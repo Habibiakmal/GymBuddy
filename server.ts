@@ -2690,7 +2690,7 @@ Keluarkan output JSON valid:
           const parsedDate = parseDateFromQuery(userText);
           const totals = getDailyTotals(from, parsedDate.dateStr);
           responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-        } else if (getAi()) {
+        } else if (USER_GEMINI_KEY) {
           let imagePart: any = null;
           if (mediaUrl) {
             try {
