@@ -43,12 +43,9 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
   }
 
   const modelsToTry = [
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
     "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-flash-latest",
-    "gemini-pro-latest"
+    "gemini-1.5-flash-latest",
+    "gemini-flash-latest"
   ];
 
   // Pure REST request without x-goog-api-key header to avoid ACCESS_TOKEN_TYPE_UNSUPPORTED
@@ -2541,47 +2538,44 @@ Keluarkan output JSON valid:
   });
 
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
-    const encodedPrompt = encodeURIComponent(promptText);
+    // Clean prompt for AI image generators (short, no punctuation)
+    const cleanPrompt = promptText
+      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 120);
 
-    // Provider 1: Pollinations AI Image Generation (Ultra Fast, High Quality, Free API Keyless)
+    const encodedPrompt = encodeURIComponent(cleanPrompt);
+
+    // Provider 1: Pollinations AI Image Generator (Clean prompt)
     try {
-      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&model=flux&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
-      console.log("[AI Image Gen] Fetching from Pollinations Flux:", pollUrl);
-      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 25000 });
+      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
+      console.log("[AI Image Gen] Fetching Pollinations image:", pollUrl);
+      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 15000 });
       if (resp.data && resp.data.length > 5000) {
-        console.log("[AI Image Gen] Successfully generated AI image with Pollinations Flux! Size:", resp.data.length);
+        console.log("[AI Image Gen] Successfully generated AI image! Size:", resp.data.length);
         return Buffer.from(resp.data);
       }
     } catch (e: any) {
-      console.log("[AI Image Gen] Pollinations Flux info:", e?.message || e);
+      console.log("[AI Image Gen] Pollinations error:", e?.message || e);
     }
 
-    // Provider 2: Pollinations Turbo Model Fallback
-    try {
-      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&model=turbo&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
-      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 25000 });
-      if (resp.data && resp.data.length > 5000) {
-        console.log("[AI Image Gen] Successfully generated AI image with Pollinations Turbo! Size:", resp.data.length);
-        return Buffer.from(resp.data);
-      }
-    } catch (e: any) {
-      console.log("[AI Image Gen] Pollinations Turbo info:", e?.message || e);
-    }
-
-    // Provider 3: Google Gemini Imagen 3 REST API
+    // Provider 2: Google Gemini Imagen 3 REST API (for keys with Imagen enabled)
     if (USER_GEMINI_KEY) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${USER_GEMINI_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${USER_GEMINI_KEY}`;
         const resp = await axios.post(url, {
-          instances: [{ prompt: promptText }],
-          parameters: { sampleCount: 1, aspectRatio: "3:4" }
+          prompt: cleanPrompt,
+          number_of_images: 1,
+          aspect_ratio: "3:4",
+          output_mime_type: "image/jpeg"
         }, { headers: { "Content-Type": "application/json" }, timeout: 20000 });
 
-        if (resp.data?.predictions?.[0]?.bytesBase64Encoded) {
-          return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
+        if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
+          return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
         }
       } catch (e: any) {
-        console.log("[Gemini Image] Imagen 3 REST info:", e?.response?.data?.error?.message || e?.message);
+        console.log("[Gemini Imagen 3] API Key Info:", e?.response?.data?.error?.message || e?.message);
       }
     }
 
