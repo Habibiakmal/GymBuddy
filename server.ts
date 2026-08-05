@@ -164,28 +164,23 @@ function escapeXml(unsafe: string): string {
 
 function extractAndParseJson(text: string): any {
   if (!text) return null;
-  const trimmed = String(text).trim();
+  let trimmed = String(text).trim();
 
-  const cleanJsonStr = (str: string) => {
-    return str
-      .replace(/,\s*([}\]])/g, "$1") // Remove trailing commas
-      .replace(/```(?:json)?/gi, "")
-      .replace(/```/g, "")
-      .trim();
-  };
+  // Remove markdown codeblocks
+  trimmed = trimmed.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
 
   // 1. Direct JSON parse
   try {
-    return JSON.parse(cleanJsonStr(trimmed));
+    return JSON.parse(trimmed);
   } catch (_) {}
 
-  // 2. Extract from markdown ```json ... ``` codeblock
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch && codeBlockMatch[1]) {
-    try {
-      return JSON.parse(cleanJsonStr(codeBlockMatch[1]));
-    } catch (_) {}
-  }
+  // 2. Sanitize unescaped newlines inside strings and trailing commas
+  try {
+    const sanitized = trimmed
+      .replace(/,\s*([}\]])/g, "$1") // Remove trailing commas
+      .replace(/[\u0000-\u001F]+/g, " "); // Replace unescaped control chars
+    return JSON.parse(sanitized);
+  } catch (_) {}
 
   // 3. Extract JSON object starting with { and ending with }
   const firstBrace = trimmed.indexOf("{");
@@ -193,8 +188,38 @@ function extractAndParseJson(text: string): any {
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const jsonSub = trimmed.substring(firstBrace, lastBrace + 1);
     try {
-      return JSON.parse(cleanJsonStr(jsonSub));
-    } catch (_) {}
+      return JSON.parse(jsonSub);
+    } catch (_) {
+      try {
+        const sanitizedSub = jsonSub
+          .replace(/,\s*([}\]])/g, "$1")
+          .replace(/[\u0000-\u001F]+/g, " ");
+        return JSON.parse(sanitizedSub);
+      } catch (_) {}
+    }
+  }
+
+  // 4. Regex Fallback object construction
+  const intentMatch = trimmed.match(/"intent"\s*:\s*"([^"]+)"/i);
+  const isFoodMatch = trimmed.match(/"isFood"\s*:\s*(true|false)/i);
+  const foodNameMatch = trimmed.match(/"foodName"\s*:\s*"([^"]+)"/i);
+  const calMatch = trimmed.match(/"calories"\s*:\s*(\d+)/i);
+  const protMatch = trimmed.match(/"protein"\s*:\s*(\d+)/i);
+  const carbMatch = trimmed.match(/"carbs"\s*:\s*(\d+)/i);
+  const fatMatch = trimmed.match(/"fat"\s*:\s*(\d+)/i);
+  const replyMatch = trimmed.match(/"generalReply"\s*:\s*"([\s\S]*)"/i);
+
+  if (intentMatch || isFoodMatch || foodNameMatch || calMatch) {
+    return {
+      intent: intentMatch ? intentMatch[1] : (foodNameMatch || calMatch ? "FOOD_LOG" : "CHAT"),
+      isFood: isFoodMatch ? isFoodMatch[1].toLowerCase() === "true" : Boolean(foodNameMatch || calMatch),
+      foodName: foodNameMatch ? foodNameMatch[1] : "Makanan",
+      calories: calMatch ? parseInt(calMatch[1], 10) : 350,
+      protein: protMatch ? parseInt(protMatch[1], 10) : 15,
+      carbs: carbMatch ? parseInt(carbMatch[1], 10) : 35,
+      fat: fatMatch ? parseInt(fatMatch[1], 10) : 10,
+      generalReply: replyMatch ? replyMatch[1].replace(/\\n/g, "\n").replace(/"\s*\}$/, "").trim() : null
+    };
   }
 
   return null;
@@ -2745,6 +2770,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const protMatch = rawText.match(/"protein"\s*:\s*(\d+)/i);
               const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
               const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
+              const intentMatch = rawText.match(/"intent"\s*:\s*"([^"]+)"/i);
 
               if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true')) {
                 parsed = {
@@ -2757,8 +2783,16 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                   fat: fatMatch ? parseInt(fatMatch[1], 10) : 10,
                   generalReply: "Catatan makanan berhasil disimpan!"
                 };
+              } else if (intentMatch && intentMatch[1] === "DAILY_REKAP") {
+                parsed = { intent: "DAILY_REKAP", isFood: false };
               } else {
-                const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").replace(/\{[\s\S]*\}/g, "").trim();
+                let cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
+                const genReplyMatch = cleanReply.match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,|\s*\n)/i);
+                if (genReplyMatch && genReplyMatch[1]) {
+                  cleanReply = genReplyMatch[1].replace(/\\n/g, "\n").trim();
+                } else {
+                  cleanReply = cleanReply.replace(/^\{[\s\S]*?"generalReply"\s*:\s*"?/i, "").replace(/"?\s*\}?\s*$/i, "").replace(/\\n/g, "\n").trim();
+                }
                 parsed = { intent: "CHAT", isFood: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
               }
             }
@@ -2778,7 +2812,12 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
             } else {
-              responseMessages = [parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?"];
+              let finalMsg = parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?";
+              if (finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
+                const gMatch = finalMsg.match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,)/i);
+                finalMsg = gMatch ? gMatch[1].replace(/\\n/g, "\n").trim() : finalMsg.replace(/^\{[\s\S]*?"generalReply"\s*:\s*"?/i, "").replace(/"?\s*\}?\s*$/i, "").trim();
+              }
+              responseMessages = [finalMsg];
             }
           } catch (e) {
             console.error("[Twilio WA] Gemini AI error:", e);
