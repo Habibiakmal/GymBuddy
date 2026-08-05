@@ -383,15 +383,25 @@ let mongoConnected = false;
 
 async function getMongoDb() {
   if (!MONGODB_URI) return null;
-  if (!mongoClient) {
-    mongoClient = new MongoClient(MONGODB_URI);
+  try {
+    if (!mongoClient) {
+      mongoClient = new MongoClient(MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 10000,
+      });
+    }
+    if (!mongoConnected) {
+      await mongoClient.connect();
+      mongoConnected = true;
+      console.log("[MongoDB] Connected to Atlas ✅");
+    }
+    return mongoClient.db("gymbuddy");
+  } catch (err: any) {
+    mongoClient = null;
+    mongoConnected = false;
+    console.error("[MongoDB] Connection error (check Atlas Network Access 0.0.0.0/0 IP whitelist):", err?.message || err);
+    return null;
   }
-  if (!mongoConnected) {
-    await mongoClient.connect();
-    mongoConnected = true;
-    console.log("[MongoDB] Connected to Atlas ✅");
-  }
-  return mongoClient.db("gymbuddy");
 }
 
 async function loadFromMongo(): Promise<boolean> {
