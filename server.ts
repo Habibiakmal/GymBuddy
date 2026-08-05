@@ -2539,80 +2539,51 @@ Keluarkan output JSON valid:
 
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
     const cleanPrompt = promptText
-      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .replace(/[^a-zA-Z0-9\s,.-]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
-    // Provider 1: Gemini Multimodal & Imagen Image Generation Models (Google Generative AI)
+    const seed = Math.floor(Math.random() * 100000);
+    const encodedPrompt = encodeURIComponent(cleanPrompt.substring(0, 300));
+
+    // Provider 1: Pollinations FLUX / Turbo AI Model (Fast, Photorealistic Fitness Infographic Posters)
+    const pollinationsUrls = [
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=800&height=1200&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&nologo=true&seed=${seed}`
+    ];
+
+    for (const pUrl of pollinationsUrls) {
+      try {
+        console.log("[AI Image Gen] Requesting Pollinations FLUX image:", pUrl);
+        const resp = await axios.get(pUrl, { responseType: "arraybuffer", timeout: 15000 });
+        const contentType = String(resp.headers?.["content-type"] || "");
+        if (resp.data && resp.data.length > 5000 && (contentType.includes("image") || resp.data.length > 8000)) {
+          console.log("[AI Image Gen] Successfully generated Pollinations FLUX AI poster! Size:", resp.data.length);
+          return Buffer.from(resp.data);
+        }
+      } catch (e: any) {
+        console.log("[AI Image Gen] Pollinations attempt note:", e?.message || e);
+      }
+    }
+
+    // Provider 2: Google Imagen 3 REST API
     if (USER_GEMINI_KEY) {
       const cleanKey = USER_GEMINI_KEY;
-
-      // 1A. Try Gemini Image Generation Models (generateContent with responseMimeType / inlineData)
-      const geminiImageModels = [
-        "gemini-3.1-flash-image",
-        "gemini-3.1-flash-lite-image",
-        "gemini-3-pro-image",
-        "gemini-2.5-flash-image"
-      ];
-
-      for (const mName of geminiImageModels) {
-        try {
-          console.log(`[Gemini Image Gen] Requesting model ${mName}...`);
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-          const headers: any = { "Content-Type": "application/json" };
-          if (cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.")) {
-            headers["Authorization"] = `Bearer ${cleanKey}`;
-          } else {
-            headers["x-goog-api-key"] = cleanKey;
-          }
-
-          const resp = await axios.post(
-            url,
-            {
-              contents: [
-                {
-                  parts: [{ text: `Generate an image for: ${cleanPrompt}` }]
-                }
-              ],
-              generationConfig: {
-                responseMimeType: "image/jpeg"
-              }
-            },
-            { headers, timeout: 20000 }
-          );
-
-          const parts = resp.data?.candidates?.[0]?.content?.parts || [];
-          for (const p of parts) {
-            if (p.inlineData?.data) {
-              console.log(`[Gemini Image Gen] Successfully generated image with ${mName}!`);
-              return Buffer.from(p.inlineData.data, "base64");
-            }
-          }
-        } catch (e: any) {
-          console.log(`[Gemini Image REST] Model ${mName} info:`, e?.response?.data?.error?.message || e?.message);
-        }
-      }
-
-      // 1B. Try Imagen Models (generateImages & predict endpoints)
-      const imagenModels = [
-        "imagen-3.0-generate-002",
-        "imagen-3.0-fast-generate-001",
-        "imagen-3.0-generate-001"
-      ];
+      const imagenModels = ["imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"];
 
       for (const mName of imagenModels) {
-        // 1B-i: generateImages endpoint
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateImages?key=${encodeURIComponent(cleanKey)}`;
           const resp = await axios.post(
             url,
             {
-              prompt: cleanPrompt.substring(0, 200),
+              prompt: cleanPrompt.substring(0, 250),
               number_of_images: 1,
               aspect_ratio: "3:4",
               output_mime_type: "image/jpeg"
             },
-            { headers: { "Content-Type": "application/json" }, timeout: 20000 }
+            { headers: { "Content-Type": "application/json" }, timeout: 15000 }
           );
 
           if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
@@ -2620,53 +2591,8 @@ Keluarkan output JSON valid:
             return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
           }
         } catch (e: any) {
-          console.log(`[Imagen REST] Model ${mName} generateImages info:`, e?.response?.data?.error?.message || e?.message);
+          console.log(`[Imagen REST] Model ${mName} info:`, e?.response?.data?.error?.message || e?.message);
         }
-
-        // 1B-ii: predict endpoint
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:predict?key=${encodeURIComponent(cleanKey)}`;
-          const resp = await axios.post(
-            url,
-            {
-              instances: [{ prompt: cleanPrompt.substring(0, 200) }],
-              parameters: { sampleCount: 1, aspectRatio: "3:4", outputMimeType: "image/jpeg" }
-            },
-            { headers: { "Content-Type": "application/json" }, timeout: 20000 }
-          );
-
-          if (resp.data?.predictions?.[0]?.bytesBase64Encoded) {
-            console.log(`[Imagen REST] Successfully generated image via predict with ${mName}!`);
-            return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
-          }
-        } catch (e: any) {
-          console.log(`[Imagen REST] Model ${mName} predict info:`, e?.response?.data?.error?.message || e?.message);
-        }
-      }
-    }
-
-    // Provider 2: Pollinations AI Image Generator (Fallback with clean short prompts)
-    const shortPrompt = cleanPrompt.substring(0, 80);
-    const encodedPrompt = encodeURIComponent(shortPrompt);
-    const seed = Math.floor(Math.random() * 10000);
-
-    const pollinationsEndpoints = [
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=800&height=1000&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=800&height=1000&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1000&nologo=true&seed=${seed}`
-    ];
-
-    for (const pollUrl of pollinationsEndpoints) {
-      try {
-        console.log("[AI Image Gen] Fetching Pollinations image:", pollUrl);
-        const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 12000 });
-        const contentType = String(resp.headers?.["content-type"] || "");
-        if (resp.data && resp.data.length > 3000 && (contentType.includes("image") || resp.data.length > 5000)) {
-          console.log("[AI Image Gen] Successfully generated Pollinations AI image! Size:", resp.data.length);
-          return Buffer.from(resp.data);
-        }
-      } catch (e: any) {
-        console.log("[AI Image Gen] Pollinations attempt error:", e?.message || e);
       }
     }
 
@@ -3405,6 +3331,7 @@ ${mistakes}
       const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
 
       let responseMessages: string[] = [];
+      let mediaUrlToSend: string | null = null;
 
       if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
@@ -3672,50 +3599,34 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               saveDb();
 
               const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
-              let imageUrl = `${baseUrl}/api/infographic/${infoId}.png`;
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
 
-              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN) & SEND TO WHATSAPP!
+              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN 3) SYNCHRONOUSLY!
               const eqName = (parsed.equipmentName || "Gym Equipment").toUpperCase();
-              const stepsStr = Array.isArray(parsed.steps) ? parsed.steps.join(", ") : "Step 1, Step 2, Step 3";
-              const imagePrompt = `Detailed educational fitness infographic poster for ${eqName} gym equipment. Dark theme with gold and yellow highlights. Showing 4 step-by-step exercise tutorial cards: ${stepsStr}. Includes labelled machine parts, target muscle diagram, and workout sets and reps counter. Ultra high resolution, 8k quality, clear text typography, fitness guide poster.`;
+              const stepsStr = Array.isArray(parsed.steps) ? parsed.steps.join(", ") : "";
+              const partsStr = Array.isArray(parsed.parts) ? parsed.parts.join(", ") : "";
+              const musclesStr = parsed.targetMuscles || "target muscles";
+              const imagePrompt = `Ultra-detailed photorealistic fitness infographic tutorial poster for ${eqName}. Dark gym aesthetic background with gold and white typography. Top header titled TUTORIAL CARA PAKAI ALAT INI ${eqName}. Section 1 BAGIAN ALAT with realistic equipment labeled parts (${partsStr}). Section 2 CARA PAKAI with 4 step-by-step workout cards showing athletic gym person demonstrating posture: ${stepsStr}. Section 3 TIPS and KESALAHAN UMUM with red X posture error comparison. Section 4 OTOT YANG DILATIH muscle anatomy diagram (${musclesStr}) and REKOMENDASI sets reps rest counter. High quality 8k fitness poster, exact match to professional gym guide infographic.`;
 
-              (async () => {
-                try {
-                  const imgBuf = await generateGeminiImage(imagePrompt);
-                  if (imgBuf) {
-                    if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
-                    (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
-                    saveDb();
-                    imageUrl = `${baseUrl}/api/generated-image/${infoId}.jpg`;
-                    console.log("[Gemini Image] Successfully generated AI image with Gemini Imagen 3:", imageUrl);
-                  }
-                } catch (imgGenErr) {
-                  console.log("[Gemini Image] AI image generation info, using crisp PNG poster:", imgGenErr);
+              console.log("[AI Image Gen] Synchronously generating FLUX / Imagen 3 AI image poster for WhatsApp...");
+              try {
+                const imgBuf = await generateGeminiImage(imagePrompt);
+                if (imgBuf) {
+                  if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
+                  (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
+                  saveDb();
+                  mediaUrlToSend = `${baseUrl}/api/generated-image/${infoId}.jpg`;
+                  console.log("[AI Image Gen] Successfully generated & saved AI Image poster:", mediaUrlToSend);
+                } else {
+                  mediaUrlToSend = `${baseUrl}/api/infographic/${infoId}.png`;
                 }
-
-                // Send direct PNG image file attachment to WhatsApp via Twilio REST API
-                if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-                  try {
-                    const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-                    const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-                    const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-                    await getTwilio().messages.create({
-                      body: `🏋️ *GAMBAR INFOGRAFIS CARA PAKAI ALAT: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
-                      mediaUrl: [imageUrl],
-                      from: fromNum,
-                      to: toNum
-                    });
-                    console.log(`[Twilio WA] Direct PNG infographic image file sent to ${toNum}: ${imageUrl}`);
-                  } catch (twErr: any) {
-                    console.error("[Twilio WA] Direct image send error:", twErr?.message || twErr);
-                  }
-                }
-              })();
+              } catch (imgGenErr: any) {
+                console.log("[AI Image Gen] Generation note, using rendered poster:", imgGenErr?.message || imgGenErr);
+                mediaUrlToSend = `${baseUrl}/api/infographic/${infoId}.png`;
+              }
             } else {
               let finalMsg = (parsed.generalReply || "").trim();
-              // If generalReply is empty or contains raw JSON, extract or generate default
               if (!finalMsg || finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
                 const gMatch = (finalMsg || "").match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,)/i);
                 finalMsg = gMatch ? gMatch[1].replace(/\\n/g, "\n").trim() : "";
@@ -3736,7 +3647,11 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
       // Send TwiML response for ALL message types (welcome, water, weight, AI, etc.)
       if (responseMessages.length > 0) {
         const combinedReply = responseMessages.join("\n\n");
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(combinedReply)}</Message></Response>`;
+        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(combinedReply)}</Body>`;
+        if (mediaUrlToSend) {
+          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+        }
+        twiml += `</Message></Response>`;
         res.type("text/xml").send(twiml);
 
         // Also send via Twilio REST API as fallback guarantee
@@ -3746,12 +3661,16 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
               const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
               const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-              await getTwilio().messages.create({
+              const msgPayload: any = {
                 body: combinedReply,
                 from: fromNum,
                 to: toNum
-              });
-              console.log(`[Twilio WA] Direct message sent to ${toNum}`);
+              };
+              if (mediaUrlToSend) {
+                msgPayload.mediaUrl = [mediaUrlToSend];
+              }
+              await getTwilio().messages.create(msgPayload);
+              console.log(`[Twilio WA] Direct message sent to ${toNum} (with media: ${!!mediaUrlToSend})`);
             } catch (twErr: any) {
               console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
             }
