@@ -2668,42 +2668,8 @@ Keluarkan output JSON valid:
           responseMessages = resProg ? [formatWeeklyProgressCard(resProg)] : ["Profil belum terdaftar. Isi kuesioner dulu!"];
         }
       } else {
-        const isMealLogCheck = lowerText.includes("log makan") ||
-          lowerText.includes("udah makan apa") ||
-          lowerText.includes("makan apa aja") ||
-          lowerText.includes("riwayat makan") ||
-          lowerText.includes("rekap makan") ||
-          lowerText.includes("catatan makan") ||
-          lowerText.includes("sisa kalori") ||
-          lowerText.includes("cek kalori");
-
-        const isMealRecommendationQuery = (lowerText.includes("rekomendasi makanan") ||
-          lowerText.includes("saran makan") ||
-          lowerText.includes("ide makan") ||
-          lowerText.includes("menu besok")) && !isMealLogCheck;
-
-        const isWorkoutQuery = lowerText.includes("workout") ||
-          lowerText.includes("latihan") ||
-          lowerText.includes("olahraga") ||
-          lowerText.includes("jadwal gym") ||
-          lowerText.includes("menu latihan");
-
-        if (isMealLogCheck) {
-          const parsedDate = parseDateFromQuery(userText);
-          const totals = getDailyTotals(from, parsedDate.dateStr);
-          responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-        } else if (isMealRecommendationQuery && isWorkoutQuery) {
-          responseMessages = [
-            generateMealRecommendations(userData),
-            generateWorkoutRecommendations(userData)
-          ];
-        } else if (isWorkoutQuery) {
-          responseMessages = [generateWorkoutRecommendations(userData)];
-        } else if (isMealRecommendationQuery) {
-          responseMessages = [generateMealRecommendations(userData)];
-        } else if (lowerText.includes("cek progress") || lowerText.includes("riwayat progress")) {
-          responseMessages = [formatProgressHistoryCard(from)];
-        } else if (USER_GEMINI_KEY) {
+        // 100% PURE AI MESSAGING — ALL messages processed dynamically by Gemini AI
+        if (USER_GEMINI_KEY) {
           let imagePart: any = null;
           if (mediaUrl) {
             try {
@@ -2721,32 +2687,58 @@ Keluarkan output JSON valid:
 
           const isMia = userData.persona === "mia" || userData.persona === "nikita";
           const personaInstruction = isMia
-            ? `PERSONA MIA: Coach wanita bernama Coach Mia. Sabar, ramah, lembut (aku/kamu).`
-            : `PERSONA MAX: Coach pria bernama Coach Max. Tegas, gaul Jakarta (lo/gue).`;
+            ? `PERSONA: Coach wanita bernama Coach Mia. Sabar, ramah, motivatif, gunakan bahasa lembut (aku/kamu).`
+            : `PERSONA: Coach pria bernama Coach Max. Tegas, penuh energi, gaul Jakarta (lo/gue).`;
 
-          const prompt = `INFORMASI PENGGUNA:
+          const dailyTotals = getDailyTotals(from);
+          const todayMealLogsStr = (dbData.dailyLogs[`${from}_${getLocalDateStr()}`] || [])
+            .map(m => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") || "Belum ada catatan makanan hari ini";
+
+          const prompt = `KAMU ADALAH BOT ASISTEN GYMBUDDY AI (${personaInstruction}).
+INFORMASI USER:
 - Nama: ${userData.name} | Berat: ${userData.weight}kg | Target: ${userData.targetWeight}kg
-- Kalori Target: ${userData.targetCalories}kcal | Goal: ${userData.goalTitle}
-${personaInstruction}
+- Target Kalori Harian: ${userData.targetCalories} kcal | Goal: ${userData.goalTitle}
+- Asupan Hari Ini: ${dailyTotals.calories} / ${userData.targetCalories} kcal (Protein: ${dailyTotals.protein}g, Karbo: ${dailyTotals.carbs}g, Lemak: ${dailyTotals.fat}g)
+- Makanan yang Sudah Dimakan Hari Ini:
+${todayMealLogsStr}
 
-User mengirim: "${userText}"${imagePart ? " + foto" : ""}
+PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO" : ""}
 
-Kategori 1 - MAKANAN/FOTO MAKANAN → JSON:
-{"isFood":true,"isEquipment":false,"foodName":"Nama Makanan","calories":200,"protein":20,"carbs":30,"fat":5,"fiber":2,"satietyScore":8,"healthScore":9,"portionEst":"1 porsi","keyInsights":["insight"],"microSummary":"mineral","generalReply":"komentar coach"}
+TUGAS: Analisis niat pengguna & keluarkan HANYA JSON valid sesuai salah satu format berikut:
 
-Kategori 2 - ALAT GYM → JSON:
-{"isFood":false,"isEquipment":true,"equipmentName":"Nama Alat","generalReply":"penjelasan"}
+FORMAT 1 - JIKA USER MELAPORKAN MAKANAN / MINUMAN (teks atau foto):
+{
+  "intent": "FOOD_LOG",
+  "isFood": true,
+  "foodName": "Nama Makanan/Minuman",
+  "calories": 400,
+  "protein": 25,
+  "carbs": 40,
+  "fat": 10,
+  "fiber": 3,
+  "generalReply": "Analisis nutrisi & saran coach"
+}
 
-Kategori 3 - CHAT UMUM → JSON:
-{"isFood":false,"isEquipment":false,"generalReply":"pesan"}
+FORMAT 2 - JIKA USER MENANYAKAN REKAP / RIWAYAT MAKANAN / CEK APAPUN YANG SUDAH DIMAKAN HARI INI / SISA KALORI:
+{
+  "intent": "DAILY_REKAP",
+  "isFood": false,
+  "generalReply": "Rangkuman ramah berisi makanan yang sudah dimakan hari ini, total kalori & makro yang masuk, serta sisa kalori menuju target."
+}
 
-PENTING: Keluarkan HANYA JSON valid tanpa teks lain!`;
+FORMAT 3 - CHAT UMUM / REKOMENDASI / WORKOUT / ALAT GYM / PERTANYAAN:
+{
+  "intent": "CHAT",
+  "isFood": false,
+  "generalReply": "Jawaban cerdas, ramah, & informatif sesuai persona coach"
+}
+
+Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
 
           try {
             const rawText = await generateGeminiContent(prompt, imagePart);
             let parsed: any = extractAndParseJson(rawText);
 
-            // Robust fallback if JSON parsing failed or partial JSON was returned
             if (!parsed || typeof parsed !== "object") {
               const foodNameMatch = rawText.match(/"foodName"\s*:\s*"([^"]+)"/i);
               const calMatch = rawText.match(/"calories"\s*:\s*(\d+)/i);
@@ -2754,10 +2746,10 @@ PENTING: Keluarkan HANYA JSON valid tanpa teks lain!`;
               const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
               const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
 
-              if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true') || lowerText.includes("makan") || lowerText.includes("minum")) {
+              if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true')) {
                 parsed = {
+                  intent: "FOOD_LOG",
                   isFood: true,
-                  isEquipment: false,
                   foodName: foodNameMatch ? foodNameMatch[1] : (userText.length < 30 ? userText : "Makanan"),
                   calories: calMatch ? parseInt(calMatch[1], 10) : 350,
                   protein: protMatch ? parseInt(protMatch[1], 10) : 15,
@@ -2767,26 +2759,33 @@ PENTING: Keluarkan HANYA JSON valid tanpa teks lain!`;
                 };
               } else {
                 const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").replace(/\{[\s\S]*\}/g, "").trim();
-                parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
+                parsed = { intent: "CHAT", isFood: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
               }
             }
 
-            if (String(parsed.isFood).toLowerCase() === "true") parsed.isFood = true;
-
-            const isEquipmentMatch = parsed.isEquipment || (imagePart && !parsed.isFood) || 
-              lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
-
-            if (parsed.isFood) {
+            if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
+              parsed.isFood = true;
               addMealLog(from, {
                 id: `m-${Date.now()}`, foodName: parsed.foodName || "Makanan",
                 calories: Number(parsed.calories) || 0, protein: Number(parsed.protein) || 0,
                 carbs: Number(parsed.carbs) || 0, fat: Number(parsed.fat) || 0,
-                fiber: Number(parsed.fiber) || 0, mealType: parsed.mealType || getMealTypeByHour(),
+                fiber: Number(parsed.fiber) || 0, mealType: getMealTypeByHour(),
                 timestamp: new Date().toISOString()
               });
-              const dailyTotals = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals)];
-            } else if (isEquipmentMatch) {
+              const updatedTotals = getDailyTotals(from);
+              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, updatedTotals)];
+            } else if (parsed.intent === "DAILY_REKAP") {
+              const totals = getDailyTotals(from);
+              responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
+            } else {
+              responseMessages = [parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?"];
+            }
+          } catch (e) {
+            console.error("[Twilio WA] Gemini AI error:", e);
+            responseMessages = ["Maaf, ada kendala koneksi AI sebentar. Ada yang bisa dibantu tentang makanan atau latihanmu?"];
+          }
+        }
+      } else if (isEquipmentMatch) {
               if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
               parsed.isEquipment = true;
 
