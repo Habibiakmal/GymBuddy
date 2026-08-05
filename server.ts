@@ -99,29 +99,6 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
   throw new Error("All Gemini models failed");
 }
 
-  // Fallback: SDK (only for standard AIza API keys)
-  const ai = getAi();
-  if (ai) {
-    for (const modelName of modelsToTry) {
-      try {
-        const contents: any[] = imagePart ? [prompt, imagePart] : [prompt];
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents
-        });
-        if (response?.text) {
-          console.log(`[Gemini SDK] Success with model: ${modelName}`);
-          return response.text;
-        }
-      } catch (err: any) {
-        // Silent catch for SDK fallback
-      }
-    }
-  }
-
-  throw new Error("Failed to generate content with all Gemini models");
-}
-
 
 // Midtrans configuration
 const snap = new midtransClient.Snap({
