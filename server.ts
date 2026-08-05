@@ -3354,6 +3354,29 @@ ${mistakes}
       if (!userProfile) userProfile = getOrCreateUserProfile(from);
       const userData = calculateUserData(userProfile);
 
+      // Handle RESET command (user wants to wipe data & re-register)
+      const isResetQuery = /^(reset|reset\s*data|hapus\s*data|ulang\s*dari\s*awal|registrasi\s*ulang|hapus\s*akun)/i.test(userText.trim());
+      if (isResetQuery) {
+        delete dbData.users[from];
+        for (const k of Object.keys(dbData.dailyLogs)) {
+          if (k.startsWith(`${from}_`)) delete dbData.dailyLogs[k];
+        }
+        delete dbData.weeklyProgress[from];
+        for (const k of Object.keys(dbData.waterLogs)) {
+          if (k.startsWith(`${from}_`)) delete dbData.waterLogs[k];
+        }
+        saveDb();
+
+        const resetMsg = `🗑️ *AKUN & DATA BERHASIL DIHAPUS*\n-----------------------------------\n` +
+          `Seluruh riwayat makanan, latihan, dan profil kamu di GymBuddy telah dibersihkan secara total.\n\n` +
+          `👉 *Untuk Registrasi Ulang*:\n` +
+          `Kamu bisa membalas dengan *"Halo Coach"* untuk memulai pendaftaran baru dari awal, atau isi kuesioner baru di website GymBuddy!\n\n` +
+          `Semangat memulai perjalanan baru! 💪✨`;
+
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(resetMsg)}</Message></Response>`;
+        return res.type("text/xml").send(twiml);
+      }
+
       const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
       const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
 
