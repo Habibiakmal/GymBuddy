@@ -2540,15 +2540,16 @@ Keluarkan output JSON valid:
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
     const rawEq = promptText.match(/for ([A-Z0-9\s]+)\./i);
     const eqName = rawEq ? rawEq[1].trim() : "Gym Equipment";
+    const cleanEq = eqName.replace(/[^a-zA-Z0-9\s]/g, "").trim().replace(/\s+/g, "+");
 
-    // Provider 1: Pollinations FLUX AI Model with short clean prompt URL (< 60 chars)
+    // Provider 1: Pollinations FLUX AI Model with ultra-clean prompt URL
     const seed = Math.floor(Math.random() * 100000);
-    const shortPrompt = encodeURIComponent(`gym workout tutorial poster for ${eqName}, fitness guide`.substring(0, 80));
+    const pollPrompt = `gym+exercise+tutorial+poster+${cleanEq}`;
 
     const pollinationsUrls = [
-      `https://image.pollinations.ai/prompt/${shortPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${shortPrompt}?model=turbo&width=800&height=1200&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${shortPrompt}?width=800&height=1200&nologo=true&seed=${seed}`
+      `https://image.pollinations.ai/prompt/${pollPrompt}?width=800&height=1200&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${pollPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${pollPrompt}?model=turbo&width=800&height=1200&nologo=true&seed=${seed}`
     ];
 
     for (const pUrl of pollinationsUrls) {
@@ -2627,7 +2628,7 @@ Keluarkan output JSON valid:
 
     // Fallback: Return high-resolution rendered PNG Infographic
     const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
-    const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
+    const parsed = info ? info.parsed : { equipmentName: "Alat Gym" };
     const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
     const svgStr = generateInfographicSVG(parsed, userData);
 
@@ -2654,34 +2655,34 @@ Keluarkan output JSON valid:
     const rawName = isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName;
 
     const eqName = escapeXml(rawName.toUpperCase());
-    const desc = escapeXml(parsed.description || "Melatih kelompok otot target secara optimal dan aman.");
-    const muscles = escapeXml(parsed.targetMuscles || "Punggung, Glutes, Hamstring");
+    const rawDesc = parsed.description || "Melatih kelompok otot target secara optimal dan aman.";
+    const rawMuscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
 
     const partsList = (Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : [
       "Bagian Utama / Pegangan (Grip)",
       "Beban / Weight Plate",
       "Kunci Pengaman / Lock Pin",
       "Bantalan Penopang / Support Pad"
-    ]).map((x: any) => escapeXml(String(x)));
+    ]).map((x: any) => String(x));
 
     const stepsList = (Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : [
       "Atur Posisi: Sesuaikan beban dan posisi tubuh secara stabil",
       "Posisi Awal: Kunci pegangan, tubuh tegap, kencangkan otot core",
       "Gerakan Latihan: Eksekusi gerakan perlahan 2-3 detik",
       "Gerakan Akhir: Kembali ke posisi awal dengan terkontrol"
-    ]).map((x: any) => escapeXml(String(x)));
+    ]).map((x: any) => String(x));
 
     const tipsList = (Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : [
       "Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)",
       "Fokus pada kontraksi otot target utama",
       "Jaga postur tubuh tetap lurus & atur pernapasan"
-    ]).map((x: any) => escapeXml(String(x)));
+    ]).map((x: any) => String(x));
 
     const mistakesList = (Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : [
       "Menggunakan ayunan/momentum berlebihan",
       "Postur punggung membungkuk saat mengangkat beban",
       "Rentang gerakan terlalu pendek (half reps)"
-    ]).map((x: any) => escapeXml(String(x)));
+    ]).map((x: any) => String(x));
 
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
@@ -2726,7 +2727,7 @@ Keluarkan output JSON valid:
 
         <text x="0" y="62" fill="#FFFFFF" font-family="sans-serif" font-size="28" font-weight="900" letter-spacing="0.5">TUTORIAL CARA PAKAI ALAT INI</text>
         <text x="0" y="94" fill="#eab308" font-family="sans-serif" font-size="22" font-weight="bold">${eqName}</text>
-        <text x="0" y="118" fill="#94a3b8" font-family="sans-serif" font-size="13">${desc.substring(0, 75)}</text>
+        <text x="0" y="118" fill="#94a3b8" font-family="sans-serif" font-size="13">${escapeXml(rawDesc.substring(0, 75))}</text>
 
         <!-- Right Machine Illustration Banner Graphics -->
         <g transform="translate(520, 5)">
@@ -2768,7 +2769,7 @@ Keluarkan output JSON valid:
               <g transform="translate(0, ${y})">
                 <circle cx="12" cy="10" r="10" fill="#eab308"/>
                 <text x="12" y="14" fill="#000" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">${i + 1}</text>
-                <text x="32" y="14" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">${p.substring(0, 48)}</text>
+                <text x="32" y="14" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">${escapeXml(p.substring(0, 48))}</text>
               </g>
             `;
           }).join("")}
@@ -2807,9 +2808,9 @@ Keluarkan output JSON valid:
                 <circle cx="${35 + i * 5}" cy="20" r="5" fill="#eab308"/>
               </g>
 
-              <text x="118" y="60" fill="#f8fafc" font-family="sans-serif" font-size="11" font-weight="bold">${s.substring(0, 32)}</text>
-              <text x="118" y="78" fill="#cbd5e1" font-family="sans-serif" font-size="10">${s.substring(32, 68) || ""}</text>
-              <text x="118" y="94" fill="#94a3b8" font-family="sans-serif" font-size="10">${s.substring(68, 105) || ""}</text>
+              <text x="118" y="60" fill="#f8fafc" font-family="sans-serif" font-size="11" font-weight="bold">${escapeXml(s.substring(0, 32))}</text>
+              <text x="118" y="78" fill="#cbd5e1" font-family="sans-serif" font-size="10">${escapeXml(s.substring(32, 68) || "")}</text>
+              <text x="118" y="94" fill="#94a3b8" font-family="sans-serif" font-size="10">${escapeXml(s.substring(68, 105) || "")}</text>
             </g>
           `;
         }).join("")}
@@ -2827,7 +2828,7 @@ Keluarkan output JSON valid:
             <g transform="translate(16, ${48 + i * 40})">
               <circle cx="10" cy="10" r="8" fill="#22c55e"/>
               <text x="10" y="14" fill="#000" font-size="10" text-anchor="middle">✓</text>
-              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${t.substring(0, 40)}</text>
+              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${escapeXml(t.substring(0, 40))}</text>
             </g>
           `).join("")}
         </g>
@@ -2842,7 +2843,7 @@ Keluarkan output JSON valid:
             <g transform="translate(16, ${48 + i * 40})">
               <circle cx="10" cy="10" r="8" fill="#ef4444"/>
               <text x="10" y="14" fill="#fff" font-size="10" text-anchor="middle">✕</text>
-              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${m.substring(0, 34)}</text>
+              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${escapeXml(m.substring(0, 34))}</text>
             </g>
           `).join("")}
 
@@ -2872,8 +2873,8 @@ Keluarkan output JSON valid:
             <ellipse cx="40" cy="50" rx="10" ry="6" fill="rgba(234,179,8,0.7)"/>
           </g>
 
-          <text x="110" y="65" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">• ${muscles.substring(0, 28)}</text>
-          <text x="110" y="85" fill="#cbd5e1" font-family="sans-serif" font-size="11">• Core & Stabilizer Otot</text>
+          <text x="110" y="65" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">• ${escapeXml(rawMuscles.substring(0, 28))}</text>
+          <text x="110" y="85" fill="#cbd5e1" font-family="sans-serif" font-size="11">• Core &amp; Stabilizer Otot</text>
           <text x="110" y="105" fill="#94a3b8" font-family="sans-serif" font-size="10">Target utama latihan ini</text>
         </g>
 
