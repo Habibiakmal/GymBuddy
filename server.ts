@@ -2540,48 +2540,45 @@ Keluarkan output JSON valid:
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
     const rawEq = promptText.match(/for ([A-Z0-9\s]+)\./i);
     const eqName = rawEq ? rawEq[1].trim() : "Gym Equipment";
-    const cleanEq = eqName.replace(/[^a-zA-Z0-9\s]/g, "").trim().replace(/\s+/g, "+");
 
-    // Provider 1: Pollinations FLUX AI Model with ultra-clean prompt URL
-    const seed = Math.floor(Math.random() * 100000);
-    const pollPrompt = `gym+exercise+tutorial+poster+${cleanEq}`;
+    const fullPrompt = `Photorealistic 8k fitness infographic tutorial poster for how to use ${eqName}. Dark gym aesthetic background with gold and white typography. Top title TUTORIAL CARA PAKAI ALAT INI ${eqName}. Bagian Alat section showing equipment parts. Cara Pakai section showing 4 step by step workout demonstration cards with athletic people performing the movement. Tips and common mistakes section with red X posture error comparison. Target muscle anatomy diagram showing worked muscles and workout sets reps rest counter. High quality realistic gym guide poster.`;
 
-    const pollinationsUrls = [
-      `https://image.pollinations.ai/prompt/${pollPrompt}?width=800&height=1200&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${pollPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`,
-      `https://image.pollinations.ai/prompt/${pollPrompt}?model=turbo&width=800&height=1200&nologo=true&seed=${seed}`
-    ];
-
-    for (const pUrl of pollinationsUrls) {
-      try {
-        console.log("[AI Image Gen] Fetching Pollinations FLUX:", pUrl);
-        const resp = await axios.get(pUrl, { responseType: "arraybuffer", timeout: 8000 });
-        const contentType = String(resp.headers?.["content-type"] || "");
-        if (resp.data && resp.data.length > 5000 && (contentType.includes("image") || resp.data.length > 8000)) {
-          console.log("[AI Image Gen] Successfully generated Pollinations FLUX poster! Bytes:", resp.data.length);
-          return Buffer.from(resp.data);
+    // Provider 1: Official Google GenAI SDK (Imagen 3.0 Generate 002)
+    try {
+      const ai = getAi();
+      if (ai) {
+        console.log("[Google AI Imagen 3] Requesting image via @google/genai SDK (imagen-3.0-generate-002)...");
+        const resp = await (ai as any).models.generateImages({
+          model: "imagen-3.0-generate-002",
+          prompt: fullPrompt,
+          config: {
+            numberOfImages: 1,
+            aspectRatio: "3:4",
+            outputMimeType: "image/jpeg"
+          }
+        });
+        const imgBytes = resp.generatedImages?.[0]?.image?.imageBytes;
+        if (imgBytes) {
+          console.log("[Google AI Imagen 3] Successfully generated AI image via SDK!");
+          return Buffer.from(imgBytes, "base64");
         }
-      } catch (e: any) {
-        console.log("[AI Image Gen] Pollinations attempt note:", e?.message || e);
       }
+    } catch (sdkErr: any) {
+      console.log("[Google AI Imagen 3 SDK] Note:", sdkErr?.message || sdkErr);
     }
 
-    // Provider 2: Google Gemini & Imagen Models with OAuth Bearer token check
+    // Provider 2: Google REST API (imagen-3.0-generate-002:predict & fast-generate)
     if (USER_GEMINI_KEY) {
       const cleanKey = USER_GEMINI_KEY;
       const isBearer = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
-      
-      const imagenModels = [
-        "imagen-3.0-generate-002",
-        "imagen-3.0-fast-generate-001",
-        "gemini-2.0-flash-exp"
-      ];
+      const imagenModels = ["imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"];
 
       for (const mName of imagenModels) {
         try {
-          const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateImages`;
+          console.log(`[Google REST Imagen 3] Requesting ${mName}:predict...`);
+          const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:predict`;
           const url = isBearer ? baseUrl : `${baseUrl}?key=${encodeURIComponent(cleanKey)}`;
-          
+
           const headers: any = { "Content-Type": "application/json" };
           if (isBearer) {
             headers["Authorization"] = `Bearer ${cleanKey}`;
@@ -2592,21 +2589,44 @@ Keluarkan output JSON valid:
           const resp = await axios.post(
             url,
             {
-              prompt: `photorealistic gym exercise tutorial poster for ${eqName}, 8k fitness guide`,
-              number_of_images: 1,
-              aspect_ratio: "3:4",
-              output_mime_type: "image/jpeg"
+              instances: [{ prompt: fullPrompt }],
+              parameters: { sampleCount: 1, aspectRatio: "3:4", outputMimeType: "image/jpeg" }
             },
-            { headers, timeout: 10000 }
+            { headers, timeout: 15000 }
           );
 
-          if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
-            console.log(`[Imagen REST] Successfully generated image with ${mName}!`);
-            return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+          const base64Data = resp.data?.predictions?.[0]?.bytesBase64Encoded || resp.data?.generatedImages?.[0]?.image?.imageBytes;
+          if (base64Data) {
+            console.log(`[Google REST Imagen 3] Successfully generated AI image via REST ${mName}!`);
+            return Buffer.from(base64Data, "base64");
           }
-        } catch (e: any) {
-          console.log(`[Imagen REST] Model ${mName} note:`, e?.response?.data?.error?.message || e?.message);
+        } catch (restErr: any) {
+          console.log(`[Google REST Imagen 3] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
         }
+      }
+    }
+
+    // Provider 3: Pollinations FLUX AI Model fallback
+    const seed = Math.floor(Math.random() * 100000);
+    const cleanEq = eqName.replace(/[^a-zA-Z0-9\s]/g, "").trim().replace(/\s+/g, "+");
+    const pollPrompt = `gym+exercise+tutorial+poster+${cleanEq}`;
+
+    const pollinationsUrls = [
+      `https://image.pollinations.ai/prompt/${pollPrompt}?width=800&height=1200&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${pollPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`
+    ];
+
+    for (const pUrl of pollinationsUrls) {
+      try {
+        console.log("[Pollinations FLUX] Requesting image:", pUrl);
+        const resp = await axios.get(pUrl, { responseType: "arraybuffer", timeout: 8000 });
+        const contentType = String(resp.headers?.["content-type"] || "");
+        if (resp.data && resp.data.length > 5000 && (contentType.includes("image") || resp.data.length > 8000)) {
+          console.log("[Pollinations FLUX] Successfully generated AI poster! Bytes:", resp.data.length);
+          return Buffer.from(resp.data);
+        }
+      } catch (e: any) {
+        console.log("[Pollinations FLUX] Attempt note:", e?.message || e);
       }
     }
 
