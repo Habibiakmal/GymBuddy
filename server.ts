@@ -52,32 +52,30 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     "gemini-1.5-pro"
   ];
 
+  // 1. Try official SDK first (@google/genai natively supports AQ. Auth keys)
+  const ai = getAi();
+  if (ai) {
+    for (const mName of modelsToTry) {
+      try {
+        const contents: any[] = imagePart ? [prompt, imagePart] : [prompt];
+        const response = await ai.models.generateContent({
+          model: mName,
+          contents
+        });
+        if (response?.text) {
+          console.log(`[Gemini SDK] Success with model: ${mName}`);
+          return response.text;
+        }
+      } catch (err: any) {
+        console.log(`[Gemini SDK] Model ${mName} note:`, err?.message || err);
+      }
+    }
+  }
+
+  // 2. Try REST API with x-goog-api-key and ?key=
   for (const mName of modelsToTry) {
-    // Attempt 1: Query param ?key=
     try {
       const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-      const requestParts: any[] = [{ text: prompt }];
-      if (imagePart && imagePart.inlineData) {
-        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
-      }
-
-      const res = await axios.post(
-        restUrl,
-        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
-        { headers: { "Content-Type": "application/json" }, timeout: 20000 }
-      );
-
-      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini REST] Success with model: ${mName}`);
-        return res.data.candidates[0].content.parts[0].text;
-      }
-    } catch (restErr: any) {
-      console.log(`[Gemini REST ?key=] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
-    }
-
-    // Attempt 2: Header x-goog-api-key
-    try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
       const requestParts: any[] = [{ text: prompt }];
       if (imagePart && imagePart.inlineData) {
         requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
@@ -90,35 +88,16 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
       );
 
       if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini REST x-goog-api-key] Success with model: ${mName}`);
+        console.log(`[Gemini REST] Success with model: ${mName}`);
         return res.data.candidates[0].content.parts[0].text;
       }
     } catch (restErr: any) {
-      console.log(`[Gemini REST x-goog-api-key] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
-    }
-
-    // Attempt 3: Header Authorization: Bearer (for OAuth access tokens / GCP keys)
-    try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
-      const requestParts: any[] = [{ text: prompt }];
-      if (imagePart && imagePart.inlineData) {
-        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
-      }
-
-      const res = await axios.post(
-        restUrl,
-        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
-        { headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cleanKey}` }, timeout: 20000 }
-      );
-
-      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini REST Bearer] Success with model: ${mName}`);
-        return res.data.candidates[0].content.parts[0].text;
-      }
-    } catch (restErr: any) {
-      console.log(`[Gemini REST Bearer] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
     }
   }
+
+  throw new Error("All Gemini models failed");
+}
 
   // Fallback: SDK (only for standard AIza API keys)
   const ai = getAi();
