@@ -2542,6 +2542,40 @@ Keluarkan output JSON valid:
         lowerText.includes("start") || lowerText.includes("mulai") ||
         lowerText.includes("join");
 
+      // Check if user has onboarding data in latest_onboarding
+      if (!userProfile) {
+        const latestOB = dbData.users["latest_onboarding"] as any;
+        if (latestOB && latestOB.weight) {
+          userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
+        }
+      }
+
+      // If user has NOT completed onboarding on Web UI, require onboarding first!
+      if (!userProfile && !isWelcomeMessage && !mediaUrl) {
+        const reply = `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
+          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\nSilakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨`;
+        
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
+        res.type("text/xml").send(twiml);
+
+        // Send direct to WhatsApp via Twilio API so user gets the notification
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({
+              body: reply,
+              from: fromNum,
+              to: toNum
+            });
+          } catch (twErr: any) {
+            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
+          }
+        }
+        return;
+      }
+
       if (!userProfile) userProfile = getOrCreateUserProfile(from);
       const userData = calculateUserData(userProfile);
 
