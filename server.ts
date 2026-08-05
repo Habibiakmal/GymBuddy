@@ -2541,7 +2541,264 @@ Keluarkan output JSON valid:
     res.json({ success: true });
   });
 
+  // GymBuddy Official Visual Infographic Template Web Route
+  app.get("/infographic/:id", (req, res) => {
+    const { id } = req.params;
+    const info = (dbData.infographics && dbData.infographics[id]) ? dbData.infographics[id] : null;
+
+    const parsed = info ? info.parsed : {
+      equipmentName: "Hyperextension Bench",
+      description: "Alat ini digunakan untuk melatih otot punggung bawah, glutes, dan hamstring dengan gerakan hyperextension.",
+      targetMuscles: "Erector Spinae (Punggung Bawah), Gluteus (Bokong), Hamstring",
+      parts: ["Roller Kaki: Mengunci pergelangan kaki", "Foot Plate: Tempat pijakan kaki agar lebih stabil", "Pad Paha: Untuk menopang bagian atas paha", "Handle: Pegangan untuk membantu posisi tubuh"],
+      steps: ["Atur Posisi: Pastikan pad paha sejajar dengan pinggul. Sesuaikan agar nyaman.", "Posisi Awal: Berbaring menghadap ke bawah, kaki dikaitkan di bawah roller, tangan di dada.", "Gerakan Turun: Turunkan tubuh perlahan ke bawah hingga punggung bagian bawah terasa meregang.", "Gerakan Naik: Angkat tubuh kembali ke atas dengan mengencangkan otot punggung bawah dan glutes."],
+      tips: ["Gerakan perlahan dan terkontrol.", "Fokus pada kontraksi otot punggung bawah dan glutes.", "Jaga punggung tetap lurus, jangan membungkuk.", "Lakukan sesuai kemampuan, jangan memaksakan beban."],
+      mistakes: ["Hiperextensi berlebihan saat naik.", "Menggunakan momentum, bukan kekuatan otot.", "Posisi pad terlalu rendah atau terlalu tinggi.", "Gerakan terlalu cepat."]
+    };
+    const userData = info ? info.userData : { name: "Pengguna GymBuddy", goalTitle: "Menurunkan Berat Badan" };
+
+    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
+    const desc = parsed.description || "Melatih otot target secara optimal.";
+    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+
+    const partsList = Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki", "Foot Plate", "Pad Paha", "Handle"];
+    const stepsList = Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Turun", "Gerakan Naik"];
+    const tipsList = Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
+    const mistakesList = Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan", "Menggunakan momentum"];
+
+    let defaultSets = "3 - 4 Set";
+    let defaultReps = "10 - 15 Repetisi";
+    let defaultRest = "60 - 90 Detik";
+
+    const goalLower = (userData.goalTitle || "").toLowerCase();
+    if (goalLower.includes("menurunkan") || goalLower.includes("fat loss") || goalLower.includes("turun")) {
+      defaultSets = "3 - 4 Set";
+      defaultReps = "12 - 15 Repetisi (Kalori Tinggi)";
+      defaultRest = "45 - 60 Detik (Intensitas Tinggi)";
+    } else if (goalLower.includes("naik") || goalLower.includes("otot") || goalLower.includes("gain")) {
+      defaultSets = "4 Set";
+      defaultReps = "8 - 12 Repetisi (Hipertrofi Otot)";
+      defaultRest = "90 - 120 Detik (Recovery Maksimal)";
+    }
+
+    const sets = parsed.recommendedSets || defaultSets;
+    const reps = parsed.recommendedReps || defaultReps;
+    const rest = parsed.recommendedRest || defaultRest;
+
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TUTORIAL CARA PAKAI ALAT - ${eqName} | GymBuddy AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0c10;
+      color: #f1f5f9;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .poster {
+      width: 100%;
+      max-width: 680px;
+      background: #12131a;
+      border: 2px solid #eab308;
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 35px rgba(234, 179, 8, 0.2);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(234, 179, 8, 0.15);
+      color: #eab308;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 2px;
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(234, 179, 8, 0.4);
+      margin-bottom: 12px;
+    }
+    .title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1.1;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .machine-name {
+      color: #eab308;
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      margin-top: 6px;
+    }
+    .sub-desc {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    .section-box {
+      background: #1a1c26;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .sec-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #eab308;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+    .card-item {
+      background: #222533;
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .card-num {
+      width: 26px; height: 26px;
+      background: #eab308; color: #000;
+      border-radius: 50%; font-weight: 900; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+    }
+    .card-text { font-size: 13px; font-weight: 600; color: #f8fafc; line-height: 1.4; }
+    .list-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; margin-bottom: 10px; color: #cbd5e1; line-height: 1.4; }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(234,179,8,0.12) 0%, rgba(6,182,212,0.12) 100%);
+      border: 1px solid rgba(234,179,8,0.3);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-val { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; color: #eab308; }
+    .stat-lbl { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+    .footer {
+      text-align: center; font-size: 12px; color: #64748b; margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="poster">
+    <div class="header">
+      <div class="badge">⚡ GYMBUDDY AI • INFOGRAFIS VISUAL RESMI</div>
+      <div class="title">TUTORIAL CARA PAKAI ALAT INI</div>
+      <div class="machine-name">${eqName}</div>
+      <div class="sub-desc">${desc}</div>
+    </div>
+
+    <!-- BAGIAN ALAT -->
+    <div class="section-box">
+      <div class="sec-title">🔩 BAGIAN UTAMA ALAT</div>
+      <div class="grid-4">
+        ${partsList.map((p: string, i: number) => `
+          <div class="card-item">
+            <div class="card-num">${i + 1}</div>
+            <div class="card-text">${p}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <!-- CARA PAKAI STEP BY STEP -->
+    <div class="section-box">
+      <div class="sec-title">📐 CARA PAKAI (STEP-BY-STEP)</div>
+      <div class="grid-4">
+        ${stepsList.map((s: string, i: number) => `
+          <div class="card-item">
+            <div class="card-num">${i + 1}</div>
+            <div class="card-text">${s}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <!-- TIPS & KESALAHAN UMUM -->
+    <div class="grid-2">
+      <div class="section-box">
+        <div class="sec-title">💡 TIPS PERFORMA</div>
+        ${tipsList.map((t: string) => `
+          <div class="list-item">
+            <span>✅</span> <span>${t}</span>
+          </div>
+        `).join("")}
+      </div>
+      <div class="section-box">
+        <div class="sec-title">❌ KESALAHAN UMUM</div>
+        ${mistakesList.map((m: string) => `
+          <div class="list-item">
+            <span>⚠️</span> <span>${m}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <!-- OTOT DILATIH & REKOMENDASI -->
+    <div class="section-box">
+      <div class="sec-title">🎯 OTOT DILATIH: ${muscles}</div>
+      <div style="margin-top: 10px;" class="grid-4">
+        <div class="stat-card">
+          <div class="stat-val">${sets}</div>
+          <div class="stat-lbl">SETS</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">${reps}</div>
+          <div class="stat-lbl">REPETISI</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">${rest}</div>
+          <div class="stat-lbl">ISTIRAHAT</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Official GymBuddy AI Guide • Dibuat khusus untuk <strong>${userData.name || "User"}</strong> (${userData.goalTitle || "Goal Harian"})
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.send(html);
+  });
+
   function formatEquipmentTutorialCard(parsed: any, userData: any): string {
+    const infoId = `info-${Date.now()}`;
+    if (!dbData.infographics) dbData.infographics = {};
+    dbData.infographics[infoId] = { parsed, userData, timestamp: new Date().toISOString() };
+    saveDb();
+
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const infographicUrl = `${baseUrl}/infographic/${infoId}`;
+
     const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
     const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
     const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
@@ -2589,6 +2846,9 @@ Keluarkan output JSON valid:
 🎯 *Target Otot*: ${muscles}
 📋 *Goal Kamu*: ${userData.goalTitle || "Kebugaran Harian"}
 
+🖼️ *POSTER INFOGRAFIS VISUAL GYMBUDDY RESMI*:
+🔗 ${infographicUrl}
+
 🔩 *BAGIAN ALAT*:
 ${parts}
 
@@ -2606,7 +2866,7 @@ ${mistakes}
 🔄 *Reps*: ${reps}
 ⏳ *Istirahat*: ${rest}
 
-💪 *Coach*: Cobalah porsi di atas & rasakan kontraksi ototnya! Ada pertanyaan lain tentang cara pakai alat ini?`;
+💪 *Coach*: Cobalah porsi di atas & klik link di atas untuk melihat Poster Infografis Visual Resmi GymBuddy AI!`;
   }
 
   // =============================================
