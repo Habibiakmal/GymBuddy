@@ -3658,7 +3658,6 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
-              mediaUrlToSend = `${baseUrl}/api/generated-image/${infoId}.jpg`;
 
               // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN 3) IN BACKGROUND FOR FAST RESPONSE!
               const eqName = (parsed.equipmentName || "Gym Equipment").toUpperCase();
@@ -3676,6 +3675,22 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                     (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
                     saveDb();
                     console.log("[AI Image Gen] Successfully saved background AI Image poster for:", infoId);
+
+                    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+                      try {
+                        const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+                        const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+                        const toNum = from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
+                        await getTwilio().messages.create({
+                          body: `🎨 *POSTER TUTORIAL ALAT ${eqName}*`,
+                          from: fromNum,
+                          to: toNum,
+                          mediaUrl: [`${baseUrl}/api/generated-image/${infoId}.jpg`]
+                        });
+                      } catch (twPushErr: any) {
+                        console.log("[AI Image Gen] Twilio REST poster push info:", twPushErr?.message || twPushErr);
+                      }
+                    }
                   }
                 } catch (imgGenErr: any) {
                   console.log("[AI Image Gen] Background generation note:", imgGenErr?.message || imgGenErr);
