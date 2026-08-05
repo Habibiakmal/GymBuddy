@@ -2761,6 +2761,25 @@ Kategori 3 - CHAT UMUM → JSON:
         const combinedReply = responseMessages.join("\n\n");
         const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(combinedReply)}</Message></Response>`;
         res.type("text/xml").send(twiml);
+
+        // Also send via Twilio REST API as fallback guarantee
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          (async () => {
+            try {
+              const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+              const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+              const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+              await getTwilio().messages.create({
+                body: combinedReply,
+                from: fromNum,
+                to: toNum
+              });
+              console.log(`[Twilio WA] Direct message sent to ${toNum}`);
+            } catch (twErr: any) {
+              console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
+            }
+          })();
+        }
       } else {
         res.type("text/xml").send("<Response></Response>");
       }
