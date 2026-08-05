@@ -2537,6 +2537,8 @@ Keluarkan output JSON valid:
       dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m: any) => m.id !== mealId);
       saveDb();
     }
+    res.json({ success: true });
+  });
 
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
     if (!USER_GEMINI_KEY) return null;
