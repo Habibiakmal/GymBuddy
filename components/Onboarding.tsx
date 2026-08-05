@@ -795,26 +795,58 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           />
                         </div>
 
-                        {/* AI Recommendation Card */}
-                        <div className="bg-[#182232] border border-[#D4FF00]/30 rounded-2xl p-4 flex items-start gap-3">
-                          <Sparkles className="w-5 h-5 text-[#D4FF00] shrink-0 mt-0.5" />
-                          <div className="text-xs space-y-1.5">
-                            <p className="font-extrabold text-[#D4FF00]">
-                              {isEN ? "GymBuddy AI Healthy Calculation:" : "Perhitungan Target Ideal AI GymBuddy:"}
-                            </p>
-                            <p className="text-neutral-300 leading-relaxed">
-                              {isEN
-                                ? `Based on your height (${height || 170}cm), age (${age || 25}), and current weight (${currW}kg), a safe & healthy target is ${recW} kg (Ideal BMI ~22, turun ~${lossKg} kg bertahap).`
-                                : `Berdasarkan tinggi (${height || 170}cm), usia (${age || 25} th), dan BB saat ini (${currW}kg), target ideal yang aman & sehat adalah ${recW} kg (BMI Ideal ~22, turun ~${lossKg} kg bertahap).`}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => setUserTargetWeight(String(recW))}
-                              className="text-[11px] font-bold text-[#D4FF00] underline cursor-pointer hover:text-white"
-                            >
-                              {isEN ? "Use AI Recommended Target" : "Gunakan Target Rekomendasi AI"}
-                            </button>
+                        {/* AI Recommendation Card - HEAVILY HIGHLIGHTED DESIGN */}
+                        <div className="bg-gradient-to-br from-[#1F2B14] via-[#182332] to-[#111620] border-2 border-[#D4FF00] shadow-[0_0_25px_rgba(212,255,0,0.2)] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden">
+                          <div className="flex items-center justify-between">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4FF00] text-black font-['Archivo_Black'] text-[11px] uppercase tracking-wider shadow-md">
+                              <Sparkles className="w-3.5 h-3.5 fill-black" />
+                              <span>{isEN ? "AI HEALTHY RECOMMENDATION" : "REKOMENDASI TARGET SEHAT AI"}</span>
+                            </div>
+                            <span className="text-[11px] font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/30">
+                              BMI Ideal ~22.0
+                            </span>
                           </div>
+
+                          <div className="flex items-baseline gap-2 pt-1">
+                            <span className="text-3xl font-['Archivo_Black'] text-white">
+                              {recW} <span className="text-base font-bold text-[#D4FF00]">kg</span>
+                            </span>
+                            <span className="text-xs text-neutral-300 font-medium">
+                              ({isEN ? `Gradual loss ~${lossKg} kg` : `Proses bertahap turun ~${lossKg} kg`})
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-neutral-200 leading-relaxed font-medium">
+                            {isEN
+                              ? `Based on your height (${height || 170} cm), age (${age || 25} yrs), and current weight (${currW} kg), the healthiest long-term target is ${recW} kg.`
+                              : `Berdasarkan tinggi (${height || 170} cm), usia (${age || 25} th), dan BB awal (${currW} kg), target paling aman & sehat jangka panjang adalah ${recW} kg.`}
+                          </p>
+
+                          {/* Warning if user inputs a very low weight */}
+                          {userTargetWeight && Number(userTargetWeight) < recW - 4 && (
+                            <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-amber-300">
+                              <span>⚠️</span>
+                              <span>
+                                {isEN
+                                  ? `Target ${userTargetWeight} kg is quite low for your height (${height} cm). We recommend using the AI target (${recW} kg).`
+                                  : `Target ${userTargetWeight} kg cukup tergolong rendah untuk tinggi ${height} cm. Disarankan memakai rekomendasi AI (${recW} kg).`}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Action Button */}
+                          <button
+                            type="button"
+                            onClick={() => setUserTargetWeight(String(recW))}
+                            className="w-full py-2.5 px-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer active:scale-98"
+                          >
+                            <Sparkles className="w-4 h-4 fill-black" />
+                            <span>
+                              {isEN
+                                ? `Apply AI Recommended Target (${recW} kg)`
+                                : `Gunakan Target Rekomendasi AI (${recW} kg)`}
+                            </span>
+                          </button>
                         </div>
                       </div>
                     );
