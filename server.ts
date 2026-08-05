@@ -166,16 +166,24 @@ function extractAndParseJson(text: string): any {
   if (!text) return null;
   const trimmed = String(text).trim();
 
+  const cleanJsonStr = (str: string) => {
+    return str
+      .replace(/,\s*([}\]])/g, "$1") // Remove trailing commas
+      .replace(/```(?:json)?/gi, "")
+      .replace(/```/g, "")
+      .trim();
+  };
+
   // 1. Direct JSON parse
   try {
-    return JSON.parse(trimmed);
+    return JSON.parse(cleanJsonStr(trimmed));
   } catch (_) {}
 
   // 2. Extract from markdown ```json ... ``` codeblock
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (codeBlockMatch && codeBlockMatch[1]) {
     try {
-      return JSON.parse(codeBlockMatch[1].trim());
+      return JSON.parse(cleanJsonStr(codeBlockMatch[1]));
     } catch (_) {}
   }
 
@@ -185,7 +193,7 @@ function extractAndParseJson(text: string): any {
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     const jsonSub = trimmed.substring(firstBrace, lastBrace + 1);
     try {
-      return JSON.parse(jsonSub);
+      return JSON.parse(cleanJsonStr(jsonSub));
     } catch (_) {}
   }
 
@@ -2660,14 +2668,19 @@ Keluarkan output JSON valid:
           responseMessages = resProg ? [formatWeeklyProgressCard(resProg)] : ["Profil belum terdaftar. Isi kuesioner dulu!"];
         }
       } else {
-        const isMealQuery = lowerText.includes("rekomendasi makanan") ||
-          lowerText.includes("menu makan") ||
-          lowerText.includes("jadwal makan") ||
-          lowerText.includes("makan apa") ||
-          lowerText.includes("perlu makan") ||
+        const isMealLogCheck = lowerText.includes("log makan") ||
+          lowerText.includes("udah makan apa") ||
+          lowerText.includes("makan apa aja") ||
+          lowerText.includes("riwayat makan") ||
+          lowerText.includes("rekap makan") ||
+          lowerText.includes("catatan makan") ||
+          lowerText.includes("sisa kalori") ||
+          lowerText.includes("cek kalori");
+
+        const isMealRecommendationQuery = (lowerText.includes("rekomendasi makanan") ||
           lowerText.includes("saran makan") ||
-          lowerText.includes("makan besok") ||
-          lowerText.includes("ide makan");
+          lowerText.includes("ide makan") ||
+          lowerText.includes("menu besok")) && !isMealLogCheck;
 
         const isWorkoutQuery = lowerText.includes("workout") ||
           lowerText.includes("latihan") ||
@@ -2675,21 +2688,21 @@ Keluarkan output JSON valid:
           lowerText.includes("jadwal gym") ||
           lowerText.includes("menu latihan");
 
-        if (isMealQuery && isWorkoutQuery) {
+        if (isMealLogCheck) {
+          const parsedDate = parseDateFromQuery(userText);
+          const totals = getDailyTotals(from, parsedDate.dateStr);
+          responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+        } else if (isMealRecommendationQuery && isWorkoutQuery) {
           responseMessages = [
             generateMealRecommendations(userData),
             generateWorkoutRecommendations(userData)
           ];
         } else if (isWorkoutQuery) {
           responseMessages = [generateWorkoutRecommendations(userData)];
-        } else if (isMealQuery) {
+        } else if (isMealRecommendationQuery) {
           responseMessages = [generateMealRecommendations(userData)];
         } else if (lowerText.includes("cek progress") || lowerText.includes("riwayat progress")) {
           responseMessages = [formatProgressHistoryCard(from)];
-        } else if (lowerText.includes("cek kalori") || lowerText.includes("rekap") || lowerText.includes("sisa kalori")) {
-          const parsedDate = parseDateFromQuery(userText);
-          const totals = getDailyTotals(from, parsedDate.dateStr);
-          responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
         } else if (USER_GEMINI_KEY) {
           let imagePart: any = null;
           if (mediaUrl) {
@@ -2719,21 +2732,46 @@ ${personaInstruction}
 User mengirim: "${userText}"${imagePart ? " + foto" : ""}
 
 Kategori 1 - MAKANAN/FOTO MAKANAN → JSON:
-{"isFood":true,"isEquipment":false,"foodName":"Nama","calories":200,"protein":20,"carbs":30,"fat":5,"fiber":2,"satietyScore":8,"healthScore":9,"portionEst":"1 porsi","keyInsights":["insight"],"microSummary":"mineral","generalReply":"komentar coach"}
+{"isFood":true,"isEquipment":false,"foodName":"Nama Makanan","calories":200,"protein":20,"carbs":30,"fat":5,"fiber":2,"satietyScore":8,"healthScore":9,"portionEst":"1 porsi","keyInsights":["insight"],"microSummary":"mineral","generalReply":"komentar coach"}
 
 Kategori 2 - ALAT GYM → JSON:
 {"isFood":false,"isEquipment":true,"equipmentName":"Nama Alat","generalReply":"penjelasan"}
 
 Kategori 3 - CHAT UMUM → JSON:
-{"isFood":false,"isEquipment":false,"generalReply":"pesan"}`;
+{"isFood":false,"isEquipment":false,"generalReply":"pesan"}
+
+PENTING: Keluarkan HANYA JSON valid tanpa teks lain!`;
 
           try {
             const rawText = await generateGeminiContent(prompt, imagePart);
             let parsed: any = extractAndParseJson(rawText);
-            if (!parsed) {
-              const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
-              parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
+
+            // Robust fallback if JSON parsing failed or partial JSON was returned
+            if (!parsed || typeof parsed !== "object") {
+              const foodNameMatch = rawText.match(/"foodName"\s*:\s*"([^"]+)"/i);
+              const calMatch = rawText.match(/"calories"\s*:\s*(\d+)/i);
+              const protMatch = rawText.match(/"protein"\s*:\s*(\d+)/i);
+              const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
+              const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
+
+              if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true') || lowerText.includes("makan") || lowerText.includes("minum")) {
+                parsed = {
+                  isFood: true,
+                  isEquipment: false,
+                  foodName: foodNameMatch ? foodNameMatch[1] : (userText.length < 30 ? userText : "Makanan"),
+                  calories: calMatch ? parseInt(calMatch[1], 10) : 350,
+                  protein: protMatch ? parseInt(protMatch[1], 10) : 15,
+                  carbs: carbMatch ? parseInt(carbMatch[1], 10) : 35,
+                  fat: fatMatch ? parseInt(fatMatch[1], 10) : 10,
+                  generalReply: "Catatan makanan berhasil disimpan!"
+                };
+              } else {
+                const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").replace(/\{[\s\S]*\}/g, "").trim();
+                parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
+              }
             }
+
+            if (String(parsed.isFood).toLowerCase() === "true") parsed.isFood = true;
 
             const isEquipmentMatch = parsed.isEquipment || (imagePart && !parsed.isFood) || 
               lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
