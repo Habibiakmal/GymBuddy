@@ -3267,6 +3267,8 @@ ${mistakes}
           const todayMealLogsStr = (dbData.dailyLogs[`${from}_${getLocalDateStr()}`] || [])
             .map(m => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") || "Belum ada catatan makanan hari ini";
 
+          const isEquipmentQuery = imagePart && (lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("pakai") || lowerText.includes("cara") || lowerText.includes("gym") || lowerText.includes("dumbbell") || lowerText.includes("barbell") || lowerText.includes("bench") || lowerText.length < 5);
+
           const prompt = `KAMU ADALAH BOT ASISTEN GYMBUDDY AI (${personaInstruction}).
 INFORMASI USER:
 - Nama: ${userData.name} | Berat: ${userData.weight}kg | Target: ${userData.targetWeight}kg
@@ -3275,11 +3277,11 @@ INFORMASI USER:
 - Makanan yang Sudah Dimakan Hari Ini:
 ${todayMealLogsStr}
 
-PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO" : ""}
+PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO ALAT GYM" : ""}
 
 TUGAS: Analisis niat pengguna & keluarkan HANYA JSON valid sesuai salah satu format berikut:
 
-FORMAT 1 - JIKA USER MELAPORKAN MAKANAN / MINUMAN (teks atau foto):
+FORMAT 1 - JIKA USER MELAPORKAN MAKANAN / MINUMAN (teks atau foto makanan):
 {
   "intent": "FOOD_LOG",
   "isFood": true,
@@ -3296,28 +3298,40 @@ FORMAT 2 - JIKA USER MENANYAKAN REKAP / RIWAYAT MAKANAN / CEK APAPUN YANG SUDAH 
 {
   "intent": "DAILY_REKAP",
   "isFood": false,
-  "generalReply": "Rangkuman ramah berisi makanan yang sudah dimakan hari ini, total kalori & makro yang masuk, serta sisa kalori menuju target."
+  "generalReply": "..."
 }
 
-FORMAT 3 - JIKA USER MENANYAKAN / MENGEFOTO ALAT GYM / MESIN GYM / CARA PAKAI ALAT:
+FORMAT 3 - JIKA USER MENGIRIMKAN FOTO ALAT GYM / MESIN GYM / DUMBBELL / BARBELL / ATAU MENANYAKAN CARA PAKAI ALAT:
 {
   "intent": "EQUIPMENT_TUTORIAL",
   "isFood": false,
-  "equipmentName": "Sebutkan Nama Alat Gym Spesifik (Misal: Hyperextension Bench, Lat Pulldown, Leg Press, Smith Machine, Chest Press, Cable Crossover, Dll.)",
-  "description": "Fungsi alat ini untuk melatih kelompok otot target.",
-  "targetMuscles": "Sebutkan nama otot spesifik yang dilatih",
-  "parts": ["1. Bagian Alat 1", "2. Bagian Alat 2", "3. Bagian Alat 3", "4. Bagian Alat 4"],
-  "steps": ["1. Atur Posisi: ...", "2. Posisi Awal: ...", "3. Gerakan Turun: ...", "4. Gerakan Naik: ..."],
-  "tips": ["Tips 1: ...", "Tips 2: ...", "Tips 3: ..."],
-  "mistakes": ["Kesalahan 1: ...", "Kesalahan 2: ..."]
+  "equipmentName": "SEBUTKAN NAMA SPESIFIK ALAT YANG ADA DI FOTO (misal: Dumbbell Hex, Lat Pulldown Machine, Leg Press Machine, Hyperextension Bench, Barbell, Smith Machine, Cable Machine, dll.)",
+  "description": "Deskripsi fungsi alat ini untuk melatih otot apa.",
+  "targetMuscles": "Nama otot-otot spesifik yang dilatih",
+  "parts": ["Bagian 1: fungsi", "Bagian 2: fungsi", "Bagian 3: fungsi"],
+  "steps": ["Langkah 1: ...", "Langkah 2: ...", "Langkah 3: ...", "Langkah 4: ..."],
+  "tips": ["Tips 1", "Tips 2", "Tips 3"],
+  "mistakes": ["Kesalahan 1", "Kesalahan 2"]
 }
 
-FORMAT 4 - CHAT UMUM / REKOMENDASI / WORKOUT / PERTANYAAN LAINNYA:
+FORMAT 4 - JIKA USER MINTA JADWAL LATIHAN / WORKOUT PLAN:
+{
+  "intent": "WORKOUT_PLAN",
+  "isFood": false,
+  "generalReply": "Jadwal latihan lengkap dan terstruktur sesuai goal user, tulis dengan format yang rapi, pakai emoji, dan berikan motivasi"
+}
+
+FORMAT 5 - CHAT UMUM / REKOMENDASI / PERTANYAAN LAINNYA:
 {
   "intent": "CHAT",
   "isFood": false,
-  "generalReply": "Jawaban cerdas, ramah, & informatif sesuai persona coach"
+  "generalReply": "Jawaban cerdas, ramah, & informatif sesuai persona coach. JANGAN KOSONG, TULIS JAWABAN LENGKAP!"
 }
+
+CATATAN PENTING:
+- Jika ada FOTO ALAT GYM (bukan makanan), WAJIB gunakan FORMAT 3!
+- Jika user minta jadwal latihan, WAJIB gunakan FORMAT 4!
+- generalReply WAJIB berisi teks jawaban yang bermakna, JANGAN JSON!
 
 Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
 
@@ -3365,6 +3379,17 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               }
             }
 
+            // If photo was equipment query but AI returned CHAT or didn't detect, force EQUIPMENT_TUTORIAL
+            if (isEquipmentQuery && parsed.intent !== "FOOD_LOG" && parsed.intent !== "EQUIPMENT_TUTORIAL") {
+              parsed.intent = "EQUIPMENT_TUTORIAL";
+              // Try to get equipment name from generalReply or default
+              if (!parsed.equipmentName && parsed.generalReply) {
+                const equipGuess = parsed.generalReply.match(/(dumbbell|barbell|barbel|dumbel|lat pulldown|leg press|chest press|bench press|smith machine|cable|hyperextension|treadmill|elliptical|rowing|pull up|kettlebell)/i);
+                parsed.equipmentName = equipGuess ? equipGuess[1] : "Dumbbell Hex";
+              }
+              if (!parsed.equipmentName) parsed.equipmentName = "Dumbbell Hex";
+            }
+
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
               parsed.isFood = true;
               addMealLog(from, {
@@ -3379,7 +3404,13 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             } else if (parsed.intent === "DAILY_REKAP") {
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
-            } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName || (imagePart && !parsed.isFood && (lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("pakai") || lowerText.includes("gym")))) {
+            } else if (parsed.intent === "WORKOUT_PLAN") {
+              let workoutReply = parsed.generalReply || "";
+              if (!workoutReply || workoutReply.trim().length < 10) {
+                workoutReply = `🏋️ *JADWAL LATIHAN UNTUK ${userData.name.toUpperCase()}*\n🎯 Goal: ${userData.goalTitle}\n\n📅 *SENIN - DADA & TRISEP*\n• Bench Press: 4x10\n• Incline Dumbbell Press: 3x12\n• Cable Crossover: 3x15\n• Tricep Pushdown: 3x15\n\n📅 *SELASA - PUNGGUNG & BISEP*\n• Pull Up: 4x8\n• Barbell Row: 4x10\n• Lat Pulldown: 3x12\n• Bicep Curl: 3x15\n\n📅 *RABU - ISTIRAHAT AKTIF*\n• Jalan kaki 30 menit atau Yoga ringan\n\n📅 *KAMIS - KAKI*\n• Squat: 4x10\n• Leg Press: 4x12\n• Lunges: 3x12 per kaki\n• Leg Curl: 3x15\n\n📅 *JUMAT - BAHU & ABS*\n• Shoulder Press: 4x10\n• Lateral Raise: 3x15\n• Face Pull: 3x15\n• Plank: 3x60 detik\n\n📅 *SABTU & MINGGU*\n• Istirahat atau cardio ringan 20-30 menit\n\n💪 *Rekomendasi*: ${userData.goalTitle?.includes("turun") ? "Tambahkan 20 menit cardio setelah latihan" : "Fokus progressive overload setiap minggu"}`;
+              }
+              responseMessages = [workoutReply];
+            } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName) {
               const infoId = `info-${Date.now()}`;
               if (!dbData.infographics) dbData.infographics = {};
               dbData.infographics[infoId] = { parsed, userData, timestamp: new Date().toISOString() };
@@ -3426,10 +3457,15 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                 }
               })();
             } else {
-              let finalMsg = parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?";
-              if (finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
-                const gMatch = finalMsg.match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,)/i);
-                finalMsg = gMatch ? gMatch[1].replace(/\\n/g, "\n").trim() : finalMsg.replace(/^\{[\s\S]*?"generalReply"\s*:\s*"?/i, "").replace(/"?\s*\}?\s*$/i, "").trim();
+              let finalMsg = (parsed.generalReply || "").trim();
+              // If generalReply is empty or contains raw JSON, extract or generate default
+              if (!finalMsg || finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
+                const gMatch = (finalMsg || "").match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,)/i);
+                finalMsg = gMatch ? gMatch[1].replace(/\\n/g, "\n").trim() : "";
+              }
+              if (!finalMsg || finalMsg.length < 5) {
+                const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+                finalMsg = `Hei ${userData.name}! 💪 Ada yang bisa ${coachN} bantu hari ini? Mau catat makanan, cek kalori, minta jadwal workout, atau tanya cara pakai alat gym?`;
               }
               responseMessages = [finalMsg];
             }
