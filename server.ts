@@ -3700,15 +3700,30 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
         }
       }
 
-      // Send TwiML response for ALL message types (welcome, water, weight, AI, etc.)
+      // Send single WhatsApp response via Twilio REST API & return empty TwiML to prevent webhook timeout
       if (responseMessages.length > 0) {
         const combinedReply = responseMessages.join("\n\n");
-        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(combinedReply)}</Body>`;
-        if (mediaUrlToSend) {
-          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+        res.type("text/xml").send("<Response></Response>");
+
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            const msgOpts: any = {
+              body: combinedReply,
+              from: fromNum,
+              to: toNum
+            };
+            if (mediaUrlToSend) {
+              msgOpts.mediaUrl = [mediaUrlToSend];
+            }
+            await getTwilio().messages.create(msgOpts);
+            console.log("[Twilio WA] Successfully delivered WhatsApp message via REST API!");
+          } catch (twErr: any) {
+            console.error("[Twilio WA] REST push error:", twErr?.message || twErr);
+          }
         }
-        twiml += `</Message></Response>`;
-        res.type("text/xml").send(twiml);
       } else {
         res.type("text/xml").send("<Response></Response>");
       }
