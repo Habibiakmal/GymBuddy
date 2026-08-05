@@ -3267,7 +3267,10 @@ ${mistakes}
           const todayMealLogsStr = (dbData.dailyLogs[`${from}_${getLocalDateStr()}`] || [])
             .map(m => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") || "Belum ada catatan makanan hari ini";
 
-          const isEquipmentQuery = imagePart && (lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("pakai") || lowerText.includes("cara") || lowerText.includes("gym") || lowerText.includes("dumbbell") || lowerText.includes("barbell") || lowerText.includes("bench") || lowerText.length < 5);
+          // Detect equipment query from EITHER photo OR text keywords (both cases must work)
+          const equipmentKeywords = ["alat", "mesin", "cara pakai", "cara memakai", "cara makai", "gimana cara", "how to", "dumbbell", "barbell", "barbel", "bench", "squat rack", "lat pulldown", "leg press", "chest press", "cable", "treadmill", "elliptical", "kettlebell", "smith machine", "pull up", "gym"];
+          const hasEquipmentText = equipmentKeywords.some(kw => lowerText.includes(kw));
+          const isEquipmentQuery = (imagePart && (hasEquipmentText || lowerText.length < 10)) || (!imagePart && hasEquipmentText && (lowerText.includes("cara") || lowerText.includes("pakai") || lowerText.includes("alat") || lowerText.includes("mesin")));
 
           const prompt = `KAMU ADALAH BOT ASISTEN GYMBUDDY AI (${personaInstruction}).
 INFORMASI USER:
@@ -3379,15 +3382,13 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               }
             }
 
-            // If photo was equipment query but AI returned CHAT or didn't detect, force EQUIPMENT_TUTORIAL
+            // If equipment query detected (photo OR text) but AI returned CHAT or WORKOUT, force EQUIPMENT_TUTORIAL
             if (isEquipmentQuery && parsed.intent !== "FOOD_LOG" && parsed.intent !== "EQUIPMENT_TUTORIAL") {
               parsed.intent = "EQUIPMENT_TUTORIAL";
-              // Try to get equipment name from generalReply or default
-              if (!parsed.equipmentName && parsed.generalReply) {
-                const equipGuess = parsed.generalReply.match(/(dumbbell|barbell|barbel|dumbel|lat pulldown|leg press|chest press|bench press|smith machine|cable|hyperextension|treadmill|elliptical|rowing|pull up|kettlebell)/i);
-                parsed.equipmentName = equipGuess ? equipGuess[1] : "Dumbbell Hex";
-              }
-              if (!parsed.equipmentName) parsed.equipmentName = "Dumbbell Hex";
+              // Try to extract equipment name from userText or generalReply
+              const eqSources = [userText, parsed.generalReply || ""].join(" ");
+              const equipGuess = eqSources.match(/(dumbbell|barbel|barbell|lat pulldown|leg press|chest press|bench press|smith machine|cable machine|hyperextension|treadmill|elliptical|rowing machine|pull up bar|kettlebell|hex dumbbell)/i);
+              parsed.equipmentName = equipGuess ? equipGuess[1] : (imagePart ? "Dumbbell Hex" : "Alat Gym");
             }
 
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
