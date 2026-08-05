@@ -25,38 +25,36 @@ function getTwilio() {
   return twilioClient;
 }
 
-const USER_GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+const USER_GEMINI_KEY = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
 console.log(`[Gemini] Key loaded: prefix=${USER_GEMINI_KEY.substring(0,10)}... length=${USER_GEMINI_KEY.length}`);
 
 let aiClient: GoogleGenAI | null = null;
 function getAi() {
-  if (!aiClient && USER_GEMINI_KEY) {
+  if (!aiClient && USER_GEMINI_KEY && !USER_GEMINI_KEY.startsWith("AQ.") && !USER_GEMINI_KEY.startsWith("ya29.")) {
     aiClient = new GoogleGenAI({ apiKey: USER_GEMINI_KEY });
   }
   return aiClient;
 }
 
 async function generateGeminiContent(prompt: string, imagePart?: any): Promise<string> {
+  const cleanKey = USER_GEMINI_KEY;
+  if (!cleanKey) {
+    throw new Error("GEMINI_API_KEY is not set in environment variables");
+  }
+
   const modelsToTry = [
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-flash-latest",
-    "gemini-pro-latest",
-    "gemini-3.5-flash-lite"
+    "gemini-pro-latest"
   ];
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json"
-  };
-
-  // Only pass x-goog-api-key if not using AQ. token format (AQ. tokens are passed via ?key= param)
-  if (!USER_GEMINI_KEY.startsWith("AQ.") && !USER_GEMINI_KEY.startsWith("ya29.")) {
-    headers["x-goog-api-key"] = USER_GEMINI_KEY;
-  }
-
+  // Pure REST request without x-goog-api-key header to avoid ACCESS_TOKEN_TYPE_UNSUPPORTED
   for (const mName of modelsToTry) {
     try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${USER_GEMINI_KEY}`;
+      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 
       const requestParts: any[] = [{ text: prompt }];
       if (imagePart && imagePart.inlineData) {
@@ -75,7 +73,7 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
           generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
         },
         { 
-          headers, 
+          headers: { "Content-Type": "application/json" }, 
           timeout: 25000 
         }
       );
@@ -92,15 +90,11 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     } catch (restErr: any) {
       const status = restErr?.response?.status;
       const errMsg = restErr?.response?.data?.error?.message || restErr?.message || restErr;
-      console.log(`[Gemini REST] Model ${mName} info (HTTP ${status}): ${errMsg}`);
-
-      if (status === 400 || status === 401 || status === 403) {
-        // If auth fails on invalid credentials across endpoints, try next model or continue
-      }
+      console.log(`[Gemini REST] Model ${mName} (HTTP ${status}): ${errMsg}`);
     }
   }
 
-  // Fallback: SDK
+  // Fallback: SDK (only for standard AIza API keys)
   const ai = getAi();
   if (ai) {
     for (const modelName of modelsToTry) {
@@ -115,7 +109,7 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
           return response.text;
         }
       } catch (err: any) {
-        console.log(`[Gemini SDK] Model ${modelName} info:`, err?.message || err);
+        // Silent catch for SDK fallback
       }
     }
   }

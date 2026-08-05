@@ -44,29 +44,30 @@ function getTwilio() {
   }
   return twilioClient;
 }
-var USER_GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+var USER_GEMINI_KEY = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
 var aiClient = null;
 function getAi() {
-  if (!aiClient && USER_GEMINI_KEY) {
+  if (!aiClient && USER_GEMINI_KEY && !USER_GEMINI_KEY.startsWith("AQ.") && !USER_GEMINI_KEY.startsWith("ya29.")) {
     aiClient = new import_genai.GoogleGenAI({ apiKey: USER_GEMINI_KEY });
   }
   return aiClient;
 }
 async function generateGeminiContent(prompt, imagePart) {
+  const cleanKey = USER_GEMINI_KEY;
+  if (!cleanKey) {
+    throw new Error("GEMINI_API_KEY is not set in environment variables");
+  }
   const modelsToTry = [
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-flash-latest",
-    "gemini-pro-latest",
-    "gemini-3.5-flash-lite"
+    "gemini-pro-latest"
   ];
-  const headers = { "Content-Type": "application/json" };
-  if (!USER_GEMINI_KEY.startsWith("AQ.") && !USER_GEMINI_KEY.startsWith("ya29.")) {
-    headers["x-goog-api-key"] = USER_GEMINI_KEY;
-  }
   for (const mName of modelsToTry) {
     try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${USER_GEMINI_KEY}`;
+      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
       const requestParts = [{ text: prompt }];
       if (imagePart && imagePart.inlineData) {
         requestParts.push({
@@ -82,7 +83,7 @@ async function generateGeminiContent(prompt, imagePart) {
           contents: [{ parts: requestParts }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
         },
-        { headers, timeout: 25000 }
+        { headers: { "Content-Type": "application/json" }, timeout: 25000 }
       );
       if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
         console.log(`[Gemini] Success with model: ${mName}`);
@@ -91,7 +92,7 @@ async function generateGeminiContent(prompt, imagePart) {
     } catch (restErr) {
       const status = restErr?.response?.status;
       const errMsg = restErr?.response?.data?.error?.message || restErr?.message || restErr;
-      console.log(`[Gemini REST] Model ${mName} info (HTTP ${status}):`, errMsg);
+      console.log(`[Gemini REST] Model ${mName} (HTTP ${status}):`, errMsg);
     }
   }
   const ai = getAi();
@@ -105,7 +106,7 @@ async function generateGeminiContent(prompt, imagePart) {
         });
         if (response && response.text) return response.text;
       } catch (err) {
-        console.log(`[Gemini SDK] Model ${modelName} info:`, err?.message || err);
+        // Silent catch for SDK fallback
       }
     }
   }
