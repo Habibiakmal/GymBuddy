@@ -30,8 +30,12 @@ console.log(`[Gemini] Key loaded: prefix=${USER_GEMINI_KEY.substring(0,10)}... l
 
 let aiClient: GoogleGenAI | null = null;
 function getAi() {
-  if (!aiClient && USER_GEMINI_KEY && !USER_GEMINI_KEY.startsWith("AQ.") && !USER_GEMINI_KEY.startsWith("ya29.")) {
-    aiClient = new GoogleGenAI({ apiKey: USER_GEMINI_KEY });
+  if (!aiClient && USER_GEMINI_KEY) {
+    try {
+      aiClient = new GoogleGenAI({ apiKey: USER_GEMINI_KEY });
+    } catch (e) {
+      aiClient = null;
+    }
   }
   return aiClient;
 }
@@ -42,7 +46,6 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     throw new Error("GEMINI_API_KEY is not set in environment variables");
   }
 
-  const isBearer = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
   const modelsToTry = [
     "gemini-2.0-flash",
     "gemini-1.5-flash",
@@ -94,28 +97,26 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
       console.log(`[Gemini REST x-goog-api-key] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
     }
 
-    // Attempt 3: Header Authorization: Bearer (for AQ. / ya29. OAuth access tokens)
-    if (isBearer) {
-      try {
-        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
-        const requestParts: any[] = [{ text: prompt }];
-        if (imagePart && imagePart.inlineData) {
-          requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
-        }
-
-        const res = await axios.post(
-          restUrl,
-          { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
-          { headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cleanKey}` }, timeout: 20000 }
-        );
-
-        if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-          console.log(`[Gemini REST Bearer] Success with model: ${mName}`);
-          return res.data.candidates[0].content.parts[0].text;
-        }
-      } catch (restErr: any) {
-        console.log(`[Gemini REST Bearer] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+    // Attempt 3: Header Authorization: Bearer (for OAuth access tokens / GCP keys)
+    try {
+      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
+      const requestParts: any[] = [{ text: prompt }];
+      if (imagePart && imagePart.inlineData) {
+        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
       }
+
+      const res = await axios.post(
+        restUrl,
+        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
+        { headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cleanKey}` }, timeout: 20000 }
+      );
+
+      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        console.log(`[Gemini REST Bearer] Success with model: ${mName}`);
+        return res.data.candidates[0].content.parts[0].text;
+      }
+    } catch (restErr: any) {
+      console.log(`[Gemini REST Bearer] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
     }
   }
 
