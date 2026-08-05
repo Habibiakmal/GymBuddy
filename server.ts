@@ -1305,19 +1305,19 @@ Udah siap? Ayo kirim ${firstItemPrompt} pertama lo sekarang! 🔥`
       : "pertanyaan latihan";
 
     return [
-`🌿💛 Halo ${name}! Aku Mia, AI Coach & Nutritionist kamu. Selamat datang di GymBuddy AI! ✨
-Nggak perlu pusing install aplikasi lain, kita ngobrol dan pantau semuanya langsung dari WhatsApp ya!
+`🌿 Halo ${name}! Saya Coach Mia, AI Coach & Nutritionist kamu. Selamat datang di GymBuddy AI! ✨
+Tidak perlu pusing install aplikasi tambahan, kita bisa memantau nutrisi & kebugaran kamu langsung melalui WhatsApp ini.
 
 ${summarySection}
 
-Aku bakal temenin dan dukung kamu terus untuk capai impianmu! 🥰
+Saya siap mendampingi perjalanan kebugaran kamu dengan saran yang aman, halus, dan nyaman untuk tubuhmu.
 
 ${guides.join("\n\n")}
 
-Tips dari Mia:
-Dengarkan tubuhmu ya, tiap progress kecil itu berharga! 🌱
+Pesan dari Coach Mia:
+Dengarkan kondisi tubuhmu dengan baik, setiap progres kecil sangat berharga! 🌱
 
-Yuk, kita mulai! Coba kirim ${firstItemPrompt} pertamamu sekarang! 💛`
+Yuk, kita mulai! Coba kirim ${firstItemPrompt} pertama kamu sekarang! ✨`
     ];
   }
 }
@@ -2205,7 +2205,7 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
 
             const isMia = userData.persona === "mia" || userData.persona === "nikita";
             const personaInstruction = isMia
-              ? `PERSONA MIA: Kamu adalah pelatih (coach) wanita bernama Coach Mia. Kamu sabar, ramah, lembut, dan edukatif (aku/kamu). SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max atau menggunakan kata bro/lo/gue.`
+              ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
               : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
 
             const prompt = `INFORMASI PENGGUNA:
@@ -2591,7 +2591,7 @@ Keluarkan output JSON valid:
 
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia
-          ? `PERSONA MIA: Kamu adalah pelatih (coach) wanita bernama Coach Mia. Kamu sabar, ramah, lembut, dan edukatif (aku/kamu). SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max atau menggunakan kata bro/lo/gue.`
+          ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
           : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
 
         const activeService = userData.activeService || "both";
@@ -3799,8 +3799,8 @@ ${mistakes}
 
           const isMia = userData.persona === "mia" || userData.persona === "nikita";
           const personaInstruction = isMia
-            ? `PERSONA: Coach wanita bernama Coach Mia. Sabar, ramah, motivatif, gunakan bahasa lembut (aku/kamu).`
-            : `PERSONA: Coach pria bernama Coach Max. Tegas, penuh energi, gaul Jakarta (lo/gue).`;
+            ? `PERSONA MIA: Coach wanita bernama Coach Mia. Sangat santun, ramah, halus, lembut, dan profesional. DILARANG KERAS panggil "sayang/cinta/beb". Gunakan sapaan sopan (aku/kamu).`
+            : `PERSONA MAX: Coach pria bernama Coach Max. Tegas, penuh energi, gaul Jakarta (lo/gue).`;
 
           const dailyTotals = getDailyTotals(from);
           const todayMealLogsStr = (dbData.dailyLogs[`${from}_${getLocalDateStr()}`] || [])

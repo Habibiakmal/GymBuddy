@@ -559,16 +559,9 @@ export default function Dashboard({
     };
 
     window.addEventListener("focus", handleFocus);
-    const interval = setInterval(() => {
-      fetchUserProfile();
-      fetchMealsForDate(selectedDate);
-      fetchProgress();
-      fetchWaterIntake(selectedDate);
-    }, 3000);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
-      clearInterval(interval);
     };
   }, [selectedDate, activeUser.phone]);
 
