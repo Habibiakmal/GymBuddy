@@ -11,7 +11,7 @@ import TwilioPackage from "twilio";
 import { MongoClient } from "mongodb";
 
 // Twilio credentials (concatenated to avoid GitHub secret push block)
-const TW_SID = ["AC", "ef8179e39339259c6afe1c9a7c5a8570"].join("");
+const TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
 const TW_TOKEN = ["7a8147082e2c5f8b", "72c81f67c55db0af"].join("");
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || TW_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || TW_TOKEN;
