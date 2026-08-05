@@ -93,6 +93,30 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     } catch (restErr: any) {
       console.log(`[Gemini REST x-goog-api-key] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
     }
+
+    // Attempt 3: Header Authorization: Bearer (for AQ. / ya29. OAuth access tokens)
+    if (isBearer) {
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
+        const requestParts: any[] = [{ text: prompt }];
+        if (imagePart && imagePart.inlineData) {
+          requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
+        }
+
+        const res = await axios.post(
+          restUrl,
+          { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
+          { headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cleanKey}` }, timeout: 20000 }
+        );
+
+        if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+          console.log(`[Gemini REST Bearer] Success with model: ${mName}`);
+          return res.data.candidates[0].content.parts[0].text;
+        }
+      } catch (restErr: any) {
+        console.log(`[Gemini REST Bearer] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+      }
+    }
   }
 
   // Fallback: SDK (only for standard AIza API keys)
