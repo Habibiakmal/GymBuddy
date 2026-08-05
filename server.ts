@@ -3575,15 +3575,6 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             const rawText = await generateGeminiContent(prompt, imagePart);
             let parsed: any = extractAndParseJson(rawText);
 
-            if (!parsed || typeof parsed !== "object") {
-              const foodNameMatch = rawText.match(/"foodName"\s*:\s*"([^"]+)"/i);
-              const calMatch = rawText.match(/"calories"\s*:\s*(\d+)/i);
-              const protMatch = rawText.match(/"protein"\s*:\s*(\d+)/i);
-              const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
-              const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
-              const intentMatch = rawText.match(/"intent"\s*:\s*"([^"]+)"/i);
-              const eqMatch = rawText.match(/"equipmentName"\s*:\s*"([^"]+)"/i);
-
             // 0. Check if user is asking for today's daily rekap / meal history summary FIRST
             const isRekapQuery = /^(log\s+makanan\s*(ku|saya)?\s*hari\s*ini|rekap|riwayat|ringkasan\s*makanan|sisa\s*kalori|cek\s*kalori\s*hari\s*ini|laporan\s*makanan|makanan\s*hari\s*ini)/i.test(userText.trim());
 
