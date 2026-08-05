@@ -2710,18 +2710,39 @@ Keluarkan output JSON valid:
   });
 
   function generateInfographicSVG(parsed: any, userData: any): string {
-    const rawEqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
-    const rawDesc = parsed.description || "Melatih otot target secara optimal.";
-    const rawMuscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    const rawEqName = (parsed.equipmentName || "ALAT GYM").trim();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
+    const rawName = isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName;
 
-    const eqName = escapeXml(rawEqName);
-    const desc = escapeXml(rawDesc);
-    const muscles = escapeXml(rawMuscles);
+    const eqName = escapeXml(rawName.toUpperCase());
+    const desc = escapeXml(parsed.description || "Melatih kelompok otot target secara optimal dan aman.");
+    const muscles = escapeXml(parsed.targetMuscles || "Punggung, Glutes, Hamstring");
 
-    const partsList = (Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki: Mengunci kaki", "Foot Plate: Pijakan kaki", "Pad Paha: Menopang paha", "Handle: Pegangan posisi"]).map((x: any) => escapeXml(String(x)));
-    const stepsList = (Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi: Pad paha sejajar pinggul", "Posisi Awal: Kaki di roller, tangan di dada", "Gerakan Turun: Turunkan badan perlahan", "Gerakan Naik: Angkat badan kencangkan otot target"]).map((x: any) => escapeXml(String(x)));
-    const tipsList = (Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target"]).map((x: any) => escapeXml(String(x)));
-    const mistakesList = (Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan saat naik", "Menggunakan momentum"]).map((x: any) => escapeXml(String(x)));
+    const partsList = (Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : [
+      "Bagian Utama / Pegangan (Grip)",
+      "Beban / Weight Plate",
+      "Kunci Pengaman / Lock Pin",
+      "Bantalan Penopang / Support Pad"
+    ]).map((x: any) => escapeXml(String(x)));
+
+    const stepsList = (Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : [
+      "Atur Posisi: Sesuaikan beban dan posisi tubuh secara stabil",
+      "Posisi Awal: Kunci pegangan, tubuh tegap, kencangkan otot core",
+      "Gerakan Latihan: Eksekusi gerakan perlahan 2-3 detik",
+      "Gerakan Akhir: Kembali ke posisi awal dengan terkontrol"
+    ]).map((x: any) => escapeXml(String(x)));
+
+    const tipsList = (Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : [
+      "Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)",
+      "Fokus pada kontraksi otot target utama",
+      "Jaga postur tubuh tetap lurus & atur pernapasan"
+    ]).map((x: any) => escapeXml(String(x)));
+
+    const mistakesList = (Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : [
+      "Menggunakan ayunan/momentum berlebihan",
+      "Postur punggung membungkuk saat mengangkat beban",
+      "Rentang gerakan terlalu pendek (half reps)"
+    ]).map((x: any) => escapeXml(String(x)));
 
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
@@ -2749,106 +2770,198 @@ Keluarkan output JSON valid:
           <stop offset="0%" stop-color="#1a1c26"/>
           <stop offset="100%" stop-color="#14151f"/>
         </linearGradient>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#eab308"/>
+          <stop offset="100%" stop-color="#ca8a04"/>
+        </linearGradient>
       </defs>
 
       <!-- Background Poster -->
       <rect width="800" height="1200" fill="url(#bgGrad)"/>
-      <rect x="16" y="16" width="768" height="1168" rx="24" fill="#12131a" stroke="#eab308" stroke-width="3"/>
+      <rect x="16" y="16" width="768" height="1168" rx="24" fill="#12131a" stroke="#eab308" stroke-width="2.5"/>
 
-      <!-- Header Badge & Title -->
-      <rect x="250" y="40" width="300" height="32" rx="16" fill="rgba(234, 179, 8, 0.15)" stroke="#eab308" stroke-width="1.5"/>
-      <text x="400" y="61" fill="#eab308" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="2">⚡ GYMBUDDY AI • INFOGRAFIS ALAT</text>
+      <!-- Header Section with Title & Machine Graphic Banner -->
+      <g transform="translate(40, 36)">
+        <rect x="0" y="0" width="280" height="28" rx="14" fill="rgba(234, 179, 8, 0.15)" stroke="#eab308" stroke-width="1.2"/>
+        <text x="140" y="18.5" fill="#eab308" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" letter-spacing="1.5">⚡ GYMBUDDY AI • INFOGRAFIS ALAT</text>
 
-      <text x="400" y="105" fill="#FFFFFF" font-family="sans-serif" font-size="30" font-weight="900" text-anchor="middle">TUTORIAL CARA PAKAI ALAT INI</text>
-      <text x="400" y="142" fill="#eab308" font-family="sans-serif" font-size="24" font-weight="bold" text-anchor="middle">${eqName}</text>
-      <text x="400" y="170" fill="#94a3b8" font-family="sans-serif" font-size="14" text-anchor="middle">${desc.substring(0, 85)}</text>
+        <text x="0" y="62" fill="#FFFFFF" font-family="sans-serif" font-size="28" font-weight="900" letter-spacing="0.5">TUTORIAL CARA PAKAI ALAT INI</text>
+        <text x="0" y="94" fill="#eab308" font-family="sans-serif" font-size="22" font-weight="bold">${eqName}</text>
+        <text x="0" y="118" fill="#94a3b8" font-family="sans-serif" font-size="13">${desc.substring(0, 75)}</text>
 
-      <line x1="40" y1="190" x2="760" y2="190" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-
-      <!-- Section 1: BAGIAN ALAT -->
-      <rect x="40" y="210" width="720" height="175" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
-      <text x="60" y="240" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">🔩 BAGIAN UTAMA ALAT</text>
-
-      ${partsList.slice(0, 4).map((p: string, i: number) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = 60 + col * 350;
-        const y = 260 + row * 55;
-        return `
-          <g transform="translate(${x}, ${y})">
-            <rect width="330" height="45" rx="10" fill="#222533" stroke="rgba(255,255,255,0.04)"/>
-            <circle cx="25" cy="22.5" r="13" fill="#eab308"/>
-            <text x="25" y="27" fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">${i + 1}</text>
-            <text x="48" y="27" fill="#f8fafc" font-family="sans-serif" font-size="13" font-weight="bold">${p.substring(0, 38)}</text>
-          </g>
-        `;
-      }).join("")}
-
-      <!-- Section 2: CARA PAKAI STEP BY STEP -->
-      <rect x="40" y="405" width="720" height="325" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
-      <text x="60" y="435" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">📐 CARA PAKAI (STEP-BY-STEP)</text>
-
-      ${stepsList.slice(0, 4).map((s: string, i: number) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = 60 + col * 350;
-        const y = 455 + row * 130;
-        return `
-          <g transform="translate(${x}, ${y})">
-            <rect width="330" height="115" rx="12" fill="#222533" stroke="rgba(255,255,255,0.04)"/>
-            <circle cx="24" cy="24" r="13" fill="#eab308"/>
-            <text x="24" y="28.5" fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">${i + 1}</text>
-            <text x="46" y="28" fill="#eab308" font-family="sans-serif" font-size="13" font-weight="bold">LANGKAH ${i + 1}</text>
-            <text x="16" y="55" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">${s.substring(0, 42)}</text>
-            <text x="16" y="75" fill="#cbd5e1" font-family="sans-serif" font-size="11">${s.substring(42, 90) || ""}</text>
-            <text x="16" y="93" fill="#94a3b8" font-family="sans-serif" font-size="11">${s.substring(90, 135) || ""}</text>
-          </g>
-        `;
-      }).join("")}
-
-      <!-- Section 3: TIPS & KESALAHAN UMUM -->
-      <g transform="translate(40, 748)">
-        <!-- Tips Card -->
-        <rect x="0" y="0" width="350" height="210" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
-        <text x="20" y="30" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold">💡 TIPS PERFORMA</text>
-        ${tipsList.slice(0, 3).map((t: string, i: number) => `
-          <g transform="translate(20, ${55 + i * 48})">
-            <text x="0" y="14" fill="#22c55e" font-size="14">✅</text>
-            <text x="24" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="12" font-weight="bold">${t.substring(0, 38)}</text>
-          </g>
-        `).join("")}
-
-        <!-- Kesalahan Umum Card -->
-        <rect x="370" y="0" width="350" height="210" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
-        <text x="390" y="30" fill="#ef4444" font-family="sans-serif" font-size="15" font-weight="bold">❌ KESALAHAN UMUM</text>
-        ${mistakesList.slice(0, 3).map((m: string, i: number) => `
-          <g transform="translate(390, ${55 + i * 48})">
-            <text x="0" y="14" fill="#ef4444" font-size="14">⚠️</text>
-            <text x="24" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="12" font-weight="bold">${m.substring(0, 38)}</text>
-          </g>
-        `).join("")}
+        <!-- Right Machine Illustration Banner Graphics -->
+        <g transform="translate(520, 5)">
+          <rect x="0" y="0" width="200" height="120" rx="16" fill="#1e2230" stroke="rgba(234,179,8,0.2)"/>
+          <path d="M 40 90 L 160 90 M 60 90 L 80 40 L 140 40 L 140 90 M 110 40 L 110 25 M 95 25 L 125 25" stroke="#eab308" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <circle cx="80" cy="40" r="6" fill="#06b6d4"/>
+          <circle cx="140" cy="40" r="6" fill="#06b6d4"/>
+          <circle cx="110" cy="25" r="5" fill="#eab308"/>
+          <text x="100" y="110" fill="#94a3b8" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">DIAGRAM VISUAL ALAT</text>
+        </g>
       </g>
 
-      <!-- Section 4: REKOMENDASI LATIHAN -->
-      <rect x="40" y="975" width="720" height="145" rx="16" fill="url(#cardGrad)" stroke="rgba(234, 179, 8, 0.3)"/>
-      <text x="60" y="1005" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">🎯 OTOT DILATIH: ${muscles.substring(0, 45)}</text>
+      <line x1="40" y1="175" x2="760" y2="175" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
 
-      <g transform="translate(60, 1022)">
-        <rect x="0" y="0" width="220" height="75" rx="12" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
-        <text x="110" y="36" fill="#eab308" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle">${sets}</text>
-        <text x="110" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">SETS</text>
+      <!-- Section 1: BAGIAN ALAT (Machine Diagram Left + Callout Pins Right) -->
+      <g transform="translate(40, 190)">
+        <rect x="0" y="0" width="720" height="185" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+        <rect x="16" y="14" width="130" height="24" rx="12" fill="rgba(234,179,8,0.2)"/>
+        <text x="81" y="30" fill="#eab308" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle">🔩 BAGIAN ALAT</text>
 
-        <rect x="250" y="0" width="220" height="75" rx="12" fill="rgba(6, 182, 212, 0.1)" stroke="rgba(6, 182, 212, 0.3)"/>
-        <text x="360" y="36" fill="#06b6d4" font-family="sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${reps}</text>
-        <text x="360" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">REPETISI</text>
+        <!-- Machine Diagram Pin Graphic on Left -->
+        <g transform="translate(20, 48)">
+          <rect x="0" y="0" width="220" height="120" rx="12" fill="#12141d" stroke="rgba(255,255,255,0.05)"/>
+          <path d="M 30 95 L 190 95 M 50 95 L 80 40 L 160 40 L 180 95" stroke="#475569" stroke-width="5" fill="none"/>
+          <rect x="90" y="30" width="50" height="18" rx="4" fill="#ca8a04"/>
+          <circle cx="50" cy="95" r="10" fill="#334155"/>
+          <circle cx="180" cy="95" r="10" fill="#334155"/>
+          <circle cx="50" cy="70" r="10" fill="#eab308"/><text x="50" y="74" fill="#000" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">1</text>
+          <circle cx="180" cy="70" r="10" fill="#eab308"/><text x="180" y="74" fill="#000" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">2</text>
+          <circle cx="115" cy="22" r="10" fill="#eab308"/><text x="115" y="26" fill="#000" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">3</text>
+          <circle cx="160" cy="35" r="10" fill="#eab308"/><text x="160" y="39" fill="#000" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">4</text>
+        </g>
 
-        <rect x="500" y="0" width="220" height="75" rx="12" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
-        <text x="610" y="36" fill="#eab308" font-family="sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${rest}</text>
-        <text x="610" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">ISTIRAHAT</text>
+        <!-- Right Side Parts Legend (4 Callout Items) -->
+        <g transform="translate(260, 48)">
+          ${partsList.slice(0, 4).map((p: string, i: number) => {
+            const y = i * 28;
+            return `
+              <g transform="translate(0, ${y})">
+                <circle cx="12" cy="10" r="10" fill="#eab308"/>
+                <text x="12" y="14" fill="#000" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">${i + 1}</text>
+                <text x="32" y="14" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">${p.substring(0, 48)}</text>
+              </g>
+            `;
+          }).join("")}
+        </g>
+      </g>
+
+      <!-- Section 2: CARA PAKAI (4 Grid Step Cards with Pose Graphics) -->
+      <g transform="translate(40, 390)">
+        <rect x="0" y="0" width="720" height="345" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+        <rect x="16" y="14" width="130" height="24" rx="12" fill="rgba(234,179,8,0.2)"/>
+        <text x="81" y="30" fill="#eab308" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle">📐 CARA PAKAI</text>
+
+        ${stepsList.slice(0, 4).map((s: string, i: number) => {
+          const col = i % 2;
+          const row = Math.floor(i / 2);
+          const x = 16 + col * 348;
+          const y = 48 + row * 140;
+
+          const posePaths = [
+            "M 30 65 L 30 40 L 45 25 M 30 40 L 15 50 M 45 25 L 60 40 L 65 65",
+            "M 25 55 L 45 45 L 65 45 M 45 45 L 35 30 M 65 45 L 75 60",
+            "M 20 60 L 40 30 L 65 50 M 40 30 L 55 20 M 65 50 L 70 70",
+            "M 25 45 L 50 35 L 70 30 M 50 35 L 40 20 M 70 30 L 80 50"
+          ];
+
+          return `
+            <g transform="translate(${x}, ${y})">
+              <rect width="338" height="130" rx="12" fill="#181a24" stroke="rgba(255,255,255,0.05)"/>
+              <circle cx="22" cy="22" r="11" fill="#eab308"/>
+              <text x="22" y="26" fill="#000" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">${i + 1}</text>
+              <text x="40" y="26" fill="#eab308" font-family="sans-serif" font-size="13" font-weight="bold">LANGKAH ${i + 1}</text>
+
+              <g transform="translate(16, 42)">
+                <rect width="90" height="72" rx="8" fill="#10121a" stroke="rgba(234,179,8,0.15)"/>
+                <path d="${posePaths[i]}" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" fill="none"/>
+                <circle cx="${35 + i * 5}" cy="20" r="5" fill="#eab308"/>
+              </g>
+
+              <text x="118" y="60" fill="#f8fafc" font-family="sans-serif" font-size="11" font-weight="bold">${s.substring(0, 32)}</text>
+              <text x="118" y="78" fill="#cbd5e1" font-family="sans-serif" font-size="10">${s.substring(32, 68) || ""}</text>
+              <text x="118" y="94" fill="#94a3b8" font-family="sans-serif" font-size="10">${s.substring(68, 105) || ""}</text>
+            </g>
+          `;
+        }).join("")}
+      </g>
+
+      <!-- Section 3: TIPS & KESALAHAN UMUM (With Posture Warning Graphic) -->
+      <g transform="translate(40, 750)">
+        <!-- Tips Card -->
+        <g transform="translate(0, 0)">
+          <rect x="0" y="0" width="348" height="215" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+          <rect x="16" y="14" width="80" height="22" rx="11" fill="rgba(34,197,94,0.15)"/>
+          <text x="56" y="29" fill="#22c55e" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">💡 TIPS</text>
+
+          ${tipsList.slice(0, 4).map((t: string, i: number) => `
+            <g transform="translate(16, ${48 + i * 40})">
+              <circle cx="10" cy="10" r="8" fill="#22c55e"/>
+              <text x="10" y="14" fill="#000" font-size="10" text-anchor="middle">✓</text>
+              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${t.substring(0, 40)}</text>
+            </g>
+          `).join("")}
+        </g>
+
+        <!-- Kesalahan Umum Card with Posture Warning Diagram -->
+        <g transform="translate(372, 0)">
+          <rect x="0" y="0" width="348" height="215" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+          <rect x="16" y="14" width="140" height="22" rx="11" fill="rgba(239,68,68,0.15)"/>
+          <text x="86" y="29" fill="#ef4444" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">❌ KESALAHAN UMUM</text>
+
+          ${mistakesList.slice(0, 3).map((m: string, i: number) => `
+            <g transform="translate(16, ${48 + i * 40})">
+              <circle cx="10" cy="10" r="8" fill="#ef4444"/>
+              <text x="10" y="14" fill="#fff" font-size="10" text-anchor="middle">✕</text>
+              <text x="26" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold">${m.substring(0, 34)}</text>
+            </g>
+          `).join("")}
+
+          <g transform="translate(230, 130)">
+            <rect width="100" height="70" rx="8" fill="#12141f" stroke="rgba(239,68,68,0.3)"/>
+            <path d="M 20 50 Q 50 15 80 50" stroke="#ef4444" stroke-width="3" stroke-dasharray="3,3" fill="none"/>
+            <circle cx="50" cy="28" r="7" fill="#ef4444"/>
+            <text x="50" y="32" fill="#fff" font-size="9" text-anchor="middle">✕</text>
+            <text x="50" y="63" fill="#94a3b8" font-family="sans-serif" font-size="9" text-anchor="middle">Postur Salah</text>
+          </g>
+        </g>
+      </g>
+
+      <!-- Section 4: OTOT DILATIH & REKOMENDASI -->
+      <g transform="translate(40, 980)">
+        <!-- Left: Muscle Anatomy Box -->
+        <g transform="translate(0, 0)">
+          <rect x="0" y="0" width="348" height="140" rx="16" fill="url(#cardGrad)" stroke="rgba(234, 179, 8, 0.2)"/>
+          <rect x="16" y="14" width="140" height="22" rx="11" fill="rgba(234, 179, 8, 0.15)"/>
+          <text x="86" y="29" fill="#eab308" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">🎯 OTOT DILATIH</text>
+
+          <g transform="translate(16, 45)">
+            <rect width="80" height="80" rx="8" fill="#12141f" stroke="rgba(234,179,8,0.2)"/>
+            <path d="M 40 15 L 40 70 M 25 30 L 55 30 M 25 30 L 20 55 M 55 30 L 60 55 M 32 70 L 30 90 M 48 70 L 50 90" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="40" cy="15" r="6" fill="#475569"/>
+            <ellipse cx="40" cy="35" rx="12" ry="8" fill="rgba(234,179,8,0.7)"/>
+            <ellipse cx="40" cy="50" rx="10" ry="6" fill="rgba(234,179,8,0.7)"/>
+          </g>
+
+          <text x="110" y="65" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">• ${muscles.substring(0, 28)}</text>
+          <text x="110" y="85" fill="#cbd5e1" font-family="sans-serif" font-size="11">• Core & Stabilizer Otot</text>
+          <text x="110" y="105" fill="#94a3b8" font-family="sans-serif" font-size="10">Target utama latihan ini</text>
+        </g>
+
+        <!-- Right: Rekomendasi 3 Stat Cards -->
+        <g transform="translate(372, 0)">
+          <rect x="0" y="0" width="348" height="140" rx="16" fill="url(#cardGrad)" stroke="rgba(234, 179, 8, 0.2)"/>
+          <rect x="16" y="14" width="130" height="22" rx="11" fill="rgba(6,182,212,0.15)"/>
+          <text x="81" y="29" fill="#06b6d4" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">📊 REKOMENDASI</text>
+
+          <g transform="translate(16, 48)">
+            <rect x="0" y="0" width="98" height="75" rx="10" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
+            <text x="49" y="35" fill="#eab308" font-family="sans-serif" font-size="16" font-weight="bold" text-anchor="middle">${sets}</text>
+            <text x="49" y="58" fill="#94a3b8" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">SETS</text>
+
+            <rect x="108" y="0" width="102" height="75" rx="10" fill="rgba(6, 182, 212, 0.1)" stroke="rgba(6, 182, 212, 0.3)"/>
+            <text x="159" y="35" fill="#06b6d4" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle">${reps}</text>
+            <text x="159" y="58" fill="#94a3b8" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">REPETISI</text>
+
+            <rect x="220" y="0" width="98" height="75" rx="10" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
+            <text x="269" y="35" fill="#eab308" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle">${rest}</text>
+            <text x="269" y="58" fill="#94a3b8" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle">ISTIRAHAT</text>
+          </g>
+        </g>
       </g>
 
       <!-- Footer -->
-      <text x="400" y="1155" fill="#64748b" font-family="sans-serif" font-size="12" text-anchor="middle">Official GymBuddy AI Guide • Dibuat khusus untuk ${userName}</text>
+      <text x="400" y="1150" fill="#64748b" font-family="sans-serif" font-size="11" text-anchor="middle">Official GymBuddy AI Visual Infographic Guide • Khusus untuk ${userName}</text>
     </svg>`;
   }
 
@@ -2857,7 +2970,7 @@ Keluarkan output JSON valid:
     const { id } = req.params;
     const cleanId = id.replace(/\.(svg|png|jpg|jpeg)$/i, "");
     const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
-    const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
+    const parsed = info ? info.parsed : { equipmentName: "Dumbbell Hex" };
     const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
 
     const svgStr = generateInfographicSVG(parsed, userData);
@@ -2885,24 +2998,27 @@ Keluarkan output JSON valid:
     const info = (dbData.infographics && dbData.infographics[id]) ? dbData.infographics[id] : null;
 
     const parsed = info ? info.parsed : {
-      equipmentName: "Hyperextension Bench",
-      description: "Alat ini digunakan untuk melatih otot punggung bawah, glutes, dan hamstring dengan gerakan hyperextension.",
-      targetMuscles: "Erector Spinae (Punggung Bawah), Gluteus (Bokong), Hamstring",
-      parts: ["Roller Kaki: Mengunci pergelangan kaki", "Foot Plate: Tempat pijakan kaki agar lebih stabil", "Pad Paha: Untuk menopang bagian atas paha", "Handle: Pegangan untuk membantu posisi tubuh"],
-      steps: ["Atur Posisi: Pastikan pad paha sejajar dengan pinggul. Sesuaikan agar nyaman.", "Posisi Awal: Berbaring menghadap ke bawah, kaki dikaitkan di bawah roller, tangan di dada.", "Gerakan Turun: Turunkan tubuh perlahan ke bawah hingga punggung bagian bawah terasa meregang.", "Gerakan Naik: Angkat tubuh kembali ke atas dengan mengencangkan otot punggung bawah dan glutes."],
-      tips: ["Gerakan perlahan dan terkontrol.", "Fokus pada kontraksi otot punggung bawah dan glutes.", "Jaga punggung tetap lurus, jangan membungkuk.", "Lakukan sesuai kemampuan, jangan memaksakan beban."],
-      mistakes: ["Hiperextensi berlebihan saat naik.", "Menggunakan momentum, bukan kekuatan otot.", "Posisi pad terlalu rendah atau terlalu tinggi.", "Gerakan terlalu cepat."]
+      equipmentName: "Dumbbell Hex",
+      description: "Alat ini digunakan untuk melatih kelompok otot target dengan gerakan isolasi atau kompaun.",
+      targetMuscles: "Biceps, Triceps, Chest, Shoulder, Back",
+      parts: ["Pegangan (Grip)", "Beban (Weight Head)", "Hexagonal Edge", "Iron Core"],
+      steps: ["Atur Posisi: Berdiri tegak atau duduk di bench dengan stabil.", "Posisi Awal: Pegang dumbbell dengan erat di kedua tangan.", "Gerakan Latihan: Angkat/dorong dumbbell perlahan 2-3 detik.", "Gerakan Akhir: Turunkan kembali ke posisi awal dengan terkontrol."],
+      tips: ["Gerakan perlahan dan terkontrol.", "Fokus pada kontraksi otot target.", "Jaga punggung tetap lurus.", "Gunakan beban yang sesuai."],
+      mistakes: ["Menggunakan ayunan/momentum.", "Posisi punggung membungkuk.", "Gerakan terlalu cepat."]
     };
     const userData = info ? info.userData : { name: "Pengguna GymBuddy", goalTitle: "Menurunkan Berat Badan" };
 
-    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
-    const desc = parsed.description || "Melatih otot target secara optimal.";
+    const rawEqName = (parsed.equipmentName || "ALAT GYM").trim();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
+    const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
+
+    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
     const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
 
-    const partsList = Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki", "Foot Plate", "Pad Paha", "Handle"];
-    const stepsList = Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Turun", "Gerakan Naik"];
-    const tipsList = Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
-    const mistakesList = Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan", "Menggunakan momentum"];
+    const partsList = Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : ["Pegangan Utama", "Beban Principal", "Pengunci", "Support Pad"];
+    const stepsList = Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Latihan", "Gerakan Akhir"];
+    const tipsList = Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
+    const mistakesList = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : ["Menggunakan momentum", "Postur membungkuk"];
 
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
@@ -2954,7 +3070,9 @@ Keluarkan output JSON valid:
       box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 35px rgba(234, 179, 8, 0.2);
     }
     .header {
-      text-align: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 24px;
       padding-bottom: 20px;
       border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -2965,33 +3083,32 @@ Keluarkan output JSON valid:
       color: #eab308;
       font-family: 'Outfit', sans-serif;
       font-weight: 800;
-      font-size: 13px;
+      font-size: 12px;
       letter-spacing: 2px;
-      padding: 6px 18px;
+      padding: 6px 16px;
       border-radius: 20px;
       border: 1px solid rgba(234, 179, 8, 0.4);
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .title {
       font-family: 'Outfit', sans-serif;
-      font-size: 34px;
+      font-size: 28px;
       font-weight: 900;
       line-height: 1.1;
       color: #ffffff;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
     .machine-name {
       color: #eab308;
       font-family: 'Outfit', sans-serif;
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 800;
       margin-top: 6px;
     }
     .sub-desc {
       color: #94a3b8;
-      font-size: 14px;
-      margin-top: 10px;
+      font-size: 13px;
+      margin-top: 8px;
       line-height: 1.5;
     }
     .section-box {
@@ -3003,7 +3120,7 @@ Keluarkan output JSON valid:
     }
     .sec-title {
       font-family: 'Outfit', sans-serif;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 800;
       letter-spacing: 1px;
       color: #eab308;
@@ -3022,23 +3139,23 @@ Keluarkan output JSON valid:
       border: 1px solid rgba(255,255,255,0.04);
     }
     .card-num {
-      width: 26px; height: 26px;
+      width: 24px; height: 24px;
       background: #eab308; color: #000;
-      border-radius: 50%; font-weight: 900; font-size: 13px;
+      border-radius: 50%; font-weight: 900; font-size: 12px;
       display: flex; align-items: center; justify-content: center;
       margin-bottom: 10px;
     }
-    .card-text { font-size: 13px; font-weight: 600; color: #f8fafc; line-height: 1.4; }
-    .list-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; margin-bottom: 10px; color: #cbd5e1; line-height: 1.4; }
+    .card-text { font-size: 12px; font-weight: 600; color: #f8fafc; line-height: 1.4; }
+    .list-item { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin-bottom: 10px; color: #cbd5e1; line-height: 1.4; }
     .stat-card {
       background: linear-gradient(135deg, rgba(234,179,8,0.12) 0%, rgba(6,182,212,0.12) 100%);
       border: 1px solid rgba(234,179,8,0.3);
       border-radius: 14px;
-      padding: 16px;
+      padding: 14px;
       text-align: center;
     }
-    .stat-val { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; color: #eab308; }
-    .stat-lbl { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+    .stat-val { font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800; color: #eab308; }
+    .stat-lbl { font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
     .footer {
       text-align: center; font-size: 12px; color: #64748b; margin-top: 20px;
     }
@@ -3047,10 +3164,12 @@ Keluarkan output JSON valid:
 <body>
   <div class="poster">
     <div class="header">
-      <div class="badge">⚡ GYMBUDDY AI • INFOGRAFIS VISUAL RESMI</div>
-      <div class="title">TUTORIAL CARA PAKAI ALAT INI</div>
-      <div class="machine-name">${eqName}</div>
-      <div class="sub-desc">${desc}</div>
+      <div>
+        <div class="badge">⚡ GYMBUDDY AI • INFOGRAFIS VISUAL RESMI</div>
+        <div class="title">TUTORIAL CARA PAKAI ALAT INI</div>
+        <div class="machine-name">${eqName}</div>
+        <div class="sub-desc">${desc}</div>
+      </div>
     </div>
 
     <!-- BAGIAN ALAT -->
@@ -3138,26 +3257,27 @@ Keluarkan output JSON valid:
     const infographicUrl = `${baseUrl}/infographic/${infoId}`;
 
     const rawEqName = (parsed.equipmentName || "").trim();
-    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Alat Gym / Mesin") || rawEqName.includes("Nama Alat Gym");
-    const eqName = (isGeneric ? "Hyperextension Bench" : rawEqName).toUpperCase();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
+    const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
+
     const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    const muscles = parsed.targetMuscles || "Otot Target Latihan";
     
-    const parts = Array.isArray(parsed.parts)
+    const parts = Array.isArray(parsed.parts) && parsed.parts.length > 0
       ? parsed.parts.map((p: string, i: number) => `  ${i + 1}️⃣ *${p}*`).join("\n")
-      : "  1️⃣ *Roller / Pad Penopang*: Mengunci posisi tubuh\n  2️⃣ *Handle / Pegangan*: Menjaga keseimbangan posisi\n  3️⃣ *Foot Plate*: Pijakan kaki utama";
+      : "  1️⃣ *Pegangan Utama / Grip*: Menjaga posisi tangan\n  2️⃣ *Beban / Resistance*: Pengatur intensitas\n  3️⃣ *Support Pad / Pijakan*: Menjaga stabilitas postur";
 
-    const steps = Array.isArray(parsed.steps)
+    const steps = Array.isArray(parsed.steps) && parsed.steps.length > 0
       ? parsed.steps.map((s: string, i: number) => `  ${i + 1}️⃣ *${s}*`).join("\n")
-      : "  1️⃣ *Atur Posisi*: Sesuaikan tinggi pad dengan pinggul\n  2️⃣ *Posisi Awal*: Tubuh lurus, tangan silang di dada\n  3️⃣ *Gerakan Turun*: Turunkan badan perlahan hingga terasa regangan\n  4️⃣ *Gerakan Naik*: Angkat badan kembali kencangkan otot target";
+      : "  1️⃣ *Atur Posisi*: Sesuaikan beban & posisi awal\n  2️⃣ *Posisi Awal*: Kencangkan otot core dan pegang alat\n  3️⃣ *Gerakan Latihan*: Tarik/Dorong beban perlahan\n  4️⃣ *Gerakan Akhir*: Kembali ke posisi semula secara terkontrol";
 
-    const tips = Array.isArray(parsed.tips)
+    const tips = Array.isArray(parsed.tips) && parsed.tips.length > 0
       ? parsed.tips.map((t: string) => `  ✅ ${t}`).join("\n")
       : "  ✅ Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  ✅ Jaga punggung tetap lurus, jangan membungkuk\n  ✅ Fokus pada kontraksi otot target";
 
-    const mistakes = Array.isArray(parsed.mistakes)
+    const mistakes = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0
       ? parsed.mistakes.map((m: string) => `  ⚠️ ${m}`).join("\n")
-      : "  ⚠️ Hiperextensi berlebihan saat naik\n  ⚠️ Menggunakan ayunan/momentum, bukan otot";
+      : "  ⚠️ Menggunakan ayunan/momentum, bukan kekuatan otot\n  ⚠️ Postur punggung melengkung saat beban berat";
 
     // Customize sets/reps to user goal!
     let defaultSets = "3 - 4 Set";
