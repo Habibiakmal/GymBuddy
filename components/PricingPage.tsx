@@ -173,43 +173,43 @@ export default function PricingPage({
       {/* 3 BENTO CARDS PRICING GRID (Matching requested design) */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
         
-        {/* CARD 1: BASIC PLAN (WHITE CARD) */}
-        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all">
+        {/* CARD 1: ADVANCED PLAN - NUTRITIONIST */}
+        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all border border-neutral-200">
           <div>
             <div className="mb-6">
               <h3 className="text-xl font-['Archivo_Black'] text-black">
-                {isEN ? "Basic Plan" : "Paket Basic"}
+                {isEN ? "Advanced: Nutritionist" : "Advanced: AI Nutritionist"}
               </h3>
               <p className="text-xs text-neutral-500 font-medium mt-1">
-                {isEN ? "Ideal for beginners starting their journey" : "Cocok untuk pemula yang baru mulai"}
+                {isEN ? "Focused 100% on meal logging & macro coaching" : "Fokus 100% pada hitung kalori & nutrisi makanan"}
               </p>
             </div>
 
             {/* Price */}
             <div className="flex items-baseline gap-1.5 mb-6">
               <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-black">
-                {billingCycle === "monthly" ? (isEN ? "$29" : "Rp 49rb") : (isEN ? "$23" : "Rp 39rb")}
+                {isEN ? "$5" : "Rp 79rb"}
               </span>
               <span className="text-neutral-500 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
             </div>
 
             {/* Select Plan Button */}
             <button
-              onClick={() => onSelectPlanAndStart("advanced")}
+              onClick={() => onSelectPlanAndStart("advanced", "nutrition")}
               className="w-full py-3.5 rounded-full border border-neutral-300 hover:border-black text-black font-bold text-sm transition-all mb-8 cursor-pointer"
             >
-              {isEN ? "Select Plan" : "Pilih Paket"}
+              {isEN ? "Select Nutritionist Plan" : "Pilih AI Nutritionist"}
             </button>
           </div>
 
-          {/* Features Box (Gray Sub-Container) */}
+          {/* Features Box */}
           <div className="bg-[#ECEEF2] rounded-2xl p-5 space-y-3">
             {[
-              isEN ? "24/7 WhatsApp AI Assistant" : "Asisten WhatsApp AI 24/7",
-              isEN ? "Nutrition & Calorie Tracker" : "Hitung Kalori & Foto Makanan",
-              isEN ? "BMR & Metabolism Calculator" : "Kalkulator BMR & Metabolisme",
-              isEN ? "Basic Weekly Progress Report" : "Laporan Progress Mingguan Dasar",
-              isEN ? "10 meal logs per day" : "10 log makanan per hari"
+              isEN ? "Dedicated AI Nutritionist Persona" : "Persona Asisten AI Nutritionist",
+              isEN ? "Photo Food Logging & Macro Breakdown" : "Pencatatan Makanan via Foto & Makro",
+              isEN ? "BMR, TDEE & Deficit Calculator" : "Kalkulator BMR, TDEE & Target Defisit",
+              isEN ? "Daily WhatsApp Nutrition Rekap" : "Rekap Nutrisi Harian di WhatsApp",
+              isEN ? "Unlimited Daily Meal Logs" : "Unlimited Log Makanan Harian"
             ].map((feat, idx) => (
               <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-neutral-800">
                 <Check className="w-4 h-4 text-black shrink-0" strokeWidth={2.5} />
@@ -219,97 +219,97 @@ export default function PricingPage({
           </div>
         </div>
 
-        {/* CARD 2: PRO PLAN / BUSINESS (BLACK FEATURED CARD) */}
-        <div className="bg-[#0A0A0A] text-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden transform md:-translate-y-2">
+        {/* CARD 2: ADVANCED PLAN - WORKOUT COACH */}
+        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all border border-neutral-200">
+          <div>
+            <div className="mb-6">
+              <h3 className="text-xl font-['Archivo_Black'] text-black">
+                {isEN ? "Advanced: Workout Coach" : "Advanced: AI Workout Coach"}
+              </h3>
+              <p className="text-xs text-neutral-500 font-medium mt-1">
+                {isEN ? "Focused 100% on exercises & posture feedback" : "Fokus 100% pada variasi latihan & koreksi postur"}
+              </p>
+            </div>
+
+            {/* Price */}
+            <div className="flex items-baseline gap-1.5 mb-6">
+              <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-black">
+                {isEN ? "$5" : "Rp 79rb"}
+              </span>
+              <span className="text-neutral-500 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
+            </div>
+
+            {/* Select Plan Button */}
+            <button
+              onClick={() => onSelectPlanAndStart("advanced", "coach")}
+              className="w-full py-3.5 rounded-full border border-neutral-300 hover:border-black text-black font-bold text-sm transition-all mb-8 cursor-pointer"
+            >
+              {isEN ? "Select Workout Coach Plan" : "Pilih AI Workout Coach"}
+            </button>
+          </div>
+
+          {/* Features Box */}
+          <div className="bg-[#ECEEF2] rounded-2xl p-5 space-y-3">
+            {[
+              isEN ? "Dedicated AI Workout Coach Persona" : "Persona Asisten AI Workout Coach",
+              isEN ? "Gym Equipment Form & Technique Check" : "Form & Technique Check Alat Gym",
+              isEN ? "Custom Weekly Training Schedule" : "Jadwal Latihan Mingguan Custom",
+              isEN ? "Interactive Dashboard Schedule Sync" : "Sync Jadwal Latihan ke Dashboard",
+              isEN ? "Unlimited Workout Queries" : "Unlimited Tanya Jawab Latihan"
+            ].map((feat, idx) => (
+              <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-neutral-800">
+                <Check className="w-4 h-4 text-black shrink-0" strokeWidth={2.5} />
+                <span>{feat}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CARD 3: PREMIUM PLAN (ALL-ACCESS 2 AIs - FEATURED CARD) */}
+        <div className="bg-[#0A0A0A] text-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden transform md:-translate-y-2 border border-neutral-800">
           <div>
             <div className="mb-6 flex justify-between items-start">
               <div>
                 <h3 className="text-xl font-['Archivo_Black'] text-white">
-                  {isEN ? "Pro Plan" : "Paket Pro"}
+                  {isEN ? "Premium Plan (All-Access)" : "Paket Premium (All-Access)"}
                 </h3>
                 <p className="text-xs text-neutral-400 font-medium mt-1">
-                  {isEN ? "For growing & serious fitness goals" : "Paling populer & terlengkap"}
+                  {isEN ? "Both AIs (Nutritionist + Workout Coach)" : "Dua AI Sekaligus: Nutrisi & Workout"}
                 </p>
               </div>
               <span className="px-3 py-1 bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase rounded-full">
-                POPULAR
+                BEST VALUE
               </span>
             </div>
 
             {/* Price in Lime Accent Color */}
             <div className="flex items-baseline gap-1.5 mb-6">
               <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                {billingCycle === "monthly" ? (isEN ? "$59" : "Rp 99rb") : (isEN ? "$49" : "Rp 79rb")}
+                {isEN ? "$8" : "Rp 139rb"}
               </span>
               <span className="text-neutral-400 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
             </div>
 
-            {/* Select Plan Button (Lime Pill Button) */}
-            <button
-              onClick={() => onSelectPlanAndStart("advanced")}
-              className="w-full py-3.5 rounded-full bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-sm transition-all mb-8 cursor-pointer shadow-lg shadow-[#D4FF00]/10"
-            >
-              {isEN ? "Select Plan" : "Pilih Paket Pro"}
-            </button>
-          </div>
-
-          {/* Features Box (White Sub-Container for Contrast) */}
-          <div className="bg-white text-black rounded-2xl p-5 space-y-3">
-            {[
-              isEN ? "Everything in Basic plan" : "Semua fitur paket Basic",
-              isEN ? "AI Workout Coach & Custom Programs" : "AI Workout Coach & Program Latihan",
-              isEN ? "Vision AI Form Check Analysis" : "Vision AI Form Check Postur",
-              isEN ? "Choice of AI Coach (Max / Mia)" : "Pilih Gaya Coach (Max / Mia)",
-              isEN ? "Unlimited Daily Meal & Workout Logs" : "Unlimited Log Makanan & Latihan",
-              isEN ? "Advanced Analytics & Progress Graphs" : "Grafik Analisis Progress Lengkap"
-            ].map((feat, idx) => (
-              <div key={idx} className="flex items-center gap-2.5 text-xs font-bold text-neutral-900">
-                <Check className="w-4 h-4 text-black shrink-0" strokeWidth={2.5} />
-                <span>{feat}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CARD 3: ULTIMATE PLAN (WHITE CARD) */}
-        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all">
-          <div>
-            <div className="mb-6">
-              <h3 className="text-xl font-['Archivo_Black'] text-black">
-                {isEN ? "Premium Plan" : "Paket Ultimate"}
-              </h3>
-              <p className="text-xs text-neutral-500 font-medium mt-1">
-                {isEN ? "Ideal for peak performance seeking 1-on-1" : "Akses maksimal & konsultasi gizi"}
-              </p>
-            </div>
-
-            {/* Price */}
-            <div className="flex items-baseline gap-1.5 mb-6">
-              <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-black">
-                {billingCycle === "monthly" ? (isEN ? "$99" : "Rp 199rb") : (isEN ? "$79" : "Rp 159rb")}
-              </span>
-              <span className="text-neutral-500 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
-            </div>
-
             {/* Select Plan Button */}
             <button
-              onClick={() => onSelectPlanAndStart("premium", "coach")}
-              className="w-full py-3.5 rounded-full border border-neutral-300 hover:border-black text-black font-bold text-sm transition-all mb-8 cursor-pointer"
+              onClick={() => onSelectPlanAndStart("premium")}
+              className="w-full py-3.5 rounded-full bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-sm transition-all mb-8 cursor-pointer shadow-lg shadow-[#D4FF00]/10"
             >
-              {isEN ? "Select Plan" : "Pilih Paket"}
+              {isEN ? "Select Premium Plan" : "Pilih Paket Premium (All-Access)"}
             </button>
           </div>
 
-          {/* Features Box (Gray Sub-Container) */}
-          <div className="bg-[#ECEEF2] rounded-2xl p-5 space-y-3">
+          {/* Features Box */}
+          <div className="bg-white text-black rounded-2xl p-5 space-y-3">
             {[
-              isEN ? "Everything in Pro plan" : "Semua fitur paket Pro",
-              isEN ? "Human Nutritionist Review & Audit" : "Review & Audit dari Ahli Gizi Asli",
-              isEN ? "Custom Meal Prep Strategy" : "Strategi Meal Prep Khusus",
-              isEN ? "AI-Driven Recommendations" : "Rekomendasi AI Lanjutan",
-              isEN ? "VIP 1-on-1 Dedicated Support" : "Dukungan VIP 1-on-1 Dedicated"
+              isEN ? "2 AI Personas: Nutritionist + Workout Coach" : "2 Asisten AI: Nutritionist + Workout Coach",
+              isEN ? "Gemini Pro High-Precision Vision AI" : "Presisi Tinggi Gemini Pro Vision AI",
+              isEN ? "Visual Infographic Poster Generation" : "Generasi Infografis Poster Visual Gym",
+              isEN ? "Unlimited Daily Meal & Workout Logs" : "Unlimited Log Makanan & Latihan",
+              isEN ? "Full Real-time WhatsApp & Dashboard Sync" : "Sync Real-Time WhatsApp & Dashboard",
+              isEN ? "Priority 24/7 Fast Response" : "Respon Prioritas Fast Track 24/7"
             ].map((feat, idx) => (
-              <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-neutral-800">
+              <div key={idx} className="flex items-center gap-2.5 text-xs font-bold text-neutral-900">
                 <Check className="w-4 h-4 text-black shrink-0" strokeWidth={2.5} />
                 <span>{feat}</span>
               </div>

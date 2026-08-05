@@ -674,14 +674,24 @@ export default function App() {
               >
                 <div className="flex items-center gap-4">
                   <div className="flex -space-x-4">
-                    {[1, 2, 3].map((i) => (
+                    {[
+                      { id: 1, src: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 1" },
+                      { id: 2, src: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 2" },
+                      { id: 3, src: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 3" },
+                    ].map((person, idx) => (
                       <motion.div
-                        key={i}
+                        key={person.id}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.4, delay: 0.4 + i * 0.06 }}
-                        className={`w-12 h-12 2xl:w-16 2xl:h-16 rounded-full border-[3px] border-white overflow-hidden shadow-sm ${i === 1 ? "bg-neutral-200" : i === 2 ? "bg-neutral-300" : "bg-neutral-400"}`}
-                      />
+                        transition={{ duration: 0.4, delay: 0.4 + idx * 0.06 }}
+                        className="w-12 h-12 2xl:w-16 2xl:h-16 rounded-full border-[3px] border-white overflow-hidden shadow-sm bg-neutral-200"
+                      >
+                        <img
+                          src={person.src}
+                          alt={person.alt}
+                          className="w-full h-full object-cover"
+                        />
+                      </motion.div>
                     ))}
                   </div>
                   <div>
@@ -1236,7 +1246,7 @@ export default function App() {
                     <div className="flex flex-col items-end">
                       <div className="flex items-start">
                         <span className="text-lg font-bold mt-1 mr-1 text-neutral-900">
-                          $
+                          {language === "EN" ? "$" : "Rp "}
                         </span>
                         <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-neutral-900">
                           0
@@ -1249,8 +1259,8 @@ export default function App() {
                   </div>
                   <p className="text-neutral-600 text-sm md:text-base font-medium mb-8">
                     {language === "EN"
-                      ? "Perfect for getting started with GymBuddy AI."
-                      : "Sempurna untuk memulai dengan GymBuddy AI."}
+                      ? "Perfect for getting started with GymBuddy AI (2-Day Free Trial)."
+                      : "Sempurna untuk mencoba uji coba gratis 2 hari GymBuddy AI."}
                   </p>
                   <ul className="space-y-4">
                     <li className="flex items-start gap-3">
@@ -1273,22 +1283,30 @@ export default function App() {
                       <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
                       <span className="font-medium text-sm 2xl:text-base text-neutral-600">
                         {language === "EN"
-                          ? "15 AI requests every 2 days (shared across Workout AI, Meal Recognition, and Form Analysis)"
-                          : "15 permintaan AI setiap 2 hari (dibagi untuk Workout AI, Pengenalan Makanan, dan Analisis Postur)"}
+                          ? "2-Day Full Access Trial to Workout & Nutrition AI"
+                          : "2 Hari Akses Penuh AI Workout & Nutrisi"}
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
                       <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
                       <span className="font-medium text-sm 2xl:text-base text-neutral-600">
                         {language === "EN"
-                          ? "Community Access"
-                          : "Akses Komunitas"}
+                          ? "WhatsApp AI Integration"
+                          : "Integrasi WhatsApp AI"}
                       </span>
                     </li>
                   </ul>
                 </div>
-                <button onClick={() => setIsAppOnboarding(true)} className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8">
-                  {language === "EN" ? "Get Started" : "Mulai Sekarang"}
+                <button
+                  onClick={() => {
+                    if (isLoggedIn) setViewMode("dashboard");
+                    else setIsAppOnboarding(true);
+                  }}
+                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8 cursor-pointer"
+                >
+                  {isLoggedIn
+                    ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                    : (language === "EN" ? "Get Started Free" : "Mulai Coba Gratis")}
                 </button>
               </div>
 
@@ -1305,10 +1323,10 @@ export default function App() {
                     <div className="flex flex-col items-end">
                       <div className="flex items-start">
                         <span className="text-xl font-bold mt-1 mr-1 text-black">
-                          $
+                          {language === "EN" ? "$" : "Rp "}
                         </span>
-                        <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-5xl 2xl:text-6xl text-black">
-                          20
+                        <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-black">
+                          {language === "EN" ? "5" : "79rb"}
                         </span>
                       </div>
                       <span className="text-xs font-bold mt-1 text-neutral-500">
@@ -1406,8 +1424,16 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setIsAppOnboarding(true)} className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#D4FF00] text-black hover:brightness-105 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-all mt-auto">
-                  {language === "EN" ? "Book Now" : "Pesan Sekarang"}
+                <button
+                  onClick={() => {
+                    if (isLoggedIn) setViewMode("dashboard");
+                    else setIsAppOnboarding(true);
+                  }}
+                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#D4FF00] text-black hover:brightness-105 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-all mt-auto cursor-pointer"
+                >
+                  {isLoggedIn
+                    ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                    : (language === "EN" ? "Pesan Advanced ($5)" : "Pesan Advanced (Rp 79rb)")}
                 </button>
               </div>
 
@@ -1421,10 +1447,10 @@ export default function App() {
                     <div className="flex flex-col items-end">
                       <div className="flex items-start">
                         <span className="text-lg font-bold mt-1 mr-1 text-neutral-900">
-                          $
+                          {language === "EN" ? "$" : "Rp "}
                         </span>
                         <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-neutral-900">
-                          30
+                          {language === "EN" ? "8" : "139rb"}
                         </span>
                       </div>
                       <span className="text-xs font-bold mt-1 text-neutral-500">
@@ -1434,8 +1460,8 @@ export default function App() {
                   </div>
                   <p className="text-neutral-600 text-sm md:text-base font-medium mb-8">
                     {language === "EN"
-                      ? "The complete GymBuddy AI experience."
-                      : "Pengalaman GymBuddy AI yang lengkap."}
+                      ? "The complete GymBuddy AI experience with both AIs."
+                      : "Pengalaman GymBuddy AI yang lengkap dengan 2 AI sekaligus."}
                   </p>
                   <ul className="space-y-4">
                     <li className="flex items-start gap-3">
@@ -1450,77 +1476,44 @@ export default function App() {
                       <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
                       <span className="font-medium text-sm 2xl:text-base text-neutral-600">
                         {language === "EN"
-                          ? "Nutrition AI + Vision AI"
-                          : "Nutrition AI + Vision AI"}
+                          ? "Nutrition AI + Vision Workout AI"
+                          : "Nutrition AI + Vision Workout AI"}
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
                       <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
                       <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        Recovery Intelligence
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "Wearable Integration"
-                          : "Integrasi Wearable"}
+                        Recovery Intelligence & Visual Posters
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
                       <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
                       <span className="font-medium text-sm 2xl:text-base text-neutral-600">
                         {language === "EN"
-                          ? "Priority AI Processing"
-                          : "Pemrosesan AI Prioritas"}
+                          ? "Full WhatsApp & Dashboard Sync"
+                          : "Sync Real-Time WhatsApp & Dashboard"}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
+                        {language === "EN"
+                          ? "Priority Gemini Pro AI Processing"
+                          : "Pemrosesan AI Prioritas Gemini Pro"}
                       </span>
                     </li>
                   </ul>
                 </div>
-                <button onClick={() => setIsAppOnboarding(true)} className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 border border-transparent hover:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8">
-                  {language === "EN" ? "Book Now" : "Pesan Sekarang"}
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Slider & Controls */}
-            <div className="w-full mt-12 md:mt-16 flex items-center justify-between relative">
-              <div className="flex-grow flex justify-center">
-                <div className="flex gap-2">
-                  <button
-                    className="relative w-11 h-11 focus:outline-none flex items-center justify-center group"
-                    aria-label="Go to slide 1"
-                  >
-                    <div className="w-10 h-1.5 bg-[#D4FF00] rounded-full group-hover:bg-opacity-80 transition-colors"></div>
-                  </button>
-                  <button
-                    className="relative w-11 h-11 focus:outline-none flex items-center justify-center group"
-                    aria-label="Go to slide 2"
-                  >
-                    <div className="w-10 h-1.5 bg-neutral-700 group-hover:bg-neutral-600 rounded-full transition-colors"></div>
-                  </button>
-                  <button
-                    className="relative w-11 h-11 focus:outline-none flex items-center justify-center group"
-                    aria-label="Go to slide 3"
-                  >
-                    <div className="w-10 h-1.5 bg-neutral-700 group-hover:bg-neutral-600 rounded-full transition-colors"></div>
-                  </button>
-                </div>
-              </div>
-
-              <div className="absolute right-0 flex gap-3">
-                <button className="w-11 h-11 md:w-12 md:h-12 rounded-full border border-neutral-800 flex items-center justify-center text-neutral-600 hover:text-neutral-900 hover:border-neutral-600 transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
-                  <ChevronLeft
-                    className="w-5 h-5 md:w-6 md:h-6"
-                    strokeWidth={2}
-                  />
-                </button>
-                <button className="w-11 h-11 md:w-12 md:h-12 rounded-full border border-neutral-700 bg-neutral-900 flex items-center justify-center text-white hover:bg-neutral-800 transition-colors focus:outline-none">
-                  <ChevronRight
-                    className="w-5 h-5 md:w-6 md:h-6"
-                    strokeWidth={2}
-                  />
+                <button
+                  onClick={() => {
+                    if (isLoggedIn) setViewMode("dashboard");
+                    else setIsAppOnboarding(true);
+                  }}
+                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 border border-transparent hover:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8 cursor-pointer"
+                >
+                  {isLoggedIn
+                    ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                    : (language === "EN" ? "Pesan Premium ($8)" : "Pesan Premium (Rp 139rb)")}
                 </button>
               </div>
             </div>

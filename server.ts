@@ -604,6 +604,69 @@ function saveUserProfile(rawPhone: string, profile: any) {
   return updated;
 }
 
+function getDefaultWorkoutSchedule(goal: string, equipment?: string, injuries?: string[]) {
+  const isBodyweight = equipment === "bodyweight";
+  const isDumbbells = equipment === "dumbbells";
+  const hasKneePain = Array.isArray(injuries) && injuries.includes("knee");
+  const hasBackPain = Array.isArray(injuries) && injuries.includes("lower_back");
+
+  if (isBodyweight) {
+    return [
+      { day: "Senin", focus: "Push & Core (Rumah)", exercises: [{ name: "Push Up (Regular / Knee)", setsReps: "3 Set x 12 Reps" }, { name: "Pike Push Up (Bahu)", setsReps: "3 Set x 10 Reps" }, { name: "Plank Hold", setsReps: "3 Set x 45 Detik" }] },
+      { day: "Selasa", focus: "Lower Body (Bodyweight)", exercises: [{ name: hasKneePain ? "Glute Bridge & Hip Thrust" : "Bodyweight Squat", setsReps: "4 Set x 15 Reps" }, { name: "Calf Raise & Wall Sit", setsReps: "3 Set x 15 Reps" }] },
+      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Stretching & Active Rest", setsReps: "Rest Day" }] },
+      { day: "Kamis", focus: "Pull & Core (Rumah)", exercises: [{ name: "Doorframe / Towel Inverted Row", setsReps: "4 Set x 12 Reps" }, { name: "Chair Dips", setsReps: "3 Set x 12 Reps" }, { name: "Superman Hold", setsReps: "3 Set x 45 Detik" }] },
+      { day: "Jumat", focus: "Full Body Bodyweight Circuit", exercises: [{ name: "Jumping Jacks / Shadow Boxing", setsReps: "4 Set x 1 Menit" }, { name: "Bodyweight Lunge / Step Up", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Sabtu", focus: "Cardio & Mobility", exercises: [{ name: "Brisk Walk / Jogging Rumah", setsReps: "30 Menit" }] },
+      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
+    ];
+  }
+
+  if (isDumbbells) {
+    return [
+      { day: "Senin", focus: "Dumbbell Upper Push", exercises: [{ name: "Dumbbell Floor / Bench Press", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Overhead Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Tricep Dumbbell Extension", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Selasa", focus: "Dumbbell Lower Body", exercises: [{ name: hasKneePain ? "Dumbbell Romanian Deadlift" : "Dumbbell Goblet Squat", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Lunge / Step Up", setsReps: "3 Set x 10 Reps/kaki" }] },
+      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Active Recovery", setsReps: "Rest Day" }] },
+      { day: "Kamis", focus: "Dumbbell Upper Pull", exercises: [{ name: hasBackPain ? "Chest-Supported Dumbbell Row" : "Single Arm Dumbbell Row", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Bicep Curl", setsReps: "3 Set x 12 Reps" }, { name: "Dumbbell Rear Delt Fly", setsReps: "3 Set x 15 Reps" }] },
+      { day: "Jumat", focus: "Dumbbell Full Body Blast", exercises: [{ name: "Dumbbell Thrusters", setsReps: "3 Set x 12 Reps" }, { name: "Dumbbell Farmer Walk", setsReps: "4 Set x 45 Detik" }] },
+      { day: "Sabtu", focus: "Cardio & Core", exercises: [{ name: "Dumbbell Woodchopper & Plank", setsReps: "3 Set x 15 Reps" }] },
+      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
+    ];
+  }
+
+  if (goal === "lose") {
+    return [
+      { day: "Senin", focus: "Upper Body & Cardio", exercises: [{ name: "Incline Push Up / Bench Press", setsReps: "3 Set x 12 Reps" }, { name: "Lat Pulldown Wide Grip", setsReps: "3 Set x 12 Reps" }, { name: "Treadmill Incline Walk", setsReps: "20 Menit" }] },
+      { day: "Selasa", focus: "Lower Body & Core", exercises: [{ name: hasKneePain ? "Leg Extension & Glute Bridge" : "Goblet Squat / Leg Press", setsReps: "4 Set x 12 Reps" }, { name: hasBackPain ? "Chest Supported Row" : "Romanian Deadlift", setsReps: "3 Set x 10 Reps" }, { name: "Plank Hold", setsReps: "3 Set x 45 Detik" }] },
+      { day: "Rabu", focus: "Rest & Active Recovery", exercises: [{ name: "Jalan Santai / Stretching", setsReps: "30 Menit" }] },
+      { day: "Kamis", focus: "Full Body HIIT", exercises: [{ name: "Dumbbell Thrusters", setsReps: "3 Set x 15 Reps" }, { name: "Kettlebell Swing", setsReps: "4 Set x 15 Reps" }, { name: "Jump Rope", setsReps: "5 Ronde x 1 Menit" }] },
+      { day: "Jumat", focus: "Push & Core Focus", exercises: [{ name: "Dumbbell Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Cable Tricep Pushdown", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Sabtu", focus: "Cardio & Fat Burn", exercises: [{ name: "Outdoor Jogging / Cycling", setsReps: "35 Menit" }] },
+      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
+    ];
+  } else if (goal === "gain") {
+    return [
+      { day: "Senin", focus: "Dada & Tricep (Push)", exercises: [{ name: "Barbell Bench Press", setsReps: "4 Set x 8-10 Reps" }, { name: "Incline Dumbbell Press", setsReps: "3 Set x 10 Reps" }, { name: "Tricep Cable Pushdown", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Selasa", focus: "Punggung & Bicep (Pull)", exercises: [{ name: hasBackPain ? "Chest Supported Cable Row" : "Barbell Bent Row", setsReps: "4 Set x 8-10 Reps" }, { name: "Lat Pulldown Wide Grip", setsReps: "3 Set x 10 Reps" }, { name: "Bicep Dumbbell Curl", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Istirahat & Recovery Muscle", setsReps: "Rest Day" }] },
+      { day: "Kamis", focus: "Kaki & Bahu", exercises: [{ name: hasKneePain ? "Leg Press & Leg Curl" : "Barbell Back Squat", setsReps: "4 Set x 8 Reps" }, { name: "Overhead Dumbbell Press", setsReps: "4 Set x 10 Reps" }] },
+      { day: "Jumat", focus: "Upper Body Hypertrophy", exercises: [{ name: "Dumbbell Chest Fly", setsReps: "3 Set x 12 Reps" }, { name: "Seated Cable Row", setsReps: "3 Set x 12 Reps" }, { name: "Lateral Raise", setsReps: "4 Set x 15 Reps" }] },
+      { day: "Sabtu", focus: "Core & Arms Blast", exercises: [{ name: "Hammer Curl & Dip Superset", setsReps: "3 Set x 12 Reps" }, { name: "Cable Crunch", setsReps: "4 Set x 15 Reps" }] },
+      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
+    ];
+  } else {
+    return [
+      { day: "Senin", focus: "Full Body Maintenance", exercises: [{ name: hasKneePain ? "Leg Press" : "Goblet Squat", setsReps: "3 Set x 12 Reps" }, { name: "Push Up", setsReps: "3 Set x 15 Reps" }, { name: "Dumbbell Row", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Selasa", focus: "Cardio & Core", exercises: [{ name: "Brisk Walk / Cycling", setsReps: "30 Menit" }, { name: "Plank & Bicycle Crunch", setsReps: "3 Set x 1 Menit" }] },
+      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Recovery", setsReps: "Rest Day" }] },
+      { day: "Kamis", focus: "Upper Body & Mobility", exercises: [{ name: "Dumbbell Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Lat Pulldown", setsReps: "3 Set x 12 Reps" }, { name: "Yoga / Stretching", setsReps: "15 Menit" }] },
+      { day: "Jumat", focus: "Lower Body Focus", exercises: [{ name: "Leg Extension & Calf Raise", setsReps: "3 Set x 12 Reps" }] },
+      { day: "Sabtu", focus: "Outdoor Activity", exercises: [{ name: "Renang / Badminton / Running", setsReps: "45 Menit" }] },
+      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
+    ];
+  }
+}
+
 function calculateUserData(profile: any) {
   const name = profile?.name || "Member";
   const weight = Math.max(30, Number(profile?.weight) || 65);
@@ -663,6 +726,21 @@ function calculateUserData(profile: any) {
   const carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
   const fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
 
+  // Active AI persona service scope ('nutritionist' | 'workout' | 'both')
+  const activeService: "nutritionist" | "workout" | "both" =
+    profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
+
+  const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
+  const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0
+    ? profile.workoutSchedule
+    : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
+
+  const subscription = profile?.subscription || {
+    plan: profile?.plan || "advanced",
+    activeService,
+    status: "active"
+  };
+
   return {
     name,
     weight,
@@ -680,7 +758,14 @@ function calculateUserData(profile: any) {
     proteinGrams,
     carbGrams,
     fatGrams,
-    fiberGrams
+    fiberGrams,
+    injuries: profile?.injuries || ["none"],
+    customInjury: profile?.customInjury || "",
+    equipment: profile?.equipment || "full_gym",
+    activeService,
+    hasReceivedWelcome,
+    workoutSchedule,
+    subscription
   };
 }
 
@@ -1046,73 +1131,123 @@ ${fiberBar}
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
-  const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams } = userData;
+  const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, activeService, equipment, injuries, customInjury } = userData;
 
-  if (persona === "max") {
+  const isMax = persona === "max";
+  const showNutrition = activeService === "nutritionist" || activeService === "both";
+  const showWorkout = activeService === "workout" || activeService === "both";
+
+  const eqText = equipment === "bodyweight"
+    ? "Tanpa Alat / Rumah"
+    : equipment === "dumbbells"
+    ? "Dumbbell di Rumah"
+    : "Alat Gym Lengkap";
+
+  const injList = Array.isArray(injuries) ? injuries.filter((i: string) => i !== "none") : [];
+  if (customInjury) injList.push(customInjury);
+  const injText = injList.length > 0 ? injList.join(", ") : "Sehat (Tanpa Cedera)";
+
+  if (isMax) {
+    let summarySection = `📊 SUMMARY STRATEGI LO:\n🎯 Goal: ${goalTitle}\n`;
+    if (showNutrition) {
+      summarySection += `🔥 Target Kalori: ${targetCalories} kcal/hari\n🍖 Protein: ${proteinGrams}g/hari\n🍚 Karbo: ${carbGrams}g/hari\n🥓 Lemak: ${fatGrams}g/hari\n🥬 Serat: ${fiberGrams}g/hari\n`;
+    }
+    summarySection += `⚖️ Target BB: ${weight}kg → ${targetWeight}kg`;
+    if (showWorkout) {
+      summarySection += `\n🏋️ Alat: ${eqText}\n🩹 Kondisi Fisik: ${injText}`;
+    }
+
+    let guides: string[] = [];
+    if (showNutrition) {
+      guides.push(
+`Nutrition AI 🥦
+• Kirim foto/chat makanan lo ke sini.
+• Gue bakal breakdown makro & kalorinya + catat progress harian lo.
+• Kalo mau cek sisa kalori / rekap kemarin, bilang "rekap kemarin"!
+• Kalo butuh ide makan, bilang "rekomendasi makanan"!
+• Kalo mau catat berat badan mingguan, bilang "update bb 75"!`
+      );
+    }
+
+    if (showWorkout) {
+      guides.push(
+`AI Coach 🏋️‍♂️
+• Kirim foto form latihan / foto alat gym atau tanya menu workout.
+• Gue kasih feedback tajam dan jadwal latihan disesuaikan alat (${eqText}) & kondisi tubuh lo (${injText}).`
+      );
+    }
+
+    const firstItemPrompt = showNutrition && showWorkout
+      ? "foto makanan atau pertanyaan workout"
+      : showNutrition
+      ? "foto makanan"
+      : "pertanyaan workout";
+
     return [
 `💪🔥 Woy ${name}! Gue Max, AI Coach & Nutritionist lo mulai sekarang. Welcome to GymBuddy AI!
 Gak perlu ribet install app baru, kita gas semua dari WhatsApp ini.
 
-📊 SUMMARY STRATEGI LO:
-🎯 Goal: ${goalTitle}
-🔥 Target Kalori: ${targetCalories} kcal/hari
-🍖 Protein: ${proteinGrams}g/hari
-🍚 Karbo: ${carbGrams}g/hari
-🥓 Lemak: ${fatGrams}g/hari
-🥬 Serat: ${fiberGrams}g/hari
-⚖️ Target: ${weight}kg → ${targetWeight}kg
+${summarySection}
 
 Gue di sini buat pastiin lo stay on track, no excuse! 🛑
 
-Nutrition AI 🥦
-• Kirim foto/chat makanan lo ke sini.
-• Gue bakal breakdown makro & kalorinya + catat progress harian lo.
-• Kalo mau cek sisa kalori / rekap kemarin, bilang "rekap kemarin" atau "rekap 28 jul"!
-• Kalo butuh ide makan, bilang "rekomendasi makanan"!
-• Kalo mau catat berat badan mingguan, bilang "update bb 75"!
-
-AI Coach 🏋️‍♂️
-• Kirim foto form latihan / foto alat gym atau tanya menu workout.
-• Gue kasih feedback tajam dan jadwal latihan. Jangan harap gue kasih kendor.
+${guides.join("\n\n")}
 
 Tips dari gue:
 Konsistensi > Motivasi. Kalo lo males, inget kenapa lo mulai.
-Jangan skip meal prep!
 
-Udah siap? Ayo kirim foto makanan/workout pertama lo sekarang! 🔥`
+Udah siap? Ayo kirim ${firstItemPrompt} pertama lo sekarang! 🔥`
     ];
   } else {
+    let summarySection = `📊 SUMMARY RENCANA KAMU:\n🎯 Goal: ${goalTitle}\n`;
+    if (showNutrition) {
+      summarySection += `🔥 Target Kalori: ${targetCalories} kcal/hari\n🍖 Protein: ${proteinGrams}g/hari\n🍚 Karbo: ${carbGrams}g/hari\n🥓 Lemak: ${fatGrams}g/hari\n🥬 Serat: ${fiberGrams}g/hari\n`;
+    }
+    summarySection += `⚖️ Target BB: ${weight}kg → ${targetWeight}kg`;
+    if (showWorkout) {
+      summarySection += `\n🏋️ Alat: ${eqText}\n🩹 Kondisi Fisik: ${injText}`;
+    }
+
+    let guides: string[] = [];
+    if (showNutrition) {
+      guides.push(
+`Nutrition AI 🥗
+• Tinggal kirim foto makanan atau ketik apa yang kamu makan hari ini.
+• Aku bantu hitung kalori, nutrisi, & rekap konsumsi harianmu.
+• Kamu bisa tanya sisa kalori lewat "rekap kemarin"!
+• Minta rekomendasi makan sehat lewat "rekomendasi makanan"!
+• Kamu juga bisa update berat badanmu lewat "update bb 75"!`
+      );
+    }
+
+    if (showWorkout) {
+      guides.push(
+`AI Coach 🧘‍♀️
+• Kirim foto/video latihan atau foto alat gym untuk rekomendasi.
+• Aku akan kasih saran yang aman dan rekomendasi yang nyaman buat tubuhmu.`
+      );
+    }
+
+    const firstItemPrompt = showNutrition && showWorkout
+      ? "foto makanan atau latihan"
+      : showNutrition
+      ? "foto makanan"
+      : "pertanyaan latihan";
+
     return [
 `🌿💛 Halo ${name}! Aku Mia, AI Coach & Nutritionist kamu. Selamat datang di GymBuddy AI! ✨
 Nggak perlu pusing install aplikasi lain, kita ngobrol dan pantau semuanya langsung dari WhatsApp ya!
 
-📊 SUMMARY RENCANA NUTRISI KAMU:
-🎯 Goal: ${goalTitle}
-🔥 Target Kalori: ${targetCalories} kcal/hari
-🍖 Protein: ${proteinGrams}g/hari
-🍚 Karbo: ${carbGrams}g/hari
-🥓 Lemak: ${fatGrams}g/hari
-🥬 Serat: ${fiberGrams}g/hari
-⚖️ Target: ${weight}kg → ${targetWeight}kg
+${summarySection}
 
 Aku bakal temenin dan dukung kamu terus untuk capai impianmu! 🥰
 
-Nutrition AI 🥗
-• Tinggal kirim foto makanan atau ketik apa yang kamu makan hari ini.
-• Aku bantu hitung kalori, nutrisi, & rekap konsumsi harianmu.
-• Kamu juga bisa tanya sisa kalori atau rekap hari apa pun lewat "rekap kemarin"!
-• Minta rekomendasi makan sehat lewat "rekomendasi makanan"!
-• Kamu juga bisa update perkembangan berat badanmu lewat "update bb 75"!
-
-AI Coach 🧘‍♀️
-• Kirim foto/video latihan atau foto alat gym untuk rekomendasi.
-• Aku akan kasih saran yang aman dan rekomendasi yang nyaman buat tubuhmu.
+${guides.join("\n\n")}
 
 Tips dari Mia:
-Dengarkan tubuhmu ya, istirahat itu sama pentingnya dengan latihan.
-Jangan terlalu keras sama diri sendiri, tiap progress kecil itu berharga! 🌱
+Dengarkan tubuhmu ya, tiap progress kecil itu berharga! 🌱
 
-Yuk, kita mulai! Coba kirim foto makanan atau latihan pertamamu sekarang! 💛`
+Yuk, kita mulai! Coba kirim ${firstItemPrompt} pertamamu sekarang! 💛`
     ];
   }
 }
@@ -1675,38 +1810,84 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     });
   });
 
+  // REST API: Get/Update Workout Schedule for Dashboard & WhatsApp Sync
+  app.get("/api/user/:phone/schedule", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const user = getUserProfile(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const calculated = calculateUserData(user);
+    res.json({ success: true, schedule: calculated.workoutSchedule, goal: calculated.goal, goalTitle: calculated.goalTitle });
+  });
+
+  app.post("/api/user/:phone/schedule", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const user = getUserProfile(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const { schedule } = req.body;
+    if (Array.isArray(schedule)) {
+      user.workoutSchedule = schedule;
+      saveUserProfile(phone, user);
+    }
+    const calculated = calculateUserData(user);
+    res.json({ success: true, schedule: calculated.workoutSchedule });
+  });
+
+  // REST API: Update Goals for Dashboard
+  app.post("/api/user/:phone/goals", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const user = getUserProfile(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const { targetWeight, targetCalories, goal, goalTitle } = req.body;
+    if (targetWeight) user.targetWeight = Number(targetWeight);
+    if (targetCalories) user.targetCalories = Number(targetCalories);
+    if (goal) user.goal = goal;
+    if (goalTitle) user.goalTitle = goalTitle;
+    saveUserProfile(phone, user);
+    const calculated = calculateUserData(user);
+    res.json({ success: true, user, profile: user, userData: calculated, calculated });
+  });
+
   // Midtrans Payment Endpoint
-  app.post("/api/midtrans/create-transaction", async (req, res) => {
+  app.post("/api/midtrans/create-transaction", express.json(), async (req, res) => {
     try {
-      const { orderId, amount, itemDetails, customerDetails } = req.body;
+      const { phone, plan = "advanced", activeService = "both", amount, customerName } = req.body;
+      const orderId = `GYMBUDDY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const grossAmount = Number(amount) || (plan === "premium" ? 139000 : 79000);
 
       const parameter = {
         transaction_details: {
-          order_id: orderId || `GYMBUDDY-${Date.now()}`,
-          gross_amount: amount || 29000,
+          order_id: orderId,
+          gross_amount: grossAmount,
         },
-        item_details: itemDetails || [{
-          id: 'PRO-PLAN',
-          price: amount || 29000,
+        item_details: req.body.itemDetails || [{
+          id: `${plan.toUpperCase()}-${activeService.toUpperCase()}`,
+          price: grossAmount,
           quantity: 1,
-          name: 'GymBuddy Pro Plan'
+          name: `GymBuddy AI ${plan.toUpperCase()} Plan (${activeService})`
         }],
-        customer_details: customerDetails || {
-          first_name: 'Member',
-          email: 'member@gymbuddy.app',
-          phone: '08123456789'
+        customer_details: req.body.customerDetails || {
+          first_name: customerName || "Member GymBuddy",
+          email: "member@gymbuddy.app",
+          phone: phone || "08123456789"
         }
       };
 
       const transaction = await snap.createTransaction(parameter);
       res.json({
         success: true,
+        orderId,
         token: transaction.token,
         redirect_url: transaction.redirect_url
       });
     } catch (error: any) {
       console.error("Midtrans Transaction Error:", error);
-      res.status(500).json({ error: error.message || "Failed to create transaction" });
+      res.status(500).json({ success: false, error: error.message || "Failed to create transaction" });
     }
   });
 
@@ -2203,9 +2384,32 @@ Keluarkan output JSON valid:
       // Water Intake Intent Match (e.g. "minum 2 gelas", "air 500ml", "water 3 cups")
       const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
 
+      const isResetMessage = lowerText.includes("reset akun") || 
+                             lowerText.includes("hapus akun") || 
+                             lowerText.includes("reset data") ||
+                             lowerText.includes("hapus data saya");
+
       let responseMessages: string[] = [];
 
-      if (isWelcomeMessage) {
+      if (isResetMessage) {
+        const normPhone = normalizePhone(From);
+        if (dbData.users[normPhone]) {
+          delete dbData.users[normPhone];
+        }
+        delete dbData.weeklyProgress[normPhone];
+        Object.keys(dbData.dailyLogs).forEach((key) => {
+          if (key.startsWith(normPhone)) {
+            delete dbData.dailyLogs[key];
+          }
+        });
+        saveDb();
+        console.log(`[Reset Command] Deleted profile and data for ${normPhone}`);
+        responseMessages = [
+          `🗑️ *AKUN & DATA KAMU BERHASIL DIHAPUS!*\n-----------------------------\n` +
+          `Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.\n\n` +
+          `Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! ✨`
+        ];
+      } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
 
@@ -2249,8 +2453,20 @@ Keluarkan output JSON valid:
           saveUserProfile(From, userProfile);
         }
 
-        const currentCalculated = calculateUserData(userProfile);
-        responseMessages = generateWelcomeMessages(currentCalculated);
+        if (userProfile.hasReceivedWelcome) {
+          const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+          const shortWelcome = userData.persona === "max"
+            ? `🔥 *WOY ${userData.name.toUpperCase()}!* ${coachName} siap mendampingi lo!\n\n` +
+              `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`
+            : `✨ *HALO ${userData.name.toUpperCase()}!* ${coachName} di sini! 🥰\n\n` +
+              `Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan? Silakan kirim kapan saja ya! 🌿`;
+          responseMessages = [shortWelcome];
+        } else {
+          userProfile.hasReceivedWelcome = true;
+          saveUserProfile(From, userProfile);
+          const currentCalculated = calculateUserData(userProfile);
+          responseMessages = generateWelcomeMessages(currentCalculated);
+        }
       } else if (waterMatch) {
         const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
         const unit = (waterMatch[2] || "gelas").toLowerCase();
@@ -2302,6 +2518,19 @@ Keluarkan output JSON valid:
           ? `PERSONA MIA: Kamu adalah pelatih (coach) wanita bernama Coach Mia. Kamu sabar, ramah, lembut, dan edukatif (aku/kamu). SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max atau menggunakan kata bro/lo/gue.`
           : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
 
+        const activeService = userData.activeService || "both";
+        const serviceInstruction = activeService === "nutritionist"
+          ? `BATASAN LAYANAN PENGGUNA: User berlangganan Paket AI Nutritionist.
+Fokuslah 100% pada konsultasi nutrisi, evaluasi porsi makan, kalori, dan makro.
+Jika user meminta program/jadwal workout yang detail, berikan jawaban singkat lalu ingatkan secara sopan:
+"💡 *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Nutritionist. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Workout Coach penuh! 🏋️‍♂️"`
+          : activeService === "workout"
+          ? `BATASAN LAYANAN PENGGUNA: User berlangganan Paket AI Workout Coach.
+Fokuslah 100% pada teknik latihan, posture check, rekomendasi workout, dan alat gym.
+Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingatkan secara sopan:
+"💡 *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Workout Coach. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Nutritionist penuh! 🥦"`
+          : `BATASAN LAYANAN PENGGUNA: User berlangganan Paket Premium (All-Access). Berikan pendampingan penuh untuk nutrisi maupun latihan.`;
+
         const prompt = `INFORMASI PENGGUNA:
 - Nama: ${userData.name}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
@@ -2310,6 +2539,7 @@ Keluarkan output JSON valid:
 - Goal Utama: ${userData.goalTitle}
 
 ${personaInstruction}
+${serviceInstruction}
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"

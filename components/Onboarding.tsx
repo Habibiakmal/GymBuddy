@@ -25,7 +25,8 @@ import {
   Brain,
   CheckCircle2,
   Sliders,
-  HelpCircle
+  HelpCircle,
+  Sparkles
 } from "lucide-react";
 
 // WhatsApp Icon component
@@ -90,19 +91,25 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   const [weight, setWeight] = useState("65");
   const [height, setHeight] = useState("170");
   const [age, setAge] = useState("25");
+  const [userTargetWeight, setUserTargetWeight] = useState("");
 
-  // Lifestyle & Challenges
+  // Lifestyle & Workout Constraints
   const [activityLevel, setActivityLevel] = useState("sedentary");
   const [experience, setExperience] = useState("beginner");
   const [satisfaction, setSatisfaction] = useState("medium");
   const [challenges, setChallenges] = useState<string[]>(["nyerah", "gorengan"]);
 
+  // Physical Limitations / Injuries & Equipment
+  const [injuries, setInjuries] = useState<string[]>(["none"]);
+  const [customInjury, setCustomInjury] = useState("");
+  const [equipment, setEquipment] = useState<"full_gym" | "dumbbells" | "bodyweight">("full_gym");
+
   // Persona Selection
   const [persona, setPersona] = useState<"max" | "mia">("max");
 
-  // Plan Selection
-  const [selectedPlan, setSelectedPlan] = useState<"advanced" | "premium">("advanced");
-  const [selectedFeature, setSelectedFeature] = useState<"nutrition" | "coach" | null>(null);
+  // Plan Selection ('free_trial' | 'advanced' | 'premium')
+  const [selectedPlan, setSelectedPlan] = useState<"free_trial" | "advanced" | "premium">("free_trial");
+  const [selectedFeature, setSelectedFeature] = useState<"nutrition" | "coach" | null>("coach");
 
   // Phone Delivery
   const [phone, setPhone] = useState("");
@@ -128,18 +135,27 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     if (step === 13) {
       const saveProfile = async () => {
         let computedGoalTitle = "Gaya Hidup Sehat & Fit";
-        let computedTargetWeight = Number(weight) || 65;
+        
+        const hM = (Number(height) || 170) / 100;
+        const currentW = Number(weight) || 65;
+        const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+        const aiRecommendedW = Math.min(currentW - 2, Math.max(45, bmiIdealW));
 
+        let computedTargetWeight = Number(userTargetWeight) || currentW;
         if (goal === "lose") {
           computedGoalTitle = "Menurunkan Berat Badan";
-          computedTargetWeight = Math.max(40, Number(weight) - 7);
+          if (!userTargetWeight) computedTargetWeight = aiRecommendedW;
         } else if (goal === "gain") {
           computedGoalTitle = "Menaikkan Berat Badan";
-          computedTargetWeight = Number(weight) + 5;
+          if (!userTargetWeight) computedTargetWeight = currentW + 5;
         } else if (goal === "health" || goal === "maintain") {
           computedGoalTitle = "Gaya Hidup Sehat & Fit";
-          computedTargetWeight = Number(weight);
+          computedTargetWeight = currentW;
         }
+
+        const activeService = (selectedPlan === "premium" || selectedPlan === "free_trial") 
+          ? "both" 
+          : (selectedFeature === "coach" ? "workout" : "nutritionist");
 
         const userObj = {
           name,
@@ -152,15 +168,20 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           weight: Number(weight) || 65,
           startWeight: Number(weight) || 65,
           targetWeight: computedTargetWeight,
+          aiRecommendedTargetWeight: aiRecommendedW,
           height: Number(height) || 165,
           age: Number(age) || 25,
           activityLevel,
           experience,
           satisfaction,
           challenges,
+          injuries,
+          customInjury,
+          equipment,
           persona,
           plan: selectedPlan,
           feature: selectedFeature,
+          activeService,
           phone
         };
 
@@ -229,7 +250,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
       case 8: return challenges.length > 0;
       case 9: return true; // Analysis 2 screen
       case 10: return true; // Persona selection has defaults
-      case 11: return selectedPlan === "advanced" || (selectedPlan === "premium" && selectedFeature !== null);
+      case 11: return selectedPlan === "free_trial" || selectedPlan === "premium" || (selectedPlan === "advanced" && selectedFeature !== null);
       case 12: return phone.trim().length >= 8;
       default: return true;
     }
@@ -748,6 +769,56 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       />
                     </div>
                   </div>
+
+                  {/* Target Weight & AI Recommendation for Lose Weight */}
+                  {goal === "lose" && (() => {
+                    const hM = (Number(height) || 170) / 100;
+                    const currW = Number(weight) || 65;
+                    const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+                    const recW = Math.min(currW - 2, Math.max(45, bmiIdealW));
+                    const lossKg = Math.round((currW - recW) * 10) / 10;
+
+                    return (
+                      <div className="pt-2 space-y-3 border-t border-neutral-800/80">
+                        <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                          {isEN ? "Target Weight Goal (kg)" : "Target Berat Badan Impian (kg)"}
+                        </label>
+                        <div className="relative">
+                          <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={userTargetWeight || recW}
+                            onChange={(e) => setUserTargetWeight(e.target.value)}
+                            placeholder={String(recW)}
+                            className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* AI Recommendation Card */}
+                        <div className="bg-[#182232] border border-[#D4FF00]/30 rounded-2xl p-4 flex items-start gap-3">
+                          <Sparkles className="w-5 h-5 text-[#D4FF00] shrink-0 mt-0.5" />
+                          <div className="text-xs space-y-1.5">
+                            <p className="font-extrabold text-[#D4FF00]">
+                              {isEN ? "GymBuddy AI Healthy Calculation:" : "Perhitungan Target Ideal AI GymBuddy:"}
+                            </p>
+                            <p className="text-neutral-300 leading-relaxed">
+                              {isEN
+                                ? `Based on your height (${height || 170}cm), age (${age || 25}), and current weight (${currW}kg), a safe & healthy target is ${recW} kg (Ideal BMI ~22, turun ~${lossKg} kg bertahap).`
+                                : `Berdasarkan tinggi (${height || 170}cm), usia (${age || 25} th), dan BB saat ini (${currW}kg), target ideal yang aman & sehat adalah ${recW} kg (BMI Ideal ~22, turun ~${lossKg} kg bertahap).`}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setUserTargetWeight(String(recW))}
+                              className="text-[11px] font-bold text-[#D4FF00] underline cursor-pointer hover:text-white"
+                            >
+                              {isEN ? "Use AI Recommended Target" : "Gunakan Target Rekomendasi AI"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </motion.div>
             )}
@@ -846,6 +917,88 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Sub 4: Equipment Availability for Workout Coach */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                    {isEN ? "Available Workout Equipment" : "Ketersediaan Alat Latihan (Equipment)"}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {[
+                      { id: "full_gym", title: isEN ? "Full Gym Equipment" : "Alat Gym Lengkap", desc: isEN ? "Barbells, Cable, Machines" : "Gym Commercial / Fitness Center" },
+                      { id: "dumbbells", title: isEN ? "Dumbbells Only" : "Dumbbell di Rumah", desc: isEN ? "Home dumbbells & bench" : "Set Dumbbell / Beban Rumah" },
+                      { id: "bodyweight", title: isEN ? "Bodyweight (No Equipment)" : "Tanpa Alat / Rumah", desc: isEN ? "Calisthenics & Home Workouts" : "Latihan Pakai Beban Tubuh" }
+                    ].map((eq) => (
+                      <button
+                        key={eq.id}
+                        type="button"
+                        onClick={() => setEquipment(eq.id as any)}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          equipment === eq.id
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                            : "bg-[#111620] text-white border-neutral-800 hover:border-neutral-700"
+                        }`}
+                      >
+                        <p className="font-extrabold text-xs sm:text-sm mb-0.5">{eq.title}</p>
+                        <p className={`text-[11px] ${equipment === eq.id ? "text-black/80 font-medium" : "text-neutral-400"}`}>{eq.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub 5: Physical Limitations / Injuries */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                      {isEN ? "Injuries or Physical Limitations (Optional)" : "Cedera atau Keterbatasan Fisik (Opsional)"}
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      {isEN ? "AI Coach will adapt exercises" : "AI akan menyesuaikan gerakan"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: "none", label: isEN ? "None (Fully Healthy)" : "Sehat (Tanpa Cedera)" },
+                      { id: "knee", label: isEN ? "Knee Pain" : "Nyeri Lutut" },
+                      { id: "lower_back", label: isEN ? "Lower Back Pain" : "Nyeri Punggung Bawah" },
+                      { id: "shoulder", label: isEN ? "Shoulder Injury" : "Cedera Bahu" },
+                      { id: "hypertension", label: isEN ? "Vertigo / High BP" : "Vertigo / Darah Tinggi" }
+                    ].map((inj) => {
+                      const isSel = injuries.includes(inj.id);
+                      return (
+                        <button
+                          key={inj.id}
+                          type="button"
+                          onClick={() => {
+                            if (inj.id === "none") {
+                              setInjuries(["none"]);
+                            } else {
+                              setInjuries((prev) => {
+                                const filter = prev.filter((i) => i !== "none");
+                                return filter.includes(inj.id) ? filter.filter((i) => i !== inj.id) : [...filter, inj.id];
+                              });
+                            }
+                          }}
+                          className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center justify-between cursor-pointer ${
+                            isSel
+                              ? "bg-[#D4FF00]/10 border-[#D4FF00] text-[#D4FF00]"
+                              : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                          }`}
+                        >
+                          <span>{inj.label}</span>
+                          {isSel && <Check size={14} className="text-[#D4FF00] shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    value={customInjury}
+                    onChange={(e) => setCustomInjury(e.target.value)}
+                    placeholder={isEN ? "Other specific condition (e.g. wrist pain, asthma...)" : "Catatan khusus lain (misal: nyeri pergelangan tangan, asma...)"}
+                    className="w-full bg-[#111620] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                  />
                 </div>
               </motion.div>
             )}
@@ -1108,37 +1261,82 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     <Check size={20} />
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
-                    {isEN ? "Select Your Plan" : "Pilih Plan Kamu"}
+                    {isEN ? "Select Your Plan" : "Pilih Paket Kamu"}
                   </h2>
                 </div>
-                <p className="text-sm sm:text-base text-neutral-400 mb-8 max-w-lg">
+                <p className="text-sm sm:text-base text-neutral-400 mb-6 max-w-lg">
                   {isEN
-                    ? "Customize according to your needs. Choose full access to all features or focus on a single feature."
-                    : "Sesuaikan dengan kebutuhanmu. Pilih akses penuh ke semua fitur atau fokus pada satu fitur saja."}
+                    ? "Start with a 2-day free trial or select a full plan tailored to your fitness goals."
+                    : "Mulai dengan uji coba gratis 2 hari atau pilih paket penuh sesuai kebutuhan kebugaranmu."}
                 </p>
 
-                <div className="space-y-4 max-w-2xl flex-grow">
-                  {/* Advanced Plan */}
+                <div className="space-y-3.5 max-w-2xl flex-grow">
+                  {/* Option 1: 2-Day Free Trial */}
                   <button
                     onClick={() => {
-                      setSelectedPlan("advanced");
+                      setSelectedPlan("free_trial");
                       setSelectedFeature(null);
                     }}
-                    className={`w-full text-left p-5 sm:p-6 rounded-2xl border transition-all ${
-                      selectedPlan === "advanced"
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                      selectedPlan === "free_trial"
                         ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-600"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-start justify-between mb-1">
                       <div>
-                        <h3 className={`font-['Archivo_Black'] text-lg uppercase ${
-                          selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
-                        }`}>
-                          Advanced Plan
-                        </h3>
-                        <p className="text-sm text-neutral-400 mt-1">
-                          {isEN ? "Full access to all Gym Buddy AI features" : "Akses penuh ke semua fitur Gym Buddy AI"}
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "free_trial" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "2-Day Free Trial" : "Uji Coba Gratis 2 Hari"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            FREE $0
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN
+                            ? "Full access to both AI Workout Coach & Nutritionist for 48 hours. No credit card required."
+                            : "Akses penuh 2 AI (Workout & Nutrisi) selama 48 jam tanpa bayar sama sekali."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selectedPlan === "free_trial" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "free_trial" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Advanced Plan ($5 / Rp 79.000) */}
+                  <div
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all ${
+                      selectedPlan === "advanced"
+                        ? "bg-[#161B22] border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedPlan("advanced");
+                        if (!selectedFeature) setSelectedFeature("coach");
+                      }}
+                      className="w-full flex items-start justify-between text-left cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            Advanced Plan
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
+                            {isEN ? "$5 / mo" : "Rp 79rb / bln"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN ? "Focus 100% on 1 feature of your choice" : "Fokus 100% pada 1 fitur pilihanmu"}
                         </p>
                       </div>
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
@@ -1146,100 +1344,102 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       }`}>
                         {selectedPlan === "advanced" && <Check size={14} className="text-black stroke-[3]" />}
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 text-xs text-white">
-                        <Activity size={14} className="text-[#D4FF3D]" />
-                        <span>AI Coach</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 text-xs text-white">
-                        <Leaf size={14} className="text-[#D4FF3D]" />
-                        <span>Nutrition AI</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Premium Plan */}
-                  <div
-                    className={`w-full text-left p-5 sm:p-6 rounded-2xl border transition-all ${
-                      selectedPlan === "premium"
-                        ? "bg-[#161B22] border-neutral-500"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-600"
-                    }`}
-                  >
-                    <button
-                      onClick={() => setSelectedPlan("premium")}
-                      className="w-full flex items-start justify-between mb-2 text-left"
-                    >
-                      <div>
-                        <h3 className="font-['Archivo_Black'] text-lg uppercase text-white">
-                          Premium Plan
-                        </h3>
-                        <p className="text-sm text-neutral-400 mt-1">
-                          {isEN ? "Focus on 1 feature of your choice" : "Fokus pada satu fitur pilihanmu"}
-                        </p>
-                      </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selectedPlan === "premium" ? "border-white bg-white" : "border-neutral-600"
-                      }`}>
-                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
-                      </div>
                     </button>
-                    
-                    {/* Sub-selection for Premium */}
-                    {selectedPlan === "premium" && (
-                      <div className="mt-5 space-y-3 pt-4 border-t border-neutral-800">
-                        <p className="text-sm font-medium text-neutral-300">
-                          {isEN ? "Select 1 feature to activate:" : "Pilih 1 fitur untuk diaktifkan:"}
+
+                    {/* Sub-selection for Advanced */}
+                    {selectedPlan === "advanced" && (
+                      <div className="mt-4 space-y-2 pt-3 border-t border-neutral-800">
+                        <p className="text-xs font-bold text-neutral-300">
+                          {isEN ? "Select 1 feature to activate:" : "Pilih 1 fitur spesialisasi yang diaktifkan:"}
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFeature("coach");
                             }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedFeature === "coach"
                                 ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
                                 : "bg-black/40 border-transparent hover:border-neutral-700"
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                               selectedFeature === "coach" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
                             }`}>
-                              <Activity size={18} />
+                              <Activity size={16} />
                             </div>
                             <div className="text-left">
-                              <p className={`font-bold text-sm ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Coach</p>
-                              <p className="text-xs text-neutral-500">{isEN ? "Form analysis & plans" : "Analisis form & jadwal"}</p>
+                              <p className={`font-bold text-xs ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Workout Coach</p>
+                              <p className="text-[10px] text-neutral-500">{isEN ? "Form check & workout split" : "Koreksi postur & jadwal gym"}</p>
                             </div>
                           </button>
-                          
+
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFeature("nutrition");
                             }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedFeature === "nutrition"
                                 ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
                                 : "bg-black/40 border-transparent hover:border-neutral-700"
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                               selectedFeature === "nutrition" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
                             }`}>
-                              <Leaf size={18} />
+                              <Leaf size={16} />
                             </div>
                             <div className="text-left">
-                              <p className={`font-bold text-sm ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>Nutrition AI</p>
-                              <p className="text-xs text-neutral-500">{isEN ? "Meal logging & analysis" : "Analisis & log makanan"}</p>
+                              <p className={`font-bold text-xs ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>AI Nutritionist</p>
+                              <p className="text-[10px] text-neutral-500">{isEN ? "Meal logging & macro targets" : "Hitung kalori & foto makanan"}</p>
                             </div>
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {/* Option 3: Premium Plan ($8 / Rp 139.000) */}
+                  <button
+                    onClick={() => {
+                      setSelectedPlan("premium");
+                      setSelectedFeature(null);
+                    }}
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                      selectedPlan === "premium"
+                        ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "premium" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "Premium Plan (All-Access)" : "Paket Premium (All-Access)"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            {isEN ? "$8 / mo" : "Rp 139rb / bln"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN
+                            ? "Both AIs (Nutritionist + Workout Coach), Gemini Pro Vision & Visual Infographic Poster Generation."
+                            : "2 AI Sekaligus (Nutrisi + Workout Coach), Presisi Tinggi Gemini Pro & Generasi Poster Visual Gym."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selectedPlan === "premium" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </button>
                 </div>
               </motion.div>
             )}

@@ -67,6 +67,23 @@ interface DashboardProps {
 }
 
 function getPersonalizedWorkoutSchedule(user: any) {
+  if (user?.workoutSchedule && Array.isArray(user.workoutSchedule) && user.workoutSchedule.length > 0) {
+    return user.workoutSchedule.map((item: any) => {
+      const dayLabel = item.day || "Hari Latihan";
+      const focusText = item.focus ? ` • ${item.focus}` : "";
+      const exercisesText = Array.isArray(item.exercises)
+        ? item.exercises.map((e: any) => `${e.name} (${e.setsReps || "3 Set"})`).join(" + ")
+        : (item.title || "Latihan Gym");
+      const descText = item.desc || (Array.isArray(item.exercises) ? `${item.exercises.length} gerakan target otot` : "Jadwal AI WhatsApp");
+
+      return {
+        day: `${dayLabel}${focusText}`,
+        title: exercisesText,
+        desc: descText
+      };
+    });
+  }
+
   const goal = user.goal || "maintain";
   const event = user.goalEvent || "daily";
   const exp = user.experience || "beginner";
@@ -185,6 +202,13 @@ export default function Dashboard({
   const [newWeightInput, setNewWeightInput] = useState(String(initialUser.weight || 78.5));
   const [weightHistory, setWeightHistory] = useState<any[]>([]);
 
+  // Edit Goals Modal State
+  const [showEditGoalsModal, setShowEditGoalsModal] = useState(false);
+  const [editTargetWeight, setEditTargetWeight] = useState(String(initialUser.targetWeight || initialUser.weight || 70));
+  const [editTargetCalories, setEditTargetCalories] = useState(String(initialUser.targetCalories || 2000));
+  const [editGoal, setEditGoal] = useState<string>(initialUser.goal || "lose");
+  const [savingGoals, setSavingGoals] = useState(false);
+
   // Interactive Workout Checklist State
   const [workoutChecked, setWorkoutChecked] = useState<Record<number, boolean>>(() => {
     try {
@@ -292,6 +316,41 @@ export default function Dashboard({
         }
       }
     } catch (e) {}
+  };
+
+  const handleSaveGoals = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingGoals(true);
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    try {
+      let goalTitle = "Gaya Hidup Sehat & Fit";
+      if (editGoal === "lose") goalTitle = "Menurunkan Berat Badan";
+      else if (editGoal === "gain") goalTitle = "Menaikkan Berat Badan & Massa Otot";
+
+      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetWeight: Number(editTargetWeight),
+          targetCalories: Number(editTargetCalories),
+          goal: editGoal,
+          goalTitle
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.userData || data.user) {
+          setLiveUser((prev) => ({ ...prev, ...(data.user || data.userData) }));
+        }
+        setShowEditGoalsModal(false);
+        fetchUserProfile();
+      }
+    } catch (err) {
+      console.error("Error saving goals:", err);
+    } finally {
+      setSavingGoals(false);
+    }
   };
 
   // API Fetch Meals for Selected Date
@@ -1059,10 +1118,18 @@ export default function Dashboard({
           {/* Health & BMR Calculator Summary */}
           <div className="lg:col-span-4 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-lg flex flex-col justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-3">
-                <Activity className="w-5 h-5 text-[#D4FF00]" />
-                <span>{isEN ? "BMR & TDEE Metrics" : "Metrik BMR & TDEE"}</span>
-              </h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-[#D4FF00]" />
+                  <span>{isEN ? "BMR & TDEE Metrics" : "Metrik BMR & TDEE"}</span>
+                </h2>
+                <button
+                  onClick={() => setShowEditGoalsModal(true)}
+                  className="px-3 py-1 bg-[#D4FF00]/10 hover:bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  Edit Goal
+                </button>
+              </div>
 
               <div className="space-y-3">
                 <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-3.5 flex justify-between items-center">
@@ -1080,6 +1147,30 @@ export default function Dashboard({
                   <span className="text-sm font-black text-emerald-400">
                     {isLoseGoal ? "-500 kcal / hari" : (activeUser.goal === "gain" ? "+400 kcal / hari" : "Sebatas TDEE Harian")}
                   </span>
+                </div>
+
+                {/* Equipment & Injury Constraints Card */}
+                <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-3.5 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-400 font-semibold">Alat Workout:</span>
+                    <span className="font-extrabold text-[#D4FF00]">
+                      {activeUser.equipment === "bodyweight" ? "Tanpa Alat / Rumah" : (activeUser.equipment === "dumbbells" ? "Dumbbell Rumah" : "Alat Gym Lengkap")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs border-t border-neutral-800/60 pt-1.5">
+                    <span className="text-neutral-400 font-semibold">Kondisi Fisik / Cedera:</span>
+                    <span className="font-extrabold text-white">
+                      {Array.isArray(activeUser.injuries) && activeUser.injuries.filter((i: string) => i !== "none").length > 0
+                        ? activeUser.injuries.filter((i: string) => i !== "none").join(", ")
+                        : (activeUser.customInjury || "Sehat (Tanpa Cedera)")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs border-t border-neutral-800/60 pt-1.5">
+                    <span className="text-neutral-400 font-semibold">Persona AI Coach:</span>
+                    <span className="font-extrabold text-[#D4FF00]">
+                      {activeUser.persona === "mia" ? "Coach Mia" : "Coach Max"}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1175,6 +1266,95 @@ export default function Dashboard({
                   </button>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* EDIT GOALS MODAL */}
+      <AnimatePresence>
+        {showEditGoalsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#161C28] border border-neutral-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Target className="w-5 h-5 text-[#D4FF00]" />
+                  <span>Edit Target & Goals</span>
+                </h3>
+                <button
+                  onClick={() => setShowEditGoalsModal(false)}
+                  className="p-1 text-neutral-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveGoals} className="space-y-4 pt-2">
+                <div>
+                  <label className="text-xs font-bold text-neutral-300 mb-1.5 block">Target Utama (Goal)</label>
+                  <select
+                    value={editGoal}
+                    onChange={(e) => setEditGoal(e.target.value)}
+                    className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#D4FF00]"
+                  >
+                    <option value="lose">Menurunkan Berat Badan (Fat Loss)</option>
+                    <option value="gain">Menaikkan Berat Badan & Otot (Bulking)</option>
+                    <option value="maintain">Gaya Hidup Sehat & Fit (Maintenance)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-300 mb-1.5 block">Target Berat Badan (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editTargetWeight}
+                    onChange={(e) => setEditTargetWeight(e.target.value)}
+                    placeholder="Contoh: 70"
+                    className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#D4FF00]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-300 mb-1.5 block">Target Kalori Harian (kcal)</label>
+                  <input
+                    type="number"
+                    value={editTargetCalories}
+                    onChange={(e) => setEditTargetCalories(e.target.value)}
+                    placeholder="Contoh: 1800"
+                    className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#D4FF00]"
+                    required
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditGoalsModal(false)}
+                    className="flex-1 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingGoals}
+                    className="flex-1 py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl disabled:opacity-50 cursor-pointer shadow-md transition-all"
+                  >
+                    {savingGoals ? "Menyimpan..." : "Simpan Goal Baru"}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
