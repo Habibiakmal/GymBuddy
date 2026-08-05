@@ -2538,44 +2538,135 @@ Keluarkan output JSON valid:
   });
 
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
-    // Clean prompt for AI image generators (short, no punctuation)
     const cleanPrompt = promptText
       .replace(/[^a-zA-Z0-9\s]/g, " ")
       .replace(/\s+/g, " ")
-      .trim()
-      .substring(0, 120);
+      .trim();
 
-    const encodedPrompt = encodeURIComponent(cleanPrompt);
+    // Provider 1: Gemini Multimodal & Imagen Image Generation Models (Google Generative AI)
+    if (USER_GEMINI_KEY) {
+      const cleanKey = USER_GEMINI_KEY;
 
-    // Provider 1: Pollinations AI Image Generator (Clean prompt)
-    try {
-      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
-      console.log("[AI Image Gen] Fetching Pollinations image:", pollUrl);
-      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 15000 });
-      if (resp.data && resp.data.length > 5000) {
-        console.log("[AI Image Gen] Successfully generated AI image! Size:", resp.data.length);
-        return Buffer.from(resp.data);
+      // 1A. Try Gemini Image Generation Models (generateContent with responseMimeType / inlineData)
+      const geminiImageModels = [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image",
+        "gemini-2.5-flash-image"
+      ];
+
+      for (const mName of geminiImageModels) {
+        try {
+          console.log(`[Gemini Image Gen] Requesting model ${mName}...`);
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+          const headers: any = { "Content-Type": "application/json" };
+          if (cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.")) {
+            headers["Authorization"] = `Bearer ${cleanKey}`;
+          } else {
+            headers["x-goog-api-key"] = cleanKey;
+          }
+
+          const resp = await axios.post(
+            url,
+            {
+              contents: [
+                {
+                  parts: [{ text: `Generate an image for: ${cleanPrompt}` }]
+                }
+              ],
+              generationConfig: {
+                responseMimeType: "image/jpeg"
+              }
+            },
+            { headers, timeout: 20000 }
+          );
+
+          const parts = resp.data?.candidates?.[0]?.content?.parts || [];
+          for (const p of parts) {
+            if (p.inlineData?.data) {
+              console.log(`[Gemini Image Gen] Successfully generated image with ${mName}!`);
+              return Buffer.from(p.inlineData.data, "base64");
+            }
+          }
+        } catch (e: any) {
+          console.log(`[Gemini Image REST] Model ${mName} info:`, e?.response?.data?.error?.message || e?.message);
+        }
       }
-    } catch (e: any) {
-      console.log("[AI Image Gen] Pollinations error:", e?.message || e);
+
+      // 1B. Try Imagen Models (generateImages & predict endpoints)
+      const imagenModels = [
+        "imagen-3.0-generate-002",
+        "imagen-3.0-fast-generate-001",
+        "imagen-3.0-generate-001"
+      ];
+
+      for (const mName of imagenModels) {
+        // 1B-i: generateImages endpoint
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateImages?key=${encodeURIComponent(cleanKey)}`;
+          const resp = await axios.post(
+            url,
+            {
+              prompt: cleanPrompt.substring(0, 200),
+              number_of_images: 1,
+              aspect_ratio: "3:4",
+              output_mime_type: "image/jpeg"
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 20000 }
+          );
+
+          if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
+            console.log(`[Imagen REST] Successfully generated image with ${mName}!`);
+            return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+          }
+        } catch (e: any) {
+          console.log(`[Imagen REST] Model ${mName} generateImages info:`, e?.response?.data?.error?.message || e?.message);
+        }
+
+        // 1B-ii: predict endpoint
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:predict?key=${encodeURIComponent(cleanKey)}`;
+          const resp = await axios.post(
+            url,
+            {
+              instances: [{ prompt: cleanPrompt.substring(0, 200) }],
+              parameters: { sampleCount: 1, aspectRatio: "3:4", outputMimeType: "image/jpeg" }
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 20000 }
+          );
+
+          if (resp.data?.predictions?.[0]?.bytesBase64Encoded) {
+            console.log(`[Imagen REST] Successfully generated image via predict with ${mName}!`);
+            return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
+          }
+        } catch (e: any) {
+          console.log(`[Imagen REST] Model ${mName} predict info:`, e?.response?.data?.error?.message || e?.message);
+        }
+      }
     }
 
-    // Provider 2: Google Gemini Imagen 3 REST API (for keys with Imagen enabled)
-    if (USER_GEMINI_KEY) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${USER_GEMINI_KEY}`;
-        const resp = await axios.post(url, {
-          prompt: cleanPrompt,
-          number_of_images: 1,
-          aspect_ratio: "3:4",
-          output_mime_type: "image/jpeg"
-        }, { headers: { "Content-Type": "application/json" }, timeout: 20000 });
+    // Provider 2: Pollinations AI Image Generator (Fallback with clean short prompts)
+    const shortPrompt = cleanPrompt.substring(0, 80);
+    const encodedPrompt = encodeURIComponent(shortPrompt);
+    const seed = Math.floor(Math.random() * 10000);
 
-        if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
-          return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+    const pollinationsEndpoints = [
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=800&height=1000&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=800&height=1000&nologo=true&seed=${seed}`,
+      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1000&nologo=true&seed=${seed}`
+    ];
+
+    for (const pollUrl of pollinationsEndpoints) {
+      try {
+        console.log("[AI Image Gen] Fetching Pollinations image:", pollUrl);
+        const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 12000 });
+        const contentType = String(resp.headers?.["content-type"] || "");
+        if (resp.data && resp.data.length > 3000 && (contentType.includes("image") || resp.data.length > 5000)) {
+          console.log("[AI Image Gen] Successfully generated Pollinations AI image! Size:", resp.data.length);
+          return Buffer.from(resp.data);
         }
       } catch (e: any) {
-        console.log("[Gemini Imagen 3] API Key Info:", e?.response?.data?.error?.message || e?.message);
+        console.log("[AI Image Gen] Pollinations attempt error:", e?.message || e);
       }
     }
 
@@ -2583,7 +2674,7 @@ Keluarkan output JSON valid:
   }
 
   // Serve AI Generated Image Endpoint
-  app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], (req, res) => {
+  app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], async (req, res) => {
     const { id } = req.params;
     const cleanId = id.replace(/\.(jpg|jpeg|png)$/i, "");
     const imgBase64 = (dbData as any).generatedImages ? (dbData as any).generatedImages[cleanId] : null;
@@ -2595,24 +2686,42 @@ Keluarkan output JSON valid:
       return res.send(imgBuffer);
     }
 
-    // Fallback: If not found, return SVG infographic image
+    // Fallback: Return high-resolution rendered PNG Infographic
     const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
     const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
     const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
     const svgStr = generateInfographicSVG(parsed, userData);
-    res.setHeader("Content-Type", "image/svg+xml");
-    res.send(svgStr);
+
+    try {
+      const { Resvg } = await import("@resvg/resvg-js");
+      const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 800 } });
+      const pngData = resvg.render();
+      const pngBuffer = pngData.asPng();
+
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(pngBuffer);
+    } catch (e: any) {
+      console.log("[Resvg Render Fallback]:", e?.message || e);
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(svgStr);
+    }
   });
 
   function generateInfographicSVG(parsed: any, userData: any): string {
-    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
-    const desc = parsed.description || "Melatih otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    const rawEqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
+    const rawDesc = parsed.description || "Melatih otot target secara optimal.";
+    const rawMuscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
 
-    const partsList = Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki: Mengunci kaki", "Foot Plate: Pijakan kaki", "Pad Paha: Menopang paha", "Handle: Pegangan posisi"];
-    const stepsList = Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi: Pad paha sejajar pinggul", "Posisi Awal: Kaki di roller, tangan di dada", "Gerakan Turun: Turunkan badan perlahan", "Gerakan Naik: Angkat badan kencangkan otot target"];
-    const tipsList = Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target"];
-    const mistakesList = Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan saat naik", "Menggunakan momentum"];
+    const eqName = escapeXml(rawEqName);
+    const desc = escapeXml(rawDesc);
+    const muscles = escapeXml(rawMuscles);
+
+    const partsList = (Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki: Mengunci kaki", "Foot Plate: Pijakan kaki", "Pad Paha: Menopang paha", "Handle: Pegangan posisi"]).map((x: any) => escapeXml(String(x)));
+    const stepsList = (Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi: Pad paha sejajar pinggul", "Posisi Awal: Kaki di roller, tangan di dada", "Gerakan Turun: Turunkan badan perlahan", "Gerakan Naik: Angkat badan kencangkan otot target"]).map((x: any) => escapeXml(String(x)));
+    const tipsList = (Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target"]).map((x: any) => escapeXml(String(x)));
+    const mistakesList = (Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan saat naik", "Menggunakan momentum"]).map((x: any) => escapeXml(String(x)));
 
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
@@ -2625,9 +2734,10 @@ Keluarkan output JSON valid:
       defaultSets = "4 Set"; defaultReps = "8 - 12 Reps"; defaultRest = "90 - 120 Detik";
     }
 
-    const sets = parsed.recommendedSets || defaultSets;
-    const reps = parsed.recommendedReps || defaultReps;
-    const rest = parsed.recommendedRest || defaultRest;
+    const sets = escapeXml(parsed.recommendedSets || defaultSets);
+    const reps = escapeXml(parsed.recommendedReps || defaultReps);
+    const rest = escapeXml(parsed.recommendedRest || defaultRest);
+    const userName = escapeXml(userData.name || "User");
 
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1200" width="800" height="1200">
       <defs>
@@ -2738,7 +2848,7 @@ Keluarkan output JSON valid:
       </g>
 
       <!-- Footer -->
-      <text x="400" y="1155" fill="#64748b" font-family="sans-serif" font-size="12" text-anchor="middle">Official GymBuddy AI Guide • Dibuat khusus untuk ${userData.name || "User"}</text>
+      <text x="400" y="1155" fill="#64748b" font-family="sans-serif" font-size="12" text-anchor="middle">Official GymBuddy AI Guide • Dibuat khusus untuk ${userName}</text>
     </svg>`;
   }
 
