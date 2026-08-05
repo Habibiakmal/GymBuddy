@@ -2541,6 +2541,74 @@ Keluarkan output JSON valid:
     res.json({ success: true });
   });
 
+  function formatEquipmentTutorialCard(parsed: any, userData: any): string {
+    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
+    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
+    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    
+    const parts = Array.isArray(parsed.parts)
+      ? parsed.parts.map((p: string, i: number) => `  ${i + 1}️⃣ *${p}*`).join("\n")
+      : "  1️⃣ *Roller / Pad Penopang*: Mengunci posisi tubuh\n  2️⃣ *Handle / Pegangan*: Menjaga keseimbangan posisi\n  3️⃣ *Foot Plate*: Pijakan kaki utama";
+
+    const steps = Array.isArray(parsed.steps)
+      ? parsed.steps.map((s: string, i: number) => `  ${i + 1}️⃣ *${s}*`).join("\n")
+      : "  1️⃣ *Atur Posisi*: Sesuaikan tinggi pad dengan pinggul\n  2️⃣ *Posisi Awal*: Tubuh lurus, tangan silang di dada\n  3️⃣ *Gerakan Turun*: Turunkan badan perlahan hingga terasa regangan\n  4️⃣ *Gerakan Naik*: Angkat badan kembali kencangkan otot target";
+
+    const tips = Array.isArray(parsed.tips)
+      ? parsed.tips.map((t: string) => `  ✅ ${t}`).join("\n")
+      : "  ✅ Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  ✅ Jaga punggung tetap lurus, jangan membungkuk\n  ✅ Fokus pada kontraksi otot target";
+
+    const mistakes = Array.isArray(parsed.mistakes)
+      ? parsed.mistakes.map((m: string) => `  ⚠️ ${m}`).join("\n")
+      : "  ⚠️ Hiperextensi berlebihan saat naik\n  ⚠️ Menggunakan ayunan/momentum, bukan otot";
+
+    // Customize sets/reps to user goal!
+    let defaultSets = "3 - 4 Set";
+    let defaultReps = "10 - 15 Repetisi";
+    let defaultRest = "60 - 90 Detik";
+
+    const goalLower = (userData.goalTitle || "").toLowerCase();
+    if (goalLower.includes("menurunkan") || goalLower.includes("fat loss") || goalLower.includes("turun")) {
+      defaultSets = "3 - 4 Set";
+      defaultReps = "12 - 15 Repetisi (Tinggi Kalori)";
+      defaultRest = "45 - 60 Detik (Intensitas Tinggi)";
+    } else if (goalLower.includes("naik") || goalLower.includes("otot") || goalLower.includes("muscle") || goalLower.includes("gain")) {
+      defaultSets = "4 Set";
+      defaultReps = "8 - 12 Repetisi (Hipertrofi Otot)";
+      defaultRest = "90 - 120 Detik (Recovery Maksimal)";
+    }
+
+    const sets = parsed.recommendedSets || defaultSets;
+    const reps = parsed.recommendedReps || defaultReps;
+    const rest = parsed.recommendedRest || defaultRest;
+
+    return `🏋️ *TUTORIAL CARA PAKAI ALAT THIS MACHINE*
+----------------------------------------
+📌 *Nama Alat*: ${eqName}
+📝 *Fungsi*: ${desc}
+🎯 *Target Otot*: ${muscles}
+📋 *Goal Kamu*: ${userData.goalTitle || "Kebugaran Harian"}
+
+🔩 *BAGIAN ALAT*:
+${parts}
+
+📐 *CARA PAKAI (STEP-BY-STEP)*:
+${steps}
+
+💡 *TIPS PERFORMA*:
+${tips}
+
+❌ *KESALAHAN UMUM*:
+${mistakes}
+
+📊 *REKOMENDASI LATIHAN (KHUSUS SESUAI GOAL KAMU)*:
+⏱️ *Sets*: ${sets}
+🔄 *Reps*: ${reps}
+⏳ *Istirahat*: ${rest}
+
+💪 *Coach*: Cobalah porsi di atas & rasakan kontraksi ototnya! Ada pertanyaan lain tentang cara pakai alat ini?`;
+  }
+
   // =============================================
   // TWILIO WHATSAPP WEBHOOK
   // =============================================
@@ -2751,7 +2819,20 @@ FORMAT 2 - JIKA USER MENANYAKAN REKAP / RIWAYAT MAKANAN / CEK APAPUN YANG SUDAH 
   "generalReply": "Rangkuman ramah berisi makanan yang sudah dimakan hari ini, total kalori & makro yang masuk, serta sisa kalori menuju target."
 }
 
-FORMAT 3 - CHAT UMUM / REKOMENDASI / WORKOUT / ALAT GYM / PERTANYAAN:
+FORMAT 3 - JIKA USER MENANYAKAN / MENGEFOTO ALAT GYM / MESIN GYM / CARA PAKAI ALAT:
+{
+  "intent": "EQUIPMENT_TUTORIAL",
+  "isFood": false,
+  "equipmentName": "Hyperextension Bench (atau Nama Alat Gym yang Dideteksi)",
+  "description": "Alat ini digunakan untuk melatih otot punggung bawah, glutes, dan hamstring.",
+  "targetMuscles": "Erector Spinae (Punggung Bawah), Gluteus (Bokong), Hamstring",
+  "parts": ["Roller Kaki: Mengunci pergelangan kaki", "Foot Plate: Tempat pijakan kaki", "Pad Paha: Menopang bagian atas paha", "Handle: Pegangan posisi"],
+  "steps": ["Atur Posisi: Pastikan pad paha sejajar dengan pinggul", "Posisi Awal: Berbaring menghadap ke bawah, kaki dikaitkan di roller, tangan di dada", "Gerakan Turun: Turunkan tubuh perlahan hingga punggung bawah terasa meregang", "Gerakan Naik: Angkat tubuh kembali ke atas kencangkan otot target"],
+  "tips": ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target", "Jaga punggung tetap lurus"],
+  "mistakes": ["Hiperextensi berlebihan saat naik", "Menggunakan ayunan/momentum, bukan kekuatan otot"]
+}
+
+FORMAT 4 - CHAT UMUM / REKOMENDASI / WORKOUT / PERTANYAAN LAINNYA:
 {
   "intent": "CHAT",
   "isFood": false,
@@ -2771,6 +2852,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
               const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
               const intentMatch = rawText.match(/"intent"\s*:\s*"([^"]+)"/i);
+              const eqMatch = rawText.match(/"equipmentName"\s*:\s*"([^"]+)"/i);
 
               if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true')) {
                 parsed = {
@@ -2782,6 +2864,12 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                   carbs: carbMatch ? parseInt(carbMatch[1], 10) : 35,
                   fat: fatMatch ? parseInt(fatMatch[1], 10) : 10,
                   generalReply: "Catatan makanan berhasil disimpan!"
+                };
+              } else if (eqMatch || (intentMatch && intentMatch[1] === "EQUIPMENT_TUTORIAL")) {
+                parsed = {
+                  intent: "EQUIPMENT_TUTORIAL",
+                  isFood: false,
+                  equipmentName: eqMatch ? eqMatch[1] : "Alat Gym"
                 };
               } else if (intentMatch && intentMatch[1] === "DAILY_REKAP") {
                 parsed = { intent: "DAILY_REKAP", isFood: false };
@@ -2811,6 +2899,8 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             } else if (parsed.intent === "DAILY_REKAP") {
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
+            } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName || (imagePart && !parsed.isFood && (lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("pakai") || lowerText.includes("gym")))) {
+              responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
             } else {
               let finalMsg = parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?";
               if (finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
