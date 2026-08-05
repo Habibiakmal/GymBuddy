@@ -2774,9 +2774,22 @@ Kategori 3 - CHAT UMUM → JSON:
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.use((req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    const distIndex = path.join(distPath, "index.html");
+    const rootIndex = path.join(process.cwd(), "index.html");
+
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
+    app.use(express.static(process.cwd()));
+
+    app.use((req: any, res: any) => {
+      if (fs.existsSync(distIndex)) {
+        res.sendFile(distIndex);
+      } else if (fs.existsSync(rootIndex)) {
+        res.sendFile(rootIndex);
+      } else {
+        res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
+      }
     });
   }
 

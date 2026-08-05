@@ -2205,9 +2205,22 @@ Berikut infografis resmi dari GymBuddy AI untuk panduan bagian alat, cara pakai 
     app.use(vite.middlewares);
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
-    app.use(import_express.default.static(distPath));
+    const distIndex = import_path.default.join(distPath, "index.html");
+    const rootIndex = import_path.default.join(process.cwd(), "index.html");
+
+    if (import_fs.default.existsSync(distPath)) {
+      app.use(import_express.default.static(distPath));
+    }
+    app.use(import_express.default.static(process.cwd()));
+
     app.use((req, res) => {
-      res.sendFile(import_path.default.join(distPath, "index.html"));
+      if (import_fs.default.existsSync(distIndex)) {
+        res.sendFile(distIndex);
+      } else if (import_fs.default.existsSync(rootIndex)) {
+        res.sendFile(rootIndex);
+      } else {
+        res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
+      }
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
