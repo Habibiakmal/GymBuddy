@@ -42,16 +42,24 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     throw new Error("GEMINI_API_KEY is not set in environment variables");
   }
 
+  const isBearer = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
   const modelsToTry = [
-    "gemini-3.6-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-flash-latest"
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
   ];
 
-  // Pure REST request without x-goog-api-key header to avoid ACCESS_TOKEN_TYPE_UNSUPPORTED
   for (const mName of modelsToTry) {
     try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+      const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
+      const restUrl = isBearer ? baseUrl : `${baseUrl}?key=${encodeURIComponent(cleanKey)}`;
+
+      const headers: any = { "Content-Type": "application/json" };
+      if (isBearer) {
+        headers["Authorization"] = `Bearer ${cleanKey}`;
+      } else {
+        headers["x-goog-api-key"] = cleanKey;
+      }
 
       const requestParts: any[] = [{ text: prompt }];
       if (imagePart && imagePart.inlineData) {
@@ -69,10 +77,7 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
           contents: [{ parts: requestParts }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
         },
-        { 
-          headers: { "Content-Type": "application/json" }, 
-          timeout: 25000 
-        }
+        { headers, timeout: 20000 }
       );
 
       if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
