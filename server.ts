@@ -2745,17 +2745,30 @@ Keluarkan output JSON valid:
   }
 
   // GymBuddy Official Visual Infographic Image Route (SVG / PNG)
-  app.get(["/api/infographic/:id.svg", "/api/infographic/:id.png"], (req, res) => {
+  app.get(["/api/infographic/:id.svg", "/api/infographic/:id.png"], async (req, res) => {
     const { id } = req.params;
-    const cleanId = id.replace(/\.(svg|png)$/i, "");
+    const cleanId = id.replace(/\.(svg|png|jpg|jpeg)$/i, "");
     const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
     const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
     const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
 
     const svgStr = generateInfographicSVG(parsed, userData);
-    res.setHeader("Content-Type", "image/svg+xml");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    res.send(svgStr);
+
+    try {
+      const { Resvg } = await import("@resvg/resvg-js");
+      const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 800 } });
+      const pngData = resvg.render();
+      const pngBuffer = pngData.asPng();
+
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(pngBuffer);
+    } catch (e: any) {
+      console.log("[Resvg Render Fallback]:", e?.message || e);
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(svgStr);
+    }
   });
 
   // GymBuddy Official Visual Infographic Template Web Route
@@ -3418,7 +3431,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               saveDb();
 
               const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
-              let imageUrl = `${baseUrl}/api/infographic/${infoId}.svg`;
+              let imageUrl = `${baseUrl}/api/infographic/${infoId}.png`;
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
 
@@ -3436,22 +3449,22 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                     console.log("[Gemini Image] Successfully generated AI image with Gemini Imagen 3:", imageUrl);
                   }
                 } catch (imgGenErr) {
-                  console.log("[Gemini Image] AI image generation info, using vector poster:", imgGenErr);
+                  console.log("[Gemini Image] AI image generation info, using crisp PNG poster:", imgGenErr);
                 }
 
-                // Send direct image attachment to WhatsApp via Twilio REST API
+                // Send direct PNG image file attachment to WhatsApp via Twilio REST API
                 if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
                   try {
                     const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
                     const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
                     const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
                     await getTwilio().messages.create({
-                      body: `🏋️ *GAMBAR TUTORIAL DARI GEMINI AI: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
+                      body: `🏋️ *GAMBAR INFOGRAFIS CARA PAKAI ALAT: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
                       mediaUrl: [imageUrl],
                       from: fromNum,
                       to: toNum
                     });
-                    console.log(`[Twilio WA] Direct Gemini AI generated image file sent to ${toNum}: ${imageUrl}`);
+                    console.log(`[Twilio WA] Direct PNG infographic image file sent to ${toNum}: ${imageUrl}`);
                   } catch (twErr: any) {
                     console.error("[Twilio WA] Direct image send error:", twErr?.message || twErr);
                   }
