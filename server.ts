@@ -3573,15 +3573,15 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const intentMatch = rawText.match(/"intent"\s*:\s*"([^"]+)"/i);
               const eqMatch = rawText.match(/"equipmentName"\s*:\s*"([^"]+)"/i);
 
-              if (foodNameMatch || calMatch || rawText.includes('"isFood": true') || rawText.includes('"isFood":true')) {
+              if (foodNameMatch && (calMatch || parsed?.calories)) {
                 parsed = {
                   intent: "FOOD_LOG",
                   isFood: true,
-                  foodName: foodNameMatch ? foodNameMatch[1] : (userText.length < 30 ? userText : "Makanan"),
-                  calories: calMatch ? parseInt(calMatch[1], 10) : 350,
-                  protein: protMatch ? parseInt(protMatch[1], 10) : 15,
-                  carbs: carbMatch ? parseInt(carbMatch[1], 10) : 35,
-                  fat: fatMatch ? parseInt(fatMatch[1], 10) : 10,
+                  foodName: foodNameMatch[1],
+                  calories: calMatch ? parseInt(calMatch[1], 10) : Number(parsed?.calories || 0),
+                  protein: protMatch ? parseInt(protMatch[1], 10) : Number(parsed?.protein || 0),
+                  carbs: carbMatch ? parseInt(carbMatch[1], 10) : Number(parsed?.carbs || 0),
+                  fat: fatMatch ? parseInt(fatMatch[1], 10) : Number(parsed?.fat || 0),
                   generalReply: "Catatan makanan berhasil disimpan!"
                 };
               } else if (eqMatch || (intentMatch && intentMatch[1] === "EQUIPMENT_TUTORIAL")) {
