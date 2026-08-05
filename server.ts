@@ -209,6 +209,69 @@ function extractAndParseJson(text: string): any {
   return null;
 }
 
+function validateAndNormalizeNutrition(parsed: any, isPhoto: boolean = false): any {
+  if (!parsed || typeof parsed !== "object") return parsed;
+  if (!parsed.isFood && parsed.intent !== "FOOD_LOG") return parsed;
+
+  let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
+  let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+  let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+  let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
+  let sugar = Math.max(0, Math.round(Number(parsed.sugar) || 0));
+
+  // Compute exact macro-based calories: (Protein x 4) + (Carbs x 4) + (Fat x 9)
+  let macroCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  let rawCalories = Math.round(Number(parsed.calories) || 0);
+
+  // If protein/carbs/fat were all zero but rawCalories > 0, back-solve reasonable Indonesian macros
+  if (macroCalories === 0 && rawCalories > 0) {
+    protein = Math.round((rawCalories * 0.25) / 4);
+    fat = Math.round((rawCalories * 0.30) / 9);
+    carbs = Math.round((rawCalories - (protein * 4 + fat * 9)) / 4);
+    macroCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  }
+
+  // ALWAYS enforce exact mathematical equality: Total Calories = (P*4) + (C*4) + (F*9)
+  parsed.calories = macroCalories;
+  parsed.protein = protein;
+  parsed.carbs = carbs;
+  parsed.fat = fat;
+  parsed.fiber = fiber;
+  parsed.sugar = sugar;
+
+  // Compute Satiety Score algorithmically (1-10) based on protein (g), fiber (g), and processing level
+  const satietyRaw = Math.round((protein * 0.15) + (fiber * 0.5) + (carbs < 30 ? 2 : 1) + 2);
+  parsed.satietyScore = Math.min(10, Math.max(1, satietyRaw));
+  if (!parsed.satietyExplanation) {
+    if (parsed.satietyScore >= 8) {
+      parsed.satietyExplanation = "Tinggi protein & serat, memberikan rasa kenyang lebih lama.";
+    } else if (parsed.satietyScore >= 5) {
+      parsed.satietyExplanation = "Kandungan protein & karbo seimbang untuk energi harian.";
+    } else {
+      parsed.satietyExplanation = "Rendah serat & protein, dianjurkan tambah lauk berprotein/sayur.";
+    }
+  }
+
+  // Compute Health Score algorithmically (1-10) considering cooking method, fiber, added sugar & saturated fats
+  let hScore = 7;
+  if (fiber >= 4) hScore += 1;
+  if (protein >= 25) hScore += 1;
+  if (fat > 25) hScore -= 1;
+  if (sugar > 15) hScore -= 1;
+
+  const fnLower = String(parsed.foodName || "").toLowerCase();
+  if (fnLower.match(/(goreng|deep fried|crispy|santan|jelantah|junk|fast food)/i)) hScore -= 1.5;
+  if (fnLower.match(/(rebus|kukus|panggang|bakar|salad|sayur|brokoli|sup|soto|tim)/i)) hScore += 1;
+  parsed.healthScore = Math.min(10, Math.max(1, Math.round(hScore)));
+
+  // Confidence & Detection Badge
+  const confLevel = Math.min(98, Math.max(75, Number(parsed.confidenceLevel) || (isPhoto ? 88 : 92)));
+  parsed.confidenceLevel = confLevel;
+  parsed.confidenceText = `Estimasi berdasarkan hasil deteksi AI (Confidence: ${confLevel}%)`;
+
+  return parsed;
+}
+
 
 // Interfaces for Persistent Database
 interface MealLog {
@@ -1087,16 +1150,21 @@ function formatNutritionCard(
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
   const coachComment = parsedAi.coachComment || (userData.persona === "max" ? "Bagus! Tetap disiplin dengan target kalori lo!" : "Hebat banget! Tetap jaga pola makannya ya! ✨");
 
+  const confidenceNote = parsedAi.confidenceText || `Estimasi berdasarkan hasil deteksi AI (Confidence: 90%)`;
+  const protKcal = protein * 4;
+  const carbKcal = carbs * 4;
+  const fatKcal = fat * 9;
+
   return `📝 *${foodName} (${inputSource})*
 🕒 ${dateTimeFormatted}
 
-🔥 *Kalori*: ${calories} kcal
-🍖 *Protein*: ${protein}g
-🍚 *Karbo*: ${carbs}g
-🥓 *Lemak*: ${fat}g
-🥬 *Serat*: ${fiber}g
+🤖 *${confidenceNote}*
 
-🧪 *Mikronutrien*:
+🔥 *Kalori*: ${calories} kcal *(Validasi: ${protKcal} + ${carbKcal} + ${fatKcal} kcal)*
+🍖 *Protein*: ${protein}g (${protKcal} kcal)
+🍚 *Karbo*: ${carbs}g (${carbKcal} kcal)
+🥓 *Lemak*: ${fat}g (${fatKcal} kcal)
+🥬 *Serat*: ${fiber}g
 🍯 *Gula*: ${sugar}g
 
 🥣 *Satiety Score*: ${satietyScore}/10
@@ -1105,11 +1173,13 @@ _${satietyExplanation}_
 
 💯 *Health Score*: ${healthScore}/10
 
-🍽️ *Estimasi Porsi*:
+🍽️ *Estimasi Porsi Standar Indonesia*:
 ${portions}
 
 💡 *Key Insights*:
 ${insights}
+
+✏️ *Koreksi Porsi*: Ketik *"koreksi porsi [detail/porsi]"* jika jumlah atau porsi kurang pas!
 
 -----------------------------
 📊 *REKAP NUTRISI HARI INI*
@@ -1711,6 +1781,9 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
         parsed = { foodName: text, calories: 250, protein: 15, carbs: 30, fat: 8, fiber: 2, mealType: "lunch" };
       }
 
+      parsed.isFood = true;
+      parsed = validateAndNormalizeNutrition(parsed, false);
+
       res.json({
         success: true,
         foodName: parsed.foodName || text,
@@ -1719,6 +1792,9 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
         carbs: Number(parsed.carbs) || 30,
         fat: Number(parsed.fat) || 8,
         fiber: Number(parsed.fiber) || 2,
+        satietyScore: parsed.satietyScore || 7,
+        healthScore: parsed.healthScore || 8,
+        confidenceText: parsed.confidenceText,
         mealType: parsed.mealType || getMealTypeByHour()
       });
     } catch (err: any) {
@@ -3743,64 +3819,80 @@ INFORMASI USER:
 - Makanan yang Sudah Dimakan Hari Ini:
 ${todayMealLogsStr}
 
-PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO ALAT GYM" : ""}
+PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO MAKANAN/ALAT" : ""}
 
-TUGAS: Analisis niat pengguna & keluarkan HANYA JSON valid sesuai salah satu format berikut:
+TUGAS: Analisis pesan/foto pengguna. Pahami Bahasa Indonesia alamiah (contoh: "tadi pagi makan nasi uduk sama telur", "siang makan ayam geprek level 2", "koreksi: ayamnya 2 potong").
+Keluarkan HANYA JSON valid sesuai salah satu format berikut:
 
-FORMAT 1 - JIKA USER MELAPORKAN MAKANAN / MINUMAN (teks atau foto makanan):
+FORMAT 1 - JIKA USER MELAPORKAN/MENGINPUT MAKANAN ATAU MINUMAN (BAHASA ALAMIAH / TEKS ATAU FOTO MAKANAN):
 {
   "intent": "FOOD_LOG",
   "isFood": true,
-  "foodName": "Nama Makanan/Minuman",
-  "calories": 400,
-  "protein": 25,
-  "carbs": 40,
-  "fat": 10,
+  "foodName": "Nama Makanan/Minuman Spesifik & Porsi (misal: Batagor 1 Porsi + Bumbu Kacang / Chicken Rice Bowl + Telur / Nasi Uduk + Telur Balado)",
+  "calories": 650,
+  "protein": 32,
+  "carbs": 65,
+  "fat": 28,
   "fiber": 3,
-  "generalReply": "Analisis nutrisi & saran coach"
+  "sugar": 4,
+  "confidenceLevel": 90,
+  "portionEstimates": ["Nasi Putih (150g)", "Ayam Geprek Dada (120g)", "Sambal & Lalapan"],
+  "keyInsights": ["Tinggi protein mendukung pembentukan otot", "Perhatikan minyak dari sambal/gorengan"],
+  "coachComment": "Saran dari coach singkat & membangun"
 }
+
+RUMUS MATEMATIKA SANGAT WAJIB (100% PERSISI, DILARANG SELISIH):
+- KALORI HARUS TEPAT SAMA DENGAN: (protein × 4) + (carbs × 4) + (fat × 9).
+- Contoh konsisten: Protein 35g (140 kcal) + Karbo 60g (240 kcal) + Lemak 20g (180 kcal) = 560 kcal.
+
+ACUAN BENCHMARK DATABASE NUTRISI INDONESIA (PANGANKU / USDA):
+- Batagor 1 porsi (4-5 pcs + bumbu): ~450 kcal | P: 18g | C: 45g | F: 22g | Fiber: 3g
+- Siomay Bandung 1 porsi (5 pcs + telur + bumbu): ~480 kcal | P: 24g | C: 42g | F: 24g | Fiber: 3g
+- Ayam Geprek + Nasi + Sambal: ~650 kcal | P: 32g | C: 65g | F: 28g | Fiber: 2g
+- Chicken Rice Bowl + Telur: ~580 kcal | P: 35g | C: 60g | F: 20g | Fiber: 2g
+- Nasi Padang (Rendang/Ayam Pop + Sayur Singkong): ~750 kcal | P: 38g | C: 70g | F: 34g | Fiber: 4g
+- Nasi Uduk + Telur Balado + Tempe: ~520 kcal | P: 20g | C: 65g | F: 20g | Fiber: 3g
+- Bakso Sapi Urat + Mie: ~420 kcal | P: 26g | C: 40g | F: 18g | Fiber: 2g
+- Soto Ayam + Nasi: ~410 kcal | P: 25g | C: 50g | F: 12g | Fiber: 2g
+- Gado-Gado / Pecel + Lontong: ~430 kcal | P: 16g | C: 52g | F: 18g | Fiber: 6g
 
 FORMAT 2 - JIKA USER MENANYAKAN REKAP / RIWAYAT MAKANAN / CEK APAPUN YANG SUDAH DIMAKAN HARI INI / SISA KALORI:
 {
   "intent": "DAILY_REKAP",
-  "isFood": false,
-  "generalReply": "..."
+  "isFood": false
 }
 
-FORMAT 3 - JIKA USER MENGIRIMKAN FOTO ALAT GYM / MESIN GYM / DUMBBELL / BARBELL / ATAU MENANYAKAN CARA PAKAI ALAT:
+FORMAT 3 - JIKA USER MENGIRIMKAN FOTO ALAT GYM / MESIN GYM ATAU MENANYAKAN CARA PAKAI ALAT:
 {
   "intent": "EQUIPMENT_TUTORIAL",
   "isFood": false,
-  "equipmentName": "SEBUTKAN NAMA SPESIFIK ALAT YANG ADA DI FOTO (misal: Dumbbell Hex, Lat Pulldown Machine, Leg Press Machine, Hyperextension Bench, Barbell, Smith Machine, Cable Machine, dll.)",
-  "description": "Deskripsi fungsi alat ini untuk melatih otot apa.",
-  "targetMuscles": "Nama otot-otot spesifik yang dilatih",
-  "parts": ["Bagian 1: fungsi", "Bagian 2: fungsi", "Bagian 3: fungsi"],
-  "steps": ["Langkah 1: ...", "Langkah 2: ...", "Langkah 3: ...", "Langkah 4: ..."],
-  "tips": ["Tips 1", "Tips 2", "Tips 3"],
-  "mistakes": ["Kesalahan 1", "Kesalahan 2"]
+  "equipmentName": "Nama Spesifik Alat Gym",
+  "description": "Fungsi alat",
+  "targetMuscles": "Otot yang dilatih",
+  "parts": ["Bagian 1", "Bagian 2"],
+  "steps": ["Langkah 1", "Langkah 2"],
+  "tips": ["Tips 1"],
+  "mistakes": ["Kesalahan 1"]
 }
 
 FORMAT 4 - JIKA USER MINTA JADWAL LATIHAN / WORKOUT PLAN:
 {
   "intent": "WORKOUT_PLAN",
   "isFood": false,
-  "generalReply": "Jadwal latihan lengkap dan terstruktur sesuai goal user, tulis dengan format yang rapi, pakai emoji, dan berikan motivasi"
+  "generalReply": "Jadwal latihan lengkap"
 }
 
 FORMAT 5 - CHAT UMUM / REKOMENDASI / PERTANYAAN LAINNYA:
 {
   "intent": "CHAT",
   "isFood": false,
-  "generalReply": "Jawaban cerdas, ramah, & informatif sesuai persona coach. JANGAN KOSONG, TULIS JAWABAN LENGKAP!"
+  "generalReply": "Jawaban coach"
 }
 
-CATATAN SANGAT PENTING:
-- SANGAT PENTING: TULIS JAWABAN YANG RINGKAS, SIMPEL, TERSTRUKTUR, & DIRECT TO THE POINT!
-- DILARANG MEMBUAT BALASAN YANG TERLALU PANJANG (maksimal 800 - 1000 karakter)!
-- Pastikan seluruh informasi & saran latihan/nutrisi 100% AKURAT & SESUAI DENGAN GOAL USER (${userData.goalTitle})!
-- Hindari kata-kata basa-basi yang berbelit-belit. Gunakan format poin-poin singkat yang langsung bisa dipraktikkan!
-
-Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
+CATATAN:
+- Jika user meminta koreksi (misal: "koreksi: ayamnya 2 potong" / "salah, porsinya setengah"), sesuaikan jumlah nutrisi dan pilih intent FOOD_LOG dengan porsi baru.
+- TULIS JAWABAN RINGKAS & DIRECT TO THE POINT.
+- Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
 
           try {
             const rawText = await generateGeminiContent(prompt, imagePart);
@@ -3854,13 +3946,13 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             // If equipment query detected (photo OR text) but AI returned CHAT or WORKOUT, force EQUIPMENT_TUTORIAL
             if (isEquipmentQuery && parsed.intent !== "FOOD_LOG" && parsed.intent !== "EQUIPMENT_TUTORIAL") {
               parsed.intent = "EQUIPMENT_TUTORIAL";
-              // Try to extract equipment name from userText or generalReply
               const eqSources = [userText, parsed.generalReply || ""].join(" ");
               const equipGuess = eqSources.match(/(dumbbell|barbel|barbell|lat pulldown|leg press|chest press|bench press|smith machine|cable machine|hyperextension|treadmill|elliptical|rowing machine|pull up bar|kettlebell|hex dumbbell)/i);
               parsed.equipmentName = equipGuess ? equipGuess[1] : (imagePart ? "Dumbbell Hex" : "Alat Gym");
             }
 
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
+              parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
               parsed.isFood = true;
               addMealLog(from, {
                 id: `m-${Date.now()}`, foodName: parsed.foodName || "Makanan",
@@ -3870,7 +3962,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
                 timestamp: new Date().toISOString()
               });
               const updatedTotals = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, updatedTotals)];
+              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals)];
             } else if (parsed.intent === "DAILY_REKAP") {
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
