@@ -3367,15 +3367,28 @@ ${mistakes}
           let imagePart: any = null;
           if (mediaUrl) {
             try {
-              const imgResp = await axios.get(mediaUrl, {
-                responseType: "arraybuffer",
-                auth: { username: process.env.TWILIO_ACCOUNT_SID!, password: process.env.TWILIO_AUTH_TOKEN! }
-              });
-              const base64Image = Buffer.from(imgResp.data).toString("base64");
-              const mimeType = String(imgResp.headers["content-type"] || "image/jpeg").split(";")[0];
-              imagePart = { inlineData: { data: base64Image, mimeType } };
-            } catch (imgErr) {
-              console.error("[Twilio WA] Image download error:", imgErr);
+              let imgResp: any = null;
+              try {
+                imgResp = await axios.get(mediaUrl, {
+                  responseType: "arraybuffer",
+                  auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
+                  timeout: 15000
+                });
+              } catch (e1: any) {
+                // Try without auth headers in case media is directly accessible
+                imgResp = await axios.get(mediaUrl, {
+                  responseType: "arraybuffer",
+                  timeout: 15000
+                });
+              }
+              if (imgResp && imgResp.data) {
+                const base64Image = Buffer.from(imgResp.data).toString("base64");
+                const mimeType = String(imgResp.headers?.["content-type"] || "image/jpeg").split(";")[0];
+                imagePart = { inlineData: { data: base64Image, mimeType } };
+                console.log("[Twilio WA] Successfully downloaded media image for Gemini vision processing!");
+              }
+            } catch (imgErr: any) {
+              console.error("[Twilio WA] Image download error:", imgErr?.message || imgErr);
             }
           }
 
