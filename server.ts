@@ -3016,7 +3016,9 @@ Keluarkan output JSON valid:
     const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
     const infographicUrl = `${baseUrl}/infographic/${infoId}`;
 
-    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
+    const rawEqName = (parsed.equipmentName || "").trim();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Alat Gym / Mesin") || rawEqName.includes("Nama Alat Gym");
+    const eqName = (isGeneric ? "Hyperextension Bench" : rawEqName).toUpperCase();
     const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
     const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
     
@@ -3055,8 +3057,9 @@ Keluarkan output JSON valid:
     const sets = parsed.recommendedSets || defaultSets;
     const reps = parsed.recommendedReps || defaultReps;
     const rest = parsed.recommendedRest || defaultRest;
+    const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
-    return `🏋️ *TUTORIAL CARA PAKAI ALAT THIS MACHINE*
+    return `🏋️ *TUTORIAL CARA PAKAI ALAT: ${eqName}*
 ----------------------------------------
 📌 *Nama Alat*: ${eqName}
 📝 *Fungsi*: ${desc}
@@ -3300,13 +3303,13 @@ FORMAT 3 - JIKA USER MENANYAKAN / MENGEFOTO ALAT GYM / MESIN GYM / CARA PAKAI AL
 {
   "intent": "EQUIPMENT_TUTORIAL",
   "isFood": false,
-  "equipmentName": "Hyperextension Bench (atau Nama Alat Gym yang Dideteksi)",
-  "description": "Alat ini digunakan untuk melatih otot punggung bawah, glutes, dan hamstring.",
-  "targetMuscles": "Erector Spinae (Punggung Bawah), Gluteus (Bokong), Hamstring",
-  "parts": ["Roller Kaki: Mengunci pergelangan kaki", "Foot Plate: Tempat pijakan kaki", "Pad Paha: Menopang bagian atas paha", "Handle: Pegangan posisi"],
-  "steps": ["Atur Posisi: Pastikan pad paha sejajar dengan pinggul", "Posisi Awal: Berbaring menghadap ke bawah, kaki dikaitkan di roller, tangan di dada", "Gerakan Turun: Turunkan tubuh perlahan hingga punggung bawah terasa meregang", "Gerakan Naik: Angkat tubuh kembali ke atas kencangkan otot target"],
-  "tips": ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target", "Jaga punggung tetap lurus"],
-  "mistakes": ["Hiperextensi berlebihan saat naik", "Menggunakan ayunan/momentum, bukan kekuatan otot"]
+  "equipmentName": "Sebutkan Nama Alat Gym Spesifik (Misal: Hyperextension Bench, Lat Pulldown, Leg Press, Smith Machine, Chest Press, Cable Crossover, Dll.)",
+  "description": "Fungsi alat ini untuk melatih kelompok otot target.",
+  "targetMuscles": "Sebutkan nama otot spesifik yang dilatih",
+  "parts": ["1. Bagian Alat 1", "2. Bagian Alat 2", "3. Bagian Alat 3", "4. Bagian Alat 4"],
+  "steps": ["1. Atur Posisi: ...", "2. Posisi Awal: ...", "3. Gerakan Turun: ...", "4. Gerakan Naik: ..."],
+  "tips": ["Tips 1: ...", "Tips 2: ...", "Tips 3: ..."],
+  "mistakes": ["Kesalahan 1: ...", "Kesalahan 2: ..."]
 }
 
 FORMAT 4 - CHAT UMUM / REKOMENDASI / WORKOUT / PERTANYAAN LAINNYA:
