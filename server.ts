@@ -2785,39 +2785,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             responseMessages = ["Maaf, ada kendala koneksi AI sebentar. Ada yang bisa dibantu tentang makanan atau latihanmu?"];
           }
         }
-      } else if (isEquipmentMatch) {
-              if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
-              parsed.isEquipment = true;
-
-              const eqCard = formatEquipmentCard(parsed, userData);
-              responseMessages = [eqCard];
-
-              (async () => {
-                try {
-                  const infographicUrl = await generateEquipmentInfographicPNG(parsed, userData);
-                  if (infographicUrl && getTwilio()) {
-                    const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-                    const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-                    const toNum = from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
-                    await getTwilio().messages.create({
-                      body: `🏋️ *TUTORIAL CARA PAKAI ALAT: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*\n\nBerikut infografis resmi dari GymBuddy AI untuk panduan bagian alat, cara pakai step-by-step, & kesalahan umum! 💪✨`,
-                      mediaUrl: [infographicUrl],
-                      from: fromNum,
-                      to: toNum
-                    });
-                  }
-                } catch (infogErr) {
-                  console.error("Error generating/sending equipment infographic:", infogErr);
-                }
-              })();
-            } else {
-              responseMessages = [parsed.generalReply || "Ada laporan makanan atau latihan lain?"];
-            }
-          } catch (e) {
-            console.error("[Twilio WA] Gemini AI error:", e);
-            responseMessages = ["Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?"];
-          }
-        }
+      }
       }
 
       // Send TwiML response for ALL message types (welcome, water, weight, AI, etc.)
