@@ -1,0 +1,8 @@
+{
+  "name": "Gymbuddy V.3",
+  "description": "A modern fitness center landing page.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
