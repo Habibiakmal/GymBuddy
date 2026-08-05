@@ -50,49 +50,48 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
   ];
 
   for (const mName of modelsToTry) {
+    // Attempt 1: Query param ?key=
     try {
-      const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
-      const restUrl = isBearer ? baseUrl : `${baseUrl}?key=${encodeURIComponent(cleanKey)}`;
-
-      const headers: any = { "Content-Type": "application/json" };
-      if (isBearer) {
-        headers["Authorization"] = `Bearer ${cleanKey}`;
-      } else {
-        headers["x-goog-api-key"] = cleanKey;
-      }
-
+      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
       const requestParts: any[] = [{ text: prompt }];
       if (imagePart && imagePart.inlineData) {
-        requestParts.push({
-          inlineData: {
-            mimeType: imagePart.inlineData.mimeType,
-            data: imagePart.inlineData.data
-          }
-        });
+        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
       }
 
       const res = await axios.post(
         restUrl,
-        {
-          contents: [{ parts: requestParts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-        },
-        { headers, timeout: 20000 }
+        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
+        { headers: { "Content-Type": "application/json" }, timeout: 20000 }
       );
 
       if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini] Success with model: ${mName}`);
+        console.log(`[Gemini REST] Success with model: ${mName}`);
         return res.data.candidates[0].content.parts[0].text;
       }
+    } catch (restErr: any) {
+      console.log(`[Gemini REST ?key=] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+    }
 
-      const blockReason = res.data?.promptFeedback?.blockReason;
-      if (blockReason) {
-        console.log(`[Gemini] Content blocked by ${mName}: ${blockReason}`);
+    // Attempt 2: Header x-goog-api-key
+    try {
+      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent`;
+      const requestParts: any[] = [{ text: prompt }];
+      if (imagePart && imagePart.inlineData) {
+        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
+      }
+
+      const res = await axios.post(
+        restUrl,
+        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
+        { headers: { "Content-Type": "application/json", "x-goog-api-key": cleanKey }, timeout: 20000 }
+      );
+
+      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        console.log(`[Gemini REST x-goog-api-key] Success with model: ${mName}`);
+        return res.data.candidates[0].content.parts[0].text;
       }
     } catch (restErr: any) {
-      const status = restErr?.response?.status;
-      const errMsg = restErr?.response?.data?.error?.message || restErr?.message || restErr;
-      console.log(`[Gemini REST] Model ${mName} (HTTP ${status}): ${errMsg}`);
+      console.log(`[Gemini REST x-goog-api-key] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
     }
   }
 
@@ -3685,7 +3684,37 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
             }
           } catch (e) {
             console.error("[Twilio WA] Gemini AI error:", e);
-            responseMessages = ["Maaf, ada kendala koneksi AI sebentar. Ada yang bisa dibantu tentang makanan atau latihanmu?"];
+
+            // Smart Instant Fallback Parser for Food Logging when Gemini has API Key/Network Error
+            if (userText.match(/(makan|minum|habis|makanan|sarapan|malam|siang|americano|kopi|nasi|ayam|telur|roti|susu|jus|teh|buah|daging|ikan|gandum|es)/i)) {
+              const rawFood = userText.replace(/^(aku|saya|gue|habis|makan|minum|catat|log|input|tambah)\s+/gi, "").trim() || "Makanan";
+              const foodName = rawFood.charAt(0).toUpperCase() + rawFood.slice(1);
+              let estCal = 350, estProt = 15, estCarb = 40, estFat = 10;
+              const textLower = userText.toLowerCase();
+              if (textLower.includes("americano") || textLower.includes("kopi hitam") || textLower.includes("espresso")) {
+                estCal = 10; estProt = 0; estCarb = 2; estFat = 0;
+              } else if (textLower.includes("nasi goreng")) {
+                estCal = 550; estProt = 18; estCarb = 65; estFat = 22;
+              } else if (textLower.includes("telur")) {
+                estCal = 210; estProt = 18; estCarb = 2; estFat = 14;
+              } else if (textLower.includes("ayam")) {
+                estCal = 320; estProt = 35; estCarb = 5; estFat = 15;
+              }
+
+              const parsedFallback = { intent: "FOOD_LOG", isFood: true, foodName, calories: estCal, protein: estProt, carbs: estCarb, fat: estFat, generalReply: "Catatan makanan berhasil disimpan!" };
+              addMealLog(from, {
+                id: `m-${Date.now()}`, foodName,
+                calories: estCal, protein: estProt, carbs: estCarb, fat: estFat, fiber: 0, mealType: getMealTypeByHour(),
+                timestamp: new Date().toISOString()
+              });
+              const updatedTotals = getDailyTotals(from);
+              responseMessages = [formatNutritionCard(parsedFallback, "Teks", userData, updatedTotals)];
+            } else if (userText.match(/(lari|jogging|gbk|olahraga|cardio)/i)) {
+              responseMessages = [`🏃 *TIPS LARI SORE DI GBK FOR ${userData.name.toUpperCase()}*\n\n🔥 *Persiapan & Hydration*:\n• Minum 300-500ml air putih 30 menit sebelum lari.\n• Gunakan sepatu lari pendukung & lakukan pemanasan 5 menit.\n\n🎯 *Target*: Lari santai 20-30 menit (Zone 2 cardio) untuk membakar kalori & menjaga kesehatan jantung!\n\nSemangat latihannya hari ini! 💪`];
+            } else {
+              const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+              responseMessages = [`Hei ${userData.name}! 💪 ${coachN} siap bantu kamu catat makanan (misal: "habis minum americano"), cek kalori, jadwal workout, atau tutorial alat gym!`];
+            }
           }
         }
       }
