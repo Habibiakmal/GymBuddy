@@ -2542,13 +2542,6 @@ Keluarkan output JSON valid:
         lowerText.includes("start") || lowerText.includes("mulai") ||
         lowerText.includes("join");
 
-      if (!userProfile && !isWelcomeMessage && !mediaUrl) {
-        const reply = `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\nSilakan registrasi di website GymBuddy AI terlebih dahulu! 🎯✨`;
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
-        return res.type("text/xml").send(twiml);
-      }
-
       if (!userProfile) userProfile = getOrCreateUserProfile(from);
       const userData = calculateUserData(userProfile);
 
