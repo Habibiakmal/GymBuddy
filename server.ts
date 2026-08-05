@@ -2542,22 +2542,33 @@ Keluarkan output JSON valid:
     const eqName = rawEq ? rawEq[1].trim() : "Gym Equipment";
     const fullPrompt = `Photorealistic 8k fitness infographic tutorial poster for how to use ${eqName}. Dark gym aesthetic background with gold and white typography. Top title TUTORIAL CARA PAKAI ALAT INI ${eqName}. Bagian Alat section showing equipment parts. Cara Pakai section showing 4 step by step workout demonstration cards with athletic people performing the movement. Tips and common mistakes section with red X posture error comparison. Target muscle anatomy diagram showing worked muscles and workout sets reps rest counter. High quality realistic gym guide poster.`;
 
-    // Provider 1: Google AI Studio Imagen 3 (Valid for AIzaSy... API Keys)
-    if (USER_GEMINI_KEY && USER_GEMINI_KEY.startsWith("AIzaSy")) {
+    // Provider 1: Google Imagen 3 (Supporting AQ., ya29., AIzaSy... API Keys & Tokens)
+    if (USER_GEMINI_KEY) {
       const cleanKey = USER_GEMINI_KEY;
+      const isBearer = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
       const imagenModels = ["imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"];
 
+      // 1A. Try Generative Language API Endpoint
       for (const mName of imagenModels) {
         try {
-          console.log(`[Google Imagen 3] Requesting ${mName}:predict...`);
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:predict?key=${encodeURIComponent(cleanKey)}`;
+          console.log(`[Google Imagen 3] Requesting ${mName}:predict (Key: ${cleanKey.substring(0,4)}...)...`);
+          const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:predict`;
+          const url = isBearer ? baseUrl : `${baseUrl}?key=${encodeURIComponent(cleanKey)}`;
+
+          const headers: any = { "Content-Type": "application/json" };
+          if (isBearer) {
+            headers["Authorization"] = `Bearer ${cleanKey}`;
+          } else {
+            headers["x-goog-api-key"] = cleanKey;
+          }
+
           const resp = await axios.post(
             url,
             {
               instances: [{ prompt: fullPrompt }],
               parameters: { sampleCount: 1, aspectRatio: "3:4", outputMimeType: "image/jpeg" }
             },
-            { headers: { "Content-Type": "application/json" }, timeout: 12000 }
+            { headers, timeout: 15000 }
           );
 
           const base64Data = resp.data?.predictions?.[0]?.bytesBase64Encoded || resp.data?.generatedImages?.[0]?.image?.imageBytes;
@@ -2567,6 +2578,38 @@ Keluarkan output JSON valid:
           }
         } catch (restErr: any) {
           console.log(`[Google Imagen 3] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+        }
+      }
+
+      // 1B. Try Vertex AI Endpoint for AQ. / Bearer Tokens
+      if (isBearer) {
+        for (const mName of imagenModels) {
+          try {
+            console.log(`[Google Vertex AI Imagen 3] Requesting ${mName}:predict via Vertex API...`);
+            const url = `https://us-central1-aiplatform.googleapis.com/v1/publishers/google/models/${mName}:predict`;
+            const resp = await axios.post(
+              url,
+              {
+                instances: [{ prompt: fullPrompt }],
+                parameters: { sampleCount: 1, aspectRatio: "3:4", outputMimeType: "image/jpeg" }
+              },
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${cleanKey}`
+                },
+                timeout: 15000
+              }
+            );
+
+            const base64Data = resp.data?.predictions?.[0]?.bytesBase64Encoded || resp.data?.predictions?.[0]?.imageBytes;
+            if (base64Data) {
+              console.log(`[Google Vertex AI Imagen 3] Successfully generated AI image via Vertex ${mName}!`);
+              return Buffer.from(base64Data, "base64");
+            }
+          } catch (vErr: any) {
+            console.log(`[Google Vertex AI Imagen 3] Model ${mName} note:`, vErr?.response?.data?.error?.message || vErr?.message);
+          }
         }
       }
     }
