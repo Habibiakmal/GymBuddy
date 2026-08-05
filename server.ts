@@ -2538,7 +2538,70 @@ Keluarkan output JSON valid:
       saveDb();
     }
 
-    res.json({ success: true });
+  async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
+    if (!USER_GEMINI_KEY) return null;
+
+    // 1. Try Imagen 3 Predict API
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${USER_GEMINI_KEY}`;
+      const resp = await axios.post(url, {
+        instances: [{ prompt: promptText }],
+        parameters: { sampleCount: 1, aspectRatio: "3:4" }
+      }, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000
+      });
+
+      if (resp.data && resp.data.predictions && resp.data.predictions[0] && resp.data.predictions[0].bytesBase64Encoded) {
+        return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
+      }
+    } catch (e: any) {
+      console.log("[Gemini Image] Imagen 3 REST info:", e?.response?.data?.error?.message || e?.message);
+    }
+
+    // 2. Try Imagen 3 generateImages API
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${USER_GEMINI_KEY}`;
+      const resp = await axios.post(url, {
+        prompt: promptText,
+        number_of_images: 1,
+        aspect_ratio: "3:4",
+        output_mime_type: "image/jpeg"
+      }, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000
+      });
+
+      if (resp.data && resp.data.generatedImages && resp.data.generatedImages[0] && resp.data.generatedImages[0].image && resp.data.generatedImages[0].image.imageBytes) {
+        return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+      }
+    } catch (e: any) {
+      console.log("[Gemini Image] Imagen generateImages info:", e?.response?.data?.error?.message || e?.message);
+    }
+
+    return null;
+  }
+
+  // Serve AI Generated Image Endpoint
+  app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], (req, res) => {
+    const { id } = req.params;
+    const cleanId = id.replace(/\.(jpg|jpeg|png)$/i, "");
+    const imgBase64 = (dbData as any).generatedImages ? (dbData as any).generatedImages[cleanId] : null;
+
+    if (imgBase64) {
+      const imgBuffer = Buffer.from(imgBase64, "base64");
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(imgBuffer);
+    }
+
+    // Fallback: If not found, return SVG infographic image
+    const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
+    const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
+    const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
+    const svgStr = generateInfographicSVG(parsed, userData);
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.send(svgStr);
   });
 
   function generateInfographicSVG(parsed: any, userData: any): string {
@@ -3318,29 +3381,45 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               saveDb();
 
               const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
-              const imageUrl = `${baseUrl}/api/infographic/${infoId}.svg`;
+              let imageUrl = `${baseUrl}/api/infographic/${infoId}.svg`;
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
 
-              // Send direct infographic image attachment to WhatsApp via Twilio API
-              if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-                (async () => {
+              // GENERATE IMAGE WITH GEMINI AI IMAGEN & SEND TO WHATSAPP!
+              const imagePrompt = `A professional, high-resolution dark-mode gym tutorial infographic poster for '${parsed.equipmentName || "Gym Equipment"}'. Showing machine parts, step-by-step exercise tutorial, target muscles, and workout sets and reps in gold and dark grey aesthetics. High quality fitness infographic.`;
+
+              (async () => {
+                try {
+                  const imgBuf = await generateGeminiImage(imagePrompt);
+                  if (imgBuf) {
+                    if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
+                    (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
+                    saveDb();
+                    imageUrl = `${baseUrl}/api/generated-image/${infoId}.jpg`;
+                    console.log("[Gemini Image] Successfully generated AI image with Gemini Imagen 3:", imageUrl);
+                  }
+                } catch (imgGenErr) {
+                  console.log("[Gemini Image] AI image generation info, using vector poster:", imgGenErr);
+                }
+
+                // Send direct image attachment to WhatsApp via Twilio REST API
+                if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
                   try {
                     const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
                     const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
                     const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
                     await getTwilio().messages.create({
-                      body: `🏋️ *INFOGRAFIS GAMBAR TUTORIAL CARA PAKAI ALAT: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
+                      body: `🏋️ *GAMBAR TUTORIAL DARI GEMINI AI: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
                       mediaUrl: [imageUrl],
                       from: fromNum,
                       to: toNum
                     });
-                    console.log(`[Twilio WA] Direct infographic image file sent to ${toNum}: ${imageUrl}`);
-                  } catch (imgErr: any) {
-                    console.error("[Twilio WA] Direct image send error:", imgErr?.message || imgErr);
+                    console.log(`[Twilio WA] Direct Gemini AI generated image file sent to ${toNum}: ${imageUrl}`);
+                  } catch (twErr: any) {
+                    console.error("[Twilio WA] Direct image send error:", twErr?.message || twErr);
                   }
-                })();
-              }
+                }
+              })();
             } else {
               let finalMsg = parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?";
               if (finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
