@@ -3614,30 +3614,29 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
+              mediaUrlToSend = `${baseUrl}/api/generated-image/${infoId}.jpg`;
 
-              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN 3) SYNCHRONOUSLY!
+              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN 3) IN BACKGROUND FOR FAST RESPONSE!
               const eqName = (parsed.equipmentName || "Gym Equipment").toUpperCase();
               const stepsStr = Array.isArray(parsed.steps) ? parsed.steps.join(", ") : "";
               const partsStr = Array.isArray(parsed.parts) ? parsed.parts.join(", ") : "";
               const musclesStr = parsed.targetMuscles || "target muscles";
               const imagePrompt = `Ultra-detailed photorealistic fitness infographic tutorial poster for ${eqName}. Dark gym aesthetic background with gold and white typography. Top header titled TUTORIAL CARA PAKAI ALAT INI ${eqName}. Section 1 BAGIAN ALAT with realistic equipment labeled parts (${partsStr}). Section 2 CARA PAKAI with 4 step-by-step workout cards showing athletic gym person demonstrating posture: ${stepsStr}. Section 3 TIPS and KESALAHAN UMUM with red X posture error comparison. Section 4 OTOT YANG DILATIH muscle anatomy diagram (${musclesStr}) and REKOMENDASI sets reps rest counter. High quality 8k fitness poster, exact match to professional gym guide infographic.`;
 
-              console.log("[AI Image Gen] Synchronously generating FLUX / Imagen 3 AI image poster for WhatsApp...");
-              try {
-                const imgBuf = await generateGeminiImage(imagePrompt);
-                if (imgBuf) {
-                  if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
-                  (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
-                  saveDb();
-                  mediaUrlToSend = `${baseUrl}/api/generated-image/${infoId}.jpg`;
-                  console.log("[AI Image Gen] Successfully generated & saved AI Image poster:", mediaUrlToSend);
-                } else {
-                  mediaUrlToSend = `${baseUrl}/api/infographic/${infoId}.png`;
+              (async () => {
+                try {
+                  console.log("[AI Image Gen] Background generating AI poster for:", infoId);
+                  const imgBuf = await generateGeminiImage(imagePrompt);
+                  if (imgBuf) {
+                    if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
+                    (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
+                    saveDb();
+                    console.log("[AI Image Gen] Successfully saved background AI Image poster for:", infoId);
+                  }
+                } catch (imgGenErr: any) {
+                  console.log("[AI Image Gen] Background generation note:", imgGenErr?.message || imgGenErr);
                 }
-              } catch (imgGenErr: any) {
-                console.log("[AI Image Gen] Generation note, using rendered poster:", imgGenErr?.message || imgGenErr);
-                mediaUrlToSend = `${baseUrl}/api/infographic/${infoId}.png`;
-              }
+              })();
             } else {
               let finalMsg = (parsed.generalReply || "").trim();
               if (!finalMsg || finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
