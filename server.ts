@@ -2541,6 +2541,158 @@ Keluarkan output JSON valid:
     res.json({ success: true });
   });
 
+  function generateInfographicSVG(parsed: any, userData: any): string {
+    const eqName = (parsed.equipmentName || "Alat Gym / Mesin Latihan").toUpperCase();
+    const desc = parsed.description || "Melatih otot target secara optimal.";
+    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+
+    const partsList = Array.isArray(parsed.parts) ? parsed.parts : ["Roller Kaki: Mengunci kaki", "Foot Plate: Pijakan kaki", "Pad Paha: Menopang paha", "Handle: Pegangan posisi"];
+    const stepsList = Array.isArray(parsed.steps) ? parsed.steps : ["Atur Posisi: Pad paha sejajar pinggul", "Posisi Awal: Kaki di roller, tangan di dada", "Gerakan Turun: Turunkan badan perlahan", "Gerakan Naik: Angkat badan kencangkan otot target"];
+    const tipsList = Array.isArray(parsed.tips) ? parsed.tips : ["Gerakan perlahan & terkontrol", "Fokus kontraksi otot target"];
+    const mistakesList = Array.isArray(parsed.mistakes) ? parsed.mistakes : ["Hiperextensi berlebihan saat naik", "Menggunakan momentum"];
+
+    let defaultSets = "3 - 4 Set";
+    let defaultReps = "10 - 15 Repetisi";
+    let defaultRest = "60 - 90 Detik";
+
+    const goalLower = (userData.goalTitle || "").toLowerCase();
+    if (goalLower.includes("menurunkan") || goalLower.includes("fat loss") || goalLower.includes("turun")) {
+      defaultSets = "3 - 4 Set"; defaultReps = "12 - 15 Reps"; defaultRest = "45 - 60 Detik";
+    } else if (goalLower.includes("naik") || goalLower.includes("otot") || goalLower.includes("gain")) {
+      defaultSets = "4 Set"; defaultReps = "8 - 12 Reps"; defaultRest = "90 - 120 Detik";
+    }
+
+    const sets = parsed.recommendedSets || defaultSets;
+    const reps = parsed.recommendedReps || defaultReps;
+    const rest = parsed.recommendedRest || defaultRest;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1200" width="800" height="1200">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0b0c10"/>
+          <stop offset="100%" stop-color="#161822"/>
+        </linearGradient>
+        <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1a1c26"/>
+          <stop offset="100%" stop-color="#14151f"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Background Poster -->
+      <rect width="800" height="1200" fill="url(#bgGrad)"/>
+      <rect x="16" y="16" width="768" height="1168" rx="24" fill="#12131a" stroke="#eab308" stroke-width="3"/>
+
+      <!-- Header Badge & Title -->
+      <rect x="250" y="40" width="300" height="32" rx="16" fill="rgba(234, 179, 8, 0.15)" stroke="#eab308" stroke-width="1.5"/>
+      <text x="400" y="61" fill="#eab308" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="2">⚡ GYMBUDDY AI • INFOGRAFIS ALAT</text>
+
+      <text x="400" y="105" fill="#FFFFFF" font-family="sans-serif" font-size="30" font-weight="900" text-anchor="middle">TUTORIAL CARA PAKAI ALAT INI</text>
+      <text x="400" y="142" fill="#eab308" font-family="sans-serif" font-size="24" font-weight="bold" text-anchor="middle">${eqName}</text>
+      <text x="400" y="170" fill="#94a3b8" font-family="sans-serif" font-size="14" text-anchor="middle">${desc.substring(0, 85)}</text>
+
+      <line x1="40" y1="190" x2="760" y2="190" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+
+      <!-- Section 1: BAGIAN ALAT -->
+      <rect x="40" y="210" width="720" height="175" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+      <text x="60" y="240" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">🔩 BAGIAN UTAMA ALAT</text>
+
+      ${partsList.slice(0, 4).map((p: string, i: number) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = 60 + col * 350;
+        const y = 260 + row * 55;
+        return `
+          <g transform="translate(${x}, ${y})">
+            <rect width="330" height="45" rx="10" fill="#222533" stroke="rgba(255,255,255,0.04)"/>
+            <circle cx="25" cy="22.5" r="13" fill="#eab308"/>
+            <text x="25" y="27" fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">${i + 1}</text>
+            <text x="48" y="27" fill="#f8fafc" font-family="sans-serif" font-size="13" font-weight="bold">${p.substring(0, 38)}</text>
+          </g>
+        `;
+      }).join("")}
+
+      <!-- Section 2: CARA PAKAI STEP BY STEP -->
+      <rect x="40" y="405" width="720" height="325" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+      <text x="60" y="435" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">📐 CARA PAKAI (STEP-BY-STEP)</text>
+
+      ${stepsList.slice(0, 4).map((s: string, i: number) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = 60 + col * 350;
+        const y = 455 + row * 130;
+        return `
+          <g transform="translate(${x}, ${y})">
+            <rect width="330" height="115" rx="12" fill="#222533" stroke="rgba(255,255,255,0.04)"/>
+            <circle cx="24" cy="24" r="13" fill="#eab308"/>
+            <text x="24" y="28.5" fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">${i + 1}</text>
+            <text x="46" y="28" fill="#eab308" font-family="sans-serif" font-size="13" font-weight="bold">LANGKAH ${i + 1}</text>
+            <text x="16" y="55" fill="#f8fafc" font-family="sans-serif" font-size="12" font-weight="bold">${s.substring(0, 42)}</text>
+            <text x="16" y="75" fill="#cbd5e1" font-family="sans-serif" font-size="11">${s.substring(42, 90) || ""}</text>
+            <text x="16" y="93" fill="#94a3b8" font-family="sans-serif" font-size="11">${s.substring(90, 135) || ""}</text>
+          </g>
+        `;
+      }).join("")}
+
+      <!-- Section 3: TIPS & KESALAHAN UMUM -->
+      <g transform="translate(40, 748)">
+        <!-- Tips Card -->
+        <rect x="0" y="0" width="350" height="210" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+        <text x="20" y="30" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold">💡 TIPS PERFORMA</text>
+        ${tipsList.slice(0, 3).map((t: string, i: number) => `
+          <g transform="translate(20, ${55 + i * 48})">
+            <text x="0" y="14" fill="#22c55e" font-size="14">✅</text>
+            <text x="24" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="12" font-weight="bold">${t.substring(0, 38)}</text>
+          </g>
+        `).join("")}
+
+        <!-- Kesalahan Umum Card -->
+        <rect x="370" y="0" width="350" height="210" rx="16" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.06)"/>
+        <text x="390" y="30" fill="#ef4444" font-family="sans-serif" font-size="15" font-weight="bold">❌ KESALAHAN UMUM</text>
+        ${mistakesList.slice(0, 3).map((m: string, i: number) => `
+          <g transform="translate(390, ${55 + i * 48})">
+            <text x="0" y="14" fill="#ef4444" font-size="14">⚠️</text>
+            <text x="24" y="14" fill="#cbd5e1" font-family="sans-serif" font-size="12" font-weight="bold">${m.substring(0, 38)}</text>
+          </g>
+        `).join("")}
+      </g>
+
+      <!-- Section 4: REKOMENDASI LATIHAN -->
+      <rect x="40" y="975" width="720" height="145" rx="16" fill="url(#cardGrad)" stroke="rgba(234, 179, 8, 0.3)"/>
+      <text x="60" y="1005" fill="#eab308" font-family="sans-serif" font-size="15" font-weight="bold" letter-spacing="1">🎯 OTOT DILATIH: ${muscles.substring(0, 45)}</text>
+
+      <g transform="translate(60, 1022)">
+        <rect x="0" y="0" width="220" height="75" rx="12" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
+        <text x="110" y="36" fill="#eab308" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle">${sets}</text>
+        <text x="110" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">SETS</text>
+
+        <rect x="250" y="0" width="220" height="75" rx="12" fill="rgba(6, 182, 212, 0.1)" stroke="rgba(6, 182, 212, 0.3)"/>
+        <text x="360" y="36" fill="#06b6d4" font-family="sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${reps}</text>
+        <text x="360" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">REPETISI</text>
+
+        <rect x="500" y="0" width="220" height="75" rx="12" fill="rgba(234, 179, 8, 0.1)" stroke="rgba(234, 179, 8, 0.3)"/>
+        <text x="610" y="36" fill="#eab308" font-family="sans-serif" font-size="18" font-weight="bold" text-anchor="middle">${rest}</text>
+        <text x="610" y="58" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">ISTIRAHAT</text>
+      </g>
+
+      <!-- Footer -->
+      <text x="400" y="1155" fill="#64748b" font-family="sans-serif" font-size="12" text-anchor="middle">Official GymBuddy AI Guide • Dibuat khusus untuk ${userData.name || "User"}</text>
+    </svg>`;
+  }
+
+  // GymBuddy Official Visual Infographic Image Route (SVG / PNG)
+  app.get(["/api/infographic/:id.svg", "/api/infographic/:id.png"], (req, res) => {
+    const { id } = req.params;
+    const cleanId = id.replace(/\.(svg|png)$/i, "");
+    const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
+    const parsed = info ? info.parsed : { equipmentName: "Hyperextension Bench" };
+    const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
+
+    const svgStr = generateInfographicSVG(parsed, userData);
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(svgStr);
+  });
+
   // GymBuddy Official Visual Infographic Template Web Route
   app.get("/infographic/:id", (req, res) => {
     const { id } = req.params;
@@ -3160,7 +3312,35 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
             } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName || (imagePart && !parsed.isFood && (lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("pakai") || lowerText.includes("gym")))) {
+              const infoId = `info-${Date.now()}`;
+              if (!dbData.infographics) dbData.infographics = {};
+              dbData.infographics[infoId] = { parsed, userData, timestamp: new Date().toISOString() };
+              saveDb();
+
+              const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
+              const imageUrl = `${baseUrl}/api/infographic/${infoId}.svg`;
+
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
+
+              // Send direct infographic image attachment to WhatsApp via Twilio API
+              if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+                (async () => {
+                  try {
+                    const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+                    const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+                    const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+                    await getTwilio().messages.create({
+                      body: `🏋️ *INFOGRAFIS GAMBAR TUTORIAL CARA PAKAI ALAT: ${(parsed.equipmentName || "ALAT GYM").toUpperCase()}*`,
+                      mediaUrl: [imageUrl],
+                      from: fromNum,
+                      to: toNum
+                    });
+                    console.log(`[Twilio WA] Direct infographic image file sent to ${toNum}: ${imageUrl}`);
+                  } catch (imgErr: any) {
+                    console.error("[Twilio WA] Direct image send error:", imgErr?.message || imgErr);
+                  }
+                })();
+              }
             } else {
               let finalMsg = parsed.generalReply || "Ada yang bisa dibantu untuk nutrisi atau latihanmu hari ini?";
               if (finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
