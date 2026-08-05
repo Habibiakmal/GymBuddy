@@ -2541,44 +2541,48 @@ Keluarkan output JSON valid:
   });
 
   async function generateGeminiImage(promptText: string): Promise<Buffer | null> {
-    if (!USER_GEMINI_KEY) return null;
+    const encodedPrompt = encodeURIComponent(promptText);
 
-    // 1. Try Imagen 3 Predict API
+    // Provider 1: Pollinations AI Image Generation (Ultra Fast, High Quality, Free API Keyless)
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${USER_GEMINI_KEY}`;
-      const resp = await axios.post(url, {
-        instances: [{ prompt: promptText }],
-        parameters: { sampleCount: 1, aspectRatio: "3:4" }
-      }, {
-        headers: { "Content-Type": "application/json" },
-        timeout: 20000
-      });
-
-      if (resp.data && resp.data.predictions && resp.data.predictions[0] && resp.data.predictions[0].bytesBase64Encoded) {
-        return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
+      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&model=flux&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
+      console.log("[AI Image Gen] Fetching from Pollinations Flux:", pollUrl);
+      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 25000 });
+      if (resp.data && resp.data.length > 5000) {
+        console.log("[AI Image Gen] Successfully generated AI image with Pollinations Flux! Size:", resp.data.length);
+        return Buffer.from(resp.data);
       }
     } catch (e: any) {
-      console.log("[Gemini Image] Imagen 3 REST info:", e?.response?.data?.error?.message || e?.message);
+      console.log("[AI Image Gen] Pollinations Flux info:", e?.message || e);
     }
 
-    // 2. Try Imagen 3 generateImages API
+    // Provider 2: Pollinations Turbo Model Fallback
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${USER_GEMINI_KEY}`;
-      const resp = await axios.post(url, {
-        prompt: promptText,
-        number_of_images: 1,
-        aspect_ratio: "3:4",
-        output_mime_type: "image/jpeg"
-      }, {
-        headers: { "Content-Type": "application/json" },
-        timeout: 20000
-      });
-
-      if (resp.data && resp.data.generatedImages && resp.data.generatedImages[0] && resp.data.generatedImages[0].image && resp.data.generatedImages[0].image.imageBytes) {
-        return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+      const pollUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=1200&model=turbo&nologo=true&seed=${Math.floor(Math.random()*10000)}`;
+      const resp = await axios.get(pollUrl, { responseType: "arraybuffer", timeout: 25000 });
+      if (resp.data && resp.data.length > 5000) {
+        console.log("[AI Image Gen] Successfully generated AI image with Pollinations Turbo! Size:", resp.data.length);
+        return Buffer.from(resp.data);
       }
     } catch (e: any) {
-      console.log("[Gemini Image] Imagen generateImages info:", e?.response?.data?.error?.message || e?.message);
+      console.log("[AI Image Gen] Pollinations Turbo info:", e?.message || e);
+    }
+
+    // Provider 3: Google Gemini Imagen 3 REST API
+    if (USER_GEMINI_KEY) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${USER_GEMINI_KEY}`;
+        const resp = await axios.post(url, {
+          instances: [{ prompt: promptText }],
+          parameters: { sampleCount: 1, aspectRatio: "3:4" }
+        }, { headers: { "Content-Type": "application/json" }, timeout: 20000 });
+
+        if (resp.data?.predictions?.[0]?.bytesBase64Encoded) {
+          return Buffer.from(resp.data.predictions[0].bytesBase64Encoded, "base64");
+        }
+      } catch (e: any) {
+        console.log("[Gemini Image] Imagen 3 REST info:", e?.response?.data?.error?.message || e?.message);
+      }
     }
 
     return null;
@@ -3435,8 +3439,10 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
 
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
 
-              // GENERATE IMAGE WITH GEMINI AI IMAGEN & SEND TO WHATSAPP!
-              const imagePrompt = `A professional, high-resolution dark-mode gym tutorial infographic poster for '${parsed.equipmentName || "Gym Equipment"}'. Showing machine parts, step-by-step exercise tutorial, target muscles, and workout sets and reps in gold and dark grey aesthetics. High quality fitness infographic.`;
+              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN) & SEND TO WHATSAPP!
+              const eqName = (parsed.equipmentName || "Gym Equipment").toUpperCase();
+              const stepsStr = Array.isArray(parsed.steps) ? parsed.steps.join(", ") : "Step 1, Step 2, Step 3";
+              const imagePrompt = `Detailed educational fitness infographic poster for ${eqName} gym equipment. Dark theme with gold and yellow highlights. Showing 4 step-by-step exercise tutorial cards: ${stepsStr}. Includes labelled machine parts, target muscle diagram, and workout sets and reps counter. Ultra high resolution, 8k quality, clear text typography, fitness guide poster.`;
 
               (async () => {
                 try {
