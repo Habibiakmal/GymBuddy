@@ -3650,52 +3650,7 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
               }
               responseMessages = [workoutReply];
             } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName) {
-              const infoId = `info-${Date.now()}`;
-              if (!dbData.infographics) dbData.infographics = {};
-              dbData.infographics[infoId] = { parsed, userData, timestamp: new Date().toISOString() };
-              saveDb();
-
-              const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
-
               responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
-
-              // GENERATE IMAGE WITH AI IMAGE GENERATION (FLUX / TURBO / IMAGEN 3) IN BACKGROUND FOR FAST RESPONSE!
-              const eqName = (parsed.equipmentName || "Gym Equipment").toUpperCase();
-              const stepsStr = Array.isArray(parsed.steps) ? parsed.steps.join(", ") : "";
-              const partsStr = Array.isArray(parsed.parts) ? parsed.parts.join(", ") : "";
-              const musclesStr = parsed.targetMuscles || "target muscles";
-              const imagePrompt = `Ultra-detailed photorealistic fitness infographic tutorial poster for ${eqName}. Dark gym aesthetic background with gold and white typography. Top header titled TUTORIAL CARA PAKAI ALAT INI ${eqName}. Section 1 BAGIAN ALAT with realistic equipment labeled parts (${partsStr}). Section 2 CARA PAKAI with 4 step-by-step workout cards showing athletic gym person demonstrating posture: ${stepsStr}. Section 3 TIPS and KESALAHAN UMUM with red X posture error comparison. Section 4 OTOT YANG DILATIH muscle anatomy diagram (${musclesStr}) and REKOMENDASI sets reps rest counter. High quality 8k fitness poster, exact match to professional gym guide infographic.`;
-
-              (async () => {
-                try {
-                  console.log("[AI Image Gen] Background generating AI poster for:", infoId);
-                  const imgBuf = await generateGeminiImage(imagePrompt);
-                  if (imgBuf) {
-                    if (!(dbData as any).generatedImages) (dbData as any).generatedImages = {};
-                    (dbData as any).generatedImages[infoId] = imgBuf.toString("base64");
-                    saveDb();
-                    console.log("[AI Image Gen] Successfully saved background AI Image poster for:", infoId);
-
-                    if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-                      try {
-                        const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-                        const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-                        const toNum = from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
-                        await getTwilio().messages.create({
-                          body: `🎨 *POSTER TUTORIAL ALAT ${eqName}*`,
-                          from: fromNum,
-                          to: toNum,
-                          mediaUrl: [`${baseUrl}/api/generated-image/${infoId}.jpg`]
-                        });
-                      } catch (twPushErr: any) {
-                        console.log("[AI Image Gen] Twilio REST poster push info:", twPushErr?.message || twPushErr);
-                      }
-                    }
-                  }
-                } catch (imgGenErr: any) {
-                  console.log("[AI Image Gen] Background generation note:", imgGenErr?.message || imgGenErr);
-                }
-              })();
             } else {
               let finalMsg = (parsed.generalReply || "").trim();
               if (!finalMsg || finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
