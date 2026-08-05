@@ -2546,7 +2546,76 @@ Keluarkan output JSON valid:
     const seed = Math.floor(Math.random() * 100000);
     const encodedPrompt = encodeURIComponent(cleanPrompt.substring(0, 300));
 
-    // Provider 1: Pollinations FLUX / Turbo AI Model (Fast, Photorealistic Fitness Infographic Posters)
+    // Provider 1: Gemini & Imagen Dedicated Image Generation Models (Google Generative AI)
+    if (USER_GEMINI_KEY) {
+      const cleanKey = USER_GEMINI_KEY;
+      const geminiImageModels = [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image",
+        "gemini-2.5-flash-image",
+        "imagen-3.0-generate-002",
+        "imagen-3.0-fast-generate-001"
+      ];
+
+      for (const mName of geminiImageModels) {
+        // 1A. Try generateImages endpoint (Gemini & Imagen Image Gen)
+        try {
+          console.log(`[Gemini Image Gen] Requesting ${mName} generateImages...`);
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateImages?key=${encodeURIComponent(cleanKey)}`;
+          const resp = await axios.post(
+            url,
+            {
+              prompt: cleanPrompt.substring(0, 300),
+              number_of_images: 1,
+              aspect_ratio: "3:4",
+              output_mime_type: "image/jpeg"
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 15000 }
+          );
+
+          if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
+            console.log(`[Gemini Image Gen] Successfully generated image with ${mName}!`);
+            return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
+          }
+        } catch (e: any) {
+          console.log(`[Gemini Image Gen] Model ${mName} generateImages note:`, e?.response?.data?.error?.message || e?.message);
+        }
+
+        // 1B. Try generateContent endpoint (Gemini Multimodal Image models)
+        try {
+          console.log(`[Gemini Image Gen] Requesting ${mName} generateContent...`);
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+          const headers: any = { "Content-Type": "application/json" };
+          if (cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.")) {
+            headers["Authorization"] = `Bearer ${cleanKey}`;
+          } else {
+            headers["x-goog-api-key"] = cleanKey;
+          }
+
+          const resp = await axios.post(
+            url,
+            {
+              contents: [{ parts: [{ text: `Generate a high quality fitness image poster for: ${cleanPrompt}` }] }],
+              generationConfig: { responseMimeType: "image/jpeg" }
+            },
+            { headers, timeout: 15000 }
+          );
+
+          const parts = resp.data?.candidates?.[0]?.content?.parts || [];
+          for (const p of parts) {
+            if (p.inlineData?.data) {
+              console.log(`[Gemini Image Gen] Successfully generated image via generateContent with ${mName}!`);
+              return Buffer.from(p.inlineData.data, "base64");
+            }
+          }
+        } catch (e: any) {
+          console.log(`[Gemini Image Gen] Model ${mName} generateContent note:`, e?.response?.data?.error?.message || e?.message);
+        }
+      }
+    }
+
+    // Provider 2: Pollinations FLUX / Turbo AI Model (Fast, Photorealistic Fallback)
     const pollinationsUrls = [
       `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=800&height=1200&nologo=true&seed=${seed}`,
       `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&width=800&height=1200&nologo=true&seed=${seed}`,
@@ -2564,35 +2633,6 @@ Keluarkan output JSON valid:
         }
       } catch (e: any) {
         console.log("[AI Image Gen] Pollinations attempt note:", e?.message || e);
-      }
-    }
-
-    // Provider 2: Google Imagen 3 REST API
-    if (USER_GEMINI_KEY) {
-      const cleanKey = USER_GEMINI_KEY;
-      const imagenModels = ["imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"];
-
-      for (const mName of imagenModels) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateImages?key=${encodeURIComponent(cleanKey)}`;
-          const resp = await axios.post(
-            url,
-            {
-              prompt: cleanPrompt.substring(0, 250),
-              number_of_images: 1,
-              aspect_ratio: "3:4",
-              output_mime_type: "image/jpeg"
-            },
-            { headers: { "Content-Type": "application/json" }, timeout: 15000 }
-          );
-
-          if (resp.data?.generatedImages?.[0]?.image?.imageBytes) {
-            console.log(`[Imagen REST] Successfully generated image with ${mName}!`);
-            return Buffer.from(resp.data.generatedImages[0].image.imageBytes, "base64");
-          }
-        } catch (e: any) {
-          console.log(`[Imagen REST] Model ${mName} info:`, e?.response?.data?.error?.message || e?.message);
-        }
       }
     }
 
