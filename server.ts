@@ -2786,7 +2786,6 @@ Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
           }
         }
       }
-      }
 
       // Send TwiML response for ALL message types (welcome, water, weight, AI, etc.)
       if (responseMessages.length > 0) {
