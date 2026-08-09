@@ -31,10 +31,55 @@ export default function PricingPage({
   onSelectPlanAndStart,
   onLanguageChange,
 }: PricingPageProps) {
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [selectedDuration, setSelectedDuration] = useState<"1m" | "3m" | "6m" | "1y" | "lifetime">("1m");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const isEN = language === "EN";
+
+  const durationConfig = {
+    "1m": {
+      label: isEN ? "1 Month" : "1 Bulan",
+      singleIDR: "Rp 79rb", singleUSD: "$5",
+      premiumIDR: "Rp 139rb", premiumUSD: "$9",
+      periodText: isEN ? "/month" : "/bulan",
+      subNote: isEN ? "Standard monthly plan" : "Paket bulanan fleksibel",
+      badge: null
+    },
+    "3m": {
+      label: isEN ? "3 Months" : "3 Bulan",
+      singleIDR: "Rp 219rb", singleUSD: "$14",
+      premiumIDR: "Rp 369rb", premiumUSD: "$24",
+      periodText: isEN ? "/3 months" : "/3 bulan",
+      subNote: isEN ? "Save ~12% monthly" : "Hemat 12% dibanding bulanan",
+      badge: isEN ? "Save 12%" : "Hemat 12%"
+    },
+    "6m": {
+      label: isEN ? "6 Months" : "6 Bulan",
+      singleIDR: "Rp 399rb", singleUSD: "$25",
+      premiumIDR: "Rp 649rb", premiumUSD: "$42",
+      periodText: isEN ? "/6 months" : "/6 bulan",
+      subNote: isEN ? "Save ~22% monthly" : "Hemat 22% dibanding bulanan",
+      badge: isEN ? "Save 22%" : "Hemat 22%"
+    },
+    "1y": {
+      label: isEN ? "1 Year" : "1 Tahun",
+      singleIDR: "Rp 699rb", singleUSD: "$45",
+      premiumIDR: "Rp 999rb", premiumUSD: "$65",
+      periodText: isEN ? "/year" : "/tahun",
+      subNote: isEN ? "Save 40% (Most Popular)" : "Hemat 40% (Paling Laris)",
+      badge: isEN ? "Best Value (Save 40%)" : "Paling Hemat 40%"
+    },
+    "lifetime": {
+      label: isEN ? "Lifetime" : "Lifetime",
+      singleIDR: "Rp 1.499rb", singleUSD: "$99",
+      premiumIDR: "Rp 1.999rb", premiumUSD: "$129",
+      periodText: isEN ? "one-time" : "1x bayar",
+      subNote: isEN ? "Pay once, access forever" : "Akses selamanya tanpa biaya bulanan",
+      badge: isEN ? "All-Time Access" : "Akses Selamanya"
+    }
+  };
+
+  const currentPrice = durationConfig[selectedDuration];
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -47,8 +92,12 @@ export default function PricingPage({
           a: "You get full 48-hour unrestricted access to GymBuddy AI on WhatsApp. You can analyze meals, generate custom workout plans, and test form analysis before making any commitment.",
         },
         {
+          q: "What durations are available for membership?",
+          a: "We offer flexible membership durations: 1 Month, 3 Months, 6 Months, 1 Year, and Lifetime (All-Time One-Time Payment) with increasing discounts up to 40%.",
+        },
+        {
           q: "Can I switch plans later?",
-          a: "Yes! You can upgrade or downgrade your subscription at any time directly through your WhatsApp AI assistant menu or account settings.",
+          a: "Yes! You can upgrade or extend your subscription at any time directly through your WhatsApp AI assistant menu or account settings.",
         },
         {
           q: "What is the difference between AI Workout Coach and Nutrition AI?",
@@ -69,8 +118,12 @@ export default function PricingPage({
           a: "Anda mendapatkan akses penuh tanpa batas selama 48 jam ke GymBuddy AI di WhatsApp. Anda dapat menganalisis makanan, membuat jadwal latihan, dan menguji koreksi postur sebelum berlangganan.",
         },
         {
-          q: "Apakah saya bisa mengubah paket nanti?",
-          a: "Tentu saja! Anda dapat meningkatkan (upgrade) atau mengubah paket kapan saja langsung melalui menu Asisten WhatsApp GymBuddy.",
+          q: "Pilihan durasi berlangganan apa saja yang tersedia?",
+          a: "Kami menyediakan pilihan durasi 1 Bulan, 3 Bulan, 6 Bulan, 1 Tahun, dan Lifetime (Bayar 1x Akses Selamanya) dengan diskon hemat hingga 40%.",
+        },
+        {
+          q: "Apakah saya bisa mengubah atau memperpanjang paket nanti?",
+          a: "Tentu saja! Anda dapat meningkatkan (upgrade) atau memperpanjang paket kapan saja langsung melalui WhatsApp GymBuddy atau menu Dashboard.",
         },
         {
           q: "Apa perbedaan antara AI Workout Coach dan Nutrition AI?",
@@ -135,43 +188,46 @@ export default function PricingPage({
       {/* Hero Header Section */}
       <section className="max-w-4xl mx-auto text-center px-4 pt-12 md:pt-16 pb-6">
         <h1 className="text-3xl sm:text-5xl md:text-6xl font-['Archivo_Black'] tracking-tight leading-tight mb-3 text-black">
-          {isEN ? "Plans that fuel your growth." : "Paket yang Mendukung Progresmu."}
+          {isEN ? "Plans that fuel your growth." : "Paket Membership GymBuddy AI"}
         </h1>
         <p className="text-neutral-600 text-base sm:text-lg max-w-xl mx-auto font-medium">
           {isEN
-            ? "Unlock your physical potential with plans designed to fuel growth."
-            : "Pilih paket terbaik untuk mendampingi dan memaksimalkan perjalanan fitnessmu."}
+            ? "Choose your subscription duration: 1 month, 3 months, 6 months, 1 year, or lifetime access."
+            : "Pilih durasi berlangganan: 1 bulan, 3 bulan, 6 bulan, 1 tahun, atau akses selamanya (Lifetime)."}
         </p>
 
-        {/* Monthly / Yearly Toggle Control */}
-        <div className="mt-8 inline-flex items-center gap-3 bg-white px-4 py-2 rounded-full shadow-sm border border-neutral-200">
-          <span className={`text-xs sm:text-sm font-bold ${billingCycle === "monthly" ? "text-black" : "text-neutral-400"}`}>
-            {isEN ? "Monthly" : "Bulanan"}
-          </span>
+        {/* Duration Selection Tabs (1m, 3m, 6m, 1y, Lifetime) */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-neutral-200 max-w-2xl mx-auto">
+          {(["1m", "3m", "6m", "1y", "lifetime"] as const).map((durKey) => {
+            const isSelected = selectedDuration === durKey;
+            const cfg = durationConfig[durKey];
 
-          <div
-            onClick={() => setBillingCycle(billingCycle === "monthly" ? "yearly" : "monthly")}
-            className="w-12 h-6 bg-black rounded-full p-1 cursor-pointer relative flex items-center"
-          >
-            <motion.div
-              className="w-4 h-4 bg-[#D4FF00] rounded-full shadow-md"
-              animate={{ x: billingCycle === "monthly" ? 0 : 24 }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          </div>
-
-          <span className={`text-xs sm:text-sm font-bold ${billingCycle === "yearly" ? "text-black" : "text-neutral-400"}`}>
-            {isEN ? "Yearly" : "Tahunan"}
-          </span>
-
-          <span className="px-2.5 py-0.5 rounded-full bg-[#D4FF00] text-black font-extrabold text-[11px] tracking-wide">
-            Save 20%
-          </span>
+            return (
+              <button
+                key={durKey}
+                onClick={() => setSelectedDuration(durKey)}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer relative ${
+                  isSelected
+                    ? "bg-black text-white shadow-md"
+                    : "text-neutral-600 hover:text-black hover:bg-neutral-100"
+                }`}
+              >
+                <span>{cfg.label}</span>
+                {cfg.badge && (
+                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                    isSelected ? "bg-[#D4FF00] text-black" : "bg-neutral-200 text-neutral-800"
+                  }`}>
+                    {cfg.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* 3 BENTO CARDS PRICING GRID (Matching requested design) */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+      {/* 3 BENTO CARDS PRICING GRID */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
         
         {/* CARD 1: ADVANCED PLAN - NUTRITIONIST */}
         <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all border border-neutral-200">
@@ -186,11 +242,14 @@ export default function PricingPage({
             </div>
 
             {/* Price */}
-            <div className="flex items-baseline gap-1.5 mb-6">
-              <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-black">
-                {isEN ? "$5" : "Rp 79rb"}
-              </span>
-              <span className="text-neutral-500 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
+            <div className="mb-6">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-['Archivo_Black'] text-black">
+                  {isEN ? currentPrice.singleUSD : currentPrice.singleIDR}
+                </span>
+                <span className="text-neutral-500 text-sm font-medium">{currentPrice.periodText}</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 font-bold mt-1">{currentPrice.subNote}</p>
             </div>
 
             {/* Select Plan Button */}
@@ -232,11 +291,14 @@ export default function PricingPage({
             </div>
 
             {/* Price */}
-            <div className="flex items-baseline gap-1.5 mb-6">
-              <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-black">
-                {isEN ? "$5" : "Rp 79rb"}
-              </span>
-              <span className="text-neutral-500 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
+            <div className="mb-6">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-['Archivo_Black'] text-black">
+                  {isEN ? currentPrice.singleUSD : currentPrice.singleIDR}
+                </span>
+                <span className="text-neutral-500 text-sm font-medium">{currentPrice.periodText}</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 font-bold mt-1">{currentPrice.subNote}</p>
             </div>
 
             {/* Select Plan Button */}
@@ -277,17 +339,20 @@ export default function PricingPage({
                   {isEN ? "Both AIs (Nutritionist + Workout Coach)" : "Dua AI Sekaligus: Nutrisi & Workout"}
                 </p>
               </div>
-              <span className="px-3 py-1 bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase rounded-full">
+              <span className="px-3 py-1 bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase rounded-full shrink-0">
                 BEST VALUE
               </span>
             </div>
 
             {/* Price in Lime Accent Color */}
-            <div className="flex items-baseline gap-1.5 mb-6">
-              <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                {isEN ? "$8" : "Rp 139rb"}
-              </span>
-              <span className="text-neutral-400 text-sm font-medium">/{isEN ? "monthly" : "bulan"}</span>
+            <div className="mb-6">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-['Archivo_Black'] text-[#D4FF00]">
+                  {isEN ? currentPrice.premiumUSD : currentPrice.premiumIDR}
+                </span>
+                <span className="text-neutral-400 text-sm font-medium">{currentPrice.periodText}</span>
+              </div>
+              <p className="text-[11px] text-[#D4FF00] font-bold mt-1">{currentPrice.subNote}</p>
             </div>
 
             {/* Select Plan Button */}

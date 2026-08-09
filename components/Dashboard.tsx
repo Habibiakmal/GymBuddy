@@ -1071,40 +1071,109 @@ export default function Dashboard({
         {/* SECTION 3: PERSONALIZED WORKOUT SCHEDULE & METRICS */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Workout Schedule with Interactive Checkboxes */}
-          <div className="lg:col-span-8 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-lg">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Dumbbell className="w-5 h-5 text-[#D4FF00]" />
-              <span>{isEN ? "Personalized Weekly Training Schedule" : "Jadwal Latihan Mingguan (Custom Plan)"}</span>
-            </h2>
+          <div className="lg:col-span-8 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800/80 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Dumbbell className="w-5 h-5 text-[#D4FF00]" />
+                  <span>{isEN ? "Personalized Weekly Training Schedule" : "Jadwal Latihan Mingguan (Custom Plan)"}</span>
+                </h2>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {isEN ? "Track completed sessions & sync with AI Coach" : "Klik kartu untuk mencatat latihan yang sudah diselesaikan"}
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              {/* Progress badge */}
+              <div className="shrink-0 bg-[#111622] border border-neutral-800 px-3.5 py-1.5 rounded-xl flex items-center gap-2">
+                <span className="text-xs text-neutral-400 font-medium">Progres:</span>
+                <span className="text-xs font-black text-[#D4FF00]">
+                  {Object.values(workoutChecked).filter(Boolean).length} / {workoutSchedule.length} Hari ({Math.round((Object.values(workoutChecked).filter(Boolean).length / Math.max(1, workoutSchedule.length)) * 100)}%)
+                </span>
+              </div>
+            </div>
+
+            {/* Weekly Workout Completion Bar */}
+            <div className="space-y-1">
+              <div className="w-full h-2.5 bg-neutral-800 rounded-full overflow-hidden p-0.5">
+                <div
+                  className="h-full bg-gradient-to-r from-[#D4FF00] via-emerald-400 to-teal-400 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((Object.values(workoutChecked).filter(Boolean).length / Math.max(1, workoutSchedule.length)) * 100)}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
               {workoutSchedule.map((item, idx) => {
                 const isChecked = !!workoutChecked[idx];
+                const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+                const todayName = dayNames[new Date().getDay()];
+                const isToday = item.day?.toLowerCase().includes(todayName.toLowerCase());
+
                 return (
                   <div
                     key={idx}
                     onClick={() => toggleWorkoutChecked(idx)}
-                    className={`border rounded-2xl p-4 flex items-center justify-between transition-all cursor-pointer ${
+                    className={`border rounded-2xl p-4 flex flex-col justify-between space-y-2 transition-all cursor-pointer relative overflow-hidden ${
                       isChecked
-                        ? "bg-[#D4FF00]/10 border-[#D4FF00]/40"
+                        ? "bg-[#D4FF00]/10 border-[#D4FF00]/40 shadow-sm"
+                        : isToday
+                        ? "bg-[#1C2536] border-[#D4FF00]/50 ring-1 ring-[#D4FF00]/30"
                         : "bg-[#111622] border-neutral-800 hover:border-neutral-700"
                     }`}
                   >
-                    <div>
-                      <div className="text-xs font-bold text-[#D4FF00]">{item.day}</div>
-                      <div className="text-sm font-extrabold text-white mt-0.5">{item.title}</div>
-                      <div className="text-[11px] text-neutral-400 mt-1">{item.desc}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-[#D4FF00] uppercase tracking-wider">{item.day}</span>
+                        {isToday && (
+                          <span className="px-2 py-0.5 rounded-md bg-[#D4FF00] text-black text-[10px] font-black uppercase">
+                            HARI INI
+                          </span>
+                        )}
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
+                        isChecked
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                          : "border-neutral-700 text-neutral-600"
+                      }`}>
+                        ✓
+                      </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                      isChecked
-                        ? "bg-[#D4FF00] text-black border-[#D4FF00]"
-                        : "border-neutral-700 text-transparent"
-                    }`}>
-                      ✓
+
+                    <div>
+                      <div className="text-sm font-extrabold text-white leading-tight">{item.title}</div>
+                      <div className="text-xs text-neutral-400 mt-1 line-clamp-2 leading-relaxed">{item.desc}</div>
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-between text-[11px] text-neutral-500 font-semibold border-t border-neutral-800/60">
+                      <span>{isChecked ? "✅ Selesai Dikerjakan" : "⏳ Belum Diselesaikan"}</span>
+                      <span className="text-[#D4FF00] hover:underline">Klik toggle</span>
                     </div>
                   </div>
                 );
               })}
+            </div>
+
+            {/* AI Workout Coach CTA Banner */}
+            <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-[#1A2234] to-[#121722] border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#D4FF00]/10 text-[#D4FF00] flex items-center justify-center shrink-0">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white">Butuh Variasi Latihan / Koreksi Form?</div>
+                  <div className="text-[11px] text-neutral-400">Kirim foto alat gym atau tanya menu latihan ke AI Workout Coach di WhatsApp</div>
+                </div>
+              </div>
+
+              <a
+                href={`https://wa.me/${normalizePhone(activeUser.phone || "085156919826")}?text=Halo%20Coach!%20Saya%20mau%20konsultasi%20jadwal%20latihan%20dan%20variasi%20workout%20hari%20ini`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black text-xs font-extrabold rounded-xl shrink-0 text-center transition-all inline-flex items-center justify-center gap-1.5"
+              >
+                <span>Tanya AI Coach</span>
+                <ArrowRight size={14} />
+              </a>
             </div>
           </div>
 

@@ -302,6 +302,8 @@ interface DbSchema {
   dailyLogs: Record<string, MealLog[]>;
   weeklyProgress: Record<string, WeeklyEntry[]>;
   waterLogs: Record<string, number>;
+  infographics?: Record<string, any>;
+  generatedImages?: Record<string, any>;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -1803,6 +1805,53 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     }
   });
 
+  // REST API: Get meal logs for specific user and date
+  app.get("/api/user/:phone/meals", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const targetDate = (req.query.date as string) || getLocalDateStr();
+    const key = `${phone}_${targetDate}`;
+    const logs = dbData.dailyLogs[key] || [];
+    res.json({ success: true, phone, date: targetDate, logs });
+  });
+
+  // REST API: Add meal log for user
+  app.post("/api/user/:phone/meals", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const meal = req.body;
+    const targetDate = meal.date || (req.query.date as string) || getLocalDateStr();
+    if (!meal || !meal.foodName) {
+      return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
+    }
+    const mealObj: MealLog = {
+      id: meal.id || `m-${Date.now()}`,
+      foodName: meal.foodName,
+      calories: Number(meal.calories) || 0,
+      protein: Number(meal.protein) || 0,
+      carbs: Number(meal.carbs) || 0,
+      fat: Number(meal.fat) || 0,
+      fiber: Number(meal.fiber) || 0,
+      sugar: Number(meal.sugar) || 0,
+      mealType: meal.mealType || getMealTypeByHour(),
+      timestamp: meal.timestamp || new Date().toISOString()
+    };
+    addMealLog(phone, mealObj, targetDate);
+    const key = `${phone}_${targetDate}`;
+    res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
+  });
+
+  // REST API: Delete meal log for user
+  app.delete("/api/user/:phone/meals/:mealId", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const targetDate = (req.query.date as string) || getLocalDateStr();
+    const { mealId } = req.params;
+    const key = `${phone}_${targetDate}`;
+    if (dbData.dailyLogs[key]) {
+      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m: any) => m.id !== mealId);
+      saveDb();
+    }
+    res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || [] });
+  });
+
   // REST API: Get water intake
   app.get("/api/user/:phone/water", (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -2936,9 +2985,10 @@ Keluarkan output JSON valid:
 
   // Serve AI Generated Image Endpoint
   app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], async (req, res) => {
-    const { id } = req.params;
-    const cleanId = id.replace(/\.(jpg|jpeg|png)$/i, "");
-    const imgBase64 = (dbData as any).generatedImages ? (dbData as any).generatedImages[cleanId] : null;
+    const rawId = req.params.id;
+    const idStr = Array.isArray(rawId) ? rawId[0] : (rawId || "");
+    const cleanId = idStr.replace(/\.(jpg|jpeg|png)$/i, "");
+    const imgBase64 = dbData.generatedImages ? dbData.generatedImages[cleanId] : null;
 
     if (imgBase64) {
       const imgBuffer = Buffer.from(imgBase64, "base64");
@@ -2954,6 +3004,7 @@ Keluarkan output JSON valid:
     const svgStr = generateInfographicSVG(parsed, userData);
 
     try {
+      // @ts-ignore
       const { Resvg } = await import("@resvg/resvg-js");
       const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 800 } });
       const pngData = resvg.render();
@@ -3228,8 +3279,9 @@ Keluarkan output JSON valid:
 
   // GymBuddy Official Visual Infographic Image Route (SVG / PNG)
   app.get(["/api/infographic/:id.svg", "/api/infographic/:id.png"], async (req, res) => {
-    const { id } = req.params;
-    const cleanId = id.replace(/\.(svg|png|jpg|jpeg)$/i, "");
+    const rawId = req.params.id;
+    const idStr = Array.isArray(rawId) ? rawId[0] : (rawId || "");
+    const cleanId = idStr.replace(/\.(svg|png|jpg|jpeg)$/i, "");
     const info = (dbData.infographics && dbData.infographics[cleanId]) ? dbData.infographics[cleanId] : null;
     const parsed = info ? info.parsed : { equipmentName: "Dumbbell Hex" };
     const userData = info ? info.userData : { name: "User", goalTitle: "Menurunkan Berat Badan" };
@@ -3237,6 +3289,7 @@ Keluarkan output JSON valid:
     const svgStr = generateInfographicSVG(parsed, userData);
 
     try {
+      // @ts-ignore
       const { Resvg } = await import("@resvg/resvg-js");
       const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 800 } });
       const pngData = resvg.render();
@@ -3255,8 +3308,9 @@ Keluarkan output JSON valid:
 
   // GymBuddy Official Visual Infographic Template Web Route
   app.get("/infographic/:id", (req, res) => {
-    const { id } = req.params;
-    const info = (dbData.infographics && dbData.infographics[id]) ? dbData.infographics[id] : null;
+    const rawId = req.params.id;
+    const idStr = Array.isArray(rawId) ? rawId[0] : (rawId || "");
+    const info = (dbData.infographics && dbData.infographics[idStr]) ? dbData.infographics[idStr] : null;
 
     const parsed = info ? info.parsed : {
       equipmentName: "Dumbbell Hex",
