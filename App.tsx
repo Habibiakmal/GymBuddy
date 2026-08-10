@@ -656,8 +656,8 @@ export default function App() {
                   </motion.button>
                   <span className="text-neutral-400 text-sm md:text-base ml-2">
                     {language === "EN"
-                      ? "No installation needed, just WhatsApp"
-                      : "Gaperlu install, cukup WhatsApp"}
+                      ? "Integrates with WhatsApp & Dashboard"
+                      : "Terintegrasi WhatsApp & Dashboard"}
                   </span>
                 </div>
               </div>

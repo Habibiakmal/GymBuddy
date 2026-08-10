@@ -1257,7 +1257,7 @@ function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>)
 
     return [
 `💪🔥 Woy ${name}! Gue Max, AI Coach & Nutritionist lo mulai sekarang. Welcome to GymBuddy AI!
-Gak perlu ribet install app baru, kita gas semua dari WhatsApp ini.
+Integrasi WhatsApp AI & Dashboard siap bantu capai target kebugaran lo.
 
 ${summarySection}
 
@@ -1308,7 +1308,7 @@ Udah siap? Ayo kirim ${firstItemPrompt} pertama lo sekarang! 🔥`
 
     return [
 `🌿 Halo ${name}! Saya Coach Mia, AI Coach & Nutritionist kamu. Selamat datang di GymBuddy AI! ✨
-Tidak perlu pusing install aplikasi tambahan, kita bisa memantau nutrisi & kebugaran kamu langsung melalui WhatsApp ini.
+Integrasi WhatsApp AI & Dashboard siap menemani dan memantau nutrisi & kebugaran kamu secara langsung.
 
 ${summarySection}
 
