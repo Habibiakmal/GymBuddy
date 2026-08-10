@@ -194,6 +194,31 @@ const splitAndCategorizeComboText = (
   return { foods, drinks };
 };
 
+// Automatic Sanitizer to split any stored combo logs
+const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
+  if (!Array.isArray(rawLogs)) return [];
+  const result: MealItem[] = [];
+
+  for (const item of rawLogs) {
+    if (!item.foodName) continue;
+    const { foods, drinks } = splitAndCategorizeComboText(
+      item.foodName,
+      item.calories,
+      item.protein,
+      item.carbs,
+      item.fat
+    );
+
+    if (foods.length > 0 && drinks.length > 0) {
+      result.push(...foods, ...drinks);
+    } else {
+      result.push(item);
+    }
+  }
+
+  return result;
+};
+
 // Translations Dictionary
 const translations = {
   ID: {
@@ -652,35 +677,37 @@ export default function Dashboard({
 
   const { currentStreak, longestStreak } = calculateStreaks();
 
-  // Fetch Meals
+  // Fetch & Auto-Split Combo Logs
   const fetchLogsForDate = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+
+    let rawLogs: MealItem[] = [];
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${dateStr}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.logs)) {
-          setAllLogs(data.logs);
-          try {
-            localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(data.logs));
-          } catch (e) {}
-          return;
+          rawLogs = data.logs;
         }
       }
     } catch (e) {}
 
-    try {
-      const localData = localStorage.getItem(`gymbuddy_meals_${normPhone}_${dateStr}`);
-      if (localData) {
-        setAllLogs(JSON.parse(localData));
-      } else {
-        setAllLogs([]);
-      }
-    } catch (e) {
-      setAllLogs([]);
+    if (rawLogs.length === 0) {
+      try {
+        const localData = localStorage.getItem(`gymbuddy_meals_${normPhone}_${dateStr}`);
+        if (localData) rawLogs = JSON.parse(localData);
+      } catch (e) {}
     }
+
+    // Auto Sanitize & Split any combo items (e.g. "Nasi Ayam McD + Kopi")
+    const sanitized = sanitizeAndSplitComboLogs(rawLogs);
+    setAllLogs(sanitized);
+
+    try {
+      localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(sanitized));
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -773,7 +800,7 @@ export default function Dashboard({
     setShowAutoReminderModal(false);
   };
 
-  // Combo Splitting Handler
+  // Combo Splitting Handler for new entries
   const handleSaveLogItem = async () => {
     if (!itemNameInput.trim()) return;
 
@@ -891,7 +918,7 @@ export default function Dashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] flex flex-col md:flex-row selection:bg-[#C4F82A] selection:text-black">
+    <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -908,8 +935,8 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* LEFT SIDEBAR (DARK CHARCOAL PANEL - MATCHING REFERENCE IMAGE) */}
-      <aside className="w-full md:w-72 bg-[#181B26] text-white p-5 flex flex-col justify-between shrink-0 border-b md:border-b-0 md:border-r border-slate-800 md:min-h-screen">
+      {/* FLOATING DARK CHARCOAL SIDEBAR PANEL (MATCHING REFERENCE IMAGE ROUNDED CORNERS) */}
+      <aside className="w-full md:w-72 bg-[#181B26] text-white p-6 flex flex-col justify-between shrink-0 rounded-3xl border border-slate-800 shadow-xl md:min-h-[92vh]">
         <div className="space-y-6">
           {/* GymBuddy Logo & App Title */}
           <div className="flex items-center justify-between">
@@ -936,7 +963,7 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* Navigation Pill List (Matching Reference Design) */}
+          {/* Navigation Pill List (Matching Reference Image) */}
           <nav className="space-y-2">
             <button className="w-full px-4 py-3 rounded-2xl bg-[#C4F82A] text-black font-black text-sm flex items-center justify-between transition-all cursor-pointer shadow-md">
               <div className="flex items-center gap-3">
@@ -1001,8 +1028,8 @@ export default function Dashboard({
         </div>
       </aside>
 
-      {/* RIGHT MAIN CONTENT AREA (LIGHT THEME - MATCHING REFERENCE IMAGE) */}
-      <main className="flex-1 p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto">
+      {/* RIGHT MAIN CONTENT CONTAINER (WHITE ROUNDED PANEL - MATCHING REFERENCE IMAGE) */}
+      <main className="flex-1 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm">
         
         {/* STEP 1: TOP GREETING HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1026,7 +1053,7 @@ export default function Dashboard({
                   className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                     isSel
                       ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] font-black shadow-sm scale-105"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                   }`}
                 >
                   <span className="text-[10px] uppercase opacity-70 font-semibold">{d.dayName}</span>
@@ -1040,84 +1067,84 @@ export default function Dashboard({
         {/* STEP 2: SUMMARY RIBBON STAT CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Current Streak */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">{t.currentStreak}</span>
               <p className="text-2xl font-black text-slate-900">{currentStreak} <span className="text-xs font-bold text-slate-500">{t.activeDaysConsecutive}</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 font-bold flex items-center justify-center text-lg">
+            <div className="w-10 h-10 rounded-xl bg-amber-100/70 text-amber-600 font-bold flex items-center justify-center text-lg">
               🔥
             </div>
           </div>
 
           {/* Longest Streak */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{t.longestStreak}</span>
               <p className="text-2xl font-black text-slate-900">{longestStreak} <span className="text-xs font-bold text-slate-500">{t.recordStreakDays}</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-lg">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100/70 text-indigo-600 font-bold flex items-center justify-center text-lg">
               🏆
             </div>
           </div>
 
           {/* Calorie Goal */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">{t.caloriesLabel}</span>
               <p className="text-2xl font-black text-slate-900">{totalCaloriesConsumed} <span className="text-xs font-bold text-slate-500">/ {targetCalories} kcal</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-lg">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100/70 text-emerald-600 font-bold flex items-center justify-center text-lg">
               🥗
             </div>
           </div>
 
           {/* Water Intake */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Hydration</span>
               <p className="text-2xl font-black text-slate-900">{totalHydrationMl} <span className="text-xs font-bold text-slate-500">/ 2,500 ml</span></p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 font-bold flex items-center justify-center text-lg">
+            <div className="w-10 h-10 rounded-xl bg-blue-100/70 text-blue-600 font-bold flex items-center justify-center text-lg">
               💧
             </div>
           </div>
         </div>
 
         {/* STEP 3: TARGET GOALS OVERVIEW */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Target size={18} className="text-slate-800" />
               <h2 className="text-base font-extrabold text-slate-900">{t.targetGoals}</h2>
             </div>
-            <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            <span className="text-xs font-extrabold text-slate-700 bg-slate-200/80 px-3 py-1 rounded-full">
               {progressPercent}% Complete
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            <div className="bg-slate-50 rounded-xl p-3 space-y-0.5">
+            <div className="bg-white border border-slate-200/60 rounded-xl p-3 space-y-0.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase">{t.mainGoalTitle}</span>
               <p className="text-sm font-extrabold text-slate-900">{goalTitle}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3 space-y-0.5">
+            <div className="bg-white border border-slate-200/60 rounded-xl p-3 space-y-0.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase">{t.currentWeightLabel} → {t.targetWeightLabel}</span>
               <p className="text-sm font-extrabold text-slate-900">{weight} kg → {targetWeight} kg ({t.remainingLabel} {remainingKg} kg)</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3 space-y-0.5">
+            <div className="bg-white border border-slate-200/60 rounded-xl p-3 space-y-0.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase">{t.dailyTargetLabel}</span>
               <p className="text-sm font-extrabold text-slate-900">{targetCalories} kcal / {targetProtein}g P</p>
             </div>
           </div>
 
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden">
             <div className="h-full bg-slate-900 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
 
         {/* STEP 4: HOW DO YOU FEEL TODAY? */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
           <div>
             <h2 className="text-base font-extrabold text-slate-900">{t.howDoYouFeel}</h2>
             <p className="text-xs text-slate-500 font-medium">{t.feelSubtext}</p>
@@ -1125,12 +1152,12 @@ export default function Dashboard({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1">
             {[
-              { id: "bad", label: t.feelBad, icon: "😫", activeBg: "bg-red-500/10 border-red-500 text-red-700" },
-              { id: "sick", label: t.sick, icon: "🤒", activeBg: "bg-red-500/10 border-red-500 text-red-700" },
-              { id: "not_great", label: t.notGreat, icon: "🙁", activeBg: "bg-amber-500/10 border-amber-500 text-amber-800" },
-              { id: "okay", label: t.okay, icon: "😐", activeBg: "bg-slate-100 border-slate-600 text-slate-900" },
-              { id: "good", label: t.good, icon: "🙂", activeBg: "bg-[#C4F82A]/20 border-[#99C700] text-slate-900 font-black" },
-              { id: "great", label: t.great, icon: "🔥", activeBg: "bg-[#C4F82A]/30 border-[#99C700] text-slate-900 font-black" }
+              { id: "bad", label: t.feelBad, icon: "😫", activeBg: "bg-red-500/10 border-red-500 text-red-700 font-black" },
+              { id: "sick", label: t.sick, icon: "🤒", activeBg: "bg-red-500/10 border-red-500 text-red-700 font-black" },
+              { id: "not_great", label: t.notGreat, icon: "🙁", activeBg: "bg-amber-500/10 border-amber-500 text-amber-800 font-black" },
+              { id: "okay", label: t.okay, icon: "😐", activeBg: "bg-slate-200 border-slate-600 text-slate-900 font-black" },
+              { id: "good", label: t.good, icon: "🙂", activeBg: "bg-[#C4F82A]/30 border-[#88B800] text-slate-900 font-black" },
+              { id: "great", label: t.great, icon: "🔥", activeBg: "bg-[#C4F82A]/40 border-[#88B800] text-slate-900 font-black" }
             ].map((st) => {
               const isSelected = feelState === st.id;
               return (
@@ -1140,7 +1167,7 @@ export default function Dashboard({
                   className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs gap-1 ${
                     isSelected
                       ? `${st.activeBg} shadow-xs ring-2 ring-slate-900/10`
-                      : "bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100"
+                      : "bg-white border-slate-200/80 text-slate-600 hover:bg-slate-100"
                   }`}
                 >
                   <span className="text-lg">{st.icon}</span>
@@ -1152,7 +1179,7 @@ export default function Dashboard({
         </div>
 
         {/* STEP 5 & 6: WEEKLY WORKOUT SCHEDULE & WORKOUT PROGRESS */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Dumbbell size={18} className="text-slate-800" />
@@ -1166,14 +1193,14 @@ export default function Dashboard({
 
             <button
               onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
-              className="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-full bg-slate-200/80 text-slate-800 font-bold text-xs hover:bg-slate-300 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Layers size={14} />
               <span>{showFullWeeklyOverview ? t.viewTodayOnly : t.viewFullWeeklySchedule}</span>
             </button>
           </div>
 
-          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-slate-200/70 rounded-full overflow-hidden">
             <div className="h-full bg-emerald-600 rounded-full transition-all duration-300" style={{ width: `${overallWorkoutPercent}%` }}></div>
           </div>
 
@@ -1188,10 +1215,10 @@ export default function Dashboard({
                     key={ex.id}
                     className={`border rounded-xl p-4 transition-all space-y-3 cursor-pointer ${
                       isDone
-                        ? "bg-emerald-50/60 border-emerald-200 text-slate-900"
+                        ? "bg-emerald-50/80 border-emerald-200 text-slate-900"
                         : ex.completedSets > 0
-                        ? "bg-amber-50/50 border-amber-200 text-slate-900"
-                        : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100"
+                        ? "bg-amber-50/80 border-amber-200 text-slate-900"
+                        : "bg-white border-slate-200/80 hover:bg-slate-50"
                     }`}
                     onClick={() => setActiveWorkoutDetail(ex)}
                   >
@@ -1246,7 +1273,7 @@ export default function Dashboard({
                   <div
                     key={daySch.day}
                     className={`border rounded-xl p-3.5 transition-all space-y-2 ${
-                      isSelectedDay ? "bg-slate-900 text-white border-slate-900" : "bg-slate-50 border-slate-200/80"
+                      isSelectedDay ? "bg-[#181B26] text-white border-[#181B26]" : "bg-white border-slate-200/80"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -1261,7 +1288,7 @@ export default function Dashboard({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       {daySch.exercises.map((exItem) => (
-                        <div key={exItem.id} className={`p-2 rounded-lg text-xs border ${isSelectedDay ? "bg-slate-800 border-slate-700 text-slate-100" : "bg-white border-slate-200 text-slate-800"}`}>
+                        <div key={exItem.id} className={`p-2 rounded-lg text-xs border ${isSelectedDay ? "bg-slate-800 border-slate-700 text-slate-100" : "bg-slate-50 border-slate-200 text-slate-800"}`}>
                           <p className="font-extrabold">{exItem.name}</p>
                           <p className="text-[11px] opacity-75 font-medium">{exItem.targetReps}</p>
                         </div>
@@ -1275,7 +1302,7 @@ export default function Dashboard({
         </div>
 
         {/* STEP 7: FOOD MEALS */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Flame size={18} className="text-amber-600" />
@@ -1290,7 +1317,7 @@ export default function Dashboard({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 rounded-xl p-3 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white border border-slate-200/60 rounded-xl p-3 text-center">
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase">{t.caloriesLabel}</span>
               <p className="text-sm font-black text-slate-900">{totalCaloriesConsumed} / {targetCalories} kcal</p>
@@ -1310,13 +1337,13 @@ export default function Dashboard({
           </div>
 
           {foodMeals.length === 0 ? (
-            <div className="text-center py-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+            <div className="text-center py-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl bg-white">
               {t.noMealsLogged}
             </div>
           ) : (
-            <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden">
+            <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden bg-white">
               {foodMeals.map((item) => (
-                <div key={item.id} className="p-3 bg-white flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div key={item.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div>
                     <h4 className="font-extrabold text-sm text-slate-900">{item.foodName}</h4>
                     <p className="text-xs text-slate-500 font-medium">
@@ -1337,7 +1364,7 @@ export default function Dashboard({
         </div>
 
         {/* STEP 8: WATER / HYDRATION */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Droplets size={18} className="text-blue-600" />
@@ -1377,13 +1404,13 @@ export default function Dashboard({
           </div>
 
           {hydrationLogs.length === 0 ? (
-            <div className="text-center py-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+            <div className="text-center py-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl bg-white">
               {t.noDrinksLogged}
             </div>
           ) : (
-            <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden">
+            <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden bg-white">
               {hydrationLogs.map((item) => (
-                <div key={item.id} className="p-3 bg-white flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div key={item.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-2.5">
                     <Coffee size={16} className="text-blue-500" />
                     <div>
@@ -1407,13 +1434,13 @@ export default function Dashboard({
         </div>
 
         {/* STEP 9: REKOMENDASI MAX / MIA */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex items-center gap-2">
             <Sparkles size={18} className="text-indigo-600" />
             <h2 className="text-base font-extrabold text-slate-900">{t.coachRecommendation} ({coachName})</h2>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex items-start gap-3">
+          <div className="bg-white border border-slate-200/80 rounded-xl p-4 flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#181B26] text-[#C4F82A] font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
               {isMaxPersona ? "M" : "N"}
             </div>
