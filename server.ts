@@ -866,25 +866,85 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
   };
 }
 
+function isLiquidName(name: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  const liquidKeywords = [
+    "air", "water", "mineral", "kopi", "coffee", "teh", "tea",
+    "susu", "milk", "jus", "juice", "shake", "drink", "minum",
+    "smoothie", "beverage", "soda", "cola", "boba", "latte",
+    "espresso", "cappuccino", "syrup", "sirup", "infused",
+    "hydrat", "pocari", "gatorade", "le minerale", "aqua", "es teh",
+    "es kopi", "yakult", "matcha"
+  ];
+  return liquidKeywords.some((kw) => lower.includes(kw));
+}
+
 function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
-  const key = `${phone}_${targetDate}`;
-  if (!dbData.dailyLogs[key]) {
-    dbData.dailyLogs[key] = [];
-  }
-  if (!dbData.dailyLogs[key].some((m: any) => m.id === meal.id)) {
-    dbData.dailyLogs[key].push(meal);
+
+  // Smart splitting for combo text (e.g. "Nasi Ayam McD + Kopi")
+  const rawName = meal.foodName || "";
+  const parts = rawName.split(/\+|\s+&\s+|\s+dan\s+|\s+with\s+|,/i).map((p) => p.trim()).filter(Boolean);
+
+  const solidParts: string[] = [];
+  const liquidParts: string[] = [];
+
+  for (const part of parts) {
+    if (isLiquidName(part)) {
+      liquidParts.push(part);
+    } else {
+      solidParts.push(part);
+    }
   }
 
-  // Also sync meal to all other registered user keys in dbData.users to prevent phone mismatch issues
-  for (const uPhone of Object.keys(dbData.users)) {
-    const uKey = `${uPhone}_${targetDate}`;
-    if (!dbData.dailyLogs[uKey]) {
-      dbData.dailyLogs[uKey] = [];
+  const mealsToInsert: MealLog[] = [];
+
+  if (solidParts.length > 0 && liquidParts.length > 0) {
+    // Split solid part & liquid part
+    mealsToInsert.push({
+      ...meal,
+      id: `${meal.id || Date.now()}-food`,
+      foodName: solidParts.join(" + "),
+      calories: Math.max(0, (Number(meal.calories) || 450) - 50),
+      isHydration: false
+    });
+    mealsToInsert.push({
+      ...meal,
+      id: `${meal.id || Date.now()}-drink`,
+      foodName: liquidParts.join(" + "),
+      calories: 50,
+      protein: 1,
+      carbs: 5,
+      fat: 0,
+      isHydration: true,
+      volumeMl: 250
+    } as any);
+  } else {
+    mealsToInsert.push({
+      ...meal,
+      isHydration: liquidParts.length > 0 || isLiquidName(rawName)
+    } as any);
+  }
+
+  for (const itemMeal of mealsToInsert) {
+    const key = `${phone}_${targetDate}`;
+    if (!dbData.dailyLogs[key]) {
+      dbData.dailyLogs[key] = [];
     }
-    if (!dbData.dailyLogs[uKey].some((m: any) => m.id === meal.id)) {
-      dbData.dailyLogs[uKey].push(meal);
+    if (!dbData.dailyLogs[key].some((m: any) => m.id === itemMeal.id)) {
+      dbData.dailyLogs[key].push(itemMeal);
+    }
+
+    for (const uPhone of Object.keys(dbData.users)) {
+      const uKey = `${uPhone}_${targetDate}`;
+      if (!dbData.dailyLogs[uKey]) {
+        dbData.dailyLogs[uKey] = [];
+      }
+      if (!dbData.dailyLogs[uKey].some((m: any) => m.id === itemMeal.id)) {
+        dbData.dailyLogs[uKey].push(itemMeal);
+      }
     }
   }
 
