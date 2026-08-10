@@ -61,6 +61,8 @@ interface UserProfileData {
   age: number;
   gender: string;
   persona: string;
+  createdAt?: string;
+  registerDate?: string;
   tdee?: number;
   targetCalories?: number;
   proteinGrams?: number;
@@ -225,7 +227,7 @@ const translations = {
     memberDashboard: "MEMBER DASHBOARD",
     welcomeBack: "Selamat datang kembali",
     welcome: "Halo",
-    landingPage: "Halaman Utama",
+    landingPage: "Home",
     removeAccount: "Hapus Akun",
     logout: "Keluar",
     currentStreak: "Streak Saat Ini",
@@ -298,13 +300,14 @@ const translations = {
     saveWeight: "Simpan BB Baru",
     delete: "Hapus",
     setDone: "Selesai",
-    setNotDone: "Belum Selesai"
+    setNotDone: "Belum Selesai",
+    pickDateTooltip: "Pilih Tanggal (Sejak Mendaftar)"
   },
   EN: {
     memberDashboard: "MEMBER DASHBOARD",
     welcomeBack: "Welcome back",
     welcome: "Hello",
-    landingPage: "Landing Page",
+    landingPage: "Home",
     removeAccount: "Remove Account",
     logout: "Log Out",
     currentStreak: "Current Streak",
@@ -377,7 +380,8 @@ const translations = {
     saveWeight: "Save New Weight",
     delete: "Delete",
     setDone: "Completed",
-    setNotDone: "Not Completed"
+    setNotDone: "Not Completed",
+    pickDateTooltip: "Select Date (Since Registration)"
   }
 };
 
@@ -517,10 +521,35 @@ export default function Dashboard({
     return `${year}-${month}-${day}`;
   };
 
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateKey(new Date()));
+  const todayDateStr = formatDateKey(new Date());
+  const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
   const [liveUser, setLiveUser] = useState<UserProfileData>(initialUser);
   const [allLogs, setAllLogs] = useState<MealItem[]>([]);
   const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
+
+  const activeUser = liveUser || initialUser;
+
+  // Determine User Registration Date as Min Date Constraint
+  const getUserRegisterDateStr = (): string => {
+    if (activeUser.createdAt) return activeUser.createdAt.substring(0, 10);
+    if (activeUser.registerDate) return activeUser.registerDate.substring(0, 10);
+
+    const phoneKey = activeUser.phone || "user";
+    try {
+      const stored = localStorage.getItem(`gymbuddy_user_registered_at_${phoneKey}`);
+      if (stored) return stored;
+
+      // Default registration date to 14 days ago
+      const defaultDate = new Date(Date.now() - 14 * 86400000);
+      const defaultStr = formatDateKey(defaultDate);
+      localStorage.setItem(`gymbuddy_user_registered_at_${phoneKey}`, defaultStr);
+      return defaultStr;
+    } catch (e) {
+      return formatDateKey(new Date(Date.now() - 14 * 86400000));
+    }
+  };
+
+  const minDateStr = getUserRegisterDateStr();
 
   // Feel State per date
   const [feelState, setFeelState] = useState<FeelState>(() => {
@@ -584,7 +613,6 @@ export default function Dashboard({
     return cleaned;
   };
 
-  const activeUser = liveUser || initialUser;
   const weight = Number(activeUser.weight) || 70;
   const startWeight = Number(activeUser.startWeight) || weight;
 
@@ -622,10 +650,14 @@ export default function Dashboard({
   const isMaxPersona = (activeUser.persona || "max").toLowerCase() === "max";
   const coachName = isMaxPersona ? "Coach Max" : "Coach Mia";
 
+  // Dynamic Date Ribbon Range centered around selectedDate
   const getRecentDates = () => {
     const dates = [];
+    const baseDate = new Date(selectedDate);
+    if (isNaN(baseDate.getTime())) return dates;
+
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
+      const d = new Date(baseDate.getTime() - (i - 1) * 86400000);
       dates.push({
         dateStr: formatDateKey(d),
         dayName: d.toLocaleDateString(lang === "EN" ? "en-US" : "id-ID", { weekday: "short" }),
@@ -1050,8 +1082,8 @@ export default function Dashboard({
       {/* RIGHT MAIN CONTENT CONTAINER */}
       <main className="flex-1 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm">
         
-        {/* STEP 1: TOP GREETING HEADER */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {/* STEP 1: TOP GREETING HEADER & DATE PICKER RIBBON */}
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {t.welcomeBack}, {activeUser.name || "Member"} 👋
@@ -1061,25 +1093,49 @@ export default function Dashboard({
             </p>
           </div>
 
-          {/* Date Navigation Ribbon */}
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-            {recentDates.map((d) => {
-              const isSel = d.dateStr === selectedDate;
-              return (
-                <button
-                  key={d.dateStr}
-                  onClick={() => setSelectedDate(d.dateStr)}
-                  className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                    isSel
-                      ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] font-black shadow-sm scale-105"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-[10px] uppercase opacity-70 font-semibold">{d.dayName}</span>
-                  <span className="text-sm font-black">{d.dayNum}</span>
-                </button>
-              );
-            })}
+          {/* Date Navigation Ribbon without Scrollbars + Registration Calendar Picker */}
+          <div className="flex items-center gap-2 w-full lg:w-auto overflow-hidden">
+            {/* Scrollbar-free Date Ribbon */}
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full lg:w-auto pb-1 lg:pb-0 shrink-0">
+              {recentDates.map((d) => {
+                const isSel = d.dateStr === selectedDate;
+                return (
+                  <button
+                    key={d.dateStr}
+                    onClick={() => setSelectedDate(d.dateStr)}
+                    className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border shrink-0 ${
+                      isSel
+                        ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] font-black shadow-sm scale-105"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase opacity-70 font-semibold">{d.dayName}</span>
+                    <span className="text-sm font-black">{d.dayNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Interactive Calendar Date Picker constrained to Registration Date */}
+            <div className="relative flex items-center shrink-0">
+              <button
+                type="button"
+                className="flex items-center justify-center w-11 h-13 rounded-xl font-bold text-xs bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer relative shadow-xs"
+                title={t.pickDateTooltip}
+              >
+                <CalendarIcon size={18} className="text-slate-800" />
+                <input
+                  type="date"
+                  min={minDateStr}
+                  max={todayDateStr}
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) setSelectedDate(e.target.value);
+                  }}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                />
+              </button>
+            </div>
           </div>
         </div>
 
