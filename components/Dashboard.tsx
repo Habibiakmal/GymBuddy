@@ -32,7 +32,8 @@ import {
   Search,
   MessageSquare,
   BarChart2,
-  CheckSquare
+  CheckSquare,
+  RotateCcw
 } from "lucide-react";
 
 interface MealItem {
@@ -221,7 +222,7 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   return result;
 };
 
-// Comprehensive 100% Consistent Translations Dictionary
+// Comprehensive Translations Dictionary
 const translations = {
   ID: {
     memberDashboard: "MEMBER DASHBOARD",
@@ -254,7 +255,7 @@ const translations = {
     good: "Baik",
     great: "Sangat Baik",
     weeklyWorkoutSchedule: "Jadwal Workout Mingguan",
-    todaysFocus: "Fokus Latihan Hari Ini",
+    todaysFocus: "Fokus Latihan",
     viewFullWeeklySchedule: "Lihat Seluruh Jadwal (Senin - Minggu)",
     viewTodayOnly: "Kembali ke Jadwal Hari Ini",
     todaysFocusProgress: "Progress Latihan Hari Ini",
@@ -301,7 +302,11 @@ const translations = {
     delete: "Hapus",
     setDone: "Selesai",
     setNotDone: "Belum Selesai",
-    pickDateTooltip: "Pilih Tanggal (Sejak Mendaftar)"
+    pickDateTooltip: "Buka Kalender Pemilih Tanggal",
+    calendarModalTitle: "Kalender Pemilih Tanggal",
+    calendarSubtext: "Pilih tanggal sejak kamu terdaftar di GymBuddy",
+    todayBtn: "Hari Ini",
+    historicalLogNotice: "Menampilkan log histori tanggal"
   },
   EN: {
     memberDashboard: "MEMBER DASHBOARD",
@@ -334,7 +339,7 @@ const translations = {
     good: "Good",
     great: "Great",
     weeklyWorkoutSchedule: "Weekly Workout Schedule",
-    todaysFocus: "Today's Focus",
+    todaysFocus: "Workout Focus",
     viewFullWeeklySchedule: "View Full Schedule (Mon - Sun)",
     viewTodayOnly: "Back to Today's Workout",
     todaysFocusProgress: "Today's Workout Progress",
@@ -381,7 +386,11 @@ const translations = {
     delete: "Delete",
     setDone: "Completed",
     setNotDone: "Not Completed",
-    pickDateTooltip: "Select Date (Since Registration)"
+    pickDateTooltip: "Open Date Picker Calendar",
+    calendarModalTitle: "Date Picker Calendar",
+    calendarSubtext: "Select any date since your registration at GymBuddy",
+    todayBtn: "Today",
+    historicalLogNotice: "Showing historical log for"
   }
 };
 
@@ -526,6 +535,7 @@ export default function Dashboard({
   const [liveUser, setLiveUser] = useState<UserProfileData>(initialUser);
   const [allLogs, setAllLogs] = useState<MealItem[]>([]);
   const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   const activeUser = liveUser || initialUser;
 
@@ -550,6 +560,10 @@ export default function Dashboard({
   };
 
   const minDateStr = getUserRegisterDateStr();
+
+  // Calendar Modal Navigation Month/Year State
+  const [calYear, setCalYear] = useState<number>(() => new Date(selectedDate).getFullYear());
+  const [calMonth, setCalMonth] = useState<number>(() => new Date(selectedDate).getMonth());
 
   // Feel State per date
   const [feelState, setFeelState] = useState<FeelState>(() => {
@@ -650,14 +664,12 @@ export default function Dashboard({
   const isMaxPersona = (activeUser.persona || "max").toLowerCase() === "max";
   const coachName = isMaxPersona ? "Coach Max" : "Coach Mia";
 
-  // Dynamic Date Ribbon Range centered around selectedDate
-  const getRecentDates = () => {
+  // STATIC 7-DAY RIBBON STRIP ENDING AT TODAY (NEVER SHIFTS POSITION WHEN CLICKING)
+  const getStaticRibbonDates = () => {
     const dates = [];
-    const baseDate = new Date(selectedDate);
-    if (isNaN(baseDate.getTime())) return dates;
-
+    const today = new Date();
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(baseDate.getTime() - (i - 1) * 86400000);
+      const d = new Date(today.getTime() - i * 86400000);
       dates.push({
         dateStr: formatDateKey(d),
         dayName: d.toLocaleDateString(lang === "EN" ? "en-US" : "id-ID", { weekday: "short" }),
@@ -668,7 +680,8 @@ export default function Dashboard({
     return dates;
   };
 
-  const recentDates = getRecentDates();
+  const ribbonDates = getStaticRibbonDates();
+  const isSelectedDateInRibbon = ribbonDates.some((d) => d.dateStr === selectedDate);
 
   // Solid Foods vs Hydration
   const foodMeals = allLogs.filter((item) => !isLiquidName(item.foodName) && !item.isHydration);
@@ -968,6 +981,32 @@ export default function Dashboard({
     }
   };
 
+  // Month Grid Helper for Modal Calendar
+  const daysInCalMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDayOfCalMonth = new Date(calYear, calMonth, 1).getDay(); // 0 = Sun
+  const calMonthTitle = new Date(calYear, calMonth, 1).toLocaleDateString(lang === "EN" ? "en-US" : "id-ID", {
+    month: "long",
+    year: "numeric"
+  });
+
+  const handlePrevCalMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear(calYear - 1);
+    } else {
+      setCalMonth(calMonth - 1);
+    }
+  };
+
+  const handleNextCalMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear(calYear + 1);
+    } else {
+      setCalMonth(calMonth + 1);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
       
@@ -1082,26 +1121,46 @@ export default function Dashboard({
       {/* RIGHT MAIN CONTENT CONTAINER */}
       <main className="flex-1 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm">
         
-        {/* STEP 1: TOP GREETING HEADER & DATE PICKER RIBBON */}
+        {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {t.welcomeBack}, {activeUser.name || "Member"} 👋
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                {t.welcomeBack}, {activeUser.name || "Member"} 👋
+              </h1>
+              {selectedDate !== todayDateStr && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[11px] border border-amber-300">
+                  {t.historicalLogNotice} {selectedDate}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500 font-semibold mt-0.5">
-              {selectedDayName} • {todayScheduleObj.focus}
+              {selectedDayName}, {selectedDate} • {todayScheduleObj.focus}
             </p>
           </div>
 
-          {/* Date Navigation Ribbon without Scrollbars + Registration Calendar Picker */}
-          <div className="flex items-center gap-2 w-full lg:w-auto overflow-hidden">
-            {/* Scrollbar-free Date Ribbon */}
-            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden w-full lg:w-auto pb-1 lg:pb-0 shrink-0">
-              {recentDates.map((d) => {
+          {/* Date Navigation Ribbon without Scrollbars + Calendar Modal Opener */}
+          <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+            
+            {/* If selected date is outside the 7-day ribbon, show a badge with shortcut to reset */}
+            {!isSelectedDateInRibbon && (
+              <button
+                onClick={() => setSelectedDate(todayDateStr)}
+                className="px-3 py-2 rounded-xl bg-amber-500 text-white font-extrabold text-xs flex items-center gap-1 hover:bg-amber-600 transition-all cursor-pointer shadow-xs shrink-0"
+              >
+                <RotateCcw size={13} />
+                <span>{t.todayBtn}</span>
+              </button>
+            )}
+
+            {/* Static 7-Day Date Ribbon (Does NOT move/shift position when clicking!) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0">
+              {ribbonDates.map((d) => {
                 const isSel = d.dateStr === selectedDate;
                 return (
                   <button
                     key={d.dateStr}
+                    type="button"
                     onClick={() => setSelectedDate(d.dateStr)}
                     className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border shrink-0 ${
                       isSel
@@ -1116,26 +1175,22 @@ export default function Dashboard({
               })}
             </div>
 
-            {/* Interactive Calendar Date Picker constrained to Registration Date */}
-            <div className="relative flex items-center shrink-0">
-              <button
-                type="button"
-                className="flex items-center justify-center w-11 h-13 rounded-xl font-bold text-xs bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer relative shadow-xs"
-                title={t.pickDateTooltip}
-              >
-                <CalendarIcon size={18} className="text-slate-800" />
-                <input
-                  type="date"
-                  min={minDateStr}
-                  max={todayDateStr}
-                  value={selectedDate}
-                  onChange={(e) => {
-                    if (e.target.value) setSelectedDate(e.target.value);
-                  }}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                />
-              </button>
-            </div>
+            {/* Beautiful Calendar Modal Launcher Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const selD = new Date(selectedDate);
+                if (!isNaN(selD.getTime())) {
+                  setCalYear(selD.getFullYear());
+                  setCalMonth(selD.getMonth());
+                }
+                setShowCalendarModal(true);
+              }}
+              className="flex items-center justify-center w-11 h-13 rounded-xl font-bold text-xs bg-[#181B26] text-white hover:bg-slate-800 transition-all cursor-pointer shadow-xs shrink-0 border border-slate-800"
+              title={t.pickDateTooltip}
+            >
+              <CalendarIcon size={18} className="text-[#C4F82A]" />
+            </button>
           </div>
         </div>
 
@@ -1587,6 +1642,119 @@ export default function Dashboard({
         </div>
 
       </main>
+
+      {/* BEAUTIFUL MONTH CALENDAR PICKER MODAL */}
+      <AnimatePresence>
+        {showCalendarModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-black text-lg text-slate-900">{t.calendarModalTitle}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{t.calendarSubtext}</p>
+                </div>
+                <button onClick={() => setShowCalendarModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Month Navigation Controls */}
+              <div className="flex items-center justify-between bg-slate-50 rounded-2xl p-3 border border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={handlePrevCalMonth}
+                  className="p-1.5 rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer transition-all"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="font-black text-sm text-slate-900 capitalize">{calMonthTitle}</span>
+                <button
+                  type="button"
+                  onClick={handleNextCalMonth}
+                  className="p-1.5 rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 cursor-pointer transition-all"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              {/* 7-Day Day Names Header */}
+              <div className="grid grid-cols-7 gap-1 text-center font-black text-xs text-slate-400 uppercase">
+                {lang === "EN"
+                  ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                  : ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]}
+              </div>
+
+              {/* Month Grid Days */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {/* Empty slots before day 1 */}
+                {Array.from({ length: firstDayOfCalMonth }).map((_, idx) => (
+                  <div key={`empty-${idx}`} className="h-10" />
+                ))}
+
+                {/* Days of the month */}
+                {Array.from({ length: daysInCalMonth }).map((_, dayIdx) => {
+                  const dayNum = dayIdx + 1;
+                  const monthStr = String(calMonth + 1).padStart(2, "0");
+                  const dayStr = String(dayNum).padStart(2, "0");
+                  const dateStr = `${calYear}-${monthStr}-${dayStr}`;
+
+                  const isSelected = dateStr === selectedDate;
+                  const isToday = dateStr === todayDateStr;
+                  const isDisabled = dateStr < minDateStr || dateStr > todayDateStr;
+
+                  return (
+                    <button
+                      key={dateStr}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        setSelectedDate(dateStr);
+                        setShowCalendarModal(false);
+                      }}
+                      className={`h-10 rounded-xl font-extrabold text-xs transition-all flex flex-col items-center justify-center cursor-pointer border ${
+                        isSelected
+                          ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] shadow-md scale-105 font-black"
+                          : isToday
+                          ? "bg-[#C4F82A]/20 text-slate-900 border-[#99C700] font-black"
+                          : isDisabled
+                          ? "bg-slate-50 text-slate-300 border-transparent cursor-not-allowed"
+                          : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-200/70"
+                      }`}
+                    >
+                      <span>{dayNum}</span>
+                      {isToday && <span className="w-1 h-1 rounded-full bg-slate-900 mt-0.5"></span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Modal Footer Shortcuts */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setSelectedDate(todayDateStr);
+                    setShowCalendarModal(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#C4F82A] text-black hover:bg-[#b2e61a] cursor-pointer"
+                >
+                  {t.todayBtn}
+                </button>
+                <button
+                  onClick={() => setShowCalendarModal(false)}
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  {t.closeModal}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* AUTO REMINDER MODAL */}
       <AnimatePresence>
