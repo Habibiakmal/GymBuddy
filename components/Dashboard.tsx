@@ -219,19 +219,20 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   return result;
 };
 
-// Translations Dictionary
+// Comprehensive 100% Consistent Translations Dictionary
 const translations = {
   ID: {
     memberDashboard: "MEMBER DASHBOARD",
-    welcomeBack: "Welcome back",
+    welcomeBack: "Selamat datang kembali",
+    welcome: "Halo",
     landingPage: "Halaman Utama",
     removeAccount: "Hapus Akun",
     logout: "Keluar",
-    currentStreak: "Current Streak",
-    longestStreak: "Longest Streak",
+    currentStreak: "Streak Saat Ini",
+    longestStreak: "Rekor Streak Terpanjang",
     activeDaysConsecutive: "hari berturut-turut",
     recordStreakDays: "hari rekor terpanjang",
-    targetGoals: "Target Goals",
+    targetGoals: "Target Goals Utama",
     mainGoalTitle: "Goal Utama",
     currentWeightLabel: "BB Saat Ini",
     targetWeightLabel: "Target BB",
@@ -241,40 +242,45 @@ const translations = {
     proteinLabel: "Protein",
     carbsLabel: "Karbohidrat",
     fatLabel: "Lemak",
-    howDoYouFeel: "How do you feel today?",
+    overallGoalProgress: "Progress Goal Keseluruhan",
+    howDoYouFeel: "Bagaimana perasaanmu hari ini?",
     feelSubtext: "Ini bukan diagnosis medis. Hanya digunakan sebagai daily wellbeing dan readiness check.",
-    feelBad: "Feeling Bad",
-    sick: "Sick",
-    notGreat: "Not Great",
-    okay: "Okay",
-    good: "Good",
-    great: "Great",
+    feelBad: "Sangat Buruk",
+    sick: "Sakit",
+    notGreat: "Kurang Baik",
+    okay: "Biasa Saja",
+    good: "Baik",
+    great: "Sangat Baik",
     weeklyWorkoutSchedule: "Jadwal Workout Mingguan",
-    todaysFocus: "Fokus Hari Ini",
+    todaysFocus: "Fokus Latihan Hari Ini",
     viewFullWeeklySchedule: "Lihat Seluruh Jadwal (Senin - Minggu)",
     viewTodayOnly: "Kembali ke Jadwal Hari Ini",
+    todaysFocusProgress: "Progress Latihan Hari Ini",
     setsCompleted: "set selesai",
     setUnit: "Set",
     statusNotStarted: "Belum Mulai",
     statusInProgress: "Sedang Berlangsung",
     statusCompleted: "Selesai",
     clickForDetails: "Klik untuk detail & checklist set",
-    foodMeals: "Food Meals",
+    exerciseCount: "Gerakan",
+    foodMeals: "Makanan (Food Meals)",
     addFoodBtn: "Tambah Makanan",
     noMealsLogged: "Belum ada makanan padat tercatat hari ini.",
-    waterHydration: "Water / Hydration",
+    waterHydration: "Air & Hidrasi (Water / Hydration)",
     addDrinkBtn: "Tambah Minuman",
     hydrationTarget: "Target Hidrasi Harian",
     quickAdd250: "+250 ml Air",
     quickAdd500: "+500 ml Air",
     noDrinksLogged: "Belum ada minuman tercatat hari ini.",
     coachRecommendation: "Rekomendasi Coach",
+    coachAdviceTitle: "Saran Coach",
     autoReminderTitle: "Pengingat Latihan Harian",
     autoReminderPrompt: "Ayo latihan hari ini! 💪 Mau diingetin jam berapa buat gym atau makan?",
+    selectReminderTime: "Pilih Jam Pengingat:",
     setReminderBtn: "Atur Pengingat",
     remindLater: "Nanti Saja",
     reminderSetMsg: "Pengingat telah diatur untuk pukul",
-    workoutDetailTitle: "Detail Workout & Set Completion",
+    workoutDetailTitle: "Detail Workout & Completion Set",
     targetRepsLabel: "Target Repetisi / Durasi",
     setChecklistLabel: "Checklist Completion Per Set",
     closeModal: "Tutup",
@@ -285,14 +291,19 @@ const translations = {
     proteinInputLabel: "Protein (g)",
     carbsInputLabel: "Karbo (g)",
     fatInputLabel: "Lemak (g)",
+    comboHelpText: "*Input combo seperti 'Nasi Ayam McD + Kopi' akan otomatis dipisah ke Makanan & Hidrasi.",
     saveEntry: "Simpan Log",
     updateWeightTitle: "Update Berat Badan",
     weightInputLabel: "Berat Badan Baru (kg)",
-    saveWeight: "Simpan BB Baru"
+    saveWeight: "Simpan BB Baru",
+    delete: "Hapus",
+    setDone: "Selesai",
+    setNotDone: "Belum Selesai"
   },
   EN: {
     memberDashboard: "MEMBER DASHBOARD",
     welcomeBack: "Welcome back",
+    welcome: "Hello",
     landingPage: "Landing Page",
     removeAccount: "Remove Account",
     logout: "Log Out",
@@ -310,6 +321,7 @@ const translations = {
     proteinLabel: "Protein",
     carbsLabel: "Carbohydrates",
     fatLabel: "Fat",
+    overallGoalProgress: "Overall Goal Progress",
     howDoYouFeel: "How do you feel today?",
     feelSubtext: "This is not a medical diagnosis. Used only for daily wellbeing and readiness check.",
     feelBad: "Feeling Bad",
@@ -322,12 +334,14 @@ const translations = {
     todaysFocus: "Today's Focus",
     viewFullWeeklySchedule: "View Full Schedule (Mon - Sun)",
     viewTodayOnly: "Back to Today's Workout",
+    todaysFocusProgress: "Today's Workout Progress",
     setsCompleted: "sets completed",
     setUnit: "Set",
     statusNotStarted: "Not Started",
     statusInProgress: "In Progress",
     statusCompleted: "Completed",
     clickForDetails: "Click for details & set checklist",
+    exerciseCount: "Exercises",
     foodMeals: "Food Meals",
     addFoodBtn: "Add Food",
     noMealsLogged: "No solid meals logged for today.",
@@ -338,8 +352,10 @@ const translations = {
     quickAdd500: "+500 ml Water",
     noDrinksLogged: "No drinks logged for today.",
     coachRecommendation: "Coach Recommendation",
+    coachAdviceTitle: "Coach Advice",
     autoReminderTitle: "Daily Workout Reminder",
     autoReminderPrompt: "Let's train today! 💪 What time would you like a reminder for gym or meals?",
+    selectReminderTime: "Select Reminder Time:",
     setReminderBtn: "Set Reminder",
     remindLater: "Later",
     reminderSetMsg: "Reminder scheduled for",
@@ -354,10 +370,14 @@ const translations = {
     proteinInputLabel: "Protein (g)",
     carbsInputLabel: "Carbs (g)",
     fatInputLabel: "Fat (g)",
+    comboHelpText: "*Combo items like 'Chicken Rice + Coffee' will automatically split into Food Meals & Water Hydration.",
     saveEntry: "Save Log",
     updateWeightTitle: "Update Body Weight",
     weightInputLabel: "New Weight (kg)",
-    saveWeight: "Save New Weight"
+    saveWeight: "Save New Weight",
+    delete: "Delete",
+    setDone: "Completed",
+    setNotDone: "Not Completed"
   }
 };
 
@@ -701,7 +721,6 @@ export default function Dashboard({
       } catch (e) {}
     }
 
-    // Auto Sanitize & Split any combo items (e.g. "Nasi Ayam McD + Kopi")
     const sanitized = sanitizeAndSplitComboLogs(rawLogs);
     setAllLogs(sanitized);
 
@@ -935,7 +954,7 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* FLOATING DARK CHARCOAL SIDEBAR PANEL (MATCHING REFERENCE IMAGE ROUNDED CORNERS) */}
+      {/* FLOATING DARK CHARCOAL SIDEBAR PANEL */}
       <aside className="w-full md:w-72 bg-[#181B26] text-white p-6 flex flex-col justify-between shrink-0 rounded-3xl border border-slate-800 shadow-xl md:min-h-[92vh]">
         <div className="space-y-6">
           {/* GymBuddy Logo & App Title */}
@@ -963,7 +982,7 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* Navigation Pill List (Matching Reference Image) */}
+          {/* Navigation Pill List */}
           <nav className="space-y-2">
             <button className="w-full px-4 py-3 rounded-2xl bg-[#C4F82A] text-black font-black text-sm flex items-center justify-between transition-all cursor-pointer shadow-md">
               <div className="flex items-center gap-3">
@@ -996,7 +1015,7 @@ export default function Dashboard({
         {/* Sidebar Bottom CTA & Account Actions */}
         <div className="pt-6 space-y-3">
           <div className="bg-gradient-to-br from-[#212534] to-[#181B26] border border-slate-800 rounded-2xl p-4 space-y-2 text-center">
-            <span className="text-xs font-bold text-slate-400 uppercase">Target Goal</span>
+            <span className="text-xs font-bold text-slate-400 uppercase">{t.mainGoalTitle}</span>
             <p className="text-sm font-extrabold text-white">{goalTitle}</p>
             <div className="pt-1 flex justify-center">
               <button
@@ -1028,14 +1047,14 @@ export default function Dashboard({
         </div>
       </aside>
 
-      {/* RIGHT MAIN CONTENT CONTAINER (WHITE ROUNDED PANEL - MATCHING REFERENCE IMAGE) */}
+      {/* RIGHT MAIN CONTENT CONTAINER */}
       <main className="flex-1 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm">
         
         {/* STEP 1: TOP GREETING HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {t.welcomeBack} {activeUser.name || "Member"} 👋
+              {t.welcomeBack}, {activeUser.name || "Member"} 👋
             </h1>
             <p className="text-sm text-slate-500 font-semibold mt-0.5">
               {selectedDayName} • {todayScheduleObj.focus}
@@ -1283,7 +1302,7 @@ export default function Dashboard({
                         </span>
                         <h4 className="font-extrabold text-sm">{daySch.focus}</h4>
                       </div>
-                      <span className="text-xs font-medium opacity-75">{daySch.exercises.length} Gerakan</span>
+                      <span className="text-xs font-medium opacity-75">{daySch.exercises.length} {t.exerciseCount}</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
@@ -1301,8 +1320,8 @@ export default function Dashboard({
           )}
         </div>
 
-        {/* STEP 7: FOOD MEALS */}
-        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
+        {/* STEP 7: FOOD MEALS WITH NUTRITION PROGRESS BARS */}
+        <div className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Flame size={18} className="text-amber-600" />
@@ -1317,22 +1336,82 @@ export default function Dashboard({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white border border-slate-200/60 rounded-xl p-3 text-center">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">{t.caloriesLabel}</span>
-              <p className="text-sm font-black text-slate-900">{totalCaloriesConsumed} / {targetCalories} kcal</p>
+          {/* VISUAL MACRO PROGRESS BARS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Calories Bar */}
+            <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-slate-700">{t.caloriesLabel}</span>
+                <span className="font-black text-amber-600">
+                  {Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-slate-900">
+                {totalCaloriesConsumed} <span className="text-xs font-bold text-slate-500">/ {targetCalories} kcal</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                <div
+                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%` }}
+                ></div>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">{t.proteinLabel}</span>
-              <p className="text-sm font-black text-slate-900">{totalProteinConsumed} / {targetProtein}g</p>
+
+            {/* Protein Bar */}
+            <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-slate-700">{t.proteinLabel}</span>
+                <span className="font-black text-indigo-600">
+                  {Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-slate-900">
+                {totalProteinConsumed} <span className="text-xs font-bold text-slate-500">/ {targetProtein} g</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                <div
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%` }}
+                ></div>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">{t.carbsLabel}</span>
-              <p className="text-sm font-black text-slate-900">{totalCarbsConsumed} / {targetCarbs}g</p>
+
+            {/* Carbs Bar */}
+            <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-slate-700">{t.carbsLabel}</span>
+                <span className="font-black text-emerald-600">
+                  {Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-slate-900">
+                {totalCarbsConsumed} <span className="text-xs font-bold text-slate-500">/ {targetCarbs} g</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                <div
+                  className="h-full bg-emerald-600 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%` }}
+                ></div>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">{t.fatLabel}</span>
-              <p className="text-sm font-black text-slate-900">{totalFatConsumed} / {targetFat}g</p>
+
+            {/* Fat Bar */}
+            <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-slate-700">{t.fatLabel}</span>
+                <span className="font-black text-rose-600">
+                  {Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-slate-900">
+                {totalFatConsumed} <span className="text-xs font-bold text-slate-500">/ {targetFat} g</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%` }}
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -1353,7 +1432,7 @@ export default function Dashboard({
                   <button
                     onClick={() => handleDeleteLogItem(item.id)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                    title="Hapus"
+                    title={t.delete}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -1423,7 +1502,7 @@ export default function Dashboard({
                   <button
                     onClick={() => handleDeleteLogItem(item.id)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                    title="Hapus"
+                    title={t.delete}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -1445,7 +1524,7 @@ export default function Dashboard({
               {isMaxPersona ? "M" : "N"}
             </div>
             <div className="space-y-0.5">
-              <h4 className="font-extrabold text-sm text-slate-900">{coachName} Advice</h4>
+              <h4 className="font-extrabold text-sm text-slate-900">{coachName} {t.coachAdviceTitle}</h4>
               <p className="text-sm text-slate-700 font-medium leading-relaxed">{getCoachFeelingRecommendation()}</p>
             </div>
           </div>
@@ -1478,7 +1557,7 @@ export default function Dashboard({
               </p>
 
               <div className="space-y-2">
-                <label className="text-xs font-extrabold text-slate-600 uppercase">Pilih Jam Pengingat:</label>
+                <label className="text-xs font-extrabold text-slate-600 uppercase">{t.selectReminderTime}</label>
                 <div className="grid grid-cols-4 gap-2">
                   {["16:00", "17:00", "19:00", "20:00"].map((timeStr) => (
                     <button
@@ -1568,7 +1647,7 @@ export default function Dashboard({
                         </div>
                         <span>Set {idx + 1}</span>
                       </div>
-                      <span className="text-xs font-bold">{isDone ? "Selesai" : "Belum Selesai"}</span>
+                      <span className="text-xs font-bold">{isDone ? t.setDone : t.setNotDone}</span>
                     </div>
                   ))}
                 </div>
@@ -1621,7 +1700,7 @@ export default function Dashboard({
                     className="w-full mt-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
-                    *Input combo seperti <span className="font-bold text-slate-900">"Nasi Ayam McD + Kopi"</span> akan otomatis dipisah ke Food Meals & Water Hydration.
+                    {t.comboHelpText}
                   </p>
                 </div>
 
