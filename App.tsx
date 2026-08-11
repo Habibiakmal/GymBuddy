@@ -389,7 +389,7 @@ export default function App() {
     );
   }
   return (
-    <div className="min-h-screen bg-black font-sans text-white selection:bg-[#D4FF00] selection:text-black">
+    <div className="min-h-screen bg-black md:bg-white font-sans text-neutral-900 selection:bg-[#D4FF00] selection:text-black">
       <div className="pb-12">
         {/* HERO SECTION */}
         <div className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 lg:pt-8">
