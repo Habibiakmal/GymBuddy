@@ -283,6 +283,7 @@ interface MealLog {
   fat: number;
   fiber?: number;
   sugar?: number;
+  isHydration?: boolean;
   timestamp: string;
   mealType?: string;
 }
@@ -1168,7 +1169,14 @@ function formatNutritionCard(
   userData: ReturnType<typeof calculateUserData>,
   dailyTotals: ReturnType<typeof getDailyTotals>
 ): string {
-  const foodName = parsedAi.foodName || "Analisis Makanan";
+  const rawFoodName = (parsedAi.foodName || "Analisis Makanan").trim();
+  const portionStr = (
+    parsedAi.portion ||
+    parsedAi.portionWeight ||
+    (Array.isArray(parsedAi.portionEstimates) && parsedAi.portionEstimates[0]) ||
+    (parsedAi.portionDetail ? String(parsedAi.portionDetail) : "1 porsi")
+  ).trim();
+
   const calories = Number(parsedAi.calories) || 0;
   const protein = Number(parsedAi.protein) || 0;
   const carbs = Number(parsedAi.carbs) || 0;
@@ -1176,89 +1184,101 @@ function formatNutritionCard(
   const fiber = Number(parsedAi.fiber) || 0;
   const sugar = Number(parsedAi.sugar) || 0;
 
-  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi.satietyScore) || 5));
-  const healthScore = Math.min(10, Math.max(1, Number(parsedAi.healthScore) || 8));
-  const satietyExplanation = parsedAi.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini.";
-
-  const satietyBar = "📙".repeat(satietyScore) + "⬛".repeat(10 - satietyScore);
-
-  const portions = Array.isArray(parsedAi.portionEstimates) && parsedAi.portionEstimates.length > 0
-    ? parsedAi.portionEstimates.map((p: string) => `• ${p}`).join("\n")
-    : "• Porsi standar (1 sajian)";
-
-  const insights = Array.isArray(parsedAi.keyInsights) && parsedAi.keyInsights.length > 0
-    ? parsedAi.keyInsights.map((i: string) => `• 🟢 ${i}`).join("\n")
-    : "• 🟢 Nutrisi seimbang sesuai program harianmu";
-
-  const remainingCalories = Math.max(0, userData.targetCalories - dailyTotals.calories);
-
-  const calPercent = userData.targetCalories > 0 ? Math.min(100, Math.round((dailyTotals.calories / userData.targetCalories) * 100)) : 0;
-  const protPercent = userData.proteinGrams > 0 ? Math.min(100, Math.round((dailyTotals.protein / userData.proteinGrams) * 100)) : 0;
-  const carbPercent = userData.carbGrams > 0 ? Math.min(100, Math.round((dailyTotals.carbs / userData.carbGrams) * 100)) : 0;
-  const fatPercent = userData.fatGrams > 0 ? Math.min(100, Math.round((dailyTotals.fat / userData.fatGrams) * 100)) : 0;
-  const fiberPercent = userData.fiberGrams > 0 ? Math.min(100, Math.round((dailyTotals.fiber / userData.fiberGrams) * 100)) : 0;
-
-  const calBar = makeProgressBar(dailyTotals.calories, userData.targetCalories);
-  const protBar = makeProgressBar(dailyTotals.protein, userData.proteinGrams);
-  const carbBar = makeProgressBar(dailyTotals.carbs, userData.carbGrams);
-  const fatBar = makeProgressBar(dailyTotals.fat, userData.fatGrams);
-  const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
-
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(":", ".");
-  const dateStr = now.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-  const dateTimeFormatted = `${dateStr} ${timeStr}`;
-
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-  const coachComment = parsedAi.coachComment || (userData.persona === "max" ? "Bagus! Tetap disiplin dengan target kalori lo!" : "Hebat banget! Tetap jaga pola makannya ya! ✨");
-
-  const confidenceNote = parsedAi.confidenceText || `Estimasi berdasarkan hasil deteksi AI (Confidence: 90%)`;
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
   const fatKcal = fat * 9;
+  const totalMacroKcal = protKcal + carbKcal + fatKcal || calories || 1;
 
-  return `📝 *${foodName} (${inputSource})*
-🕒 ${dateTimeFormatted}
+  const protPercent = Math.round((protKcal / totalMacroKcal) * 100);
+  const carbPercent = Math.round((carbKcal / totalMacroKcal) * 100);
+  const fatPercent = Math.round((fatKcal / totalMacroKcal) * 100);
 
-🤖 *${confidenceNote}*
+  const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi.confidenceLevel) || (inputSource.toLowerCase().includes("foto") ? 88 : 92)));
 
-🔥 *Kalori*: ${calories} kcal *(Validasi: ${protKcal} + ${carbKcal} + ${fatKcal} kcal)*
-🍖 *Protein*: ${protein}g (${protKcal} kcal)
-🍚 *Karbo*: ${carbs}g (${carbKcal} kcal)
-🥓 *Lemak*: ${fat}g (${fatKcal} kcal)
-🥬 *Serat*: ${fiber}g
-🍯 *Gula*: ${sugar}g
+  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi.satietyScore) || 5));
+  const healthScore = Math.min(10, Math.max(1, Number(parsedAi.healthScore) || 8));
 
-🥣 *Satiety Score*: ${satietyScore}/10
-${satietyBar}
-_${satietyExplanation}_
+  let satietyExplanation = parsedAi.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.";
+  satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
 
-💯 *Health Score*: ${healthScore}/10
+  let portionDetailText = "";
+  if (parsedAi.portionDetail) {
+    portionDetailText = String(parsedAi.portionDetail).trim();
+  } else if (Array.isArray(parsedAi.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates.join("\n");
+  } else {
+    portionDetailText = portionStr;
+  }
 
-🍽️ *Estimasi Porsi Standar Indonesia*:
-${portions}
+  let insightsFormatted = "";
+  if (Array.isArray(parsedAi.keyInsights) && parsedAi.keyInsights.length > 0) {
+    insightsFormatted = parsedAi.keyInsights.map((i: string) => {
+      const cleanInsight = i.trim();
+      if (cleanInsight.startsWith("🟢") || cleanInsight.startsWith("🟡") || cleanInsight.startsWith("🔴")) {
+        return cleanInsight;
+      }
+      return `🟢 ${cleanInsight}`;
+    }).join("\n");
+  } else {
+    insightsFormatted = `🟢 Asupan nutrisi seimbang untuk mendukung aktivitas harian\n🟢 Kandungan makro terdistribusi dengan baik`;
+  }
 
-💡 *Key Insights*:
-${insights}
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(":", ".");
 
-✏️ *Koreksi Porsi*: Ketik *"koreksi porsi [detail/porsi]"* jika jumlah atau porsi kurang pas!
+  const isMia = userData.persona === "mia" || userData.persona === "nikita";
+  const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
+  const coachComment = (parsedAi.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨" : "Mantap bro! Jaga terus disiplin makro lo! 💪")).replace(/^["“]|["”]$/g, "").trim();
 
------------------------------
-📊 *REKAP NUTRISI HARI INI*
-🔥 Kalori: ${dailyTotals.calories}/${userData.targetCalories}kcal (${calPercent}%)
-${calBar}
-🍖 Protein: ${dailyTotals.protein}/${userData.proteinGrams}g (${protPercent}%)
-${protBar}
-🍚 Karbo: ${dailyTotals.carbs}/${userData.carbGrams}g (${carbPercent}%)
-${carbBar}
-🥓 Lemak: ${dailyTotals.fat}/${userData.fatGrams}g (${fatPercent}%)
-${fatBar}
-🥬 Serat: ${dailyTotals.fiber}/${userData.fiberGrams}g (${fiberPercent}%)
-${fiberBar}
-⚡ *Sisa Kalori*: ${remainingCalories} kcal
------------------------------
+  const foodTitleWithEmoji = rawFoodName.startsWith("🥜") ? rawFoodName : `🥜 ${rawFoodName}`;
 
-💬 *${coachName}*:
+  return `${foodTitleWithEmoji} — ${portionStr}
+
+🕒 ${dateStr}, ${timeStr}
+🤖 AI Confidence: ${confidenceScore}%
+
+━━━━━━━━━━━━━━
+📊 REKAP NUTRISI
+━━━━━━━━━━━━━━
+
+🔥 ${calories} kcal
+
+🍖 Protein: ${protein}g — ${protPercent}%
+🍚 Karbo: ${carbs}g — ${carbPercent}%
+🥓 Lemak: ${fat}g — ${fatPercent}%
+🥬 Serat: ${fiber}g
+🍯 Gula: ${sugar}g
+
+Kalori dari makro:
+Protein ${protKcal} kcal • Karbo ${carbKcal} kcal • Lemak ${fatKcal} kcal
+
+━━━━━━━━━━━━━━
+⭐ SCORE
+━━━━━━━━━━━━━━
+
+🥣 Satiety: ${satietyScore}/10
+${satietyExplanation}
+
+💯 Health: ${healthScore}/10
+
+━━━━━━━━━━━━━━
+🍽️ PORSI
+━━━━━━━━━━━━━━
+
+${portionDetailText}
+
+💡 KEY INSIGHTS
+
+${insightsFormatted}
+
+✏️ Koreksi Porsi
+Ketik: koreksi porsi [detail/porsi]
+
+━━━━━━━━━━━━━━
+🤖 ${coachHeader}
+━━━━━━━━━━━━━━
+
 "${coachComment}"`;
 }
 
@@ -3950,8 +3970,11 @@ FORMAT 1 - JIKA USER MELAPORKAN/MENGINPUT MAKANAN ATAU MINUMAN (BAHASA ALAMIAH /
   "fiber": 3,
   "sugar": 4,
   "confidenceLevel": 90,
+  "satietyScore": 8,
+  "satietyExplanation": "Penjelasan singkat 1-2 kalimat mengenai tingkat rasa kenyang berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.",
+  "healthScore": 8,
   "portionEstimates": ["Nasi Putih (150g)", "Ayam Geprek Dada (120g)", "Sambal & Lalapan"],
-  "keyInsights": ["Tinggi protein mendukung pembentukan otot", "Perhatikan minyak dari sambal/gorengan"],
+  "keyInsights": ["🟢 Tinggi protein mendukung pembentukan otot", "🟡 Perhatikan minyak dari sambal/gorengan"],
   "coachComment": "Saran dari coach singkat & membangun"
 }
 
