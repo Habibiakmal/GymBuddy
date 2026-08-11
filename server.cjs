@@ -1007,7 +1007,7 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   return `${foodTitleWithEmoji} \u2014 ${portionStr}
 
 \u{1F552} ${dateStr}, ${timeStr}
-\u{1F916} AI Confidence: ${confidenceScore}%
+\u{1F916} GymBuddy AI Analysis : ${confidenceScore}%
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F4CA} REKAP NUTRISI

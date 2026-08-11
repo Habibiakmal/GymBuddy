@@ -1236,7 +1236,7 @@ function formatNutritionCard(
   return `${foodTitleWithEmoji} — ${portionStr}
 
 🕒 ${dateStr}, ${timeStr}
-🤖 AI Confidence: ${confidenceScore}%
+🤖 GymBuddy AI Analysis : ${confidenceScore}%
 
 ━━━━━━━━━━━━━━
 📊 REKAP NUTRISI
