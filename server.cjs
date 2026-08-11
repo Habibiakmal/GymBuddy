@@ -662,6 +662,38 @@ function getDailyTotals(rawPhone, targetDateStr) {
 function isLiquidName(name) {
   if (!name) return false;
   const lower = name.toLowerCase();
+  const solidExceptions = [
+    "pancong",
+    "roti",
+    "martabak",
+    "cake",
+    "kue",
+    "pancake",
+    "waffle",
+    "biskuit",
+    "sereal",
+    "cereal",
+    "ice cream",
+    "es krim",
+    "keju",
+    "pudding",
+    "puding",
+    "bubur",
+    "bolu",
+    "donat",
+    "pie",
+    "tart",
+    "saus",
+    "sauce",
+    "selai",
+    "topping",
+    "crepe",
+    "churros",
+    "pisang"
+  ];
+  if (solidExceptions.some((se) => lower.includes(se))) {
+    return false;
+  }
   const liquidKeywords = [
     "air",
     "water",
@@ -1659,16 +1691,34 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     }
     return res.status(404).json({ success: false, error: "User profile not found" });
   });
-  app.post("/api/user/reset", (req, res) => {
+  app.all(["/api/user/reset", "/api/admin/reset-db"], async (req, res) => {
     dbData = {
       users: {},
       dailyLogs: {},
       weeklyProgress: {},
-      waterLogs: {}
+      waterLogs: {},
+      infographics: {},
+      generatedImages: {}
     };
     saveDb();
-    console.log("All user database data reset.");
-    return res.json({ success: true, message: "Semua data database berhasil dihapus." });
+    if (MONGODB_URI) {
+      try {
+        const db = await getMongoDb();
+        if (db) {
+          await db.collection("appdata").deleteMany({});
+          await db.collection("appdata").replaceOne(
+            { _id: "main" },
+            { _id: "main", users: {}, dailyLogs: {}, weeklyProgress: {}, waterLogs: {}, updatedAt: /* @__PURE__ */ new Date() },
+            { upsert: true }
+          );
+          console.log("[MongoDB] Collection reset successfully \u2705");
+        }
+      } catch (err) {
+        console.error("[MongoDB] Reset error:", err?.message || err);
+      }
+    }
+    console.log("All user database data reset successfully.");
+    return res.json({ success: true, message: "Semua data database (lokal & MongoDB) berhasil dihapus 100%." });
   });
   app.post("/api/user/:phone/progress", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);

@@ -870,6 +870,18 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
 function isLiquidName(name: string): boolean {
   if (!name) return false;
   const lower = name.toLowerCase();
+
+  const solidExceptions = [
+    "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
+    "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
+    "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
+    "selai", "topping", "crepe", "churros", "pisang"
+  ];
+
+  if (solidExceptions.some((se) => lower.includes(se))) {
+    return false;
+  }
+
   const liquidKeywords = [
     "air", "water", "mineral", "kopi", "coffee", "teh", "tea",
     "susu", "milk", "jus", "juice", "shake", "drink", "minum",
@@ -1967,17 +1979,35 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     return res.status(404).json({ success: false, error: "User profile not found" });
   });
 
-  // Reset all database data endpoint
-  app.post("/api/user/reset", (req, res) => {
+  // Reset all database data endpoint (Local & MongoDB Atlas)
+  app.all(["/api/user/reset", "/api/admin/reset-db"], async (req, res) => {
     dbData = {
       users: {},
       dailyLogs: {},
       weeklyProgress: {},
-      waterLogs: {}
+      waterLogs: {},
+      infographics: {},
+      generatedImages: {}
     };
     saveDb();
-    console.log("All user database data reset.");
-    return res.json({ success: true, message: "Semua data database berhasil dihapus." });
+    if (MONGODB_URI) {
+      try {
+        const db = await getMongoDb();
+        if (db) {
+          await db.collection("appdata").deleteMany({});
+          await db.collection("appdata").replaceOne(
+            { _id: "main" as any },
+            { _id: "main" as any, users: {}, dailyLogs: {}, weeklyProgress: {}, waterLogs: {}, updatedAt: new Date() },
+            { upsert: true }
+          );
+          console.log("[MongoDB] Collection reset successfully ✅");
+        }
+      } catch (err: any) {
+        console.error("[MongoDB] Reset error:", err?.message || err);
+      }
+    }
+    console.log("All user database data reset successfully.");
+    return res.json({ success: true, message: "Semua data database (lokal & MongoDB) berhasil dihapus 100%." });
   });
 
   // Weekly Progress Endpoint for API / Dashboard
