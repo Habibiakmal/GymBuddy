@@ -1933,7 +1933,7 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
             }
           }
           const lowerText = userText.toLowerCase();
-          const isWelcomeMessage = lowerText.includes("gymbuddy ai") || lowerText.includes("hello gymbuddy") || lowerText.includes("halo gymbuddy") || lowerText.includes("analysis & daily targets") || lowerText.includes("target harian saya") || lowerText.includes("tolong kirimkan") || lowerText.includes("start");
+          const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) || (lowerText.includes("nama saya") && lowerText.includes("target saya"));
           if (!userProfile && !isWelcomeMessage) {
             await sendMetaWhatsappMessage(
               from,
@@ -2228,7 +2228,7 @@ Keluarkan output JSON valid:
         }
       }
       const lowerText = userText.toLowerCase();
-      const isWelcomeMessage = lowerText.includes("gymbuddy ai") || lowerText.includes("hello gymbuddy") || lowerText.includes("halo gymbuddy") || lowerText.includes("analysis & daily targets") || lowerText.includes("target harian saya") || lowerText.includes("tolong kirimkan") || lowerText.includes("start");
+      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) || (lowerText.includes("nama saya") && lowerText.includes("target saya"));
       if (!userProfile && !isWelcomeMessage) {
         const twiml2 = new import_twilio.default.twiml.MessagingResponse();
         twiml2.message(
@@ -3300,7 +3300,7 @@ ${mistakes}
       const from = normalizePhone(rawFrom.replace("whatsapp:", ""));
       let userProfile = getUserProfile(from);
       const lowerText = userText.toLowerCase();
-      const isWelcomeMessage = lowerText.includes("gymbuddy") || lowerText.includes("hello") || lowerText.includes("halo") || lowerText.includes("start") || lowerText.includes("mulai") || lowerText.includes("join");
+      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) || (lowerText.includes("nama saya") && lowerText.includes("target saya"));
       if (!userProfile) {
         const latestOB = dbData.users["latest_onboarding"];
         if (latestOB && latestOB.weight) {

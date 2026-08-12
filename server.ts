@@ -2244,13 +2244,8 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
 
           const lowerText = userText.toLowerCase();
 
-          const isWelcomeMessage = lowerText.includes("gymbuddy ai") ||
-                                   lowerText.includes("hello gymbuddy") ||
-                                   lowerText.includes("halo gymbuddy") ||
-                                   lowerText.includes("analysis & daily targets") ||
-                                   lowerText.includes("target harian saya") ||
-                                   lowerText.includes("tolong kirimkan") || 
-                                   lowerText.includes("start");
+          const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+                                   (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
           // Strict Onboarding Requirement: If profile is deleted / unregistered and message is not onboarding welcome
           if (!userProfile && !isWelcomeMessage) {
@@ -2596,13 +2591,8 @@ Keluarkan output JSON valid:
 
       const lowerText = userText.toLowerCase();
 
-      const isWelcomeMessage = lowerText.includes("gymbuddy ai") ||
-                               lowerText.includes("hello gymbuddy") ||
-                               lowerText.includes("halo gymbuddy") ||
-                               lowerText.includes("analysis & daily targets") ||
-                               lowerText.includes("target harian saya") ||
-                               lowerText.includes("tolong kirimkan") || 
-                               lowerText.includes("start");
+      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+                               (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
       // Strict Onboarding Requirement: If profile is deleted / unregistered and message is not onboarding welcome
       if (!userProfile && !isWelcomeMessage) {
@@ -3814,10 +3804,8 @@ ${mistakes}
       let userProfile = getUserProfile(from);
       const lowerText = userText.toLowerCase();
 
-      const isWelcomeMessage = lowerText.includes("gymbuddy") ||
-        lowerText.includes("hello") || lowerText.includes("halo") ||
-        lowerText.includes("start") || lowerText.includes("mulai") ||
-        lowerText.includes("join");
+      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+                               (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
       // Check if user has onboarding data in latest_onboarding
       if (!userProfile) {
