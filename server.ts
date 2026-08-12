@@ -585,48 +585,82 @@ function getUserProfile(rawPhone: string) {
   return null;
 }
 
-function getOrCreateUserProfile(rawPhone: string) {
+function getOrCreateUserProfile(rawPhone: string, userText?: string) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
-  let user = getUserProfile(phone);
-  if (!user) {
-    const latestOnboarding = dbData.users["latest_onboarding"];
 
-    if (latestOnboarding && latestOnboarding.weight) {
+  // 1. Exact match by normalized phone
+  let user = getUserProfile(phone);
+
+  // 2. Check international vs local variations (08xxx <-> 628xxx)
+  if (!user && phone.startsWith('0')) {
+    user = getUserProfile('62' + phone.substring(1));
+  } else if (!user && phone.startsWith('62')) {
+    user = getUserProfile('0' + phone.substring(2));
+  }
+
+  // 3. Extract name from incoming text if present (e.g. "Saya bibi")
+  let extractedName = "";
+  if (userText) {
+    const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
+    if (nameMatch && nameMatch[1].trim()) {
+      extractedName = nameMatch[1].trim();
+    }
+  }
+
+  // 4. Try matching existing profile in dbData.users by extracted name
+  if (!user && extractedName) {
+    const nameLower = extractedName.toLowerCase();
+    const matchedByName = Object.values(dbData.users).find((u: any) =>
+      u && u.name && String(u.name).toLowerCase() === nameLower && u.weight
+    );
+    if (matchedByName) {
       user = saveUserProfile(phone, {
-        ...latestOnboarding,
+        ...matchedByName,
         phone,
         normalizedPhone: phone
       });
+      saveDb();
       return user;
     }
-
-    // Search all phone-keyed profiles for a match
-    const validUsers = Object.entries(dbData.users)
-      .filter(([key]) => key !== "latest_onboarding")
-      .map(([, u]) => u as any);
-
-    const matchedByPhone = validUsers.find((u: any) => normalizePhone(u.phone || "") === phone);
-    if (matchedByPhone) {
-      return matchedByPhone;
-    }
-
-    // No match found - create placeholder but inherit from latestOnboarding if present
-    user = saveUserProfile(phone, {
-      name: latestOnboarding?.name ? latestOnboarding.name : `Member ${phone.slice(-4)}`,
-      phone,
-      goal: latestOnboarding?.goal || "maintain",
-      goalTitle: latestOnboarding?.goalTitle || "Gaya Hidup Sehat & Fit",
-      weight: Number(latestOnboarding?.weight) || 65,
-      startWeight: Number(latestOnboarding?.startWeight) || Number(latestOnboarding?.weight) || 65,
-      targetWeight: Number(latestOnboarding?.targetWeight) || 65,
-      height: Number(latestOnboarding?.height) || 170,
-      age: Number(latestOnboarding?.age) || 25,
-      gender: latestOnboarding?.gender || "pria",
-      persona: latestOnboarding?.persona || "max",
-      activityLevel: latestOnboarding?.activityLevel || "moderate"
-    });
   }
+
+  // 5. Try latest_onboarding submission
+  if (!user) {
+    const latestOB = dbData.users["latest_onboarding"] as any;
+    if (latestOB && latestOB.weight) {
+      const profileName = extractedName || latestOB.name || `Member ${phone.slice(-4)}`;
+      user = saveUserProfile(phone, {
+        ...latestOB,
+        name: profileName,
+        phone,
+        normalizedPhone: phone
+      });
+      saveDb();
+      return user;
+    }
+  }
+
+  // 6. Fallback if no profile exists anywhere
+  if (!user) {
+    const profileName = extractedName || `Member ${phone.slice(-4)}`;
+    user = saveUserProfile(phone, {
+      name: profileName,
+      phone,
+      goal: "maintain",
+      goalTitle: "Gaya Hidup Sehat & Fit",
+      weight: 65,
+      startWeight: 65,
+      targetWeight: 65,
+      height: 170,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "moderate"
+    });
+    saveDb();
+  }
+
   return user;
 }
 
@@ -2230,7 +2264,7 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
           }
 
           if (!userProfile) {
-            userProfile = getOrCreateUserProfile(from);
+            userProfile = getOrCreateUserProfile(from, userText);
           }
           const userData = calculateUserData(userProfile);
 
@@ -2582,7 +2616,7 @@ Keluarkan output JSON valid:
       }
 
       if (!userProfile) {
-        userProfile = getOrCreateUserProfile(From);
+        userProfile = getOrCreateUserProfile(From, userText);
       }
       const userData = calculateUserData(userProfile);
 

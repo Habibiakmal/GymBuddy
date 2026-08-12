@@ -419,40 +419,76 @@ function getUserProfile(rawPhone) {
   }
   return null;
 }
-function getOrCreateUserProfile(rawPhone) {
+function getOrCreateUserProfile(rawPhone, userText) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
+
   let user = getUserProfile(phone);
-  if (!user) {
-    const latestOnboarding = dbData.users["latest_onboarding"];
-    if (latestOnboarding && latestOnboarding.weight) {
+
+  if (!user && phone.startsWith('0')) {
+    user = getUserProfile('62' + phone.substring(1));
+  } else if (!user && phone.startsWith('62')) {
+    user = getUserProfile('0' + phone.substring(2));
+  }
+
+  let extractedName = "";
+  if (userText) {
+    const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
+    if (nameMatch && nameMatch[1].trim()) {
+      extractedName = nameMatch[1].trim();
+    }
+  }
+
+  if (!user && extractedName) {
+    const nameLower = extractedName.toLowerCase();
+    const matchedByName = Object.values(dbData.users).find((u) =>
+      u && u.name && String(u.name).toLowerCase() === nameLower && u.weight
+    );
+    if (matchedByName) {
       user = saveUserProfile(phone, {
-        ...latestOnboarding,
+        ...matchedByName,
         phone,
         normalizedPhone: phone
       });
+      saveDb();
       return user;
     }
-    const validUsers = Object.entries(dbData.users).filter(([key]) => key !== "latest_onboarding").map(([, u]) => u);
-    const matchedByPhone = validUsers.find((u) => normalizePhone(u.phone || "") === phone);
-    if (matchedByPhone) {
-      return matchedByPhone;
-    }
-    user = saveUserProfile(phone, {
-      name: latestOnboarding?.name ? latestOnboarding.name : `Member ${phone.slice(-4)}`,
-      phone,
-      goal: latestOnboarding?.goal || "maintain",
-      goalTitle: latestOnboarding?.goalTitle || "Gaya Hidup Sehat & Fit",
-      weight: Number(latestOnboarding?.weight) || 65,
-      startWeight: Number(latestOnboarding?.startWeight) || Number(latestOnboarding?.weight) || 65,
-      targetWeight: Number(latestOnboarding?.targetWeight) || 65,
-      height: Number(latestOnboarding?.height) || 170,
-      age: Number(latestOnboarding?.age) || 25,
-      gender: latestOnboarding?.gender || "pria",
-      persona: latestOnboarding?.persona || "max",
-      activityLevel: latestOnboarding?.activityLevel || "moderate"
-    });
   }
+
+  if (!user) {
+    const latestOB = dbData.users["latest_onboarding"];
+    if (latestOB && latestOB.weight) {
+      const profileName = extractedName || latestOB.name || `Member ${phone.slice(-4)}`;
+      user = saveUserProfile(phone, {
+        ...latestOB,
+        name: profileName,
+        phone,
+        normalizedPhone: phone
+      });
+      saveDb();
+      return user;
+    }
+  }
+
+  if (!user) {
+    const profileName = extractedName || `Member ${phone.slice(-4)}`;
+    user = saveUserProfile(phone, {
+      name: profileName,
+      phone,
+      goal: "maintain",
+      goalTitle: "Gaya Hidup Sehat & Fit",
+      weight: 65,
+      startWeight: 65,
+      targetWeight: 65,
+      height: 170,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "moderate"
+    });
+    saveDb();
+  }
+
   return user;
 }
 function saveUserProfile(rawPhone, profile) {
