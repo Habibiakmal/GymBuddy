@@ -431,6 +431,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   };
 
   const goalData = getGoalSpecificData();
+  const communityStats = getCommunityStats();
 
   return (
     <div className="fixed inset-0 z-50 bg-white font-['Inter'] overflow-y-auto selection:bg-[#D4FF00] selection:text-black p-4 md:p-6 lg:p-8">
@@ -702,74 +703,71 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
             )}
 
             {/* STEP 5: FIRST REPORT SCREEN */}
-            {step === 5 && (() => {
-              const stats = getCommunityStats();
-              return (
-                <motion.div
-                  key="step5"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
-                    <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
-                      {isEN ? "Community Insights" : "Statistik Komunitas"}
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
+                  <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
+                    {isEN ? "Community Insights" : "Statistik Komunitas"}
+                  </div>
+
+                  <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
+                    {communityStats.title}
+                  </h2>
+
+                  {/* METRIC GRID */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                          {communityStats.metric1.val}
+                        </span>
+                        <TrendingUp className="text-[#D4FF00] w-5 h-5" />
+                      </div>
+                      <div className="font-bold text-white text-sm sm:text-base mb-1">
+                        {communityStats.metric1.title}
+                      </div>
+                      <div className="text-xs text-neutral-400">
+                        {communityStats.metric1.desc}
+                      </div>
                     </div>
 
-                    <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
-                      {stats.title}
-                    </h2>
-
-                    {/* METRIC GRID */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                            {stats.metric1.val}
-                          </span>
+                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                          {communityStats.metric2.val}
+                        </span>
+                        {communityStats.metric2.trend === "down" ? (
+                          <TrendingDown className="text-[#D4FF00] w-5 h-5" />
+                        ) : (
                           <TrendingUp className="text-[#D4FF00] w-5 h-5" />
-                        </div>
-                        <div className="font-bold text-white text-sm sm:text-base mb-1">
-                          {stats.metric1.title}
-                        </div>
-                        <div className="text-xs text-neutral-400">
-                          {stats.metric1.desc}
-                        </div>
+                        )}
                       </div>
-
-                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                            {stats.metric2.val}
-                          </span>
-                          {stats.metric2.trend === "down" ? (
-                            <TrendingDown className="text-[#D4FF00] w-5 h-5" />
-                          ) : (
-                            <TrendingUp className="text-[#D4FF00] w-5 h-5" />
-                          )}
-                        </div>
-                        <div className="font-bold text-white text-sm sm:text-base mb-1">
-                          {stats.metric2.title}
-                        </div>
-                        <div className="text-xs text-neutral-400">
-                          {stats.metric2.desc}
-                        </div>
+                      <div className="font-bold text-white text-sm sm:text-base mb-1">
+                        {communityStats.metric2.title}
                       </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
-                      <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
-                      <span>
-                        {isEN
-                          ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
-                          : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
-                      </span>
+                      <div className="text-xs text-neutral-400">
+                        {communityStats.metric2.desc}
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              );
-            })()}
+
+                  <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
+                    <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
+                    <span>
+                      {isEN
+                        ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
+                        : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* STEP 6: PERSONAL DATA & BIOMETRICS */}
             {step === 6 && (
