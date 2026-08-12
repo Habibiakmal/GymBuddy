@@ -1020,7 +1020,7 @@ export default function Dashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] md:bg-[#F3F4F8] text-white md:text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
+    <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
       
       {/* Toast Notification */}
       <AnimatePresence>

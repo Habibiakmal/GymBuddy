@@ -314,6 +314,101 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     }
   };
 
+  // Dynamic Community Insights based on Goal
+  const getCommunityStats = () => {
+    switch (goal) {
+      case "lose":
+        return {
+          title: isEN
+            ? "Accelerated Fat Loss through Daily Calorie & Macro Deficit"
+            : "Menurunkan Berat Badan Lebih Efektif dengan Defisit Makro Terukur",
+          metric1: {
+            val: "91%",
+            title: isEN ? "Consistent Calorie Deficit" : "Capai Defisit Kalori Konsisten",
+            desc: isEN
+              ? "Achieved within the first 7 days without extreme starvation"
+              : "Tercapai dalam 7 hari pertama tanpa merasa lapar berlebih",
+            trend: "up" as const,
+          },
+          metric2: {
+            val: "84%",
+            title: isEN ? "Waistline & Fat Reduction" : "Penurunan Lemak Perut & Pinggang",
+            desc: isEN
+              ? "After setting personalized daily meal & macro guidance"
+              : "Setelah menerapkan target makro harian yang terukur",
+            trend: "down" as const,
+          },
+        };
+      case "gain":
+        return {
+          title: isEN
+            ? "Clean Muscle Gain through Targeted Surplus & High Protein"
+            : "Menaikkan Massa Otot Tanpa Penumpukan Lemak Berlebih",
+          metric1: {
+            val: "89%",
+            title: isEN ? "Daily Surplus & Protein Met" : "Target Protein & Surplus Tercapai",
+            desc: isEN
+              ? "Achieved within the first 7 days with structured meal plans"
+              : "Tercapai dalam 7 hari pertama dengan panduan nutrisi terstruktur",
+            trend: "up" as const,
+          },
+          metric2: {
+            val: "78%",
+            title: isEN ? "Lifting & Strength Progression" : "Peningkatan Kekuatan Latihan",
+            desc: isEN
+              ? "Steady muscle growth without bloating or fat accumulation"
+              : "Peningkatan beban angkatan & massa otot tanpa rasa begah",
+            trend: "up" as const,
+          },
+        };
+      case "health":
+        return {
+          title: isEN
+            ? "Boosted Daily Energy & Sustainable Metabolic Balance"
+            : "Meningkatkan Vitalitas & Kualitas Kesehatan Harian",
+          metric1: {
+            val: "94%",
+            title: isEN ? "All-Day High Energy" : "Stamina Harian Lebih Stabil",
+            desc: isEN
+              ? "Eliminated mid-day energy crashes in the first 7 days"
+              : "Bebas lemas dan kantuk di jam kerja setelah perbaikan nutrisi",
+            trend: "up" as const,
+          },
+          metric2: {
+            val: "81%",
+            title: isEN ? "Better Digestion & Sleep" : "Pencernaan & Tidur Lebih Nyaman",
+            desc: isEN
+              ? "Reported significant improvement in daily physical wellbeing"
+              : "Peningkatan signifikan pada kenyamanan perut & kualitas istirahat",
+            trend: "up" as const,
+          },
+        };
+      case "maintain":
+      default:
+        return {
+          title: isEN
+            ? "Improving Diet Control through Measured Macro Systems"
+            : "Meningkatkan Kontrol Pola Makan dengan Sistem Makro Terukur",
+          metric1: {
+            val: "92%",
+            title: isEN ? "Mindful Portion Control" : "Sadar Porsi Makan",
+            desc: isEN
+              ? "Achieved within the first 7 days with daily AI assistance"
+              : "Tercapai dalam 7 hari pertama dengan pendampingan harian",
+            trend: "up" as const,
+          },
+          metric2: {
+            val: "76%",
+            title: isEN ? "Reduction in Binge Eating" : "Penurunan Kalap Makan",
+            desc: isEN
+              ? "After setting measured daily macro targets"
+              : "Setelah menetapkan target makro harian yang terukur",
+            trend: "down" as const,
+          },
+        };
+    }
+  };
+
   const goalData = getGoalSpecificData();
 
   return (
@@ -586,63 +681,74 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
             )}
 
             {/* STEP 5: FIRST REPORT SCREEN */}
-            {step === 5 && (
-              <motion.div
-                key="step5"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
-                  <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
-                    {isEN ? "Community Insights" : "Statistik Komunitas"}
-                  </div>
+            {step === 5 && (() => {
+              const stats = getCommunityStats();
+              return (
+                <motion.div
+                  key="step5"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
+                    <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
+                      {isEN ? "Community Insights" : "Statistik Komunitas"}
+                    </div>
 
-                  <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
-                    {isEN ? "Improving Diet Control through Measured Macro Systems" : "Meningkatkan Kontrol Pola Makan dengan Sistem Makro Terukur"}
-                  </h2>
+                    <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
+                      {stats.title}
+                    </h2>
 
-                  {/* METRIC GRID */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">92%</span>
-                        <TrendingUp className="text-[#D4FF00] w-5 h-5" />
+                    {/* METRIC GRID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                            {stats.metric1.val}
+                          </span>
+                          <TrendingUp className="text-[#D4FF00] w-5 h-5" />
+                        </div>
+                        <div className="font-bold text-white text-sm sm:text-base mb-1">
+                          {stats.metric1.title}
+                        </div>
+                        <div className="text-xs text-neutral-400">
+                          {stats.metric1.desc}
+                        </div>
                       </div>
-                      <div className="font-bold text-white text-sm sm:text-base mb-1">
-                        {isEN ? "Mindful Portion Control" : "Sadar Porsi Makan"}
-                      </div>
-                      <div className="text-xs text-neutral-400">
-                        {isEN ? "Achieved within the first 7 days with daily AI assistance" : "Tercapai dalam 7 hari pertama dengan pendampingan harian"}
+
+                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                            {stats.metric2.val}
+                          </span>
+                          {stats.metric2.trend === "down" ? (
+                            <TrendingDown className="text-[#D4FF00] w-5 h-5" />
+                          ) : (
+                            <TrendingUp className="text-[#D4FF00] w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="font-bold text-white text-sm sm:text-base mb-1">
+                          {stats.metric2.title}
+                        </div>
+                        <div className="text-xs text-neutral-400">
+                          {stats.metric2.desc}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">76%</span>
-                        <TrendingDown className="text-[#D4FF00] w-5 h-5" />
-                      </div>
-                      <div className="font-bold text-white text-sm sm:text-base mb-1">
-                        {isEN ? "Reduction in Binge Eating" : "Penurunan Kalap Makan"}
-                      </div>
-                      <div className="text-xs text-neutral-400">
-                        {isEN ? "After setting measured daily macro targets" : "Setelah menetapkan target makro harian yang terukur"}
-                      </div>
+                    <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
+                      <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
+                      <span>
+                        {isEN
+                          ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
+                          : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
-                    <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
-                    <span>
-                      {isEN
-                        ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
-                        : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              );
+            })()}
 
             {/* STEP 6: PERSONAL DATA & BIOMETRICS */}
             {step === 6 && (
