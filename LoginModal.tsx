@@ -80,7 +80,7 @@ export default function LoginModal({
       ? "0" + cleanedPhone.substring(2)
       : (cleanedPhone.startsWith("8") ? "0" + cleanedPhone : cleanedPhone);
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     let foundProfile: any = null;
     let foundProgress: any = null;

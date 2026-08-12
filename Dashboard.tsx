@@ -220,7 +220,7 @@ export default function Dashboard({
   // Fetch Live Profile from Server API
   const fetchUserProfile = async () => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}`);
       if (res.ok) {
@@ -239,7 +239,7 @@ export default function Dashboard({
   const fetchMealsForDate = async (dateStr: string) => {
     setLoadingMeals(true);
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${dateStr}`);
@@ -274,7 +274,7 @@ export default function Dashboard({
   // Fetch Progress History
   const fetchProgress = async () => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/progress`);
       if (res.ok) {
@@ -295,7 +295,7 @@ export default function Dashboard({
   // Fetch Water Intake
   const fetchWaterIntake = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/water?date=${dateStr}`);
       if (res.ok) {
@@ -310,7 +310,7 @@ export default function Dashboard({
   // Fetch Workout Logs for Date
   const fetchWorkoutLogsForDate = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/workouts?date=${dateStr}`);
       if (res.ok) {
@@ -325,7 +325,7 @@ export default function Dashboard({
 
   const handleDeleteWorkout = async (workoutId: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/workouts/${workoutId}?date=${selectedDate}`, {
         method: "DELETE"
@@ -339,7 +339,7 @@ export default function Dashboard({
     const validCups = Math.max(0, newCups);
     setWaterCups(validCups);
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/water`, {
         method: "POST",
@@ -353,7 +353,7 @@ export default function Dashboard({
   const handleAnalyzeAiFood = async () => {
     if (!aiText.trim()) return;
     setAnalyzingAi(true);
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       const res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
         method: "POST",
@@ -444,7 +444,7 @@ export default function Dashboard({
       timestamp: new Date().toISOString()
     };
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
@@ -476,7 +476,7 @@ export default function Dashboard({
   // Handle Delete Meal
   const handleDeleteMeal = async (mealId: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${mealId}?date=${selectedDate}`, {
         method: "DELETE"

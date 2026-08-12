@@ -757,7 +757,7 @@ export default function Dashboard({
   // Fetch & Auto-Split Combo Logs
   const fetchLogsForDate = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     let rawLogs: MealItem[] = [];
 
@@ -890,7 +890,7 @@ export default function Dashboard({
     );
 
     const newItems = [...foods, ...drinks];
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     for (const item of newItems) {
       try {
@@ -937,7 +937,7 @@ export default function Dashboard({
       localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
     } catch (e) {}
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
         method: "POST",
@@ -955,7 +955,7 @@ export default function Dashboard({
       localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
     } catch (e) {}
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
         method: "DELETE"
@@ -966,7 +966,7 @@ export default function Dashboard({
   const handleDeleteAccount = async () => {
     if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}`, { method: "DELETE" });
     } catch (e) {}

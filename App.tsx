@@ -94,7 +94,7 @@ export default function App() {
 
   const handleResetAllData = async () => {
     try {
-      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
       if (currentUser?.phone) {
         await fetch(`${API_BASE_URL}/api/user/${currentUser.phone}`, { method: "DELETE" }).catch(() => {});
       }
