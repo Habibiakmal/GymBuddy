@@ -94,11 +94,18 @@ export default function App() {
 
   const handleResetAllData = async () => {
     try {
-      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
       if (currentUser?.phone) {
-        await fetch(`${API_BASE_URL}/api/user/${currentUser.phone}`, { method: "DELETE" }).catch(() => {});
+        const norm = String(currentUser.phone).replace(/\D/g, '');
+        await fetch(`/api/user/${norm}`, { method: "DELETE" }).catch(() => {});
       }
-      await fetch(`${API_BASE_URL}/api/user/reset`, { method: "POST" }).catch(() => {});
+      await fetch(`/api/user/reset`, { method: "POST" }).catch(() => {});
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL;
+      if (API_BASE_URL && API_BASE_URL !== "") {
+        if (currentUser?.phone) {
+          await fetch(`${API_BASE_URL}/api/user/${currentUser.phone}`, { method: "DELETE" }).catch(() => {});
+        }
+        await fetch(`${API_BASE_URL}/api/user/reset`, { method: "POST" }).catch(() => {});
+      }
     } catch (e) {}
 
     try {
@@ -338,11 +345,15 @@ export default function App() {
         onComplete={() => {
           setIsAppOnboarding(false);
           try {
-            const stored = localStorage.getItem("gymbuddy_last_user");
+            const stored = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user");
             if (stored) {
               handleLoginSuccess(JSON.parse(stored));
+            } else {
+              setViewMode("dashboard");
             }
-          } catch (e) {}
+          } catch (e) {
+            setViewMode("dashboard");
+          }
         }}
       />
     );

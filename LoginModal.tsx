@@ -85,30 +85,38 @@ export default function LoginModal({
     let foundProfile: any = null;
     let foundProgress: any = null;
 
-    // 1. Try Backend API fetch
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/user-profile/${normPhone}`);
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data && data.success && data.profile) {
-          foundProfile = data.profile;
-          try {
-            const progRes = await fetch(`${API_BASE_URL}/api/user/${normPhone}/progress`);
-            if (progRes.ok) {
-              const progData = await progRes.json().catch(() => null);
-              if (progData && progData.success) foundProgress = progData;
-            }
-          } catch (e) {}
+    // Helper to fetch profile from an API base
+    const tryFetchProfile = async (baseUrl: string) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/user-profile/${normPhone}`);
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.success && data.profile) return data.profile;
         }
-      }
-    } catch (err) {
-      console.log("Backend fetch failed, checking local storage fallback...", err);
+        const userRes = await fetch(`${baseUrl}/api/user/${normPhone}`);
+        if (userRes.ok) {
+          const uData = await userRes.json().catch(() => null);
+          if (uData && (uData.user || uData.profile || uData.name)) {
+            return uData.user || uData.profile || uData;
+          }
+        }
+      } catch (e) {}
+      return null;
+    };
+
+    // 1. Try local relative endpoint
+    foundProfile = await tryFetchProfile("");
+
+    // 2. Try configured environment API or external fallback URL
+    if (!foundProfile) {
+      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      foundProfile = await tryFetchProfile(envUrl);
     }
 
-    // 2. Try LocalStorage fallback
+    // 3. Try LocalStorage fallback
     if (!foundProfile) {
       try {
-        const stored = localStorage.getItem(`gymbuddy_user_${normPhone}`) || localStorage.getItem("gymbuddy_last_user");
+        const stored = localStorage.getItem(`gymbuddy_user_${normPhone}`) || localStorage.getItem("gymbuddy_last_user") || localStorage.getItem("gymbuddy_active_session");
         if (stored) {
           foundProfile = JSON.parse(stored);
         }

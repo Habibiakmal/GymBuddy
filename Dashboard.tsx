@@ -220,42 +220,60 @@ export default function Dashboard({
   // Fetch Live Profile from Server API
   const fetchUserProfile = async () => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && (data.user || data.profile || data.name)) {
-          const fresh = data.user || data.profile || data;
-          setLiveUser((prev) => ({ ...prev, ...fresh, ...data }));
-          if (data.streak !== undefined) setStreak(data.streak);
-          if (data.waterCups !== undefined) setWaterCups(data.waterCups);
+    const tryFetch = async (baseUrl: string) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/user/${normPhone}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.user || data.profile || data.name)) {
+            const fresh = data.user || data.profile || data;
+            setLiveUser((prev) => ({ ...prev, ...fresh, ...data }));
+            if (data.streak !== undefined) setStreak(data.streak);
+            if (data.waterCups !== undefined) setWaterCups(data.waterCups);
+            return true;
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+      return false;
+    };
+
+    const success = await tryFetch("");
+    if (!success) {
+      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      await tryFetch(envUrl);
+    }
   };
 
   // API Fetch Meals for Selected Date
   const fetchMealsForDate = async (dateStr: string) => {
     setLoadingMeals(true);
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${dateStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.logs)) {
-          setMeals(data.logs);
-          try {
-            localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(data.logs));
-          } catch (e) {}
-          setLoadingMeals(false);
-          return;
+    const tryFetchMeals = async (baseUrl: string) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.logs)) {
+            setMeals(data.logs);
+            try {
+              localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(data.logs));
+            } catch (e) {}
+            return true;
+          }
         }
-      }
-    } catch (e) {
-      console.log("Fetch meals API fallback to local storage...", e);
+      } catch (e) {}
+      return false;
+    };
+
+    let loaded = await tryFetchMeals("");
+    if (!loaded) {
+      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      loaded = await tryFetchMeals(envUrl);
+    }
+    if (loaded) {
+      setLoadingMeals(false);
+      return;
     }
 
     try {

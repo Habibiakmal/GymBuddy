@@ -190,24 +190,27 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           const norm = cleaned.startsWith('62') ? '0' + cleaned.substring(2) : (cleaned.startsWith('8') ? '0' + cleaned : cleaned);
           localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(userObj));
           localStorage.setItem("gymbuddy_last_user", JSON.stringify(userObj));
+          localStorage.setItem("gymbuddy_active_session", JSON.stringify(userObj));
         } catch (e) {}
 
-        try {
-          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-          await fetch(`${API_BASE_URL}/api/onboarding`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              phone,
-              profile: userObj
-            }),
-          }).catch(() => {});
-          if (API_BASE_URL !== "") {
-            await fetch(`/api/onboarding`, {
+        const postOnboarding = async (endpointUrl: string) => {
+          try {
+            await fetch(endpointUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ phone, profile: userObj }),
-            }).catch(() => {});
+            });
+          } catch (e) {}
+        };
+
+        try {
+          // Always post to local relative endpoint first to ensure local server db.json is updated
+          await postOnboarding("/api/onboarding");
+          const envUrl = (import.meta as any).env?.VITE_API_URL;
+          if (envUrl && envUrl !== "") {
+            await postOnboarding(`${envUrl}/api/onboarding`);
+          } else {
+            await postOnboarding("https://gymbuddy-backend-zfft.onrender.com/api/onboarding");
           }
         } catch (e) {
           console.error("Failed to save profile", e);
@@ -1692,20 +1695,34 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                   </p>
                 </div>
 
-                <motion.a
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}?text=${encodeURIComponent(
-                    `Halo GymBuddy AI! Saya ${name || "Member"}, target saya adalah ${goalData.title}. Tolong kirimkan analisis & target harian saya ya.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onComplete}
-                  className="mt-4 px-8 py-4 bg-[#25D366] text-black font-extrabold rounded-full text-base hover:bg-[#20bd5a] transition-all flex items-center gap-2.5 cursor-pointer"
-                >
-                  <WhatsAppIcon className="w-5 h-5" />
-                  <span>{isEN ? "Open WhatsApp & Get Plan" : "Buka WhatsApp & Terima Rencana"}</span>
-                </motion.a>
+                <div className="flex flex-col sm:flex-row items-center gap-3 mt-4">
+                  <motion.a
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}?text=${encodeURIComponent(
+                      `Halo GymBuddy AI! Saya ${name || "Member"}, target saya adalah ${goalData.title}. Tolong kirimkan analisis & target harian saya ya.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onComplete}
+                    className="px-8 py-4 bg-[#25D366] text-black font-extrabold rounded-full text-base hover:bg-[#20bd5a] transition-all flex items-center gap-2.5 cursor-pointer shadow-lg"
+                  >
+                    <WhatsAppIcon className="w-5 h-5" />
+                    <span>{isEN ? "Open WhatsApp & Get Plan" : "Buka WhatsApp & Terima Rencana"}</span>
+                  </motion.a>
+
+                  {onComplete && (
+                    <motion.button
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={onComplete}
+                      className="px-8 py-4 bg-[#D4FF00] text-black font-extrabold rounded-full text-base hover:bg-[#b8de00] transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                      <span>{isEN ? "Go to Web Dashboard" : "Masuk ke Dashboard Web"}</span>
+                    </motion.button>
+                  )}
+                </div>
               </motion.div>
             )}
 

@@ -761,15 +761,20 @@ export default function Dashboard({
 
     let rawLogs: MealItem[] = [];
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${dateStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.logs)) {
-          rawLogs = data.logs;
+    const tryFetchMeals = async (baseUrl: string) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.logs)) {
+            return data.logs;
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+      return null;
+    };
+
+    rawLogs = (await tryFetchMeals("")) || (await tryFetchMeals((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com")) || [];
 
     if (rawLogs.length === 0) {
       try {

@@ -1929,10 +1929,40 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
 
   // REST API: Get meal logs for specific user and date
   app.get("/api/user/:phone/meals", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
-    const key = `${phone}_${targetDate}`;
-    const logs = dbData.dailyLogs[key] || [];
+    
+    let logs: MealLog[] = [];
+
+    // 1. Direct match by normalized phone key
+    const primaryKey = `${phone}_${targetDate}`;
+    if (dbData.dailyLogs[primaryKey] && Array.isArray(dbData.dailyLogs[primaryKey])) {
+      logs = [...dbData.dailyLogs[primaryKey]];
+    }
+
+    // 2. Check alternate phone format variations (08xxx vs 628xxx)
+    if (logs.length === 0) {
+      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+      const altKey = `${altPhone}_${targetDate}`;
+      if (dbData.dailyLogs[altKey] && Array.isArray(dbData.dailyLogs[altKey])) {
+        logs = [...dbData.dailyLogs[altKey]];
+      }
+    }
+
+    // 3. Fallback: scan all dailyLogs for targetDate if empty
+    if (logs.length === 0) {
+      for (const [k, list] of Object.entries(dbData.dailyLogs)) {
+        if (k.endsWith(`_${targetDate}`) && Array.isArray(list)) {
+          list.forEach((m: any) => {
+            if (!logs.some((existing: any) => existing.id === m.id)) {
+              logs.push(m);
+            }
+          });
+        }
+      }
+    }
+
     res.json({ success: true, phone, date: targetDate, logs });
   });
 
