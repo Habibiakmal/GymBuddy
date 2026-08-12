@@ -193,7 +193,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
         } catch (e) {}
 
         try {
-          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "";
+          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
           await fetch(`${API_BASE_URL}/api/onboarding`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -201,7 +201,14 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               phone,
               profile: userObj
             }),
-          });
+          }).catch(() => {});
+          if (API_BASE_URL !== "") {
+            await fetch(`/api/onboarding`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ phone, profile: userObj }),
+            }).catch(() => {});
+          }
         } catch (e) {
           console.error("Failed to save profile", e);
         }
