@@ -590,13 +590,9 @@ function getOrCreateUserProfile(rawPhone: string) {
   if (!phone) return null;
   let user = getUserProfile(phone);
   if (!user) {
-    // Only hydrate from latest_onboarding if the user explicitly registered via the web
-    // (i.e., the latest_onboarding was saved WITH this phone number)
     const latestOnboarding = dbData.users["latest_onboarding"];
-    const latestPhone = latestOnboarding ? normalizePhone(latestOnboarding.phone || "") : "";
 
-    if (latestOnboarding && latestOnboarding.weight && latestPhone === phone) {
-      // Exact phone match - safe to use this profile
+    if (latestOnboarding && latestOnboarding.weight) {
       user = saveUserProfile(phone, {
         ...latestOnboarding,
         phone,
@@ -615,20 +611,20 @@ function getOrCreateUserProfile(rawPhone: string) {
       return matchedByPhone;
     }
 
-    // No match found - create a generic placeholder profile
+    // No match found - create placeholder but inherit from latestOnboarding if present
     user = saveUserProfile(phone, {
-      name: `Member ${phone.slice(-4)}`,
+      name: latestOnboarding?.name ? latestOnboarding.name : `Member ${phone.slice(-4)}`,
       phone,
-      goal: "maintain",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 65,
-      startWeight: 65,
-      targetWeight: 65,
-      height: 170,
-      age: 25,
-      gender: "pria",
-      persona: "max",
-      activityLevel: "moderate"
+      goal: latestOnboarding?.goal || "maintain",
+      goalTitle: latestOnboarding?.goalTitle || "Gaya Hidup Sehat & Fit",
+      weight: Number(latestOnboarding?.weight) || 65,
+      startWeight: Number(latestOnboarding?.startWeight) || Number(latestOnboarding?.weight) || 65,
+      targetWeight: Number(latestOnboarding?.targetWeight) || 65,
+      height: Number(latestOnboarding?.height) || 170,
+      age: Number(latestOnboarding?.age) || 25,
+      gender: latestOnboarding?.gender || "pria",
+      persona: latestOnboarding?.persona || "max",
+      activityLevel: latestOnboarding?.activityLevel || "moderate"
     });
   }
   return user;
