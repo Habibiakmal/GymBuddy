@@ -339,20 +339,20 @@ function getLocalDateStr(d: Date = new Date()): string {
 // Helper to determine streak count
 function getStreakCount(rawPhone: string): number {
   const phone = normalizePhone(rawPhone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   const today = new Date();
   let streak = 0;
 
   for (let i = 0; i < 365; i++) {
     const d = new Date(today.getTime() - i * 86400000);
     const dateStr = getLocalDateStr(d);
-    
-    let hasLogs = false;
-    for (const [k, list] of Object.entries(dbData.dailyLogs)) {
-      if (k.endsWith(`_${dateStr}`) && Array.isArray(list) && list.length > 0) {
-        hasLogs = true;
-        break;
-      }
-    }
+
+    // BugF Fix: only check logs belonging to this specific user, not all users
+    const key = `${phone}_${dateStr}`;
+    const altKey = `${altPhone}_${dateStr}`;
+    const hasLogs =
+      (dbData.dailyLogs[key] && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) ||
+      (dbData.dailyLogs[altKey] && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0);
 
     if (hasLogs) {
       streak++;
@@ -376,12 +376,11 @@ function getWaterCups(rawPhone: string, dateStr?: string): number {
   if (dbData.waterLogs && dbData.waterLogs[key] !== undefined) {
     return dbData.waterLogs[key];
   }
+  // BugC Fix: also check alternate phone format (08xxx vs 628xxx), but NEVER cross-user
   if (dbData.waterLogs) {
-    for (const [k, val] of Object.entries(dbData.waterLogs)) {
-      if (k.endsWith(`_${targetDate}`)) {
-        return val;
-      }
-    }
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const altKey = `${altPhone}_${targetDate}`;
+    if (dbData.waterLogs[altKey] !== undefined) return dbData.waterLogs[altKey];
   }
   return 0;
 }
@@ -392,12 +391,12 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
   const newCups = Math.max(0, cups);
   if (!dbData.waterLogs) dbData.waterLogs = {};
 
+  // BugB Fix: only save for the specific user's phone, never broadcast to all users
   const key = `${phone}_${targetDate}`;
   dbData.waterLogs[key] = newCups;
-
-  for (const uPhone of Object.keys(dbData.users)) {
-    dbData.waterLogs[`${uPhone}_${targetDate}`] = newCups;
-  }
+  // Also save for alternate phone format for cross-format lookup
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  dbData.waterLogs[`${altPhone}_${targetDate}`] = newCups;
 
   saveDb();
   return newCups;
@@ -626,23 +625,11 @@ function getOrCreateUserProfile(rawPhone: string, userText?: string) {
     }
   }
 
-  // 5. Try latest_onboarding submission
-  if (!user) {
-    const latestOB = dbData.users["latest_onboarding"] as any;
-    if (latestOB && latestOB.weight) {
-      const profileName = extractedName || latestOB.name || `Member ${phone.slice(-4)}`;
-      user = saveUserProfile(phone, {
-        ...latestOB,
-        name: profileName,
-        phone,
-        normalizedPhone: phone
-      });
-      saveDb();
-      return user;
-    }
-  }
+  // 5. BugH Fix: Only use latest_onboarding if phone explicitly matches — never blindly assign to a stranger
+  // (latest_onboarding is only safe to use from the onboarding POST where the phone is provided)
+  // Do NOT auto-assign latest_onboarding data to any random WA user who messages first
 
-  // 6. Fallback if no profile exists anywhere
+  // 6. Fallback if no profile exists anywhere — create a bare-minimum placeholder
   if (!user) {
     const profileName = extractedName || `Member ${phone.slice(-4)}`;
     user = saveUserProfile(phone, {
@@ -997,6 +984,7 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   }
 
   for (const itemMeal of mealsToInsert) {
+    // BugA Fix: only save to the specific user's log, never broadcast to all users
     const key = `${phone}_${targetDate}`;
     if (!dbData.dailyLogs[key]) {
       dbData.dailyLogs[key] = [];
@@ -1004,15 +992,14 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
     if (!dbData.dailyLogs[key].some((m: any) => m.id === itemMeal.id)) {
       dbData.dailyLogs[key].push(itemMeal);
     }
-
-    for (const uPhone of Object.keys(dbData.users)) {
-      const uKey = `${uPhone}_${targetDate}`;
-      if (!dbData.dailyLogs[uKey]) {
-        dbData.dailyLogs[uKey] = [];
-      }
-      if (!dbData.dailyLogs[uKey].some((m: any) => m.id === itemMeal.id)) {
-        dbData.dailyLogs[uKey].push(itemMeal);
-      }
+    // Also save for alternate phone format (08xxx vs 628xxx) to keep lookup consistent
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const altKey = `${altPhone}_${targetDate}`;
+    if (!dbData.dailyLogs[altKey]) {
+      dbData.dailyLogs[altKey] = [];
+    }
+    if (!dbData.dailyLogs[altKey].some((m: any) => m.id === itemMeal.id)) {
+      dbData.dailyLogs[altKey].push(itemMeal);
     }
   }
 
@@ -1967,6 +1954,7 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     }
 
     // 2. Check alternate phone format variations (08xxx vs 628xxx)
+    // 2. Check alternate phone format variations (08xxx vs 628xxx)
     if (logs.length === 0) {
       const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
       const altKey = `${altPhone}_${targetDate}`;
@@ -1975,18 +1963,8 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
       }
     }
 
-    // 3. Fallback: scan all dailyLogs for targetDate if empty
-    if (logs.length === 0) {
-      for (const [k, list] of Object.entries(dbData.dailyLogs)) {
-        if (k.endsWith(`_${targetDate}`) && Array.isArray(list)) {
-          list.forEach((m: any) => {
-            if (!logs.some((existing: any) => existing.id === m.id)) {
-              logs.push(m);
-            }
-          });
-        }
-      }
-    }
+    // BugD Fix: Removed dangerous cross-user fallback scan.
+    // Only read logs for this specific user's phone (or its 08xxx/628xxx alt format).
 
     res.json({ success: true, phone, date: targetDate, logs });
   });
@@ -2356,42 +2334,6 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
           if (isWelcomeMessage) {
             const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
             const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
-
-            let updatedProfileNeeded = false;
-            if (nameMatch && nameMatch[1].trim()) {
-              userProfile.name = nameMatch[1].trim();
-              updatedProfileNeeded = true;
-            }
-            if (targetMatch && targetMatch[1].trim()) {
-              const rawT = targetMatch[1].trim();
-              userProfile.goalTitle = rawT;
-              if (rawT.toLowerCase().includes("health") || rawT.toLowerCase().includes("sehat")) {
-                userProfile.goal = "health";
-                userProfile.goalTitle = "Gaya Hidup Sehat & Fit";
-              } else if (rawT.toLowerCase().includes("lose") || rawT.toLowerCase().includes("turun")) {
-                userProfile.goal = "lose";
-                userProfile.goalTitle = "Menurunkan Berat Badan";
-              } else if (rawT.toLowerCase().includes("gain") || rawT.toLowerCase().includes("naik")) {
-                userProfile.goal = "gain";
-                userProfile.goalTitle = "Menaikkan Berat Badan";
-              }
-              updatedProfileNeeded = true;
-            }
-
-            const latestOnboarding = dbData.users["latest_onboarding"] || Object.values(dbData.users).find((u: any) => u.name === userProfile.name && u.normalizedPhone !== userProfile.normalizedPhone);
-            if (latestOnboarding && latestOnboarding.weight) {
-              userProfile.weight = Number(latestOnboarding.weight) || userProfile.weight;
-              userProfile.startWeight = Number(latestOnboarding.startWeight) || userProfile.weight;
-              userProfile.targetWeight = Number(latestOnboarding.targetWeight) || userProfile.targetWeight;
-              userProfile.height = Number(latestOnboarding.height) || userProfile.height;
-              userProfile.age = Number(latestOnboarding.age) || userProfile.age;
-              userProfile.gender = latestOnboarding.gender || userProfile.gender;
-              userProfile.activityLevel = latestOnboarding.activityLevel || userProfile.activityLevel;
-              userProfile.persona = latestOnboarding.persona || userProfile.persona;
-              userProfile.goal = latestOnboarding.goal || userProfile.goal;
-              userProfile.goalTitle = latestOnboarding.goalTitle || userProfile.goalTitle;
-              updatedProfileNeeded = true;
-            }
 
             if (updatedProfileNeeded) {
               saveUserProfile(from, userProfile);
@@ -2766,21 +2708,6 @@ Keluarkan output JSON valid:
           updatedProfileNeeded = true;
         }
 
-        const latestOnboarding = dbData.users["latest_onboarding"] || Object.values(dbData.users).find((u: any) => u.name === userProfile.name && u.normalizedPhone !== userProfile.normalizedPhone);
-        if (latestOnboarding && latestOnboarding.weight) {
-          userProfile.weight = Number(latestOnboarding.weight) || userProfile.weight;
-          userProfile.startWeight = Number(latestOnboarding.startWeight) || userProfile.weight;
-          userProfile.targetWeight = Number(latestOnboarding.targetWeight) || userProfile.targetWeight;
-          userProfile.height = Number(latestOnboarding.height) || userProfile.height;
-          userProfile.age = Number(latestOnboarding.age) || userProfile.age;
-          userProfile.gender = latestOnboarding.gender || userProfile.gender;
-          userProfile.activityLevel = latestOnboarding.activityLevel || userProfile.activityLevel;
-          userProfile.persona = latestOnboarding.persona || userProfile.persona;
-          userProfile.goal = latestOnboarding.goal || userProfile.goal;
-          userProfile.goalTitle = latestOnboarding.goalTitle || userProfile.goalTitle;
-          updatedProfileNeeded = true;
-        }
-
         if (updatedProfileNeeded) {
           saveUserProfile(From, userProfile);
         }
@@ -3054,25 +2981,18 @@ Keluarkan output JSON valid:
     }
   });
 
-  // REST API: Get user meals for date or all dates
+  // REST API: Get user meals for date (duplicate endpoint kept for WA handler compat)
   app.get("/api/user/:phone/meals", (req, res) => {
     const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getTodayDateStr();
     const key = `${phone}_${targetDate}`;
-    let logs = dbData.dailyLogs[key] ? [...dbData.dailyLogs[key]] : [];
+    const altKey = `${altPhone}_${targetDate}`;
 
-    // Fallback: If no logs found under specific phone key, collect any logs for targetDate across all dbData.dailyLogs
-    if (logs.length === 0) {
-      for (const [k, list] of Object.entries(dbData.dailyLogs)) {
-        if (k.endsWith(`_${targetDate}`) && Array.isArray(list)) {
-          list.forEach((m: any) => {
-            if (!logs.some((existing: any) => existing.id === m.id)) {
-              logs.push(m);
-            }
-          });
-        }
-      }
-    }
+    // BugE Fix: only read logs belonging to this specific user (by phone or alt-phone format)
+    let logs = dbData.dailyLogs[key] ? [...dbData.dailyLogs[key]] :
+               (dbData.dailyLogs[altKey] ? [...dbData.dailyLogs[altKey]] : []);
+
     let calories = 0, protein = 0, carbs = 0, fat = 0;
     logs.forEach((m: any) => {
       calories += Number(m.calories) || 0;
