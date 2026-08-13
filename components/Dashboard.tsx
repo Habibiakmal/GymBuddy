@@ -239,7 +239,15 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
     if (foods.length > 0 && drinks.length > 0) {
       result.push(...foods, ...drinks);
     } else {
-      result.push(item);
+      if (isLiquidName(item.foodName) || item.isHydration) {
+        result.push({
+          ...item,
+          isHydration: true,
+          volumeMl: Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)
+        });
+      } else {
+        result.push(item);
+      }
     }
   }
 
@@ -721,7 +729,7 @@ export default function Dashboard({
   const totalCarbsConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
   const totalFatConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
 
-  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || 250), 0);
+  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
 
   // Sets Calculations
@@ -1718,7 +1726,7 @@ export default function Dashboard({
                     <div>
                       <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
                       <p className="text-xs text-neutral-400 font-medium">
-                        {item.volumeMl || 250} ml • {item.calories || 0} kcal
+                        {item.volumeMl || extractVolumeMlFromName(item.foodName)} ml • {item.calories || 0} kcal
                       </p>
                     </div>
                   </div>
