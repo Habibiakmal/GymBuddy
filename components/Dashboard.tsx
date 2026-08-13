@@ -925,7 +925,17 @@ export default function Dashboard({
     }
   };
 
-  const handleSetReminderTime = () => {
+  const handleSetReminderTime = async () => {
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      await fetch(`${API_BASE_URL}/api/user/${normPhone}/reminder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reminderTime: selectedReminderTime, reminderEnabled: true })
+      });
+    } catch (e) {}
+
     const reminderFlagKey = `gymbuddy_reminder_dismissed_${activeUser.phone || "user"}_${selectedDate}`;
     try {
       localStorage.setItem(reminderFlagKey, "true");

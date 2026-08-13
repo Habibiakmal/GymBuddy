@@ -566,8 +566,105 @@ function saveDb() {
   }
 }
 
-// Initialize database on server start
+// Helper to send direct WhatsApp message
+async function sendWhatsAppDirect(rawPhone: string, message: string): Promise<boolean> {
+  const phone = normalizePhone(rawPhone);
+  if (!phone || !getTwilio()) return false;
+  try {
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+    const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+    const formattedDest = phone.startsWith("0") ? "62" + phone.substring(1) : phone;
+    const toNum = formattedDest.startsWith("whatsapp:") ? formattedDest : `whatsapp:${formattedDest}`;
+    await getTwilio().messages.create({
+      body: message,
+      from: fromNum,
+      to: toNum
+    });
+    console.log(`[WhatsApp Reminder] Successfully delivered to: ${toNum}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[WhatsApp Reminder] Error delivering to ${phone}:`, err?.message || err);
+    return false;
+  }
+}
+
+// Get current WIB time string (HH:mm)
+function getWibTimeStr(d: Date = new Date()): string {
+  const wibDate = new Date(d.getTime() + (7 * 60 + d.getTimezoneOffset()) * 60000);
+  const hours = String(wibDate.getHours()).padStart(2, "0");
+  const minutes = String(wibDate.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+// Background Scheduler for WhatsApp Reminders (Custom Daily, Nightly Inactivity & Workout Goal)
+function initReminderScheduler() {
+  console.log("[Scheduler] WhatsApp Auto-Reminder Engine initialized ✅");
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const currentTimeStr = getWibTimeStr(now);
+      const todayDateStr = getLocalDateStr(now);
+
+      for (const [phoneKey, user] of Object.entries(dbData.users as Record<string, any>)) {
+        if (!user || phoneKey === "latest_onboarding") continue;
+        const norm = user.normalizedPhone || user.phone || phoneKey;
+        const coachName = (user.persona || "max").toLowerCase() === "max" ? "Coach Max" : "Coach Mia";
+
+        // 1. Custom User Scheduled Daily Reminder
+        const isReminderEnabled = user.reminderEnabled !== false;
+        const userReminderTime = user.reminderTime || "17:00";
+
+        if (isReminderEnabled && userReminderTime === currentTimeStr && user.lastReminderSentDate !== todayDateStr) {
+          user.lastReminderSentDate = todayDateStr;
+          saveUserProfile(norm, user);
+          const msg =
+            `⏰ *PENGINGAT HARIAN GYMBUDDY*\n-----------------------------\n` +
+            `🔥 Halo *${(user.name || "Member").toUpperCase()}*! ${coachName} di sini!\n\n` +
+            `Yuk sempatkan catat makanan/minuman kamu hari ini dan cek target latihanmu! Konsistensi itu kunci! 💪✨\n\n` +
+            `*(Ketik 'matikan pengingat' atau 'ingatkan jam 19:00' untuk mengatur scheduler)*`;
+          await sendWhatsAppDirect(norm, msg);
+        }
+
+        // 2. Nightly Inactivity Log Reminder at 20:00 WIB (if 0 meals logged today)
+        if (currentTimeStr === "20:00" && user.lastNightlyReminderDate !== todayDateStr) {
+          const userLogsKey = `${norm}_${todayDateStr}`;
+          const userLogs = dbData.dailyLogs[userLogsKey] || [];
+          if (!userLogs || userLogs.length === 0) {
+            user.lastNightlyReminderDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const msg =
+              `🥗 *PENGINGAT LOG NUTRISI MALAM*\n-----------------------------\n` +
+              `🌙 Halo *${(user.name || "Member").toUpperCase()}*! ${coachName} belum melihat catatan makanan/minuman kamu hari ini nih.\n\n` +
+              `Yuk catat log makanan kamu sebelum tidur biar asupan nutrisinya tetap terpantau akurat! 🌿`;
+            await sendWhatsAppDirect(norm, msg);
+          }
+        }
+
+        // 3. Nightly Workout Goal Reminder at 20:30 WIB (if workout not completed)
+        if (currentTimeStr === "20:30" && user.lastWorkoutReminderDate !== todayDateStr) {
+          const workoutLogsKey = `gymbuddy_exercises_${norm}_${todayDateStr}`;
+          const isWorkoutDone = dbData.dailyLogs[workoutLogsKey] && dbData.dailyLogs[workoutLogsKey].length > 0;
+          if (!isWorkoutDone) {
+            user.lastWorkoutReminderDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const goalTitle = user.goalTitle || "Kebugaran Harian";
+            const msg =
+              `🏋️ *PENGINGAT TARGET LATIHAN HARIAN*\n-----------------------------\n` +
+              `🔥 Halo *${(user.name || "Member").toUpperCase()}*! Hari ini kamu belum mencatat latihan selesai.\n\n` +
+              `Yuk lakukan latihan ringan atau tuntaskan set kamu biar goal *${goalTitle}* cepat tercapai! 💪`;
+            await sendWhatsAppDirect(norm, msg);
+          }
+        }
+      }
+    } catch (schedErr) {
+      console.error("[Scheduler] Error in background check cycle:", schedErr);
+    }
+  }, 60000);
+}
+
+// Initialize database & scheduler on server start
 initDb();
+initReminderScheduler();
 
 function getTodayDateStr(): string {
   return getLocalDateStr();
@@ -2131,6 +2228,25 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
     res.json({ success: true, schedule: calculated.workoutSchedule });
   });
 
+  // REST API: Update Reminder Settings for Dashboard & WhatsApp Sync
+  app.post("/api/user/:phone/reminder", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const user = getUserProfile(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const { reminderTime, reminderEnabled } = req.body;
+    if (reminderTime) user.reminderTime = String(reminderTime).trim();
+    if (reminderEnabled !== undefined) user.reminderEnabled = Boolean(reminderEnabled);
+    saveUserProfile(phone, user);
+    res.json({
+      success: true,
+      user,
+      reminderTime: user.reminderTime,
+      reminderEnabled: user.reminderEnabled
+    });
+  });
+
   // REST API: Update Goals for Dashboard
   app.post("/api/user/:phone/goals", express.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -2375,6 +2491,73 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
               `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
               `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
               `💬 *${coachName}*:\n"${comment}"`
+            ];
+          } else if (userText.match(/(?:reminder|pengingat|ingatkan|jadwal\s*ingat|scheduler)/i)) {
+            const isOffCommand = userText.match(/(?:matikan|nonaktifkan|off|stop|hentikan|hapus)/i);
+            const isTimeGiven = userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
+            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+            if (isOffCommand) {
+              userProfile.reminderEnabled = false;
+              saveUserProfile(from, userProfile);
+              responseMessages = [
+                `❌ *PENGINGAT HARIAN DIMATIKAN*\n-----------------------------\n` +
+                `Pengingat harian scheduler kamu telah dinonaktifkan.\n\n` +
+                `💬 *${coachName}*:\n"Sip! Kalau mau dihidupkan lagi kapan saja, ketik *'hidupkan pengingat jam 17:00'* atau *'ingatkan jam 8 malam'* ya! 👍"`
+              ];
+            } else if (isTimeGiven || userText.match(/(?:hidupkan|nyalakan|aktifkan|set|buka)/i)) {
+              let setTime = "17:00";
+              if (isTimeGiven) {
+                const hh = String(Math.min(23, Math.max(0, parseInt(isTimeGiven[1])))).padStart(2, "0");
+                const mm = isTimeGiven[2] ? String(Math.min(59, Math.max(0, parseInt(isTimeGiven[2])))).padStart(2, "0") : "00";
+                setTime = `${hh}:${mm}`;
+              } else if (userProfile.reminderTime) {
+                setTime = userProfile.reminderTime;
+              }
+
+              userProfile.reminderEnabled = true;
+              userProfile.reminderTime = setTime;
+              saveUserProfile(from, userProfile);
+
+              responseMessages = [
+                `✅ *PENGINGAT HARIAN DIAKTIFKAN*\n-----------------------------\n` +
+                `⏰ Jam Pengingat: *${setTime} WIB*\n` +
+                `STATUS: *Scheduler Aktif*\n\n` +
+                `💬 *${coachName}*:\n"Mantap! Setiap hari pukul *${setTime} WIB*, ${coachName} bakal kirim chat pengingat ke WhatsApp kamu untuk catat nutrisi & latihan! 🔥\n\n*(Ketik 'matikan pengingat' jika ingin menonaktifkan)*"`
+              ];
+            } else {
+              // Ambiguous prompt: explicitly ask user if they want to turn on or off
+              responseMessages = [
+                `⏰ *SCHEDULER PENGINGAT HARIAN GYMBUDDY*\n-----------------------------\n` +
+                `Halo ${userData.name}! Mau *dihidupkan* atau *dimatikan* scheduler pengingat harian kamu?\n\n` +
+                `👉 *Untuk Hidupkan*: Ketik *"hidupkan pengingat jam 17:00"*\n` +
+                `👉 *Untuk Matikan*: Ketik *"matikan pengingat"*`
+              ];
+            }
+          } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
+            const todayStr = getTodayDateStr();
+            const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
+            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+            // Record workout log in dailyLogs
+            const workoutLogEntry: MealLog = {
+              id: `wa-workout-${Date.now()}`,
+              foodName: `🏋️ Log Latihan: ${userText.trim()}`,
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              timestamp: new Date().toISOString(),
+              mealType: "snack"
+            };
+            addMealLog(from, workoutLogEntry);
+            dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: new Date().toISOString() }];
+            saveDb();
+
+            responseMessages = [
+              `🏋️ *CATATAN LATIHAN BERHASIL DISIMPAN!*\n-----------------------------\n` +
+              `✅ Laporan latihan kamu: *"${userText.trim()}"* telah dicatat Selesai hari ini!\n\n` +
+              `💬 *${coachName}*:\n"Mantap bro ${(userData.name || "").toUpperCase()}! 1 langkah lebih dekat ke target *${userData.goalTitle || "Kebugaran"}* kamu! Istirahat cukup dan jaga nutrisi ya! 🔥"`
             ];
           } else if (weightMatch) {
             const newW = parseFloat(weightMatch[1].replace(',', '.'));
