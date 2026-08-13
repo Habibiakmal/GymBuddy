@@ -2108,9 +2108,10 @@ Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website
 \u{1F4AC} *${coachName}*:
 "${comment}"`
             ];
-          } else if (userText.match(/(?:reminder|pengingat|ingatkan|jadwal\s*ingat|scheduler)/i)) {
+          } else if (userText.match(/(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler)/i)) {
             const isOffCommand = userText.match(/(?:matikan|nonaktifkan|off|stop|hentikan|hapus)/i);
-            const isTimeGiven = userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
+            const rawTimeMatch = userText.match(/jam\s*(\d{1,2})(?::(\d{2}))?|\b(\d{1,2})(?::(\d{2}))?\s*(?:pagi|siang|sore|malam)/i);
+            const isTimeGiven = rawTimeMatch || userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
             if (isOffCommand) {
               userProfile.reminderEnabled = false;
@@ -2126,8 +2127,14 @@ Pengingat harian scheduler kamu telah dinonaktifkan.
             } else if (isTimeGiven || userText.match(/(?:hidupkan|nyalakan|aktifkan|set|buka)/i)) {
               let setTime = "17:00";
               if (isTimeGiven) {
-                const hh = String(Math.min(23, Math.max(0, parseInt(isTimeGiven[1])))).padStart(2, "0");
-                const mm = isTimeGiven[2] ? String(Math.min(59, Math.max(0, parseInt(isTimeGiven[2])))).padStart(2, "0") : "00";
+                let hhNum = parseInt(isTimeGiven[1] || isTimeGiven[3]) || 0;
+                const mmNum = parseInt(isTimeGiven[2] || isTimeGiven[4]) || 0;
+                const isSoreMalam = /sore|malam|pm/i.test(userText);
+                const isPagi = /pagi|am/i.test(userText);
+                if (isSoreMalam && hhNum < 12) hhNum += 12;
+                if (isPagi && hhNum === 12) hhNum = 0;
+                const hh = String(Math.min(23, Math.max(0, hhNum))).padStart(2, "0");
+                const mm = String(Math.min(59, Math.max(0, mmNum))).padStart(2, "0");
                 setTime = `${hh}:${mm}`;
               } else if (userProfile.reminderTime) {
                 setTime = userProfile.reminderTime;
