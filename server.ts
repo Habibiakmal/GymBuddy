@@ -2492,10 +2492,13 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
               `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
               `💬 *${coachName}*:\n"${comment}"`
             ];
-          } else if (userText.match(/(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler)/i)) {
+          } else if (userText.match(/(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler|ganti|ubah|update|jadiin|jadikan)/i) && userText.match(/(?:jam|pengingat|reminder|ingetin|ingatin|inget|ingatkan|remind|scheduler)/i)) {
             const isOffCommand = userText.match(/(?:matikan|nonaktifkan|off|stop|hentikan|hapus)/i);
+            // Support: "setengah 4" = 3:30, "seperempat 5" = 4:15, "jam 4", "4 sore"
+            const setengahMatch = userText.match(/setengah\s+(\d{1,2})/i);
+            const seperempatMatch = userText.match(/seperempat\s+(\d{1,2})/i);
             const rawTimeMatch = userText.match(/jam\s*(\d{1,2})(?::(\d{2}))?|\b(\d{1,2})(?::(\d{2}))?\s*(?:pagi|siang|sore|malam)/i);
-            const isTimeGiven = rawTimeMatch || userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
+            const isTimeGiven = setengahMatch || seperempatMatch || rawTimeMatch || userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
             if (isOffCommand) {
@@ -2509,11 +2512,24 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
             } else if (isTimeGiven || userText.match(/(?:hidupkan|nyalakan|aktifkan|set|buka)/i)) {
               let setTime = "17:00";
               if (isTimeGiven) {
-                // support "4 sore", "8 malam", "7 pagi" 12-hour formats
-                let hhNum = parseInt(isTimeGiven[1] || isTimeGiven[3]) || 0;
-                const mmNum = parseInt(isTimeGiven[2] || isTimeGiven[4]) || 0;
                 const isSoreMalam = /sore|malam|pm/i.test(userText);
                 const isPagi = /pagi|am/i.test(userText);
+                let hhNum = 0;
+                let mmNum = 0;
+
+                if (setengahMatch) {
+                  // "setengah 4" = 3:30, "setengah 5 sore" = 16:30
+                  hhNum = parseInt(setengahMatch[1]) - 1;
+                  mmNum = 30;
+                } else if (seperempatMatch) {
+                  // "seperempat 5" = 4:15
+                  hhNum = parseInt(seperempatMatch[1]) - 1;
+                  mmNum = 15;
+                } else {
+                  hhNum = parseInt(isTimeGiven[1] || isTimeGiven[3]) || 0;
+                  mmNum = parseInt(isTimeGiven[2] || isTimeGiven[4]) || 0;
+                }
+
                 if (isSoreMalam && hhNum < 12) hhNum += 12;
                 if (isPagi && hhNum === 12) hhNum = 0;
                 const hh = String(Math.min(23, Math.max(0, hhNum))).padStart(2, "0");
