@@ -943,43 +943,37 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
 
   const mealsToInsert: MealLog[] = [];
 
-  if (solidParts.length > 0 && liquidParts.length > 0) {
-    // Split solid part & liquid part
+  if (solidParts.length > 0) {
     mealsToInsert.push({
       ...meal,
       id: `${meal.id || Date.now()}-food`,
       foodName: solidParts.join(" + "),
-      calories: Math.max(0, (Number(meal.calories) || 450) - 50),
+      calories: liquidParts.length > 0 ? Math.max(0, (Number(meal.calories) || 450) - (liquidParts.length * 50)) : (Number(meal.calories) || 450),
       isHydration: false,
       volumeMl: undefined
     });
-    // Bug 1 Fix: extract actual volume from the liquid part name instead of hardcoding 250
-    const liquidName = liquidParts.join(" + ");
-    const detectedVolumeMl = (meal as any).volumeMl
-      ? Number((meal as any).volumeMl)
-      : extractVolumeMlFromName(liquidName);
+  }
+
+  if (liquidParts.length > 0) {
+    liquidParts.forEach((lPart, idx) => {
+      const detectedVolumeMl = extractVolumeMlFromName(lPart);
+      mealsToInsert.push({
+        ...meal,
+        id: `${meal.id || Date.now()}-drink-${idx}`,
+        foodName: lPart,
+        calories: Math.round(50 / liquidParts.length),
+        protein: 1,
+        carbs: 5,
+        fat: 0,
+        isHydration: true,
+        volumeMl: detectedVolumeMl
+      } as any);
+    });
+  } else if (solidParts.length === 0) {
     mealsToInsert.push({
       ...meal,
-      id: `${meal.id || Date.now()}-drink`,
-      foodName: liquidName,
-      calories: 50,
-      protein: 1,
-      carbs: 5,
-      fat: 0,
-      isHydration: true,
-      volumeMl: detectedVolumeMl
-    } as any);
-  } else {
-    // Bug 1 Fix: for pure liquid items, extract volume from name if not already provided
-    const isLiquid = liquidParts.length > 0 || isLiquidName(rawName);
-    const existingVolume = (meal as any).volumeMl ? Number((meal as any).volumeMl) : undefined;
-    const resolvedVolume = isLiquid
-      ? (existingVolume || extractVolumeMlFromName(rawName))
-      : undefined;
-    mealsToInsert.push({
-      ...meal,
-      isHydration: isLiquid,
-      volumeMl: resolvedVolume
+      isHydration: isLiquidName(rawName),
+      volumeMl: isLiquidName(rawName) ? extractVolumeMlFromName(rawName) : undefined
     } as any);
   }
 

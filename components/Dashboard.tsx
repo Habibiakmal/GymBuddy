@@ -136,7 +136,7 @@ const extractVolumeMlFromName = (name: string): number => {
   return 250;
 };
 
-// Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi")
+// Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "Susu Bear Brand + Kopi Hitam")
 const splitAndCategorizeComboText = (
   rawName: string,
   totalCal: number = 0,
@@ -166,55 +166,38 @@ const splitAndCategorizeComboText = (
   const drinks: MealItem[] = [];
   const nowIso = new Date().toISOString();
 
-  if (solidParts.length > 0 && liquidParts.length > 0) {
+  if (solidParts.length > 0) {
     const solidName = solidParts.join(" + ");
     foods.push({
       id: `m-food-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       foodName: solidName,
-      calories: totalCal > 0 ? Math.max(100, totalCal - 50) : 450,
+      calories: totalCal > 0 && liquidParts.length > 0 ? Math.max(100, totalCal - (liquidParts.length * 50)) : (totalCal || 450),
       protein: totalProt > 0 ? totalProt : 25,
       carbs: totalCarb > 0 ? totalCarb : 45,
       fat: totalFat > 0 ? totalFat : 12,
       isHydration: false,
       timestamp: nowIso
     });
+  }
 
-    const drinkName = liquidParts.join(" + ");
-    drinks.push({
-      id: `m-drink-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      foodName: drinkName,
-      calories: 50,
-      protein: 1,
-      carbs: 5,
-      fat: 0,
-      isHydration: true,
-      // Bug 3 Fix: extract actual volume from drink name instead of hardcoding 250
-      volumeMl: extractVolumeMlFromName(drinkName),
-      timestamp: nowIso
-    });
-  } else if (liquidParts.length > 0) {
-    drinks.push({
-      id: `m-drink-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      foodName: rawName,
-      calories: totalCal || 50,
-      protein: totalProt || 1,
-      carbs: totalCarb || 5,
-      fat: totalFat || 0,
-      isHydration: true,
-      // Bug 3 Fix: extract actual volume from drink name instead of hardcoding 250
-      volumeMl: extractVolumeMlFromName(rawName),
-      timestamp: nowIso
-    });
-  } else {
-    foods.push({
-      id: `m-food-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      foodName: rawName,
-      calories: totalCal || 350,
-      protein: totalProt || 20,
-      carbs: totalCarb || 35,
-      fat: totalFat || 10,
-      isHydration: false,
-      timestamp: nowIso
+  if (liquidParts.length > 0) {
+    const perDrinkCal = Math.round((totalCal > 0 && solidParts.length === 0 ? totalCal : (liquidParts.length * 50)) / liquidParts.length);
+    const perDrinkProt = Math.round((totalProt || 0) / liquidParts.length);
+    const perDrinkCarb = Math.round((totalCarb || 0) / liquidParts.length);
+    const perDrinkFat = Math.round((totalFat || 0) / liquidParts.length);
+
+    liquidParts.forEach((part, idx) => {
+      drinks.push({
+        id: `m-drink-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        foodName: part,
+        calories: perDrinkCal,
+        protein: perDrinkProt,
+        carbs: perDrinkCarb,
+        fat: perDrinkFat,
+        isHydration: true,
+        volumeMl: extractVolumeMlFromName(part),
+        timestamp: nowIso
+      });
     });
   }
 
@@ -236,8 +219,9 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
       item.fat
     );
 
-    if (foods.length > 0 && drinks.length > 0) {
-      result.push(...foods, ...drinks);
+    if (foods.length > 0 || drinks.length > 0) {
+      if (foods.length > 0) result.push(...foods);
+      if (drinks.length > 0) result.push(...drinks);
     } else {
       if (isLiquidName(item.foodName) || item.isHydration) {
         result.push({
