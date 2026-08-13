@@ -284,6 +284,7 @@ interface MealLog {
   fiber?: number;
   sugar?: number;
   isHydration?: boolean;
+  volumeMl?: number;
   timestamp: string;
   mealType?: string;
 }
@@ -923,6 +924,17 @@ function isLiquidName(name: string): boolean {
   return liquidKeywords.some((kw) => lower.includes(kw));
 }
 
+// Extract volume in ml from a food name string (e.g. "Air Mineral 600ml" → 600)
+function extractVolumeMlFromName(name: string): number {
+  if (!name) return 250;
+  // Match patterns like "600ml", "600 ml", "1.5L", "1,5 liter"
+  const mlMatch = name.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+  if (mlMatch) return parseFloat(mlMatch[1].replace(',', '.'));
+  const lMatch = name.match(/(\d+(?:[.,]\d+)?)\s*(?:l|liter|litre)\b/i);
+  if (lMatch) return parseFloat(lMatch[1].replace(',', '.')) * 1000;
+  return 250;
+}
+
 function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
@@ -951,23 +963,36 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
       id: `${meal.id || Date.now()}-food`,
       foodName: solidParts.join(" + "),
       calories: Math.max(0, (Number(meal.calories) || 450) - 50),
-      isHydration: false
+      isHydration: false,
+      volumeMl: undefined
     });
+    // Bug 1 Fix: extract actual volume from the liquid part name instead of hardcoding 250
+    const liquidName = liquidParts.join(" + ");
+    const detectedVolumeMl = (meal as any).volumeMl
+      ? Number((meal as any).volumeMl)
+      : extractVolumeMlFromName(liquidName);
     mealsToInsert.push({
       ...meal,
       id: `${meal.id || Date.now()}-drink`,
-      foodName: liquidParts.join(" + "),
+      foodName: liquidName,
       calories: 50,
       protein: 1,
       carbs: 5,
       fat: 0,
       isHydration: true,
-      volumeMl: 250
+      volumeMl: detectedVolumeMl
     } as any);
   } else {
+    // Bug 1 Fix: for pure liquid items, extract volume from name if not already provided
+    const isLiquid = liquidParts.length > 0 || isLiquidName(rawName);
+    const existingVolume = (meal as any).volumeMl ? Number((meal as any).volumeMl) : undefined;
+    const resolvedVolume = isLiquid
+      ? (existingVolume || extractVolumeMlFromName(rawName))
+      : undefined;
     mealsToInsert.push({
       ...meal,
-      isHydration: liquidParts.length > 0 || isLiquidName(rawName)
+      isHydration: isLiquid,
+      volumeMl: resolvedVolume
     } as any);
   }
 
@@ -1984,7 +2009,10 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
       fiber: Number(meal.fiber) || 0,
       sugar: Number(meal.sugar) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
-      timestamp: meal.timestamp || new Date().toISOString()
+      timestamp: meal.timestamp || new Date().toISOString(),
+      // Bug 2b Fix: preserve isHydration and volumeMl sent from frontend
+      isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : (meal.isHydration === false || meal.isHydration === "false" ? false : undefined),
+      volumeMl: meal.volumeMl ? Number(meal.volumeMl) : undefined
     };
     addMealLog(phone, mealObj, targetDate);
     const key = `${phone}_${targetDate}`;
@@ -2374,22 +2402,41 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
           } else if (waterMatch) {
             const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
             const unit = (waterMatch[2] || "gelas").toLowerCase();
-            let cupsToAdd = Math.round(rawAmount);
+            // Bug 4 Fix: compute actual ml accurately (no rounding loss)
+            let actualMl: number;
             if (unit === "ml") {
-              cupsToAdd = Math.max(1, Math.round(rawAmount / 250));
+              actualMl = rawAmount;
             } else if (unit === "l" || unit === "liter") {
-              cupsToAdd = Math.max(1, Math.round(rawAmount * 4));
+              actualMl = rawAmount * 1000;
+            } else {
+              // "gelas" / "cup" = 250ml each
+              actualMl = Math.round(rawAmount) * 250;
             }
+            const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
             const currentCups = getWaterCups(from);
             const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
             const liters = (newTotalCups * 0.25).toFixed(1);
+            // Bug 4 Fix: also add entry to dailyLogs so dashboard shows it
+            const waterEntry: MealLog = {
+              id: `wa-water-${Date.now()}`,
+              foodName: `Air Putih ${actualMl} ml`,
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              isHydration: true,
+              volumeMl: actualMl,
+              timestamp: new Date().toISOString(),
+              mealType: getMealTypeByHour()
+            };
+            addMealLog(from, waterEntry);
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
             const comment = userData.persona === "max" 
               ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥"
               : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar ✨";
             responseMessages = [
               `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
-              `✅ Kamu menambah *${cupsToAdd} gelas* air putih!\n` +
+              `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
               `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
               `💬 *${coachName}*:\n"${comment}"`
             ];
@@ -2755,22 +2802,40 @@ Keluarkan output JSON valid:
       } else if (waterMatch) {
         const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
         const unit = (waterMatch[2] || "gelas").toLowerCase();
-        let cupsToAdd = Math.round(rawAmount);
+        // Bug 4 Fix: compute actual ml accurately (no rounding loss)
+        let actualMl: number;
         if (unit === "ml") {
-          cupsToAdd = Math.max(1, Math.round(rawAmount / 250));
+          actualMl = rawAmount;
         } else if (unit === "l" || unit === "liter") {
-          cupsToAdd = Math.max(1, Math.round(rawAmount * 4));
+          actualMl = rawAmount * 1000;
+        } else {
+          actualMl = Math.round(rawAmount) * 250;
         }
+        const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
         const currentCups = getWaterCups(From);
         const newTotalCups = setWaterCups(From, currentCups + cupsToAdd);
         const liters = (newTotalCups * 0.25).toFixed(1);
+        // Bug 4 Fix: also add entry to dailyLogs so dashboard shows it
+        const waterEntry: MealLog = {
+          id: `wa-water-${Date.now()}`,
+          foodName: `Air Putih ${actualMl} ml`,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          isHydration: true,
+          volumeMl: actualMl,
+          timestamp: new Date().toISOString(),
+          mealType: getMealTypeByHour()
+        };
+        addMealLog(From, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         const comment = userData.persona === "max" 
           ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥"
           : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar ✨";
         responseMessages = [
           `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
-          `✅ Kamu menambah *${cupsToAdd} gelas* air putih!\n` +
+          `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
           `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
           `💬 *${coachName}*:\n"${comment}"`
         ];
@@ -3960,15 +4025,36 @@ ${mistakes}
       } else if (waterMatch) {
         const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
         const unit = (waterMatch[2] || "gelas").toLowerCase();
-        let cupsToAdd = Math.round(rawAmount);
-        if (unit === "ml") cupsToAdd = Math.max(1, Math.round(rawAmount / 250));
-        else if (unit === "l" || unit === "liter") cupsToAdd = Math.max(1, Math.round(rawAmount * 4));
+        // Bug 4 Fix: compute actual ml accurately (no rounding loss)
+        let actualMl: number;
+        if (unit === "ml") {
+          actualMl = rawAmount;
+        } else if (unit === "l" || unit === "liter") {
+          actualMl = rawAmount * 1000;
+        } else {
+          actualMl = Math.round(rawAmount) * 250;
+        }
+        const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
         const newTotalCups = setWaterCups(from, getWaterCups(from) + cupsToAdd);
         const liters = (newTotalCups * 0.25).toFixed(1);
+        // Bug 4 Fix: also add entry to dailyLogs so dashboard shows it
+        const waterEntry: MealLog = {
+          id: `wa-water-${Date.now()}`,
+          foodName: `Air Putih ${actualMl} ml`,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          isHydration: true,
+          volumeMl: actualMl,
+          timestamp: new Date().toISOString(),
+          mealType: getMealTypeByHour()
+        };
+        addMealLog(from, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         responseMessages = [
           `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
-          `✅ Kamu menambah *${cupsToAdd} gelas* air putih!\n` +
+          `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
           `📊 Total Hidrasi: *${newTotalCups} Gelas* (${liters}L / 3.0L Target)\n\n` +
           `💬 *${coachName}*: Mantap! Tetap jaga hidrasi ya! 💪`
         ];

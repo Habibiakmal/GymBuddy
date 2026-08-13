@@ -126,6 +126,16 @@ const isLiquidName = (name: string): boolean => {
   return liquidKeywords.some((kw) => lower.includes(kw));
 };
 
+// Extract volume in ml from a food name string (e.g. "Air Mineral 600ml" → 600)
+const extractVolumeMlFromName = (name: string): number => {
+  if (!name) return 250;
+  const mlMatch = name.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+  if (mlMatch) return parseFloat(mlMatch[1].replace(',', '.'));
+  const lMatch = name.match(/(\d+(?:[.,]\d+)?)\s*(?:l|liter|litre)\b/i);
+  if (lMatch) return parseFloat(lMatch[1].replace(',', '.')) * 1000;
+  return 250;
+};
+
 // Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi")
 const splitAndCategorizeComboText = (
   rawName: string,
@@ -178,7 +188,8 @@ const splitAndCategorizeComboText = (
       carbs: 5,
       fat: 0,
       isHydration: true,
-      volumeMl: 250,
+      // Bug 3 Fix: extract actual volume from drink name instead of hardcoding 250
+      volumeMl: extractVolumeMlFromName(drinkName),
       timestamp: nowIso
     });
   } else if (liquidParts.length > 0) {
@@ -190,7 +201,8 @@ const splitAndCategorizeComboText = (
       carbs: totalCarb || 5,
       fat: totalFat || 0,
       isHydration: true,
-      volumeMl: 250,
+      // Bug 3 Fix: extract actual volume from drink name instead of hardcoding 250
+      volumeMl: extractVolumeMlFromName(rawName),
       timestamp: nowIso
     });
   } else {
@@ -592,6 +604,10 @@ export default function Dashboard({
   const [selectedReminderTime, setSelectedReminderTime] = useState("17:00");
   const [reminderNotificationMsg, setReminderNotificationMsg] = useState<string | null>(null);
 
+  // Coach Mood Popup State
+  const [showCoachMoodPopup, setShowCoachMoodPopup] = useState(false);
+  const [coachMoodData, setCoachMoodData] = useState<{ icon: string; title: string; message: string; tips: string[]; color: string } | null>(null);
+
   // Weekly Schedule
   const weeklySchedule = getPersonalizedWeeklySchedule(initialUser);
 
@@ -852,13 +868,67 @@ export default function Dashboard({
       localStorage.setItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`, state);
     } catch (e) {}
 
+    // Coach mood popup messages
+    const coachMessages: Record<string, { icon: string; title: string; message: string; tips: string[]; color: string }> = {
+      great: {
+        icon: "🔥",
+        title: "Lo lagi di puncak!",
+        message: "Keren! Hari ini dijaga ya fitnya, menu latihan hari ini udah gue siapin. Jangan lupa buat log makanan lo biar gue bantu tracking!",
+        tips: ["Kejar target workout hari ini 💪", "Log semua makanan ke GymBuddy", "Minum air minimal 2L hari ini"],
+        color: "#C4F82A",
+      },
+      good: {
+        icon: "🙂",
+        title: "Solid! Hari yang bagus!",
+        message: "Energi lo oke, cukup untuk workout produktif hari ini. Gas latihan sesuai jadwal, jangan skip!",
+        tips: ["Lakukan latihan sesuai jadwal hari ini", "Fokus ke form yang benar", "Catat nutrisi lo hari ini"],
+        color: "#4ade80",
+      },
+      okay: {
+        icon: "😐",
+        title: "Masih bisa digas!",
+        message: "Kondisi lo lumayan. Coba warmup dulu 10 menit, biasanya langsung lebih semangat. Jangan skip workout ya!",
+        tips: ["Mulai dengan warmup ringan 10 menit", "Kurangi intensitas jika perlu, tapi tetap latihan", "Makan makanan bergizi untuk boost energi"],
+        color: "#facc15",
+      },
+      not_great: {
+        icon: "🙁",
+        title: "Istirahat dulu boleh...",
+        message: "Kalau badan kurang fit, jangan dipaksain berat. Coba olahraga ringan kayak jalan kaki atau stretching aja dulu.",
+        tips: ["Jalan santai 20-30 menit", "Full body stretching 15 menit", "Makan makanan bersih, hindari gorengan & gula", "Tidur cukup malam ini"],
+        color: "#fb923c",
+      },
+      sick: {
+        icon: "🤒",
+        title: "Prioritas: Sembuh dulu!",
+        message: "Kalau lagi sakit, tubuh lo butuh energi buat sembuh, bukan buat latihan berat. Rest is progress juga!",
+        tips: ["❌ Skip gym dulu hari ini", "Istirahat total & tidur yang cukup", "Makan makanan bergizi: sop, buah, sayur", "Minum air & elektrolit yang cukup", "Konsultasi dokter jika butuh"],
+        color: "#f87171",
+      },
+      bad: {
+        icon: "😫",
+        title: "Yuk recharge dulu!",
+        message: "Lo lagi di titik terendah. Itu wajar. Yang penting hari ini: makan bersih, istirahat, dan jangan stress soal workout.",
+        tips: ["❌ Jangan paksa latihan hari ini", "Istirahat penuh & tidur berkualitas", "Makan makanan ringan yang bergizi", "Minum air putih yang cukup", "Besok lo pasti lebih kuat! 💪"],
+        color: "#a78bfa",
+      },
+    };
+
+    const moodData = coachMessages[state];
+    if (moodData) {
+      setCoachMoodData(moodData);
+      setShowCoachMoodPopup(true);
+    }
+
     if ((state === "good" || state === "great") && !isTodayWorkoutFinished) {
       const reminderFlagKey = `gymbuddy_reminder_dismissed_${activeUser.phone || "user"}_${selectedDate}`;
       try {
         const alreadyPrompted = localStorage.getItem(reminderFlagKey);
-        if (!alreadyPrompted) setShowAutoReminderModal(true);
+        if (!alreadyPrompted) {
+          setTimeout(() => setShowAutoReminderModal(true), 2200);
+        }
       } catch (e) {
-        setShowAutoReminderModal(true);
+        setTimeout(() => setShowAutoReminderModal(true), 2200);
       }
     }
   };
@@ -1800,6 +1870,68 @@ export default function Dashboard({
 
       {/* AUTO REMINDER MODAL */}
       <AnimatePresence>
+        {/* COACH MOOD POPUP */}
+        {showCoachMoodPopup && coachMoodData && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4"
+            onClick={() => setShowCoachMoodPopup(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+            {/* Card */}
+            <div
+              className="relative w-full max-w-sm bg-[#161B26] border rounded-3xl p-6 shadow-2xl animate-[slideUp_0.35s_cubic-bezier(.16,1,.3,1)]"
+              style={{ borderColor: coachMoodData.color + "55" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Glow */}
+              <div
+                className="absolute -top-8 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full blur-3xl opacity-25 pointer-events-none"
+                style={{ background: coachMoodData.color }}
+              />
+
+              {/* Coach Avatar + Badge */}
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
+                  style={{ background: coachMoodData.color + "22", border: `1.5px solid ${coachMoodData.color}55` }}
+                >
+                  🏋️
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: coachMoodData.color }}>GymBuddy Coach</p>
+                  <h3 className="text-base font-extrabold text-white leading-tight">{coachMoodData.icon} {coachMoodData.title}</h3>
+                </div>
+              </div>
+
+              {/* Message */}
+              <p className="text-sm text-neutral-300 leading-relaxed mb-4 font-medium">
+                {coachMoodData.message}
+              </p>
+
+              {/* Tips */}
+              <div className="bg-[#10141D] rounded-2xl p-4 space-y-2 mb-5">
+                {coachMoodData.tips.map((tip, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-xs mt-0.5" style={{ color: coachMoodData!.color }}>›</span>
+                    <span className="text-xs text-neutral-300 font-medium">{tip}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA Button */}
+              <button
+                onClick={() => setShowCoachMoodPopup(false)}
+                className="w-full py-3 rounded-2xl font-extrabold text-sm transition-all active:scale-95"
+                style={{ background: coachMoodData.color, color: "#0d0f14" }}
+              >
+                Siap, Coach! 💪
+              </button>
+            </div>
+          </div>
+        )}
+
         {showAutoReminderModal && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div
