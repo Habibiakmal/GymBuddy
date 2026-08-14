@@ -569,31 +569,127 @@ function saveDb() {
 // Helper to send direct WhatsApp message
 async function sendWhatsAppDirect(rawPhone: string, message: string): Promise<boolean> {
   const phone = normalizePhone(rawPhone);
-  if (!phone || !getTwilio()) return false;
-  try {
-    const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-    const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-    const formattedDest = phone.startsWith("0") ? "62" + phone.substring(1) : phone;
-    const toNum = formattedDest.startsWith("whatsapp:") ? formattedDest : `whatsapp:${formattedDest}`;
-    await getTwilio().messages.create({
-      body: message,
-      from: fromNum,
-      to: toNum
-    });
-    console.log(`[WhatsApp Reminder] Successfully delivered to: ${toNum}`);
-    return true;
-  } catch (err: any) {
-    console.error(`[WhatsApp Reminder] Error delivering to ${phone}:`, err?.message || err);
-    return false;
+  if (!phone) return false;
+  let sent = false;
+  if (getTwilio()) {
+    try {
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+      const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+      const formattedDest = phone.startsWith("0") ? "62" + phone.substring(1) : phone;
+      const toNum = formattedDest.startsWith("whatsapp:") ? formattedDest : `whatsapp:${formattedDest}`;
+      await getTwilio().messages.create({
+        body: message,
+        from: fromNum,
+        to: toNum
+      });
+      console.log(`[WhatsApp Reminder] Successfully delivered via Twilio to: ${toNum}`);
+      sent = true;
+    } catch (err: any) {
+      console.error(`[WhatsApp Reminder] Error delivering via Twilio to ${phone}:`, err?.message || err);
+    }
   }
+  if (!sent && (process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN)) {
+    try {
+      sent = await sendMetaWhatsappMessage(phone, message);
+      if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta to: ${phone}`);
+    } catch (err: any) {
+      console.error(`[WhatsApp Reminder] Error delivering via Meta to ${phone}:`, err?.message || err);
+    }
+  }
+  return sent;
 }
 
 // Get current WIB time string (HH:mm)
 function getWibTimeStr(d: Date = new Date()): string {
-  const wibDate = new Date(d.getTime() + (7 * 60 + d.getTimezoneOffset()) * 60000);
-  const hours = String(wibDate.getHours()).padStart(2, "0");
-  const minutes = String(wibDate.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  try {
+    const options = { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false } as const;
+    const formatter = new Intl.DateTimeFormat("en-GB", options);
+    const parts = formatter.formatToParts(d);
+    const hours = parts.find(p => p.type === "hour")!.value.padStart(2, "0");
+    const minutes = parts.find(p => p.type === "minute")!.value.padStart(2, "0");
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    const wibDate = new Date(d.getTime() + (7 * 60 + d.getTimezoneOffset()) * 60000);
+    const hours = String(wibDate.getHours()).padStart(2, "0");
+    const minutes = String(wibDate.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+}
+
+// Helper to handle reminder set/change/disable commands across all webhooks
+function handleReminderCommand(userText: string, userProfile: any, phone: string, userData: any): string[] | null {
+  const isReminderKeyword = /(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler|ganti|ubah|update|jadiin|jadikan)/i.test(userText);
+  const isTimeOrControlKeyword = /(?:jam|pengingat|reminder|ingetin|ingatin|inget|ingatkan|remind|scheduler|jadwal|matikan|nonaktifkan|hidupkan|nyalakan|aktifkan)/i.test(userText);
+
+  if (!isReminderKeyword || !isTimeOrControlKeyword) {
+    return null;
+  }
+
+  const isOffCommand = /(?:matikan|nonaktifkan|off|stop|hentikan|hapus)/i.test(userText);
+  const setengahMatch = userText.match(/setengah\s+(\d{1,2})/i);
+  const seperempatMatch = userText.match(/seperempat\s+(\d{1,2})/i);
+  const rawTimeMatch = userText.match(/jam\s*(\d{1,2})(?:[:.](\d{2}))?|\b(\d{1,2})(?:[:.](\d{2}))?\s*(?:pagi|siang|sore|malam)|(\d{1,2})[:.](\d{2})/i);
+  const genericMatch = userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
+  const isTimeGiven = Boolean(setengahMatch || seperempatMatch || rawTimeMatch || genericMatch);
+  const coachName = (userData?.persona || "max").toLowerCase() === "max" ? "Coach Max" : "Coach Mia";
+
+  if (isOffCommand) {
+    userProfile.reminderEnabled = false;
+    saveUserProfile(phone, userProfile);
+    return [
+      `❌ *PENGINGAT HARIAN DIMATIKAN*\n-----------------------------\n` +
+      `Pengingat harian scheduler kamu telah dinonaktifkan.\n\n` +
+      `💬 *${coachName}*:\n"Sip! Kalau mau dihidupkan lagi kapan saja, ketik *'hidupkan pengingat jam 17:00'* atau *'ingatkan jam 8 malam'* ya! 👍"`
+    ];
+  }
+
+  if (isTimeGiven || /(?:hidupkan|nyalakan|aktifkan|set|buka)/i.test(userText)) {
+    let setTime = userProfile.reminderTime || "17:00";
+    if (isTimeGiven) {
+      const isSoreMalam = /sore|malam|pm/i.test(userText);
+      const isPagi = /pagi|am/i.test(userText);
+      let hhNum = 0;
+      let mmNum = 0;
+
+      if (setengahMatch) {
+        hhNum = parseInt(setengahMatch[1]) - 1;
+        mmNum = 30;
+      } else if (seperempatMatch) {
+        hhNum = parseInt(seperempatMatch[1]) - 1;
+        mmNum = 15;
+      } else if (rawTimeMatch) {
+        hhNum = parseInt(rawTimeMatch[1] || rawTimeMatch[3] || rawTimeMatch[5]) || 0;
+        mmNum = parseInt(rawTimeMatch[2] || rawTimeMatch[4] || rawTimeMatch[6]) || 0;
+      } else if (genericMatch) {
+        hhNum = parseInt(genericMatch[1]) || 0;
+        mmNum = genericMatch[2] ? parseInt(genericMatch[2]) : 0;
+      }
+
+      if (isSoreMalam && hhNum < 12) hhNum += 12;
+      if (isPagi && hhNum === 12) hhNum = 0;
+      const hh = String(Math.min(23, Math.max(0, hhNum))).padStart(2, "0");
+      const mm = String(Math.min(59, Math.max(0, mmNum))).padStart(2, "0");
+      setTime = `${hh}:${mm}`;
+    }
+
+    userProfile.reminderEnabled = true;
+    userProfile.reminderTime = setTime;
+    saveUserProfile(phone, userProfile);
+
+    return [
+      `✅ *PENGINGAT HARIAN DIAKTIFKAN*\n-----------------------------\n` +
+      `⏰ Jam Pengingat: *${setTime} WIB*\n` +
+      `STATUS: *Scheduler Aktif*\n\n` +
+      `💬 *${coachName}*:\n"Mantap! Setiap hari pukul *${setTime} WIB*, ${coachName} bakal kirim chat pengingat ke WhatsApp kamu untuk catat nutrisi & latihan! 🔥\n\n*(Ketik 'matikan pengingat' jika ingin menonaktifkan)*"`
+    ];
+  }
+
+  return [
+    `⏰ *SCHEDULER PENGINGAT HARIAN GYMBUDDY*\n-----------------------------\n` +
+    `Halo ${(userData?.name || "Member")}! Mau *dihidupkan* atau *dimatikan* scheduler pengingat harian kamu?\n\n` +
+    `👉 *Untuk Hidupkan*: Ketik *"hidupkan pengingat jam 17:00"*\n` +
+    `👉 *Untuk Matikan*: Ketik *"matikan pengingat"*`
+  ];
 }
 
 // Background Scheduler for WhatsApp Reminders (Custom Daily, Nightly Inactivity & Workout Goal)
@@ -2492,72 +2588,8 @@ Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tan
               `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
               `💬 *${coachName}*:\n"${comment}"`
             ];
-          } else if (userText.match(/(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler|ganti|ubah|update|jadiin|jadikan)/i) && userText.match(/(?:jam|pengingat|reminder|ingetin|ingatin|inget|ingatkan|remind|scheduler)/i)) {
-            const isOffCommand = userText.match(/(?:matikan|nonaktifkan|off|stop|hentikan|hapus)/i);
-            // Support: "setengah 4" = 3:30, "seperempat 5" = 4:15, "jam 4", "4 sore"
-            const setengahMatch = userText.match(/setengah\s+(\d{1,2})/i);
-            const seperempatMatch = userText.match(/seperempat\s+(\d{1,2})/i);
-            const rawTimeMatch = userText.match(/jam\s*(\d{1,2})(?::(\d{2}))?|\b(\d{1,2})(?::(\d{2}))?\s*(?:pagi|siang|sore|malam)/i);
-            const isTimeGiven = setengahMatch || seperempatMatch || rawTimeMatch || userText.match(/(?:jam\s*)?(\d{1,2})[:. ]?(\d{2})?/i);
-            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-
-            if (isOffCommand) {
-              userProfile.reminderEnabled = false;
-              saveUserProfile(from, userProfile);
-              responseMessages = [
-                `❌ *PENGINGAT HARIAN DIMATIKAN*\n-----------------------------\n` +
-                `Pengingat harian scheduler kamu telah dinonaktifkan.\n\n` +
-                `💬 *${coachName}*:\n"Sip! Kalau mau dihidupkan lagi kapan saja, ketik *'hidupkan pengingat jam 17:00'* atau *'ingatkan jam 8 malam'* ya! 👍"`
-              ];
-            } else if (isTimeGiven || userText.match(/(?:hidupkan|nyalakan|aktifkan|set|buka)/i)) {
-              let setTime = "17:00";
-              if (isTimeGiven) {
-                const isSoreMalam = /sore|malam|pm/i.test(userText);
-                const isPagi = /pagi|am/i.test(userText);
-                let hhNum = 0;
-                let mmNum = 0;
-
-                if (setengahMatch) {
-                  // "setengah 4" = 3:30, "setengah 5 sore" = 16:30
-                  hhNum = parseInt(setengahMatch[1]) - 1;
-                  mmNum = 30;
-                } else if (seperempatMatch) {
-                  // "seperempat 5" = 4:15
-                  hhNum = parseInt(seperempatMatch[1]) - 1;
-                  mmNum = 15;
-                } else {
-                  hhNum = parseInt(isTimeGiven[1] || isTimeGiven[3]) || 0;
-                  mmNum = parseInt(isTimeGiven[2] || isTimeGiven[4]) || 0;
-                }
-
-                if (isSoreMalam && hhNum < 12) hhNum += 12;
-                if (isPagi && hhNum === 12) hhNum = 0;
-                const hh = String(Math.min(23, Math.max(0, hhNum))).padStart(2, "0");
-                const mm = String(Math.min(59, Math.max(0, mmNum))).padStart(2, "0");
-                setTime = `${hh}:${mm}`;
-              } else if (userProfile.reminderTime) {
-                setTime = userProfile.reminderTime;
-              }
-
-              userProfile.reminderEnabled = true;
-              userProfile.reminderTime = setTime;
-              saveUserProfile(from, userProfile);
-
-              responseMessages = [
-                `✅ *PENGINGAT HARIAN DIAKTIFKAN*\n-----------------------------\n` +
-                `⏰ Jam Pengingat: *${setTime} WIB*\n` +
-                `STATUS: *Scheduler Aktif*\n\n` +
-                `💬 *${coachName}*:\n"Mantap! Setiap hari pukul *${setTime} WIB*, ${coachName} bakal kirim chat pengingat ke WhatsApp kamu untuk catat nutrisi & latihan! 🔥\n\n*(Ketik 'matikan pengingat' jika ingin menonaktifkan)*"`
-              ];
-            } else {
-              // Ambiguous prompt: explicitly ask user if they want to turn on or off
-              responseMessages = [
-                `⏰ *SCHEDULER PENGINGAT HARIAN GYMBUDDY*\n-----------------------------\n` +
-                `Halo ${userData.name}! Mau *dihidupkan* atau *dimatikan* scheduler pengingat harian kamu?\n\n` +
-                `👉 *Untuk Hidupkan*: Ketik *"hidupkan pengingat jam 17:00"*\n` +
-                `👉 *Untuk Matikan*: Ketik *"matikan pengingat"*`
-              ];
-            }
+          } else if (handleReminderCommand(userText, userProfile, from, userData)) {
+            responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
           } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
             const todayStr = getTodayDateStr();
             const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
@@ -2987,6 +3019,32 @@ Keluarkan output JSON valid:
         const parsedDate = parseDateFromQuery(userText);
         const totals = getDailyTotals(From, parsedDate.dateStr);
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+      } else if (handleReminderCommand(userText, userProfile, From, userData)) {
+        responseMessages = handleReminderCommand(userText, userProfile, From, userData)!;
+      } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
+        const todayStr = getLocalDateStr();
+        const workoutKey = `gymbuddy_exercises_${From}_${todayStr}`;
+        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+        const workoutLogEntry: MealLog = {
+          id: `wa-workout-${Date.now()}`,
+          foodName: `🏋️ Log Latihan: ${userText.trim()}`,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          timestamp: new Date().toISOString(),
+          mealType: "snack"
+        };
+        addMealLog(From, workoutLogEntry);
+        dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: new Date().toISOString() }];
+        saveDb();
+
+        responseMessages = [
+          `🏋️ *LATIHAN HARI INI DICATAT*\n-----------------------------\n` +
+          `✅ ${userText.trim()}\n\n` +
+          `💬 *${coachName}*:\n"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! 💪🔥"`
+        ];
       } else if (getAi()) {
         // Send immediate progress notification via Twilio REST API if available
         await sendTwilioWhatsappMessage(From, "sedang berpikir... 💭\n\nHampir selesai mengecek inputmu... 📊");
@@ -4179,12 +4237,32 @@ ${mistakes}
           `📊 Total Hidrasi: *${newTotalCups} Gelas* (${liters}L / 3.0L Target)\n\n` +
           `💬 *${coachName}*: Mantap! Tetap jaga hidrasi ya! 💪`
         ];
-      } else if (weightMatch) {
-        const newW = parseFloat(weightMatch[1].replace(',', '.'));
-        if (!isNaN(newW) && newW > 30 && newW < 300) {
-          const resProg = addWeeklyProgress(from, newW, "Update via WhatsApp");
-          responseMessages = resProg ? [formatWeeklyProgressCard(resProg)] : ["Profil belum terdaftar. Isi kuesioner dulu!"];
-        }
+      } else if (handleReminderCommand(userText, userProfile, from, userData)) {
+        responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
+      } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
+        const todayStr = getLocalDateStr();
+        const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
+        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+        const workoutLogEntry: MealLog = {
+          id: `wa-workout-${Date.now()}`,
+          foodName: `🏋️ Log Latihan: ${userText.trim()}`,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          timestamp: new Date().toISOString(),
+          mealType: "snack"
+        };
+        addMealLog(from, workoutLogEntry);
+        dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: new Date().toISOString() }];
+        saveDb();
+
+        responseMessages = [
+          `🏋️ *LATIHAN HARI INI DICATAT*\n-----------------------------\n` +
+          `✅ ${userText.trim()}\n\n` +
+          `💬 *${coachName}*:\n"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! 💪🔥"`
+        ];
       } else {
         // 100% PURE AI MESSAGING — ALL messages processed dynamically by Gemini AI
         if (USER_GEMINI_KEY) {
@@ -4304,7 +4382,16 @@ FORMAT 4 - JIKA USER MINTA JADWAL LATIHAN / WORKOUT PLAN:
   "generalReply": "Jadwal latihan lengkap"
 }
 
-FORMAT 5 - CHAT UMUM / REKOMENDASI / PERTANYAAN LAINNYA:
+FORMAT 5 - JIKA USER MEMINTA UNTUK ATUR / UBAH PENGINGAT HARIAN ATAU SCHEDULER:
+{
+  "intent": "REMINDER_SET",
+  "isFood": false,
+  "reminderEnabled": true,
+  "reminderTime": "15:35",
+  "generalReply": "Baik Kak Habibi! Jadwal pengingat harian sudah Mia bantu sesuaikan menjadi pukul 15:35 WIB."
+}
+
+FORMAT 6 - CHAT UMUM / REKOMENDASI / PERTANYAAN LAINNYA:
 {
   "intent": "CHAT",
   "isFood": false,
@@ -4388,6 +4475,18 @@ CATATAN:
             } else if (parsed.intent === "DAILY_REKAP") {
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
+            } else if (parsed.intent === "REMINDER_SET" || parsed.reminderTime) {
+              const isOff = parsed.reminderEnabled === false;
+              userProfile.reminderEnabled = !isOff;
+              if (parsed.reminderTime && /^\d{2}:\d{2}$/.test(parsed.reminderTime)) {
+                userProfile.reminderTime = parsed.reminderTime;
+              }
+              saveUserProfile(from, userProfile);
+              const coachN = (userData?.persona || "max").toLowerCase() === "max" ? "Coach Max" : "Coach Mia";
+              const replyMsg = parsed.generalReply || (isOff
+                ? `❌ *PENGINGAT HARIAN DIMATIKAN*\n-----------------------------\nPengingat harian scheduler kamu telah dinonaktifkan.`
+                : `✅ *PENGINGAT HARIAN DIAKTIFKAN*\n-----------------------------\n⏰ Jam Pengingat: *${userProfile.reminderTime} WIB*\nSTATUS: *Scheduler Aktif*\n\n💬 *${coachN}*:\n"Mantap! Setiap hari pukul *${userProfile.reminderTime} WIB*, ${coachN} bakal kirim chat pengingat ke WhatsApp kamu! 🔥"`);
+              responseMessages = [replyMsg];
             } else if (parsed.intent === "WORKOUT_PLAN") {
               let workoutReply = parsed.generalReply || "";
               if (!workoutReply || workoutReply.trim().length < 10) {
