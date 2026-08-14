@@ -102,7 +102,7 @@ type FeelState = "bad" | "sick" | "not_great" | "okay" | "good" | "great";
 // Helper function to check if item name is liquid / drink
 const isLiquidName = (name: string): boolean => {
   if (!name) return false;
-  const lower = name.toLowerCase();
+  const lower = name.toLowerCase().trim();
 
   const solidExceptions = [
     "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
@@ -121,7 +121,27 @@ const isLiquidName = (name: string): boolean => {
     "smoothie", "beverage", "soda", "cola", "boba", "latte",
     "espresso", "cappuccino", "syrup", "sirup", "infused",
     "hydrat", "pocari", "gatorade", "le minerale", "aqua", "es teh",
-    "es kopi", "yakult", "matcha"
+    "es kopi", "yakult", "matcha", "americano", "macchiato",
+    "mocha", "affogato", "flat white", "long black", "ristretto", "cold brew",
+    "chai", "thai tea", "teh pucuk", "teh botol", "teh kotak", "oat milk",
+    "almond milk", "soya", "soy milk", "dancow", "ultra milk", "indomilk",
+    "cleo", "vit", "ades", "coke", "pepsi", "sprite", "fanta", "7up",
+    "root beer", "big cola", "dr pepper", "minuman", "cairan", "liquid",
+    "wedang", "jamu", "hydro", "isoplus", "you1000", "c1000", "milku",
+    "milo", "ovaltine", "nutrisari", "beer", "bir", "wine", "whiskey",
+    "vodka", "soju", "rum", "cocktail", "mocktail", "whey", "creatine",
+    // Popular Indonesian/cafe coffee drinks
+    "montblanc", "mont blanc", "vietnam", "robusta", "liberica", "arabica",
+    "v60", "drip", "pour over", "aeropress", "chemex", "cold drip",
+    "brown sugar", "caramel", "hazelnut", "vanilla latte", "pistachio",
+    "aren", "gula aren", "kopi aren", "kopi tubruk", "kopi susu",
+    "es jeruk", "es lemon", "lemonade", "lemon tea", "fruit tea",
+    "minuman dingin", "minuman panas", "hot drink", "iced", "es ",
+    "wedang jahe", "jahe", "bandrek", "bajigur", "sekoteng",
+    "cincau", "es cincau", "dawet", "es dawet", "cendol",
+    "infused water", "detox", "green tea", "ocha", "hojicha",
+    "protein shake", "mass gainer", "pre-workout", "bcaa",
+    "electrolyte", "energy drink", "red bull", "monster", "kratingdaeng"
   ];
   return liquidKeywords.some((kw) => lower.includes(kw));
 };
@@ -136,13 +156,14 @@ const extractVolumeMlFromName = (name: string): number => {
   return 250;
 };
 
-// Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "Susu Bear Brand + Kopi Hitam")
+// Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "rice bowl + americano")
 const splitAndCategorizeComboText = (
   rawName: string,
   totalCal: number = 0,
   totalProt: number = 0,
   totalCarb: number = 0,
-  totalFat: number = 0
+  totalFat: number = 0,
+  isExplicitDrink: boolean = false
 ): { foods: MealItem[]; drinks: MealItem[] } => {
   if (!rawName) return { foods: [], drinks: [] };
 
@@ -155,7 +176,7 @@ const splitAndCategorizeComboText = (
   const liquidParts: string[] = [];
 
   for (const part of parts) {
-    if (isLiquidName(part)) {
+    if (isLiquidName(part) || isExplicitDrink) {
       liquidParts.push(part);
     } else {
       solidParts.push(part);
@@ -171,7 +192,7 @@ const splitAndCategorizeComboText = (
     foods.push({
       id: `m-food-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       foodName: solidName,
-      calories: totalCal > 0 && liquidParts.length > 0 ? Math.max(100, totalCal - (liquidParts.length * 50)) : (totalCal || 450),
+      calories: totalCal > 0 && liquidParts.length > 0 ? Math.max(50, totalCal - (liquidParts.length * 20)) : (totalCal || 450),
       protein: totalProt > 0 ? totalProt : 25,
       carbs: totalCarb > 0 ? totalCarb : 45,
       fat: totalFat > 0 ? totalFat : 12,
@@ -181,10 +202,10 @@ const splitAndCategorizeComboText = (
   }
 
   if (liquidParts.length > 0) {
-    const perDrinkCal = Math.round((totalCal > 0 && solidParts.length === 0 ? totalCal : (liquidParts.length * 50)) / liquidParts.length);
-    const perDrinkProt = Math.round((totalProt || 0) / liquidParts.length);
-    const perDrinkCarb = Math.round((totalCarb || 0) / liquidParts.length);
-    const perDrinkFat = Math.round((totalFat || 0) / liquidParts.length);
+    const perDrinkCal = Math.round((totalCal > 0 && solidParts.length === 0 ? totalCal : (liquidParts.length * 15)) / liquidParts.length);
+    const perDrinkProt = Math.round((totalProt || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
+    const perDrinkCarb = Math.round((totalCarb || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
+    const perDrinkFat = Math.round((totalFat || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
 
     liquidParts.forEach((part, idx) => {
       drinks.push({
@@ -216,7 +237,8 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
       item.calories,
       item.protein,
       item.carbs,
-      item.fat
+      item.fat,
+      Boolean(item.isHydration)
     );
 
     if (foods.length > 0 || drinks.length > 0) {
@@ -641,6 +663,9 @@ export default function Dashboard({
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
   const [showManualInputs, setShowManualInputs] = useState(false);
   const [aiPreview, setAiPreview] = useState<any>(null);
+  const [aiConfirmStep, setAiConfirmStep] = useState(false); // Feature 1: two-step confirm
+  const [coachTip, setCoachTip] = useState<string | null>(null); // Coach next-step bubble
+  const [showCoachTip, setShowCoachTip] = useState(false);
 
   const normalizePhone = (phone: string): string => {
     if (!phone) return "";
@@ -768,38 +793,52 @@ export default function Dashboard({
   // Fetch & Auto-Split Combo Logs
   const fetchLogsForDate = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
+    // PRIORITY 1: Always read localStorage first — it is the authoritative local state.
+    // localStorage is updated immediately on add/delete, so it is always more up-to-date
+    // than the remote server which may lag behind or serve stale data.
     let rawLogs: MealItem[] = [];
-
-    const tryFetchMeals = async (baseUrl: string) => {
-      try {
-        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.logs)) {
-            return data.logs;
-          }
+    let hasLocalData = false;
+    try {
+      const localData = localStorage.getItem(localKey);
+      if (localData !== null) {
+        const parsed = JSON.parse(localData);
+        if (Array.isArray(parsed)) {
+          rawLogs = parsed;
+          hasLocalData = true;
         }
-      } catch (e) {}
-      return null;
-    };
+      }
+    } catch (e) {}
 
-    rawLogs = (await tryFetchMeals("")) || (await tryFetchMeals((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com")) || [];
+    // PRIORITY 2: Only fetch from server if localStorage has NO data for this date at all.
+    // This avoids stale server data overwriting fresh local deletes/adds.
+    if (!hasLocalData) {
+      const tryFetchMeals = async (baseUrl: string) => {
+        try {
+          const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.logs)) {
+              return data.logs as MealItem[];
+            }
+          }
+        } catch (e) {}
+        return null;
+      };
 
-    if (rawLogs.length === 0) {
-      try {
-        const localData = localStorage.getItem(`gymbuddy_meals_${normPhone}_${dateStr}`);
-        if (localData) rawLogs = JSON.parse(localData);
-      } catch (e) {}
+      const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com")) || [];
+      if (serverLogs.length > 0) {
+        rawLogs = serverLogs;
+        // Cache fetched server data into localStorage for future fast reads
+        try {
+          localStorage.setItem(localKey, JSON.stringify(rawLogs));
+        } catch (e) {}
+      }
     }
 
     const sanitized = sanitizeAndSplitComboLogs(rawLogs);
     setAllLogs(sanitized);
-
-    try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(sanitized));
-    } catch (e) {}
   };
 
   useEffect(() => {
@@ -990,17 +1029,18 @@ export default function Dashboard({
     return null;
   };
 
-  // Combo Splitting Handler for new entries with AI Auto-Detection
-  const handleSaveLogItem = async () => {
+  // Step 1: AI Analysis & Preview — does NOT save yet, just fills form + shows confirm panel
+  const handleAnalyzeAndPreview = async () => {
     if (!itemNameInput.trim()) return;
+    setIsAnalyzingAi(true);
+    setAiConfirmStep(false);
 
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
     let cal = Number(itemCalInput) || 0;
     let prot = Number(itemProteinInput) || 0;
     let carb = Number(itemCarbsInput) || 0;
     let fat = Number(itemFatInput) || 0;
 
-    // If user didn't enter calories manually, perform AI auto-detection!
+    // If user didn't fill macros manually, use AI
     if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
       const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
       if (aiRes) {
@@ -1011,6 +1051,20 @@ export default function Dashboard({
       }
     }
 
+    setIsAnalyzingAi(false);
+    setAiConfirmStep(true); // Show confirmation panel
+  };
+
+  // Step 2: User confirmed — actually save to log
+  const handleConfirmSave = async () => {
+    if (!itemNameInput.trim()) return;
+
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const cal = Number(itemCalInput) || 0;
+    const prot = Number(itemProteinInput) || 0;
+    const carb = Number(itemCarbsInput) || 0;
+    const fat = Number(itemFatInput) || 0;
+
     const { foods, drinks } = splitAndCategorizeComboText(
       itemNameInput,
       cal,
@@ -1020,34 +1074,91 @@ export default function Dashboard({
     );
 
     const newItems = [...foods, ...drinks];
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
-    for (const item of newItems) {
-      try {
-        await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...item, date: selectedDate })
-        });
-      } catch (e) {}
-    }
-
+    // CRITICAL: Update localStorage IMMEDIATELY before the server call.
     const updated = [...allLogs, ...newItems];
     setAllLogs(updated);
+    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      localStorage.setItem(localKey, JSON.stringify(updated));
     } catch (e) {}
 
+    // Fire-and-forget server sync (non-critical, localStorage is authoritative)
+    const syncToServer = async (baseUrl: string) => {
+      for (const item of newItems) {
+        try {
+          await fetch(`${baseUrl}/api/user/${normPhone}/meals`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...item, date: selectedDate })
+          });
+        } catch (e) {}
+      }
+    };
+    syncToServer("");
+    syncToServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com");
+
+    // Reset all form state
     setItemNameInput("");
     setItemCalInput("");
     setItemProteinInput("");
     setItemCarbsInput("");
     setItemFatInput("");
     setAiPreview(null);
+    setAiConfirmStep(false);
     setShowManualInputs(false);
     setShowAddFoodModal(false);
     setShowAddDrinkModal(false);
+
+    // ── Fetch Coach Next-Step Advice (non-blocking) ─────────────────────────
+    const totalCal = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.calories) || 0), 0);
+    const totalProt = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.protein) || 0), 0);
+    const totalCarb = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.carbs) || 0), 0);
+    const totalFat  = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.fat) || 0), 0);
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      const tipRes = await fetch(`${API_BASE_URL}/api/ai/next-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: normPhone,
+          calories: totalCal,
+          protein: totalProt,
+          carbs: totalCarb,
+          fat: totalFat,
+          targetCalories,
+          targetProtein,
+          targetCarbs,
+          targetFat,
+          goal: activeUser.goal || "maintain",
+          persona: activeUser.persona || "max",
+          name: activeUser.name || "Member",
+          mealName: itemNameInput || foods[0]?.foodName || "Makanan"
+        })
+      });
+      if (tipRes.ok) {
+        const tipData = await tipRes.json();
+        if (tipData.success && tipData.advice) {
+          // Strip WhatsApp bold markers for web display
+          const cleanAdvice = (tipData.advice as string)
+            .replace(/\*\*?(.*?)\*\*?/g, "$1")
+            .replace(/━+/g, "")
+            .replace(/🎯 \*?SARAN [A-Z ]+\*?\n*/i, "")
+            .trim();
+          setCoachTip(cleanAdvice);
+          setShowCoachTip(true);
+          // Auto-hide after 12 seconds
+          setTimeout(() => setShowCoachTip(false), 12000);
+        }
+      }
+    } catch (tipErr) {
+      // Silently ignore — coach tip is non-critical
+    }
+    // ── End Coach Next-Step ────────────────────────────────────────────────
   };
+
+  // Legacy: kept for backward compatibility but now calls handleAnalyzeAndPreview
+  const handleSaveLogItem = handleAnalyzeAndPreview;
 
   const handleQuickAddWater = (ml: number) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
@@ -1083,16 +1194,25 @@ export default function Dashboard({
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const updated = allLogs.filter((item) => item.id !== id);
     setAllLogs(updated);
+
+    // Immediately persist deletion to localStorage — this is the source of truth.
+    // Store the updated (post-delete) array so that refresh will read the correct state.
+    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      localStorage.setItem(localKey, JSON.stringify(updated));
     } catch (e) {}
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-    try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
-        method: "DELETE"
-      });
-    } catch (e) {}
+    // Fire-and-forget: sync deletion to both local and remote servers.
+    // Failures here are non-critical since localStorage is authoritative.
+    const deleteFromServer = async (baseUrl: string) => {
+      try {
+        await fetch(`${baseUrl}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
+          method: "DELETE"
+        });
+      } catch (e) {}
+    };
+    deleteFromServer(""); // local server
+    deleteFromServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com"); // remote server
   };
 
   const handleDeleteAccount = async () => {
@@ -2285,6 +2405,78 @@ export default function Dashboard({
                     </motion.div>
                   )}
                 </div>
+
+                {/* ── Feature 1: Confirmation Panel ─────────────────────── */}
+                {aiConfirmStep && !isAnalyzingAi && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 p-4 bg-[#181B26] rounded-2xl space-y-3 border border-[#C4F82A]/30"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-[#C4F82A] flex items-center gap-1.5">
+                        <Sparkles size={12} /> Hasil Deteksi AI — Konfirmasi?
+                      </span>
+                      <span className="text-[11px] font-black text-white bg-[#C4F82A]/20 border border-[#C4F82A]/30 px-2 py-0.5 rounded-lg">
+                        {itemCalInput} kcal
+                      </span>
+                    </div>
+
+                    {/* Macro summary row */}
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Protein</span>
+                        <span className="text-white">{itemProteinInput}g</span>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Karbo</span>
+                        <span className="text-white">{itemCarbsInput}g</span>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Lemak</span>
+                        <span className="text-white">{itemFatInput}g</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-white/50 text-center">
+                      Nutrisi salah? Gunakan <em>"Edit Nutrisi Manual"</em> di atas lalu simpan.
+                    </p>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setAiConfirmStep(false);
+                          setShowManualInputs(true);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-white/70 hover:bg-white/10 cursor-pointer transition-colors"
+                      >
+                        ✏️ Edit Nutrisi
+                      </button>
+                      <button
+                        onClick={handleConfirmSave}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-black bg-[#C4F82A] text-[#181B26] hover:bg-[#d8ff45] cursor-pointer transition-colors shadow-sm"
+                      >
+                        ✅ Simpan ke Log
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setAiConfirmStep(false);
+                        setAiPreview(null);
+                        setItemNameInput("");
+                        setItemCalInput("");
+                        setItemProteinInput("");
+                        setItemCarbsInput("");
+                        setItemFatInput("");
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
+                    >
+                      ❌ Batal
+                    </button>
+                  </motion.div>
+                )}
+                {/* ── End Feature 1 ─────────────────────────────────────── */}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -2293,29 +2485,32 @@ export default function Dashboard({
                     setShowAddFoodModal(false);
                     setShowAddDrinkModal(false);
                     setAiPreview(null);
+                    setAiConfirmStep(false);
                     setShowManualInputs(false);
                   }}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   {t.closeModal}
                 </button>
-                <button
-                  onClick={handleSaveLogItem}
-                  disabled={isAnalyzingAi || !itemNameInput.trim()}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
-                >
-                  {isAnalyzingAi ? (
-                    <>
-                      <Sparkles size={14} className="animate-spin" />
-                      <span>Analyzing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} />
-                      <span>{lang === "EN" ? "Save & AI Detect" : "Simpan & Deteksi AI"}</span>
-                    </>
-                  )}
-                </button>
+                {!aiConfirmStep && (
+                  <button
+                    onClick={handleAnalyzeAndPreview}
+                    disabled={isAnalyzingAi || !itemNameInput.trim()}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    {isAnalyzingAi ? (
+                      <>
+                        <Sparkles size={14} className="animate-spin" />
+                        <span>Mendeteksi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        <span>{lang === "EN" ? "AI Detect Nutrition" : "Deteksi Nutrisi AI"}</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -2374,6 +2569,53 @@ export default function Dashboard({
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── Coach Next-Step Bubble ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showCoachTip && coachTip && (
+          <motion.div
+            initial={{ y: 120, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 120, opacity: 0 }}
+            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            className="fixed bottom-6 left-4 right-4 z-50 max-w-md mx-auto"
+          >
+            <div className="bg-[#181B26] border border-[#C4F82A]/30 rounded-2xl shadow-2xl p-4 flex gap-3 items-start">
+              {/* Coach avatar badge */}
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#C4F82A]/15 border border-[#C4F82A]/30 flex items-center justify-center text-lg">
+                {isMaxPersona ? "🏋️" : "✨"}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-black text-[#C4F82A] mb-1 flex items-center gap-1.5">
+                  <Sparkles size={10} />
+                  {coachName} — Saran Selanjutnya
+                </p>
+                <p className="text-[12.5px] text-white/85 leading-relaxed font-medium">
+                  {coachTip}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowCoachTip(false)}
+                className="flex-shrink-0 text-white/30 hover:text-white/70 transition-colors cursor-pointer mt-0.5"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Progress bar showing auto-dismiss */}
+            <motion.div
+              initial={{ width: "100%" }}
+              animate={{ width: "0%" }}
+              transition={{ duration: 12, ease: "linear" }}
+              className="h-0.5 bg-[#C4F82A]/50 rounded-full mt-1 mx-1"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ── End Coach Bubble ────────────────────────────────────────────────── */}
+
     </div>
   );
 }

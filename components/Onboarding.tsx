@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   Sliders,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Lock
 } from "lucide-react";
 
 // WhatsApp Icon component
@@ -92,6 +93,20 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   const [height, setHeight] = useState("170");
   const [age, setAge] = useState("25");
   const [userTargetWeight, setUserTargetWeight] = useState("");
+  const [allergies, setAllergies] = useState<string[]>(["none"]);
+
+  const toggleAllergy = (allergyId: string) => {
+    setAllergies((prev) => {
+      if (allergyId === "none") return ["none"];
+      const filtered = prev.filter((a) => a !== "none");
+      if (filtered.includes(allergyId)) {
+        const next = filtered.filter((a) => a !== allergyId);
+        return next.length === 0 ? ["none"] : next;
+      } else {
+        return [...filtered, allergyId];
+      }
+    });
+  };
 
   // Lifestyle & Workout Constraints
   const [activityLevel, setActivityLevel] = useState("sedentary");
@@ -177,6 +192,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           challenges,
           injuries,
           customInjury,
+          allergies: allergies.length > 0 ? allergies : ["none"],
           equipment,
           persona,
           plan: selectedPlan,
@@ -766,15 +782,6 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       </div>
                     </div>
                   </div>
-
-                  <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
-                    <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
-                    <span>
-                      {isEN
-                        ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
-                        : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
-                    </span>
-                  </div>
                 </div>
               </motion.div>
             )}
@@ -790,13 +797,13 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 5 — Biometric Data" : "Langkah 5 — Data Biometrik"}
+                    {isEN ? "Step 5 — Biometric Data & Allergies" : "Langkah 5 — Data Biometrik & Alergi"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Physical & Metabolism Data" : "Data Fisik & Metabolisme"}
                   </h1>
                   <p className="text-neutral-400 text-sm">
-                    {isEN ? "Used to calculate BMR (Basal Metabolic Rate) and daily calorie needs." : "Digunakan untuk menghitung BMR (Basal Metabolic Rate) dan kebutuhan kalori harian."}
+                    {isEN ? "Used to calculate BMR (Basal Metabolic Rate) and customized daily meal plans." : "Digunakan untuk menghitung BMR dan rekomendasi nutrisi personal."}
                   </p>
                 </div>
 
@@ -842,8 +849,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         <Scale className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                         <input
                           type="number"
+                          min="1"
                           value={weight}
-                          onChange={(e) => setWeight(e.target.value)}
+                          onChange={(e) => setWeight(e.target.value.replace(/-/g, ''))}
                           placeholder="65"
                           className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                         />
@@ -858,8 +866,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         <Ruler className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                         <input
                           type="number"
+                          min="1"
                           value={height}
-                          onChange={(e) => setHeight(e.target.value)}
+                          onChange={(e) => setHeight(e.target.value.replace(/-/g, ''))}
                           placeholder="170"
                           className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                         />
@@ -876,8 +885,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                       <input
                         type="number"
+                        min="1"
                         value={age}
-                        onChange={(e) => setAge(e.target.value)}
+                        onChange={(e) => setAge(e.target.value.replace(/-/g, ''))}
                         placeholder="25"
                         className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                       />
@@ -902,8 +912,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           <input
                             type="number"
                             step="0.5"
+                            min="1"
                             value={userTargetWeight || recW}
-                            onChange={(e) => setUserTargetWeight(e.target.value)}
+                            onChange={(e) => setUserTargetWeight(e.target.value.replace(/-/g, ''))}
                             placeholder={String(recW)}
                             className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                           />
@@ -965,6 +976,46 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       </div>
                     );
                   })()}
+
+                  {/* Food Allergies Question */}
+                  <div className="pt-4 space-y-3 border-t border-neutral-800">
+                    <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                      {isEN ? "Food Allergies & Dietary Restrictions" : "Alergi & Pantangan Makanan"}
+                    </label>
+                    <p className="text-xs text-neutral-400">
+                      {isEN
+                        ? "Select any foods you are allergic to so your personalized meal recommendations stay 100% safe."
+                        : "Pilih makanan yang menyebabkan alergi agar rekomendasi nutrisi dari AI disesuaikan secara aman."}
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { id: "none", label: isEN ? "No Allergies" : "Tidak Ada Alergi", icon: "✨" },
+                        { id: "peanuts", label: isEN ? "Peanuts & Nuts" : "Kacang-kacangan", icon: "🥜" },
+                        { id: "seafood", label: isEN ? "Seafood & Fish" : "Seafood / Udang", icon: "🦐" },
+                        { id: "dairy", label: isEN ? "Dairy & Lactose" : "Susu / Laktosa", icon: "🥛" },
+                        { id: "eggs", label: isEN ? "Eggs" : "Telur", icon: "🥚" },
+                        { id: "gluten", label: isEN ? "Gluten & Wheat" : "Gluten / Gandum", icon: "🌾" },
+                        { id: "soy", label: isEN ? "Soy / Tofu" : "Kedelai / Tahu", icon: "🫛" }
+                      ].map((opt) => {
+                        const isSelected = allergies.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleAllergy(opt.id)}
+                            className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              isSelected
+                                ? "bg-[#D4FF00]/10 border-[#D4FF00] text-[#D4FF00]"
+                                : "bg-[#111620] border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                            }`}
+                          >
+                            <span>{opt.icon}</span>
+                            <span className="truncate">{opt.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -1672,59 +1723,182 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               </motion.div>
             )}
 
-            {/* STEP 14: SUCCESS & OPEN WHATSAPP */}
-            {step === 14 && (
-              <motion.div
-                key="step14"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center text-center space-y-6 min-h-[45vh]"
-              >
-                <div className="w-16 h-16 bg-[#25D366]/10 rounded-full flex items-center justify-center border border-[#25D366]/30">
-                  <Check className="w-8 h-8 text-[#25D366]" strokeWidth={3} />
-                </div>
+            {/* STEP 14: FINAL ONBOARDING TRANSITION SCREEN */}
+            {step === 14 && (() => {
+              const userW = Number(weight) || 65;
+              const userH = Number(height) || 170;
+              const userA = Number(age) || 25;
+              const userG = gender || "pria";
+              const userGoal = goal || "lose";
+              const userAct = activityLevel || "light";
 
-                <div className="space-y-2 max-w-sm">
-                  <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                    {isEN ? "Plan Ready to Send!" : "Rencana Siap Dikirim!"}
-                  </h2>
-                  <p className="text-neutral-400 text-sm">
-                    {isEN
-                      ? `Hello ${name}! GymBuddy AI has calculated your BMR and constructed a custom daily nutrition guide for you.`
-                      : `Halo ${name}! GymBuddy AI telah menghitung BMR dan menyusun panduan nutrisi harian khusus untukmu.`}
-                  </p>
-                </div>
+              const hM = userH / 100;
+              const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+              const recW = Math.min(userW - 2, Math.max(45, bmiIdealW));
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 mt-4">
-                  <motion.a
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}?text=${encodeURIComponent(
-                      `Halo GymBuddy AI! Saya ${name || "Member"}, target saya adalah ${goalData.title}. Tolong kirimkan analisis & target harian saya ya.`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={onComplete}
-                    className="px-8 py-4 bg-[#25D366] text-black font-extrabold rounded-full text-base hover:bg-[#20bd5a] transition-all flex items-center gap-2.5 cursor-pointer shadow-lg"
-                  >
-                    <WhatsAppIcon className="w-5 h-5" />
-                    <span>{isEN ? "Open WhatsApp & Get Plan" : "Buka WhatsApp & Terima Rencana"}</span>
-                  </motion.a>
+              let targetW = Number(userTargetWeight) || userW;
+              if (userGoal === "lose" && !userTargetWeight) targetW = recW;
+              else if (userGoal === "gain" && !userTargetWeight) targetW = userW + 5;
 
-                  {onComplete && (
+              const bmr = userG === "wanita"
+                ? 10 * userW + 6.25 * userH - 5 * userA - 161
+                : 10 * userW + 6.25 * userH - 5 * userA + 5;
+
+              const actMultipliers: Record<string, number> = {
+                sedentary: 1.2,
+                light: 1.375,
+                moderate: 1.55,
+                active: 1.725
+              };
+              const tdee = Math.round(bmr * (actMultipliers[userAct] || 1.375));
+
+              let targetCal = tdee;
+              if (userGoal === "lose") targetCal = Math.max(1200, Math.round(tdee - 500));
+              else if (userGoal === "gain") targetCal = Math.round(tdee + 400);
+
+              const proteinGram = Math.round((targetCal * 0.30) / 4);
+              const carbsGram = Math.round((targetCal * 0.45) / 4);
+              const fatGram = Math.round((targetCal * 0.25) / 9);
+
+              const weightDiffKg = Math.round(Math.abs(userW - targetW) * 10) / 10;
+              const estWeeks = userGoal === "maintain" || weightDiffKg === 0 ? 0 : Math.max(2, Math.ceil(weightDiffKg / 0.75));
+
+              return (
+                <motion.div
+                  key="step14"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-5 max-w-md mx-auto text-left pb-6"
+                >
+                  {/* 1. Onboarding Completion Badge at Top */}
+                  <div className="flex items-center gap-3 bg-[#161C28] border border-[#25D366]/40 p-3.5 rounded-2xl shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-[#25D366]/20 border border-[#25D366]/40 flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5 text-[#25D366]" strokeWidth={3} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-['Archivo_Black'] text-[#25D366] uppercase tracking-wider">
+                        {isEN ? "ONBOARDING COMPLETE" : "ONBOARDING SELESAI"}
+                      </div>
+                      <div className="text-xs font-bold text-white">
+                        {isEN ? "Questionnaire Finished & Profile Configured" : "Kuesioner Selesai & Profil Berhasil Dibuat"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Strong Headline & Supporting Text */}
+                  <div className="space-y-2 pt-1">
+                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                      {isEN ? "Let’s build your nutrition plan!" : "Mari buat rencana nutrisimu!"}
+                    </h1>
+                    <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
+                      {isEN
+                        ? "In just 3 minutes, you’ll discover your daily calorie needs and get an estimate of how long it may take to reach your ideal weight."
+                        : "Hanya dalam 3 menit, kamu akan menemukan kebutuhan kalori harianmu dan estimasi waktu untuk mencapai berat badan idealmu."}
+                    </p>
+                  </div>
+
+                  {/* 3. Locked Calorie Target Summary */}
+                  <div className="bg-gradient-to-br from-[#1F2B14] via-[#161B22] to-[#111620] border-2 border-[#D4FF00] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden shadow-[0_0_30px_rgba(212,255,0,0.15)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-[#D4FF00]" />
+                        {isEN ? "Estimated Daily Calorie Target" : "Estimasi Target Kalori Harian"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase shadow-sm">
+                        <Lock className="w-3 h-3 text-black" />
+                        {isEN ? "LOCKED TARGET" : "TARGET TERKUNCI"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 pt-1">
+                      <span className="text-3xl sm:text-4xl font-['Archivo_Black'] text-white">
+                        {targetCal.toLocaleString()}
+                      </span>
+                      <span className="text-sm font-extrabold text-[#D4FF00]">kcal / {isEN ? "day" : "hari"}</span>
+                    </div>
+
+                    <p className="text-[11px] text-neutral-300 font-medium">
+                      {isEN
+                        ? `Personalized based on ${userW} kg, ${userH} cm, age ${userA}, and ${userG}.`
+                        : `Dihitung khusus berdasarkan ${userW} kg, ${userH} cm, usia ${userA} th (${userG}).`}
+                    </p>
+                  </div>
+
+                  {/* 4. Simple Weight Progress Visualization */}
+                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-neutral-400 font-bold uppercase tracking-wider">
+                      <span>{isEN ? "Weight Progress Estimation" : "Estimasi Progres Berat Badan"}</span>
+                      {estWeeks > 0 && (
+                        <span className="text-[#D4FF00] font-extrabold bg-[#D4FF00]/10 px-2 py-0.5 rounded-lg border border-[#D4FF00]/30">
+                          {isEN ? `Est. ~${estWeeks} Weeks` : `Estimasi ~${estWeeks} Minggu`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="text-left">
+                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Current" : "Awal"}</div>
+                        <div className="text-xl font-['Archivo_Black'] text-white">{userW} <span className="text-xs text-neutral-400">kg</span></div>
+                      </div>
+
+                      <div className="flex-1 px-4 flex items-center justify-center flex-col">
+                        <div className="w-full bg-neutral-800 h-2.5 rounded-full relative overflow-hidden">
+                          <div className="bg-gradient-to-r from-[#D4FF00] to-[#25D366] h-full rounded-full w-2/3"></div>
+                        </div>
+                        <div className="text-[10px] font-bold text-[#D4FF00] mt-1.5">
+                          {userGoal === "lose" ? `-${weightDiffKg} kg Target` : userGoal === "gain" ? `+${weightDiffKg} kg Target` : "Menjaga BB Ideal"}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Goal" : "Target"}</div>
+                        <div className="text-xl font-['Archivo_Black'] text-[#D4FF00]">{targetW} <span className="text-xs text-neutral-400">kg</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Compact Macro Summary */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                      {isEN ? "Estimated Daily Macros" : "Estimasi Makronutrisi Harian"}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="bg-[#161C28] border border-purple-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-purple-400 uppercase">Protein</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{proteinGram}g</div>
+                        <div className="text-[10px] text-neutral-400">30% target</div>
+                      </div>
+
+                      <div className="bg-[#161C28] border border-cyan-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-cyan-400 uppercase">Carbs</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{carbsGram}g</div>
+                        <div className="text-[10px] text-neutral-400">45% target</div>
+                      </div>
+
+                      <div className="bg-[#161C28] border border-rose-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-rose-400 uppercase">Fat</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{fatGram}g</div>
+                        <div className="text-[10px] text-neutral-400">25% target</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. Prominent "Lanjut" CTA Button */}
+                  <div className="pt-3">
                     <motion.button
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={onComplete}
-                      className="px-8 py-4 bg-[#D4FF00] text-black font-extrabold rounded-full text-base hover:bg-[#b8de00] transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                      className="w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <ChevronRight className="w-5 h-5" />
-                      <span>{isEN ? "Go to Web Dashboard" : "Masuk ke Dashboard Web"}</span>
+                      <span>Lanjut</span>
+                      <ChevronRight size={22} className="stroke-[3]" />
                     </motion.button>
-                  )}
-                </div>
-              </motion.div>
-            )}
+                  </div>
+                </motion.div>
+              );
+            })()}
+
 
           </AnimatePresence>
         </main>

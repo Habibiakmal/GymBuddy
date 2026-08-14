@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  RefreshCw,
   Sparkles,
   CheckCircle2,
   Droplets,
@@ -23,7 +22,18 @@ import {
   User,
   ArrowRight,
   ArrowLeft,
-  X
+  X,
+  Check,
+  Clock,
+  Coffee,
+  Bell,
+  Globe,
+  Layers,
+  Search,
+  MessageSquare,
+  BarChart2,
+  CheckSquare,
+  RotateCcw
 } from "lucide-react";
 
 interface MealItem {
@@ -36,6 +46,8 @@ interface MealItem {
   fiber?: number;
   timestamp?: string;
   mealType?: "breakfast" | "lunch" | "dinner" | "snack";
+  isHydration?: boolean;
+  volumeMl?: number;
 }
 
 interface UserProfileData {
@@ -50,12 +62,15 @@ interface UserProfileData {
   age: number;
   gender: string;
   persona: string;
+  createdAt?: string;
+  registerDate?: string;
   tdee?: number;
   targetCalories?: number;
   proteinGrams?: number;
   carbGrams?: number;
   fatGrams?: number;
   fiberGrams?: number;
+  workoutSchedule?: any[];
 }
 
 interface DashboardProps {
@@ -66,85 +81,608 @@ interface DashboardProps {
   onResetData?: () => void;
 }
 
+interface WorkoutExercise {
+  id: string;
+  name: string;
+  targetSets: number;
+  completedSets: number;
+  setsState: boolean[];
+  targetReps: string;
+  status: "not_started" | "in_progress" | "completed";
+}
+
+interface DaySchedule {
+  day: string;
+  focus: string;
+  exercises: WorkoutExercise[];
+}
+
+type FeelState = "bad" | "sick" | "not_great" | "okay" | "good" | "great";
+
+// Helper function to check if item name is liquid / drink
+const isLiquidName = (name: string): boolean => {
+  if (!name) return false;
+  const lower = name.toLowerCase().trim();
+
+  const solidExceptions = [
+    "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
+    "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
+    "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
+    "selai", "topping", "crepe", "churros", "pisang"
+  ];
+
+  if (solidExceptions.some((se) => lower.includes(se))) {
+    return false;
+  }
+
+  const liquidKeywords = [
+    "air", "water", "mineral", "kopi", "coffee", "teh", "tea",
+    "susu", "milk", "jus", "juice", "shake", "drink", "minum",
+    "smoothie", "beverage", "soda", "cola", "boba", "latte",
+    "espresso", "cappuccino", "syrup", "sirup", "infused",
+    "hydrat", "pocari", "gatorade", "le minerale", "aqua", "es teh",
+    "es kopi", "yakult", "matcha", "americano", "macchiato",
+    "mocha", "affogato", "flat white", "long black", "ristretto", "cold brew",
+    "chai", "thai tea", "teh pucuk", "teh botol", "teh kotak", "oat milk",
+    "almond milk", "soya", "soy milk", "dancow", "ultra milk", "indomilk",
+    "cleo", "vit", "ades", "coke", "pepsi", "sprite", "fanta", "7up",
+    "root beer", "big cola", "dr pepper", "minuman", "cairan", "liquid",
+    "wedang", "jamu", "hydro", "isoplus", "you1000", "c1000", "milku",
+    "milo", "ovaltine", "nutrisari", "beer", "bir", "wine", "whiskey",
+    "vodka", "soju", "rum", "cocktail", "mocktail", "whey", "creatine",
+    // Popular Indonesian/cafe coffee drinks
+    "montblanc", "mont blanc", "vietnam", "robusta", "liberica", "arabica",
+    "v60", "drip", "pour over", "aeropress", "chemex", "cold drip",
+    "brown sugar", "caramel", "hazelnut", "vanilla latte", "pistachio",
+    "aren", "gula aren", "kopi aren", "kopi tubruk", "kopi susu",
+    "es jeruk", "es lemon", "lemonade", "lemon tea", "fruit tea",
+    "minuman dingin", "minuman panas", "hot drink", "iced", "es ",
+    "wedang jahe", "jahe", "bandrek", "bajigur", "sekoteng",
+    "cincau", "es cincau", "dawet", "es dawet", "cendol",
+    "infused water", "detox", "green tea", "ocha", "hojicha",
+    "protein shake", "mass gainer", "pre-workout", "bcaa",
+    "electrolyte", "energy drink", "red bull", "monster", "kratingdaeng"
+  ];
+  return liquidKeywords.some((kw) => lower.includes(kw));
+};
+
+// Extract volume in ml from a food name string (e.g. "Air Mineral 600ml" → 600)
+const extractVolumeMlFromName = (name: string): number => {
+  if (!name) return 250;
+  const mlMatch = name.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+  if (mlMatch) return parseFloat(mlMatch[1].replace(',', '.'));
+  const lMatch = name.match(/(\d+(?:[.,]\d+)?)\s*(?:l|liter|litre)\b/i);
+  if (lMatch) return parseFloat(lMatch[1].replace(',', '.')) * 1000;
+  return 250;
+};
+
+// Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "rice bowl + americano")
+const splitAndCategorizeComboText = (
+  rawName: string,
+  totalCal: number = 0,
+  totalProt: number = 0,
+  totalCarb: number = 0,
+  totalFat: number = 0,
+  isExplicitDrink: boolean = false
+): { foods: MealItem[]; drinks: MealItem[] } => {
+  if (!rawName) return { foods: [], drinks: [] };
+
+  const parts = rawName
+    .split(/\+|\s+&\s+|\s+dan\s+|\s+with\s+|,/i)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const solidParts: string[] = [];
+  const liquidParts: string[] = [];
+
+  for (const part of parts) {
+    if (isLiquidName(part) || isExplicitDrink) {
+      liquidParts.push(part);
+    } else {
+      solidParts.push(part);
+    }
+  }
+
+  const foods: MealItem[] = [];
+  const drinks: MealItem[] = [];
+  const nowIso = new Date().toISOString();
+
+  if (solidParts.length > 0) {
+    const solidName = solidParts.join(" + ");
+    foods.push({
+      id: `m-food-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      foodName: solidName,
+      calories: totalCal > 0 && liquidParts.length > 0 ? Math.max(50, totalCal - (liquidParts.length * 20)) : (totalCal || 450),
+      protein: totalProt > 0 ? totalProt : 25,
+      carbs: totalCarb > 0 ? totalCarb : 45,
+      fat: totalFat > 0 ? totalFat : 12,
+      isHydration: false,
+      timestamp: nowIso
+    });
+  }
+
+  if (liquidParts.length > 0) {
+    const perDrinkCal = Math.round((totalCal > 0 && solidParts.length === 0 ? totalCal : (liquidParts.length * 15)) / liquidParts.length);
+    const perDrinkProt = Math.round((totalProt || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
+    const perDrinkCarb = Math.round((totalCarb || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
+    const perDrinkFat = Math.round((totalFat || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
+
+    liquidParts.forEach((part, idx) => {
+      drinks.push({
+        id: `m-drink-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        foodName: part,
+        calories: perDrinkCal,
+        protein: perDrinkProt,
+        carbs: perDrinkCarb,
+        fat: perDrinkFat,
+        isHydration: true,
+        volumeMl: extractVolumeMlFromName(part),
+        timestamp: nowIso
+      });
+    });
+  }
+
+  return { foods, drinks };
+};
+
+// Automatic Sanitizer to split any stored combo logs
+const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
+  if (!Array.isArray(rawLogs)) return [];
+  const result: MealItem[] = [];
+
+  for (const item of rawLogs) {
+    if (!item.foodName) continue;
+    const { foods, drinks } = splitAndCategorizeComboText(
+      item.foodName,
+      item.calories,
+      item.protein,
+      item.carbs,
+      item.fat,
+      Boolean(item.isHydration)
+    );
+
+    if (foods.length > 0 || drinks.length > 0) {
+      if (foods.length > 0) result.push(...foods);
+      if (drinks.length > 0) result.push(...drinks);
+    } else {
+      if (isLiquidName(item.foodName) || item.isHydration) {
+        result.push({
+          ...item,
+          isHydration: true,
+          volumeMl: Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)
+        });
+      } else {
+        result.push(item);
+      }
+    }
+  }
+
+  return result;
+};
+
+// Comprehensive Translations Dictionary
+const translations = {
+  ID: {
+    memberDashboard: "MEMBER DASHBOARD",
+    welcomeBack: "Selamat datang kembali",
+    welcome: "Halo",
+    landingPage: "Home",
+    removeAccount: "Hapus Akun",
+    logout: "Keluar",
+    currentStreak: "Streak Saat Ini",
+    longestStreak: "Rekor Streak Terpanjang",
+    activeDaysConsecutive: "hari berturut-turut",
+    recordStreakDays: "hari rekor terpanjang",
+    targetGoals: "Target Goals Utama",
+    mainGoalTitle: "Goal Utama",
+    currentWeightLabel: "BB Saat Ini",
+    targetWeightLabel: "Target BB",
+    remainingLabel: "Sisa",
+    dailyTargetLabel: "Target Nutrisi Harian",
+    caloriesLabel: "Kalori",
+    proteinLabel: "Protein",
+    carbsLabel: "Karbohidrat",
+    fatLabel: "Lemak",
+    overallGoalProgress: "Progress Goal Keseluruhan",
+    howDoYouFeel: "Bagaimana perasaanmu hari ini?",
+    feelSubtext: "Ini bukan diagnosis medis. Hanya digunakan sebagai daily wellbeing dan readiness check.",
+    feelBad: "Sangat Buruk",
+    sick: "Sakit",
+    notGreat: "Kurang Baik",
+    okay: "Biasa Saja",
+    good: "Baik",
+    great: "Sangat Baik",
+    weeklyWorkoutSchedule: "Jadwal Workout Mingguan",
+    todaysFocus: "Fokus Latihan",
+    viewFullWeeklySchedule: "Lihat Seluruh Jadwal (Senin - Minggu)",
+    viewTodayOnly: "Kembali ke Jadwal Hari Ini",
+    todaysFocusProgress: "Progress Latihan Hari Ini",
+    setsCompleted: "set selesai",
+    setUnit: "Set",
+    statusNotStarted: "Belum Mulai",
+    statusInProgress: "Sedang Berlangsung",
+    statusCompleted: "Selesai",
+    clickForDetails: "Klik untuk detail & checklist set",
+    exerciseCount: "Gerakan",
+    foodMeals: "Makanan (Food Meals)",
+    addFoodBtn: "Tambah Makanan",
+    noMealsLogged: "Belum ada makanan padat tercatat hari ini.",
+    waterHydration: "Air & Hidrasi (Water / Hydration)",
+    addDrinkBtn: "Tambah Minuman",
+    hydrationTarget: "Target Hidrasi Harian",
+    quickAdd250: "+250 ml Air",
+    quickAdd500: "+500 ml Air",
+    noDrinksLogged: "Belum ada minuman tercatat hari ini.",
+    coachRecommendation: "Rekomendasi Coach",
+    coachAdviceTitle: "Saran Coach",
+    autoReminderTitle: "Pengingat Latihan Harian",
+    autoReminderPrompt: "Ayo latihan hari ini! 💪 Mau diingetin jam berapa buat gym atau makan?",
+    selectReminderTime: "Pilih Jam Pengingat:",
+    setReminderBtn: "Atur Pengingat",
+    remindLater: "Nanti Saja",
+    reminderSetMsg: "Pengingat telah diatur untuk pukul",
+    workoutDetailTitle: "Detail Workout & Completion Set",
+    targetRepsLabel: "Target Repetisi / Durasi",
+    setChecklistLabel: "Checklist Completion Per Set",
+    closeModal: "Tutup",
+    addMealModalTitle: "Tambah Log Makanan / Minuman",
+    foodNameLabel: "Nama Makanan / Combo (misal: 'Nasi Ayam McD + Kopi')",
+    volumeLabel: "Volume (ml)",
+    caloriesInputLabel: "Kalori (kcal)",
+    proteinInputLabel: "Protein (g)",
+    carbsInputLabel: "Karbo (g)",
+    fatInputLabel: "Lemak (g)",
+    comboHelpText: "*Input combo seperti 'Nasi Ayam McD + Kopi' akan otomatis dipisah ke Makanan & Hidrasi.",
+    saveEntry: "Simpan Log",
+    updateWeightTitle: "Update Berat Badan",
+    weightInputLabel: "Berat Badan Baru (kg)",
+    saveWeight: "Simpan BB Baru",
+    delete: "Hapus",
+    setDone: "Selesai",
+    setNotDone: "Belum Selesai",
+    pickDateTooltip: "Buka Kalender Pemilih Tanggal",
+    calendarModalTitle: "Kalender Pemilih Tanggal",
+    calendarSubtext: "Pilih tanggal sejak kamu terdaftar di GymBuddy",
+    todayBtn: "Hari Ini",
+    historicalLogNotice: "Menampilkan log histori tanggal"
+  },
+  EN: {
+    memberDashboard: "MEMBER DASHBOARD",
+    welcomeBack: "Welcome back",
+    welcome: "Hello",
+    landingPage: "Home",
+    removeAccount: "Remove Account",
+    logout: "Log Out",
+    currentStreak: "Current Streak",
+    longestStreak: "Longest Streak",
+    activeDaysConsecutive: "consecutive days",
+    recordStreakDays: "all-time record days",
+    targetGoals: "Target Goals",
+    mainGoalTitle: "Main Goal",
+    currentWeightLabel: "Current Weight",
+    targetWeightLabel: "Target Weight",
+    remainingLabel: "Remaining",
+    dailyTargetLabel: "Daily Nutrition Target",
+    caloriesLabel: "Calories",
+    proteinLabel: "Protein",
+    carbsLabel: "Carbohydrates",
+    fatLabel: "Fat",
+    overallGoalProgress: "Overall Goal Progress",
+    howDoYouFeel: "How do you feel today?",
+    feelSubtext: "This is not a medical diagnosis. Used only for daily wellbeing and readiness check.",
+    feelBad: "Feeling Bad",
+    sick: "Sick",
+    notGreat: "Not Great",
+    okay: "Okay",
+    good: "Good",
+    great: "Great",
+    weeklyWorkoutSchedule: "Weekly Workout Schedule",
+    todaysFocus: "Workout Focus",
+    viewFullWeeklySchedule: "View Full Schedule (Mon - Sun)",
+    viewTodayOnly: "Back to Today's Workout",
+    todaysFocusProgress: "Today's Workout Progress",
+    setsCompleted: "sets completed",
+    setUnit: "Set",
+    statusNotStarted: "Not Started",
+    statusInProgress: "In Progress",
+    statusCompleted: "Completed",
+    clickForDetails: "Click for details & set checklist",
+    exerciseCount: "Exercises",
+    foodMeals: "Food Meals",
+    addFoodBtn: "Add Food",
+    noMealsLogged: "No solid meals logged for today.",
+    waterHydration: "Water / Hydration",
+    addDrinkBtn: "Add Drink",
+    hydrationTarget: "Daily Hydration Target",
+    quickAdd250: "+250 ml Water",
+    quickAdd500: "+500 ml Water",
+    noDrinksLogged: "No drinks logged for today.",
+    coachRecommendation: "Coach Recommendation",
+    coachAdviceTitle: "Coach Advice",
+    autoReminderTitle: "Daily Workout Reminder",
+    autoReminderPrompt: "Let's train today! 💪 What time would you like a reminder for gym or meals?",
+    selectReminderTime: "Select Reminder Time:",
+    setReminderBtn: "Set Reminder",
+    remindLater: "Later",
+    reminderSetMsg: "Reminder scheduled for",
+    workoutDetailTitle: "Workout Detail & Set Completion",
+    targetRepsLabel: "Target Reps / Duration",
+    setChecklistLabel: "Per-Set Completion Checklist",
+    closeModal: "Close",
+    addMealModalTitle: "Add Food / Combo Item Log",
+    foodNameLabel: "Item Name / Combo (e.g. 'Chicken Rice + Coffee')",
+    volumeLabel: "Volume (ml)",
+    caloriesInputLabel: "Calories (kcal)",
+    proteinInputLabel: "Protein (g)",
+    carbsInputLabel: "Carbs (g)",
+    fatInputLabel: "Fat (g)",
+    comboHelpText: "*Combo items like 'Chicken Rice + Coffee' will automatically split into Food Meals & Water Hydration.",
+    saveEntry: "Save Log",
+    updateWeightTitle: "Update Body Weight",
+    weightInputLabel: "New Weight (kg)",
+    saveWeight: "Save New Weight",
+    delete: "Delete",
+    setDone: "Completed",
+    setNotDone: "Not Completed",
+    pickDateTooltip: "Open Date Picker Calendar",
+    calendarModalTitle: "Date Picker Calendar",
+    calendarSubtext: "Select any date since your registration at GymBuddy",
+    todayBtn: "Today",
+    historicalLogNotice: "Showing historical log for"
+  }
+};
+
+// 7-Day Weekly Workout Schedule Personalizer
+function getPersonalizedWeeklySchedule(user: UserProfileData): DaySchedule[] {
+  const goal = user?.goal || "lose";
+
+  if (goal === "gain") {
+    return [
+      { day: "Senin", focus: "Upper Body Hypertrophy", exercises: [
+        { id: "w-mon-1", name: "Incline Barbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8-10 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Tricep Dips / Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ]},
+      { day: "Selasa", focus: "Punggung & Bicep (Pull Day)", exercises: [
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Seated Cable Row", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-tue-3", name: "Barbell Bicep Curls", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ]},
+      { day: "Rabu", focus: "Leg Mass & Core (Leg Day)", exercises: [
+        { id: "w-wed-1", name: "Barbell Back Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Leg Press & Romanian Deadlift", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 15 Reps", status: "not_started" }
+      ]},
+      { day: "Kamis", focus: "Active Recovery & Mobility", exercises: [
+        { id: "w-thu-1", name: "Full Body Dynamic Stretching", targetSets: 2, completedSets: 0, setsState: [false, false], targetReps: "15 Menit Mobilitas", status: "not_started" },
+        { id: "w-thu-2", name: "Foam Rolling & Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "20 Menit Jalan Santai", status: "not_started" }
+      ]},
+      { day: "Jumat", focus: "Chest & Arms Hypertrophy", exercises: [
+        { id: "w-fri-1", name: "Flat Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Preacher Bicep Curls", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ]},
+      { day: "Sabtu", focus: "Delts 3D & Core Focus", exercises: [
+        { id: "w-sat-1", name: "Lateral Raise & Reverse Fly", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Ab Wheel Rollout", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ]},
+      { day: "Minggu", focus: "Rest & Recovery", exercises: [
+        { id: "w-sun-1", name: "Istirahat Total & Tidur Berkualitas", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery 8 Jam Tidur", status: "not_started" }
+      ]}
+    ];
+  } else if (goal === "lose") {
+    return [
+      { day: "Senin", focus: "Fat Loss HIIT & Push Day", exercises: [
+        { id: "w-mon-1", name: "Push Up (Chest & Core)", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12-15 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Jumping Jacks & Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      ]},
+      { day: "Selasa", focus: "Upper Body & Core Deficit", exercises: [
+        { id: "w-tue-1", name: "Lat Pulldown / Bodyweight Row", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank & Core Hold", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" },
+        { id: "w-tue-3", name: "Treadmill Incline Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit Speed 4.5", status: "not_started" }
+      ]},
+      { day: "Rabu", focus: "Lower Body Fat Crusher", exercises: [
+        { id: "w-wed-1", name: "Goblet Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Walking Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Kettlebell Swing", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ]},
+      { day: "Kamis", focus: "Zone 2 Cardio Fat Burn", exercises: [
+        { id: "w-thu-1", name: "Stationary Bike / Incline Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "45 Menit Zona 2", status: "not_started" },
+        { id: "w-thu-2", name: "Full Body Mobility Stretch", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "15 Menit Stretching", status: "not_started" }
+      ]},
+      { day: "Jumat", focus: "Full Body Calorie Burner", exercises: [
+        { id: "w-fri-1", name: "Burpees & Squat Jumps", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Dumbbell Thruster", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Bicycle Crunches", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ]},
+      { day: "Sabtu", focus: "Core & Incline Walking", exercises: [
+        { id: "w-sat-1", name: "Incline Treadmill Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "40 Menit Speed 4.5", status: "not_started" },
+        { id: "w-sat-2", name: "Russian Twists & Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ]},
+      { day: "Minggu", focus: "Rest & Active Recovery", exercises: [
+        { id: "w-sun-1", name: "Jalan Santai & Hydration Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery & Hidrasi", status: "not_started" }
+      ]}
+    ];
+  } else {
+    return [
+      { day: "Senin", focus: "Stamina & Mobilitas", exercises: [
+        { id: "w-mon-1", name: "Jogging & Dynamic Stretching", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "25 Menit", status: "not_started" },
+        { id: "w-mon-2", name: "Bodyweight Push Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10 Reps", status: "not_started" }
+      ]},
+      { day: "Selasa", focus: "Latihan Otot Dasar", exercises: [
+        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank Hold", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      ]},
+      { day: "Rabu", focus: "Pemulihan Aktif", exercises: [
+        { id: "w-wed-1", name: "Jalan Santai 5,000 Langkah", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "5,000 Langkah", status: "not_started" }
+      ]},
+      { day: "Kamis", focus: "Yoga & Postur", exercises: [
+        { id: "w-thu-1", name: "Yoga & Core Balance", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit", status: "not_started" }
+      ]},
+      { day: "Jumat", focus: "Full Body Conditioning", exercises: [
+        { id: "w-fri-1", name: "Bodyweight Circuit", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set Circuit", status: "not_started" }
+      ]},
+      { day: "Sabtu", focus: "Kardio Bebas", exercises: [
+        { id: "w-sat-1", name: "Berenang / Sepeda Santai", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "40 Menit", status: "not_started" }
+      ]},
+      { day: "Minggu", focus: "Istirahat Total", exercises: [
+        { id: "w-sun-1", name: "Full Body Mobility & Rest", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery", status: "not_started" }
+      ]}
+    ];
+  }
+}
+
 export default function Dashboard({
   user: initialUser,
-  language = "ID",
+  language: initialLang = "ID",
   onLogout,
   onBackToHome,
   onResetData
 }: DashboardProps) {
-  const isEN = language === "EN";
-
-  // Helper date string YYYY-MM-DD (local time)
-  const formatDateKey = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateKey(new Date()));
-  const [meals, setMeals] = useState<MealItem[]>([]);
-  const [loadingMeals, setLoadingMeals] = useState(false);
-  const [showAddMealModal, setShowAddMealModal] = useState(false);
-
-  // Live User State
-  const [liveUser, setLiveUser] = useState<UserProfileData>(initialUser);
-  const [streak, setStreak] = useState<number>(0);
-  const [waterCups, setWaterCups] = useState<number>(0);
-
-  // New Meal Form State
-  const [newFoodName, setNewFoodName] = useState("");
-  const [newCalories, setNewCalories] = useState("");
-  const [newProtein, setNewProtein] = useState("");
-  const [newCarbs, setNewCarbs] = useState("");
-  const [newFat, setNewFat] = useState("");
-  const [newMealType, setNewMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
-
-  // AI Calorie Auto Estimator State inside Modal
-  const [aiText, setAiText] = useState("");
-  const [analyzingAi, setAnalyzingAi] = useState(false);
-
-  // Weight Update Form State
-  const [showUpdateWeightModal, setShowUpdateWeightModal] = useState(false);
-  const [newWeightInput, setNewWeightInput] = useState(String(initialUser.weight || 78.5));
-  const [weightHistory, setWeightHistory] = useState<any[]>([]);
-
-  // Live Workout Logs State
-  const [workoutLogs, setWorkoutLogs] = useState<any[]>([]);
-
-
-  // Interactive Workout Checklist State
-  const [workoutChecked, setWorkoutChecked] = useState<Record<number, boolean>>(() => {
+  // Language Persistence
+  const [lang, setLang] = useState<"ID" | "EN">(() => {
     try {
-      const stored = localStorage.getItem(`gymbuddy_workout_${initialUser.phone || "user"}_${selectedDate}`);
-      return stored ? JSON.parse(stored) : {};
+      const stored = localStorage.getItem("gymbuddy_lang");
+      return stored === "EN" || stored === "ID" ? stored : initialLang;
     } catch (e) {
-      return {};
+      return initialLang;
     }
   });
 
+  const t = translations[lang];
+
+  const toggleLanguage = () => {
+    const nextLang = lang === "ID" ? "EN" : "ID";
+    setLang(nextLang);
+    try {
+      localStorage.setItem("gymbuddy_lang", nextLang);
+    } catch (e) {}
+  };
+
+  // Date Key YYYY-MM-DD
+  const formatDateKey = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayDateStr = formatDateKey(new Date());
+  const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
+  const [liveUser, setLiveUser] = useState<UserProfileData>(initialUser);
+  const [allLogs, setAllLogs] = useState<MealItem[]>([]);
+  const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+
+  const activeUser = liveUser || initialUser;
+
+  // Determine User Registration Date as Min Date Constraint
+  const getUserRegisterDateStr = (): string => {
+    if (activeUser.createdAt) return activeUser.createdAt.substring(0, 10);
+    if (activeUser.registerDate) return activeUser.registerDate.substring(0, 10);
+
+    const phoneKey = activeUser.phone || "user";
+    try {
+      const stored = localStorage.getItem(`gymbuddy_user_registered_at_${phoneKey}`);
+      if (stored) return stored;
+
+      // Default registration date to 14 days ago
+      const defaultDate = new Date(Date.now() - 14 * 86400000);
+      const defaultStr = formatDateKey(defaultDate);
+      localStorage.setItem(`gymbuddy_user_registered_at_${phoneKey}`, defaultStr);
+      return defaultStr;
+    } catch (e) {
+      return formatDateKey(new Date(Date.now() - 14 * 86400000));
+    }
+  };
+
+  const minDateStr = getUserRegisterDateStr();
+
+  // Calendar Modal Navigation Month/Year State
+  const [calYear, setCalYear] = useState<number>(() => new Date(selectedDate).getFullYear());
+  const [calMonth, setCalMonth] = useState<number>(() => new Date(selectedDate).getMonth());
+
+  // Feel State per date
+  const [feelState, setFeelState] = useState<FeelState>(() => {
+    try {
+      const stored = localStorage.getItem(`gymbuddy_feel_${initialUser.phone || "user"}_${selectedDate}`);
+      return (stored as FeelState) || "good";
+    } catch (e) {
+      return "good";
+    }
+  });
+
+  // Auto Reminder Modal State
+  const [showAutoReminderModal, setShowAutoReminderModal] = useState(false);
+  const [selectedReminderTime, setSelectedReminderTime] = useState("17:00");
+  const [reminderNotificationMsg, setReminderNotificationMsg] = useState<string | null>(null);
+
+  // Coach Mood Popup State
+  const [showCoachMoodPopup, setShowCoachMoodPopup] = useState(false);
+  const [coachMoodData, setCoachMoodData] = useState<{ icon: string; title: string; message: string; tips: string[]; color: string } | null>(null);
+
+  // Weekly Schedule
+  const weeklySchedule = getPersonalizedWeeklySchedule(initialUser);
+
+  const getDayNameFromDateStr = (dateStr: string) => {
+    const parts = dateStr.split("-");
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const dayIdx = d.getDay();
+    const idDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    return idDays[dayIdx];
+  };
+
+  const selectedDayName = getDayNameFromDateStr(selectedDate);
+  const todayScheduleObj = weeklySchedule.find((s) => s.day === selectedDayName) || weeklySchedule[0];
+
+  // Exercises State per date
+  const [exercises, setExercises] = useState<WorkoutExercise[]>(() => {
+    try {
+      const stored = localStorage.getItem(`gymbuddy_exercises_${initialUser.phone || "user"}_${selectedDate}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return todayScheduleObj.exercises;
+  });
+
+  const [activeWorkoutDetail, setActiveWorkoutDetail] = useState<WorkoutExercise | null>(null);
+
+  // Modals
+  const [showAddFoodModal, setShowAddFoodModal] = useState(false);
+  const [showAddDrinkModal, setShowAddDrinkModal] = useState(false);
+  const [showUpdateWeightModal, setShowUpdateWeightModal] = useState(false);
+
+  // Form Inputs
+  const [itemNameInput, setItemNameInput] = useState("");
+  const [itemCalInput, setItemCalInput] = useState("");
+  const [itemProteinInput, setItemProteinInput] = useState("");
+  const [itemCarbsInput, setItemCarbsInput] = useState("");
+  const [itemFatInput, setItemFatInput] = useState("");
+  const [itemVolumeInput, setItemVolumeInput] = useState("250");
+  const [newWeightInput, setNewWeightInput] = useState(String(initialUser.weight || 70));
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
+  const [showManualInputs, setShowManualInputs] = useState(false);
+  const [aiPreview, setAiPreview] = useState<any>(null);
+  const [aiConfirmStep, setAiConfirmStep] = useState(false); // Feature 1: two-step confirm
+  const [coachTip, setCoachTip] = useState<string | null>(null); // Coach next-step bubble
+  const [showCoachTip, setShowCoachTip] = useState(false);
+
   const normalizePhone = (phone: string): string => {
     if (!phone) return "";
-    let cleaned = String(phone).replace(/[^\d]/g, '');
-    if (cleaned.startsWith('62')) {
-      cleaned = '0' + cleaned.substring(2);
-    } else if (cleaned.startsWith('8')) {
-      cleaned = '0' + cleaned;
-    }
+    let cleaned = String(phone).replace(/[^\d]/g, "");
+    if (cleaned.startsWith("62")) cleaned = "0" + cleaned.substring(2);
+    else if (cleaned.startsWith("8")) cleaned = "0" + cleaned;
     return cleaned;
   };
 
-  // Calculations & Personalization
-  const activeUser = liveUser || initialUser;
   const weight = Number(activeUser.weight) || 70;
   const startWeight = Number(activeUser.startWeight) || weight;
 
   let goalTitle = activeUser.goalTitle;
   if (!goalTitle) {
-    if (activeUser.goal === "lose") goalTitle = "Menurunkan Berat Badan";
-    else if (activeUser.goal === "gain") goalTitle = "Menaikkan Berat Badan";
-    else goalTitle = "Gaya Hidup Sehat & Fit";
+    if (activeUser.goal === "lose") goalTitle = lang === "EN" ? "Weight Loss" : "Menurunkan Berat Badan";
+    else if (activeUser.goal === "gain") goalTitle = lang === "EN" ? "Muscle Gain" : "Menaikkan Berat Badan & Massa Otot";
+    else goalTitle = lang === "EN" ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Fit";
   }
 
   let targetWeight = activeUser.targetWeight;
@@ -157,57 +695,32 @@ export default function Dashboard({
   const totalWeightToChange = Math.abs(startWeight - targetWeight) || 1;
   const currentChanged = Math.abs(startWeight - weight);
   const progressPercent = Math.min(100, Math.max(0, Math.round((currentChanged / totalWeightToChange) * 100)));
-  const remainingKg = Math.max(0, Number((Math.abs(weight - targetWeight)).toFixed(1)));
+  const remainingKg = Math.max(0, Number(Math.abs(weight - targetWeight).toFixed(1)));
 
-  // Dynamic BMR & TDEE Calculation with exact activity level
+  // Calorie & TDEE Calculations
   const height = Number(activeUser.height) || 165;
   const age = Number(activeUser.age) || 25;
-  const isMale = (activeUser.gender || "pria").toLowerCase() === "pria";
-  const bmrCalc = Math.round((10 * weight) + (6.25 * height) - (5 * age) + (isMale ? 5 : -161));
+  const isMale = (activeUser.gender || "pria").toLowerCase() === "pria" || (activeUser.gender || "").toLowerCase() === "male";
+  const bmrCalc = Math.round(10 * weight + 6.25 * height - 5 * age + (isMale ? 5 : -161));
+  const tdeeCalc = Math.round(bmrCalc * 1.4);
 
-  const activityMap: Record<string, number> = {
-    sedentary: 1.2,
-    light: 1.375,
-    moderate: 1.55,
-    active: 1.725
-  };
-  const activityMultiplier = activityMap[activeUser.persona] || activityMap["moderate"];
-  const tdeeCalc = Math.round(bmrCalc * activityMultiplier);
-
-  const isHealthGoal = activeUser.goal === "health" || activeUser.goal === "maintain";
-  const isLoseGoal = activeUser.goal === "lose";
-
-  const targetCalories = activeUser.targetCalories || (isLoseGoal ? Math.max(1200, tdeeCalc - 500) : (activeUser.goal === "gain" ? tdeeCalc + 400 : tdeeCalc));
-  const targetProtein = activeUser.proteinGrams || (isLoseGoal ? Math.round(weight * 2.0) : (activeUser.goal === "gain" ? Math.round(weight * 2.2) : Math.round(weight * 1.8)));
+  const targetCalories = activeUser.targetCalories || (activeUser.goal === "lose" ? Math.max(1200, tdeeCalc - 500) : activeUser.goal === "gain" ? tdeeCalc + 400 : tdeeCalc);
+  const targetProtein = activeUser.proteinGrams || (activeUser.goal === "lose" ? Math.round(weight * 2.0) : activeUser.goal === "gain" ? Math.round(weight * 2.2) : Math.round(weight * 1.8));
   const targetFat = activeUser.fatGrams || Math.round((targetCalories * 0.25) / 9);
   const targetCarbs = activeUser.carbGrams || Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4);
-  const targetFiber = activeUser.fiberGrams || Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
 
-  const workoutSchedule = isHealthGoal ? [
-    { day: "Senin • Kebugaran & Kardio Ringan", title: "Jogging & Dynamic Stretching (25 Min)", desc: "Menjaga stamina jantung & mobilitas tubuh" },
-    { day: "Selasa • Latihan Otot Dasar", title: "Full Body Bodyweight Workout", desc: "Push Up 3 set, Bodyweight Squat 3 set, Plank 60s" },
-    { day: "Rabu • Pemulihan Aktif", title: "Jalan Santai 5,000 Langkah & Meditasi", desc: "Melancarkan sirkulasi darah & kurangi stres" },
-    { day: "Kamis • Mobilitas & Postur", title: "Yoga & Core Balance", desc: "Menjaga kebugaran sendi & postur tubuh harian" }
-  ] : isLoseGoal ? [
-    { day: "Senin • Fat Burning HIIT", title: "Jumping Jacks, Burpees & Mountain Climber", desc: "4 Set Interval untuk pembakaran kalori maksimal" },
-    { day: "Selasa • Upper Body & Core", title: "Push Up, Dumbbell Row & Crunch", desc: "Menjaga massa otot saat dalam kondisi defisit kalori" },
-    { day: "Rabu • Lower Body & Deficit Cardio", title: "Squat, Lunge & Incline Walk (30 Min)", desc: "Fokus pembakaran kalori tubuh bagian bawah" },
-    { day: "Kamis • Zone 2 Cardio Recovery", title: "Jalan Cepat / Sepeda (45 Min)", desc: "Menjaga zona pembakaran lemak tanpa lelah berlebih" }
-  ] : [
-    { day: "Senin • Heavy Push Day", title: "Bench Press, Military Press & Dips", desc: "4 Set X 8-10 Reps untuk hipertrofi otot dada/bahu" },
-    { day: "Selasa • Heavy Pull Day", title: "Pull Up, Barbell Row & Bicep Curl", desc: "4 Set X 8-10 Reps untuk pembentukan otot punggung" },
-    { day: "Rabu • Heavy Leg Day", title: "Barbell Squat, Romanian Deadlift & Leg Press", desc: "4 Set X 8-10 Reps untuk pertumbuhan otot kaki" },
-    { day: "Kamis • Active Recovery", title: "Stretching & Light Walk (30 Min)", desc: "Pemulihan jaringan otot secara optimal" }
-  ];
+  const isMaxPersona = (activeUser.persona || "max").toLowerCase() === "max";
+  const coachName = isMaxPersona ? "Coach Max" : "Coach Mia";
 
-  // Generate 7 Days Ribbon Tabs
-  const getRecentDates = () => {
+  // STATIC 7-DAY RIBBON STRIP ENDING AT TODAY (NEVER SHIFTS POSITION WHEN CLICKING)
+  const getStaticRibbonDates = () => {
     const dates = [];
+    const today = new Date();
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
+      const d = new Date(today.getTime() - i * 86400000);
       dates.push({
         dateStr: formatDateKey(d),
-        dayName: d.toLocaleDateString(isEN ? "en-US" : "id-ID", { weekday: "short" }),
+        dayName: d.toLocaleDateString(lang === "EN" ? "en-US" : "id-ID", { weekday: "short" }),
         dayNum: d.getDate(),
         isToday: formatDateKey(d) === formatDateKey(new Date())
       });
@@ -215,729 +728,1113 @@ export default function Dashboard({
     return dates;
   };
 
-  const recentDates = getRecentDates();
+  const ribbonDates = getStaticRibbonDates();
+  const isSelectedDateInRibbon = ribbonDates.some((d) => d.dateStr === selectedDate);
 
-  // Fetch Live Profile from Server API
-  const fetchUserProfile = async () => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const tryFetch = async (baseUrl: string) => {
+  // Solid Foods vs Hydration
+  const foodMeals = allLogs.filter((item) => !isLiquidName(item.foodName) && !item.isHydration);
+  const hydrationLogs = allLogs.filter((item) => isLiquidName(item.foodName) || item.isHydration);
+
+  // Totals
+  const totalCaloriesConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+  const totalProteinConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.protein) || 0), 0);
+  const totalCarbsConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
+  const totalFatConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
+
+  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
+  const totalWaterCups = Math.floor(totalHydrationMl / 250);
+
+  // Sets Calculations
+  const totalTargetSetsOverall = exercises.reduce((sum, ex) => sum + ex.targetSets, 0);
+  const totalCompletedSetsOverall = exercises.reduce((sum, ex) => sum + ex.completedSets, 0);
+  const overallWorkoutPercent = totalTargetSetsOverall > 0 ? Math.round((totalCompletedSetsOverall / totalTargetSetsOverall) * 100) : 0;
+  const isTodayWorkoutFinished = overallWorkoutPercent === 100 && totalTargetSetsOverall > 0;
+
+  // Streak Calculation
+  const calculateStreaks = () => {
+    let current = 0;
+    let longest = 0;
+    const phone = activeUser.phone || "user";
+    const today = new Date();
+
+    let tempLongest = 0;
+    let isCountingCurrent = true;
+
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today.getTime() - i * 86400000);
+      const dKey = formatDateKey(d);
+
+      let hasActivity = false;
       try {
-        const res = await fetch(`${baseUrl}/api/user/${normPhone}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && (data.user || data.profile || data.name)) {
-            const fresh = data.user || data.profile || data;
-            setLiveUser((prev) => ({ ...prev, ...fresh, ...data }));
-            if (data.streak !== undefined) setStreak(data.streak);
-            if (data.waterCups !== undefined) setWaterCups(data.waterCups);
-            return true;
-          }
+        const storedEx = localStorage.getItem(`gymbuddy_exercises_${phone}_${dKey}`);
+        if (storedEx) {
+          const parsedEx: WorkoutExercise[] = JSON.parse(storedEx);
+          if (parsedEx.some((e) => e.completedSets > 0)) hasActivity = true;
         }
+        const storedMeals = localStorage.getItem(`gymbuddy_meals_${phone}_${dKey}`);
+        if (storedMeals && JSON.parse(storedMeals).length > 0) hasActivity = true;
       } catch (e) {}
-      return false;
-    };
 
-    const success = await tryFetch("");
-    if (!success) {
-      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-      await tryFetch(envUrl);
+      if (hasActivity) {
+        tempLongest++;
+        if (tempLongest > longest) longest = tempLongest;
+        if (isCountingCurrent) current++;
+      } else {
+        if (i === 0) continue;
+        else isCountingCurrent = false;
+      }
     }
+
+    return { currentStreak: Math.max(current, totalCompletedSetsOverall > 0 || allLogs.length > 0 ? 1 : 0), longestStreak: Math.max(longest, current, 1) };
   };
 
-  // API Fetch Meals for Selected Date
-  const fetchMealsForDate = async (dateStr: string) => {
-    setLoadingMeals(true);
+  const { currentStreak, longestStreak } = calculateStreaks();
+
+  // Fetch & Auto-Split Combo Logs
+  const fetchLogsForDate = async (dateStr: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
-    const tryFetchMeals = async (baseUrl: string) => {
-      try {
-        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.logs)) {
-            setMeals(data.logs);
-            try {
-              localStorage.setItem(`gymbuddy_meals_${normPhone}_${dateStr}`, JSON.stringify(data.logs));
-            } catch (e) {}
-            return true;
-          }
+    // PRIORITY 1: Always read localStorage first — it is the authoritative local state.
+    // localStorage is updated immediately on add/delete, so it is always more up-to-date
+    // than the remote server which may lag behind or serve stale data.
+    let rawLogs: MealItem[] = [];
+    let hasLocalData = false;
+    try {
+      const localData = localStorage.getItem(localKey);
+      if (localData !== null) {
+        const parsed = JSON.parse(localData);
+        if (Array.isArray(parsed)) {
+          rawLogs = parsed;
+          hasLocalData = true;
         }
-      } catch (e) {}
-      return false;
-    };
+      }
+    } catch (e) {}
 
-    let loaded = await tryFetchMeals("");
-    if (!loaded) {
-      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-      loaded = await tryFetchMeals(envUrl);
+    // PRIORITY 2: Only fetch from server if localStorage has NO data for this date at all.
+    // This avoids stale server data overwriting fresh local deletes/adds.
+    if (!hasLocalData) {
+      const tryFetchMeals = async (baseUrl: string) => {
+        try {
+          const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.logs)) {
+              return data.logs as MealItem[];
+            }
+          }
+        } catch (e) {}
+        return null;
+      };
+
+      const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com")) || [];
+      if (serverLogs.length > 0) {
+        rawLogs = serverLogs;
+        // Cache fetched server data into localStorage for future fast reads
+        try {
+          localStorage.setItem(localKey, JSON.stringify(rawLogs));
+        } catch (e) {}
+      }
     }
-    if (loaded) {
-      setLoadingMeals(false);
-      return;
-    }
+
+    const sanitized = sanitizeAndSplitComboLogs(rawLogs);
+    setAllLogs(sanitized);
+  };
+
+  useEffect(() => {
+    fetchLogsForDate(selectedDate);
 
     try {
-      const localData = localStorage.getItem(`gymbuddy_meals_${normPhone}_${dateStr}`);
-      if (localData) {
-        setMeals(JSON.parse(localData));
+      const storedFeel = localStorage.getItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`);
+      if (storedFeel) setFeelState(storedFeel as FeelState);
+    } catch (e) {}
+
+    try {
+      const storedEx = localStorage.getItem(`gymbuddy_exercises_${activeUser.phone || "user"}_${selectedDate}`);
+      if (storedEx) {
+        setExercises(JSON.parse(storedEx));
       } else {
-        setMeals([]);
+        setExercises(todayScheduleObj.exercises);
       }
     } catch (e) {
-      setMeals([]);
+      setExercises(todayScheduleObj.exercises);
     }
-    setLoadingMeals(false);
+  }, [selectedDate, activeUser.phone]);
+
+  const saveExercisesState = (updatedEx: WorkoutExercise[]) => {
+    setExercises(updatedEx);
+    try {
+      localStorage.setItem(`gymbuddy_exercises_${activeUser.phone || "user"}_${selectedDate}`, JSON.stringify(updatedEx));
+    } catch (e) {}
   };
 
-  // Fetch Progress History
-  const fetchProgress = async () => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/progress`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.history)) {
-          setWeightHistory(data.history);
-          return;
-        }
+  const handleToggleSet = (exerciseId: string, setIndex: number) => {
+    const updated = exercises.map((ex) => {
+      if (ex.id === exerciseId) {
+        const newSetsState = [...ex.setsState];
+        newSetsState[setIndex] = !newSetsState[setIndex];
+        const completedCount = newSetsState.filter(Boolean).length;
+        let newStatus: "not_started" | "in_progress" | "completed" = "not_started";
+        if (completedCount === ex.targetSets) newStatus = "completed";
+        else if (completedCount > 0) newStatus = "in_progress";
+
+        return {
+          ...ex,
+          setsState: newSetsState,
+          completedSets: completedCount,
+          status: newStatus
+        };
       }
-    } catch (e) {}
+      return ex;
+    });
 
-    const curW = Number(activeUser.weight) || 70;
-    setWeightHistory([
-      { week: 0, weight: curW, changeFromStart: 0, date: "Hari Ini", notes: "Baseline Registrasi Awal" }
-    ]);
+    saveExercisesState(updated);
+
+    if (activeWorkoutDetail && activeWorkoutDetail.id === exerciseId) {
+      const activeUpd = updated.find((e) => e.id === exerciseId);
+      if (activeUpd) setActiveWorkoutDetail(activeUpd);
+    }
   };
 
-  // Fetch Water Intake
-  const fetchWaterIntake = async (dateStr: string) => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+  const handleSelectFeel = (state: FeelState) => {
+    setFeelState(state);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/water?date=${dateStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.cups !== undefined) {
-          setWaterCups(data.cups);
+      localStorage.setItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`, state);
+    } catch (e) {}
+
+    // Coach mood popup messages
+    const coachMessages: Record<string, { icon: string; title: string; message: string; tips: string[]; color: string }> = {
+      great: {
+        icon: "🔥",
+        title: "Lo lagi di puncak!",
+        message: "Keren! Hari ini dijaga ya fitnya, menu latihan hari ini udah gue siapin. Jangan lupa buat log makanan lo biar gue bantu tracking!",
+        tips: ["Kejar target workout hari ini 💪", "Log semua makanan ke GymBuddy", "Minum air minimal 2L hari ini"],
+        color: "#C4F82A",
+      },
+      good: {
+        icon: "🙂",
+        title: "Solid! Hari yang bagus!",
+        message: "Energi lo oke, cukup untuk workout produktif hari ini. Gas latihan sesuai jadwal, jangan skip!",
+        tips: ["Lakukan latihan sesuai jadwal hari ini", "Fokus ke form yang benar", "Catat nutrisi lo hari ini"],
+        color: "#4ade80",
+      },
+      okay: {
+        icon: "😐",
+        title: "Masih bisa digas!",
+        message: "Kondisi lo lumayan. Coba warmup dulu 10 menit, biasanya langsung lebih semangat. Jangan skip workout ya!",
+        tips: ["Mulai dengan warmup ringan 10 menit", "Kurangi intensitas jika perlu, tapi tetap latihan", "Makan makanan bergizi untuk boost energi"],
+        color: "#facc15",
+      },
+      not_great: {
+        icon: "🙁",
+        title: "Istirahat dulu boleh...",
+        message: "Kalau badan kurang fit, jangan dipaksain berat. Coba olahraga ringan kayak jalan kaki atau stretching aja dulu.",
+        tips: ["Jalan santai 20-30 menit", "Full body stretching 15 menit", "Makan makanan bersih, hindari gorengan & gula", "Tidur cukup malam ini"],
+        color: "#fb923c",
+      },
+      sick: {
+        icon: "🤒",
+        title: "Prioritas: Sembuh dulu!",
+        message: "Kalau lagi sakit, tubuh lo butuh energi buat sembuh, bukan buat latihan berat. Rest is progress juga!",
+        tips: ["❌ Skip gym dulu hari ini", "Istirahat total & tidur yang cukup", "Makan makanan bergizi: sop, buah, sayur", "Minum air & elektrolit yang cukup", "Konsultasi dokter jika butuh"],
+        color: "#f87171",
+      },
+      bad: {
+        icon: "😫",
+        title: "Yuk recharge dulu!",
+        message: "Lo lagi di titik terendah. Itu wajar. Yang penting hari ini: makan bersih, istirahat, dan jangan stress soal workout.",
+        tips: ["❌ Jangan paksa latihan hari ini", "Istirahat penuh & tidur berkualitas", "Makan makanan ringan yang bergizi", "Minum air putih yang cukup", "Besok lo pasti lebih kuat! 💪"],
+        color: "#a78bfa",
+      },
+    };
+
+    const moodData = coachMessages[state];
+    if (moodData) {
+      setCoachMoodData(moodData);
+      setShowCoachMoodPopup(true);
+    }
+
+    if ((state === "good" || state === "great") && !isTodayWorkoutFinished) {
+      const reminderFlagKey = `gymbuddy_reminder_dismissed_${activeUser.phone || "user"}_${selectedDate}`;
+      try {
+        const alreadyPrompted = localStorage.getItem(reminderFlagKey);
+        if (!alreadyPrompted) {
+          setTimeout(() => setShowAutoReminderModal(true), 2200);
         }
+      } catch (e) {
+        setTimeout(() => setShowAutoReminderModal(true), 2200);
       }
-    } catch (e) {}
+    }
   };
 
-  // Fetch Workout Logs for Date
-  const fetchWorkoutLogsForDate = async (dateStr: string) => {
+  const handleSetReminderTime = async () => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/workouts?date=${dateStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.logs)) {
-          setWorkoutLogs(data.logs);
-          return;
-        }
-      }
-    } catch (e) {}
-  };
-
-  const handleDeleteWorkout = async (workoutId: string) => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-    try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}/workouts/${workoutId}?date=${selectedDate}`, {
-        method: "DELETE"
-      });
-    } catch (e) {}
-    setWorkoutLogs(prev => prev.filter(w => w.id !== workoutId));
-  };
-
-  // Handle Update Water Cups
-  const handleUpdateWaterCups = async (newCups: number) => {
-    const validCups = Math.max(0, newCups);
-    setWaterCups(validCups);
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-    try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}/water`, {
+      await fetch(`${API_BASE_URL}/api/user/${normPhone}/reminder`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cups: validCups, date: selectedDate })
+        body: JSON.stringify({ reminderTime: selectedReminderTime, reminderEnabled: true })
       });
     } catch (e) {}
+
+    const reminderFlagKey = `gymbuddy_reminder_dismissed_${activeUser.phone || "user"}_${selectedDate}`;
+    try {
+      localStorage.setItem(reminderFlagKey, "true");
+    } catch (e) {}
+    setShowAutoReminderModal(false);
+    setReminderNotificationMsg(`${t.reminderSetMsg} ${selectedReminderTime}`);
+    setTimeout(() => setReminderNotificationMsg(null), 4000);
   };
 
-  // AI Calorie Auto-Estimator inside Modal
-  const handleAnalyzeAiFood = async () => {
-    if (!aiText.trim()) return;
-    setAnalyzingAi(true);
+  const handleDismissReminder = () => {
+    const reminderFlagKey = `gymbuddy_reminder_dismissed_${activeUser.phone || "user"}_${selectedDate}`;
+    try {
+      localStorage.setItem(reminderFlagKey, "true");
+    } catch (e) {}
+    setShowAutoReminderModal(false);
+  };
+
+  // AI Food Text Analysis Helper
+  const handleAnalyzeAiFoodText = async (textToAnalyze?: string) => {
+    const queryText = (textToAnalyze || itemNameInput).trim();
+    if (!queryText) return null;
+
+    setIsAnalyzingAi(true);
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: aiText })
+        body: JSON.stringify({ text: queryText })
       });
+
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          setNewFoodName(data.foodName || aiText);
-          setNewCalories(String(data.calories || 250));
-          setNewProtein(String(data.protein || 15));
-          setNewCarbs(String(data.carbs || 30));
-          setNewFat(String(data.fat || 8));
-          if (data.mealType) setNewMealType(data.mealType);
+          setItemCalInput(String(data.calories || 0));
+          setItemProteinInput(String(data.protein || 0));
+          setItemCarbsInput(String(data.carbs || 0));
+          setItemFatInput(String(data.fat || 0));
+          setAiPreview(data);
+          setIsAnalyzingAi(false);
+          return data;
         }
       }
     } catch (e) {
-      console.error("AI food analyze error:", e);
+      console.error("Error analyzing food with AI:", e);
     }
-    setAnalyzingAi(false);
+    setIsAnalyzingAi(false);
+    return null;
   };
 
-  // Toggle Workout Checklist State
-  const toggleWorkoutChecked = (idx: number) => {
-    setWorkoutChecked((prev) => {
-      const updated = { ...prev, [idx]: !prev[idx] };
-      try {
-        localStorage.setItem(`gymbuddy_workout_${activeUser.phone || "user"}_${selectedDate}`, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+  // Step 1: AI Analysis & Preview — does NOT save yet, just fills form + shows confirm panel
+  const handleAnalyzeAndPreview = async () => {
+    if (!itemNameInput.trim()) return;
+    setIsAnalyzingAi(true);
+    setAiConfirmStep(false);
+
+    let cal = Number(itemCalInput) || 0;
+    let prot = Number(itemProteinInput) || 0;
+    let carb = Number(itemCarbsInput) || 0;
+    let fat = Number(itemFatInput) || 0;
+
+    // If user didn't fill macros manually, use AI
+    if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
+      const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
+      if (aiRes) {
+        cal = Number(aiRes.calories) || 0;
+        prot = Number(aiRes.protein) || 0;
+        carb = Number(aiRes.carbs) || 0;
+        fat = Number(aiRes.fat) || 0;
+      }
+    }
+
+    setIsAnalyzingAi(false);
+    setAiConfirmStep(true); // Show confirmation panel
   };
 
-  useEffect(() => {
-    fetchUserProfile();
-    fetchMealsForDate(selectedDate);
-    fetchProgress();
-    fetchWaterIntake(selectedDate);
-    fetchWorkoutLogsForDate(selectedDate);
-
-    const handleFocus = () => {
-      fetchUserProfile();
-      fetchMealsForDate(selectedDate);
-      fetchProgress();
-      fetchWaterIntake(selectedDate);
-      fetchWorkoutLogsForDate(selectedDate);
-    };
-
-    window.addEventListener("focus", handleFocus);
-    const interval = setInterval(() => {
-      fetchUserProfile();
-      fetchMealsForDate(selectedDate);
-      fetchProgress();
-      fetchWaterIntake(selectedDate);
-      fetchWorkoutLogsForDate(selectedDate);
-    }, 3000);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      clearInterval(interval);
-    };
-  }, [selectedDate, activeUser.phone]);
-
-  // Totals for selected date
-  const totalConsumedCalories = meals.reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
-  const totalConsumedProtein = meals.reduce((sum, m) => sum + (Number(m.protein) || 0), 0);
-  const totalConsumedCarbs = meals.reduce((sum, m) => sum + (Number(m.carbs) || 0), 0);
-  const totalConsumedFat = meals.reduce((sum, m) => sum + (Number(m.fat) || 0), 0);
-  const totalConsumedFiber = meals.reduce((sum, m) => sum + (Number(m.fiber) || 0), 0);
-
-  const remainingCalories = Math.max(0, targetCalories - totalConsumedCalories);
-
-  // Handle Add Meal
-  const handleAddMealSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFoodName.trim()) return;
+  // Step 2: User confirmed — actually save to log
+  const handleConfirmSave = async () => {
+    if (!itemNameInput.trim()) return;
 
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const newMealObj: MealItem = {
-      id: `m-${Date.now()}`,
-      foodName: newFoodName,
-      calories: Number(newCalories) || 0,
-      protein: Number(newProtein) || 0,
-      carbs: Number(newCarbs) || 0,
-      fat: Number(newFat) || 0,
-      mealType: newMealType,
-      timestamp: new Date().toISOString()
-    };
+    const cal = Number(itemCalInput) || 0;
+    const prot = Number(itemProteinInput) || 0;
+    const carb = Number(itemCarbsInput) || 0;
+    const fat = Number(itemFatInput) || 0;
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const { foods, drinks } = splitAndCategorizeComboText(
+      itemNameInput,
+      cal,
+      prot,
+      carb,
+      fat
+    );
 
+    const newItems = [...foods, ...drinks];
+
+    // CRITICAL: Update localStorage IMMEDIATELY before the server call.
+    const updated = [...allLogs, ...newItems];
+    setAllLogs(updated);
+    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+      localStorage.setItem(localKey, JSON.stringify(updated));
+    } catch (e) {}
+
+    // Fire-and-forget server sync (non-critical, localStorage is authoritative)
+    const syncToServer = async (baseUrl: string) => {
+      for (const item of newItems) {
+        try {
+          await fetch(`${baseUrl}/api/user/${normPhone}/meals`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...item, date: selectedDate })
+          });
+        } catch (e) {}
+      }
+    };
+    syncToServer("");
+    syncToServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com");
+
+    // Reset all form state
+    setItemNameInput("");
+    setItemCalInput("");
+    setItemProteinInput("");
+    setItemCarbsInput("");
+    setItemFatInput("");
+    setAiPreview(null);
+    setAiConfirmStep(false);
+    setShowManualInputs(false);
+    setShowAddFoodModal(false);
+    setShowAddDrinkModal(false);
+
+    // ── Fetch Coach Next-Step Advice (non-blocking) ─────────────────────────
+    const totalCal = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.calories) || 0), 0);
+    const totalProt = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.protein) || 0), 0);
+    const totalCarb = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.carbs) || 0), 0);
+    const totalFat  = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.fat) || 0), 0);
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      const tipRes = await fetch(`${API_BASE_URL}/api/ai/next-step`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...newMealObj,
-          date: selectedDate
+          phone: normPhone,
+          calories: totalCal,
+          protein: totalProt,
+          carbs: totalCarb,
+          fat: totalFat,
+          targetCalories,
+          targetProtein,
+          targetCarbs,
+          targetFat,
+          goal: activeUser.goal || "maintain",
+          persona: activeUser.persona || "max",
+          name: activeUser.name || "Member",
+          mealName: itemNameInput || foods[0]?.foodName || "Makanan"
         })
       });
-    } catch (e) {}
+      if (tipRes.ok) {
+        const tipData = await tipRes.json();
+        if (tipData.success && tipData.advice) {
+          // Strip WhatsApp bold markers for web display
+          const cleanAdvice = (tipData.advice as string)
+            .replace(/\*\*?(.*?)\*\*?/g, "$1")
+            .replace(/━+/g, "")
+            .replace(/🎯 \*?SARAN [A-Z ]+\*?\n*/i, "")
+            .trim();
+          setCoachTip(cleanAdvice);
+          setShowCoachTip(true);
+          // Auto-hide after 12 seconds
+          setTimeout(() => setShowCoachTip(false), 12000);
+        }
+      }
+    } catch (tipErr) {
+      // Silently ignore — coach tip is non-critical
+    }
+    // ── End Coach Next-Step ────────────────────────────────────────────────
+  };
 
-    const updated = [...meals, newMealObj];
-    setMeals(updated);
+  // Legacy: kept for backward compatibility but now calls handleAnalyzeAndPreview
+  const handleSaveLogItem = handleAnalyzeAndPreview;
+
+  const handleQuickAddWater = (ml: number) => {
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const newItem: MealItem = {
+      id: `m-drink-${Date.now()}`,
+      foodName: `Air Putih ${ml} ml`,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      isHydration: true,
+      volumeMl: ml,
+      timestamp: new Date().toISOString()
+    };
+
+    const updated = [...allLogs, newItem];
+    setAllLogs(updated);
     try {
       localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
     } catch (e) {}
 
-    // Reset Form
-    setNewFoodName("");
-    setNewCalories("");
-    setNewProtein("");
-    setNewCarbs("");
-    setNewFat("");
-    setAiText("");
-    setShowAddMealModal(false);
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newItem, date: selectedDate })
+      });
+    } catch (e) {}
   };
 
-  // Handle Delete Meal
-  const handleDeleteMeal = async (mealId: string) => {
+  const handleDeleteLogItem = async (id: string) => {
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const updated = allLogs.filter((item) => item.id !== id);
+    setAllLogs(updated);
+
+    // Immediately persist deletion to localStorage — this is the source of truth.
+    // Store the updated (post-delete) array so that refresh will read the correct state.
+    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+    try {
+      localStorage.setItem(localKey, JSON.stringify(updated));
+    } catch (e) {}
+
+    // Fire-and-forget: sync deletion to both local and remote servers.
+    // Failures here are non-critical since localStorage is authoritative.
+    const deleteFromServer = async (baseUrl: string) => {
+      try {
+        await fetch(`${baseUrl}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
+          method: "DELETE"
+        });
+      } catch (e) {}
+    };
+    deleteFromServer(""); // local server
+    deleteFromServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com"); // remote server
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
     try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${mealId}?date=${selectedDate}`, {
-        method: "DELETE"
-      });
+      await fetch(`${API_BASE_URL}/api/user/${normPhone}`, { method: "DELETE" });
     } catch (e) {}
-
-    const updated = meals.filter((m) => m.id !== mealId);
-    setMeals(updated);
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      localStorage.clear();
     } catch (e) {}
+    if (onResetData) onResetData();
+    else onLogout();
+  };
+
+  const getCoachFeelingRecommendation = () => {
+    if (feelState === "sick" || feelState === "bad") {
+      return lang === "EN"
+        ? "You don't seem to be in your best condition today. Rest up and focus on recovery. Your goals can be resumed once you feel better."
+        : "Kamu kelihatannya sedang tidak dalam kondisi terbaik hari ini. Istirahat dulu dan fokus recovery. Goal kamu bisa dilanjutkan saat kondisi sudah lebih baik.";
+    } else if (feelState === "not_great" || feelState === "okay") {
+      return lang === "EN"
+        ? "No need to push too hard today. Let's do a light workout so you keep moving and stay on track with your goals."
+        : "Tidak perlu memaksakan diri hari ini. Yuk lakukan latihan ringan supaya kamu tetap bergerak dan tetap on track dengan goal kamu.";
+    } else {
+      return lang === "EN"
+        ? "You look fit and energetic today. Let me help you complete your planned workout and keep up the momentum!"
+        : "Kamu kelihatan fit hari ini. Yuk selesaikan latihan kamu dan lanjutkan momentum!";
+    }
+  };
+
+  // Month Grid Helper for Modal Calendar
+  const daysInCalMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDayOfCalMonth = new Date(calYear, calMonth, 1).getDay(); // 0 = Sun
+  const calMonthTitle = new Date(calYear, calMonth, 1).toLocaleDateString(lang === "EN" ? "en-US" : "id-ID", {
+    month: "long",
+    year: "numeric"
+  });
+
+  const handlePrevCalMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear(calYear - 1);
+    } else {
+      setCalMonth(calMonth - 1);
+    }
+  };
+
+  const handleNextCalMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear(calYear + 1);
+    } else {
+      setCalMonth(calMonth + 1);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#0E131F] text-white font-sans selection:bg-[#D4FF00] selection:text-black pb-20">
-      {/* Top Navigation Header */}
-      <header className="sticky top-0 z-40 bg-[#161C28]/90 backdrop-blur-md border-b border-neutral-800 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <GymBuddyLogo size={32} showText textClassName="text-lg sm:text-xl text-white" />
-          <span className="hidden md:inline-block px-2.5 py-0.5 rounded-full bg-[#D4FF00]/10 text-[#D4FF00] text-xs font-bold border border-[#D4FF00]/20">
-            MEMBER DASHBOARD
-          </span>
-        </div>
+    <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
+      
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {reminderNotificationMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#181B26] text-white px-5 py-3 rounded-full text-sm font-semibold shadow-xl flex items-center gap-2 border border-slate-700"
+          >
+            <Bell size={16} className="text-[#C4F82A]" />
+            <span>{reminderNotificationMsg}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToHome}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span>{isEN ? "Landing Page" : "Halaman Utama"}</span>
-          </button>
-          <a
-            href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3.5 py-1.5 rounded-full bg-[#25D366] text-black font-extrabold text-xs flex items-center gap-1.5 hover:bg-[#20bd5a] transition-all shadow-sm"
-          >
-            <span>WhatsApp AI Coach</span>
-          </a>
-          {onResetData && (
+      {/* FLOATING DARK CHARCOAL SIDEBAR PANEL */}
+      <aside className="w-full md:w-72 bg-[#181B26] text-white p-6 flex flex-col justify-between shrink-0 rounded-3xl border border-slate-800 shadow-xl md:min-h-[92vh]">
+        <div className="space-y-6">
+          {/* GymBuddy Logo & App Title */}
+          <div className="flex items-center justify-between">
+            <GymBuddyLogo size={32} showText textClassName="text-xl text-white font-extrabold tracking-tight" />
             <button
-              onClick={() => {
-                if (window.confirm(isEN ? "Are you sure you want to delete all data and re-register?" : "Apakah Anda yakin ingin menghapus semua data dan melakukan registrasi ulang?")) {
-                  onResetData();
-                }
-              }}
-              className="px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              title={isEN ? "Delete All Data & Re-register" : "Hapus Data & Registrasi Ulang"}
+              onClick={toggleLanguage}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-black text-slate-300 hover:text-white cursor-pointer"
             >
-              <Trash2 size={14} />
-              <span className="hidden lg:inline">{isEN ? "Reset & Re-register" : "Hapus Data & Registrasi Ulang"}</span>
+              <Globe size={12} className="text-slate-400" />
+              <span className={lang === "ID" ? "text-[#C4F82A] font-bold" : "text-slate-500"}>ID</span>
+              <span className="text-slate-600">|</span>
+              <span className={lang === "EN" ? "text-[#C4F82A] font-bold" : "text-slate-500"}>EN</span>
             </button>
-          )}
-          <button
-            onClick={onLogout}
-            className="p-2 rounded-full text-neutral-400 hover:text-red-400 hover:bg-neutral-800 transition-colors cursor-pointer"
-            title={isEN ? "Log Out" : "Keluar"}
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </header>
+          </div>
 
-      {/* Main Dashboard Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+          {/* User Profile Card */}
+          <div className="bg-[#212534] border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-[#C4F82A] text-black font-black flex items-center justify-center text-lg shadow-sm">
+              {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
+            </div>
+            <div className="overflow-hidden">
+              <h3 className="font-extrabold text-sm text-white truncate">{activeUser.name || "Member"}</h3>
+              <span className="text-xs font-semibold text-[#C4F82A] block">{coachName} Member</span>
+            </div>
+          </div>
+
+          {/* Navigation Pill List */}
+          <nav className="space-y-2">
+            <button className="w-full px-4 py-3 rounded-2xl bg-[#C4F82A] text-black font-black text-sm flex items-center justify-between transition-all cursor-pointer shadow-md">
+              <div className="flex items-center gap-3">
+                <BarChart2 size={18} />
+                <span>Dashboard</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
+
+            <button
+              onClick={onBackToHome}
+              className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#212534] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
+            >
+              <ArrowLeft size={18} />
+              <span>{t.landingPage}</span>
+            </button>
+
+            <a
+              href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full px-4 py-3 rounded-2xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366] hover:text-black font-extrabold text-sm flex items-center gap-3 transition-all cursor-pointer"
+            >
+              <MessageSquare size={18} />
+              <span>WhatsApp AI Coach</span>
+            </a>
+          </nav>
+        </div>
+
+        {/* Sidebar Bottom CTA & Account Actions */}
+        <div className="pt-6 space-y-3">
+          <div className="bg-gradient-to-br from-[#212534] to-[#181B26] border border-slate-800 rounded-2xl p-4 space-y-2 text-center">
+            <span className="text-xs font-bold text-slate-400 uppercase">{t.mainGoalTitle}</span>
+            <p className="text-sm font-extrabold text-white">{goalTitle}</p>
+            <div className="pt-1 flex justify-center">
+              <button
+                onClick={() => setShowUpdateWeightModal(true)}
+                className="px-3 py-1 rounded-full bg-[#C4F82A] text-black text-xs font-extrabold hover:bg-[#b2e61a] transition-all cursor-pointer"
+              >
+                {t.updateWeightTitle}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={handleDeleteAccount}
+              className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>{t.removeAccount}</span>
+            </button>
+
+            <button
+              onClick={onLogout}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title={t.logout}
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* RIGHT MAIN CONTENT CONTAINER */}
+      <main className="flex-1 bg-[#0F141C] border border-neutral-800/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm text-white">
         
-        {/* User Welcome Banner Card */}
-        <div className="bg-gradient-to-r from-[#182130] via-[#1B263B] to-[#141B29] border border-neutral-800 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4FF00]/5 rounded-full filter blur-3xl pointer-events-none"></div>
+        {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {t.welcomeBack}, {activeUser.name || "Member"} 👋
+              </h1>
+              {selectedDate !== todayDateStr && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[11px] border border-amber-500/40">
+                  {t.historicalLogNotice} {selectedDate}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-neutral-400 font-semibold mt-0.5">
+              {selectedDayName}, {selectedDate} • {todayScheduleObj.focus}
+            </p>
+          </div>
 
-          <div className="space-y-2 z-10">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#D4FF00] text-black font-extrabold flex items-center justify-center text-xl shadow-lg shadow-[#D4FF00]/20">
-                {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight text-white">
-                  {isEN ? `Welcome Back, ${activeUser.name}!` : `Halo, ${activeUser.name}!`}
-                </h1>
-                <p className="text-xs sm:text-sm text-neutral-400 font-medium">
-                  {activeUser.phone ? `WhatsApp: ${activeUser.phone}` : "Akun Terverifikasi"} • Coach Persona: <span className="text-[#D4FF00] font-bold uppercase">{(activeUser.persona === "mia" || activeUser.persona === "nikita") ? "Coach Mia" : "Coach Max"}</span>
-                </p>
-              </div>
+          {/* Date Navigation Ribbon without Scrollbars + Calendar Modal Opener */}
+          <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+            
+            {/* If selected date is outside the 7-day ribbon, show a badge with shortcut to reset */}
+            {!isSelectedDateInRibbon && (
+              <button
+                onClick={() => setSelectedDate(todayDateStr)}
+                className="px-3 py-2 rounded-xl bg-amber-500 text-white font-extrabold text-xs flex items-center gap-1 hover:bg-amber-600 transition-all cursor-pointer shadow-xs shrink-0"
+              >
+                <RotateCcw size={13} />
+                <span>{t.todayBtn}</span>
+              </button>
+            )}
+
+            {/* Static 7-Day Date Ribbon */}
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0">
+              {ribbonDates.map((d) => {
+                const isSel = d.dateStr === selectedDate;
+                return (
+                  <button
+                    key={d.dateStr}
+                    type="button"
+                    onClick={() => setSelectedDate(d.dateStr)}
+                    className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border shrink-0 ${
+                      isSel
+                        ? "bg-[#C4F82A] text-black border-[#C4F82A] font-black shadow-sm scale-105"
+                        : "bg-[#161B26] text-neutral-300 border-neutral-800 hover:bg-neutral-800 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase opacity-70 font-semibold">{d.dayName}</span>
+                    <span className="text-sm font-black">{d.dayNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Beautiful Calendar Modal Launcher Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const selD = new Date(selectedDate);
+                if (!isNaN(selD.getTime())) {
+                  setCalYear(selD.getFullYear());
+                  setCalMonth(selD.getMonth());
+                }
+                setShowCalendarModal(true);
+              }}
+              className="flex items-center justify-center w-11 h-13 rounded-xl font-bold text-xs bg-[#161B26] text-white hover:bg-neutral-800 transition-all cursor-pointer shadow-xs shrink-0 border border-neutral-800"
+              title={t.pickDateTooltip}
+            >
+              <CalendarIcon size={18} className="text-[#C4F82A]" />
+            </button>
+          </div>
+        </div>
+
+        {/* STEP 2: SUMMARY RIBBON STAT CARDS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Current Streak */}
+          <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">{t.currentStreak}</span>
+              <p className="text-2xl font-black text-white">{currentStreak} <span className="text-xs font-bold text-neutral-400">{t.activeDaysConsecutive}</span></p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-lg border border-amber-500/30">
+              🔥
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 z-10 w-full md:w-auto">
-            <div className="bg-[#111622] border border-neutral-800 rounded-2xl px-4 py-2.5 flex items-center gap-3 flex-1 sm:flex-none">
-              <Flame className="w-6 h-6 text-[#D4FF00]" />
-              <div>
-                <div className="text-xs text-neutral-400 font-semibold">{isEN ? "Active Streak" : "Streak Aktif"}</div>
-                <div className="text-base font-extrabold text-white">{streak} Hari 🔥</div>
-              </div>
+          {/* Longest Streak */}
+          <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{t.longestStreak}</span>
+              <p className="text-2xl font-black text-white">{longestStreak} <span className="text-xs font-bold text-neutral-400">{t.recordStreakDays}</span></p>
             </div>
-            <div className="bg-[#111622] border border-neutral-800 rounded-2xl px-4 py-2.5 flex items-center gap-3 flex-1 sm:flex-none">
-              <Target className="w-6 h-6 text-[#D4FF00]" />
-              <div>
-                <div className="text-xs text-neutral-400 font-semibold">{isEN ? "Target Goal" : "Target Utama"}</div>
-                <div className="text-base font-extrabold text-[#D4FF00]">{goalTitle}</div>
-              </div>
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-lg border border-indigo-500/30">
+              🏆
+            </div>
+          </div>
+
+          {/* Calorie Goal */}
+          <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">{t.caloriesLabel}</span>
+              <p className="text-2xl font-black text-white">{totalCaloriesConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCalories} kcal</span></p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-lg border border-emerald-500/30">
+              🥗
+            </div>
+          </div>
+
+          {/* Water Intake */}
+          <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Hydration</span>
+              <p className="text-2xl font-black text-white">{totalHydrationMl} <span className="text-xs font-bold text-neutral-400">/ 2,500 ml</span></p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-lg border border-blue-500/30">
+              💧
             </div>
           </div>
         </div>
 
-        {/* DATE SELECTOR RIBBON */}
-        <div className="bg-[#161C28] border border-neutral-800 rounded-2xl p-3 flex items-center justify-between gap-2 overflow-x-auto hide-scrollbar">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 text-[#D4FF00] ml-2 shrink-0" />
-            <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider shrink-0 mr-2">
-              {isEN ? "Log Date:" : "Jurnal Tanggal:"}
+        {/* STEP 3: TARGET GOALS OVERVIEW */}
+        <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target size={18} className="text-[#C4F82A]" />
+              <h2 className="text-base font-extrabold text-white">{t.targetGoals}</h2>
+            </div>
+            <span className="text-xs font-extrabold text-[#C4F82A] bg-[#C4F82A]/10 border border-[#C4F82A]/30 px-3 py-1 rounded-full">
+              {progressPercent}% Complete
             </span>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-            {recentDates.map((item) => (
-              <button
-                key={item.dateStr}
-                onClick={() => setSelectedDate(item.dateStr)}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold flex flex-col items-center transition-all cursor-pointer shrink-0 ${
-                  selectedDate === item.dateStr
-                    ? "bg-[#D4FF00] text-black shadow-lg shadow-[#D4FF00]/20"
-                    : "bg-[#1C2433] text-neutral-400 hover:text-white hover:bg-[#232D40]"
-                }`}
-              >
-                <span className="text-[10px] uppercase font-semibold opacity-80">{item.dayName}</span>
-                <span className="text-sm font-black">{item.dayNum}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.mainGoalTitle}</span>
+              <p className="text-sm font-extrabold text-white">{goalTitle}</p>
+            </div>
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.currentWeightLabel} → {t.targetWeightLabel}</span>
+              <p className="text-sm font-extrabold text-white">{weight} kg → {targetWeight} kg ({t.remainingLabel} {remainingKg} kg)</p>
+            </div>
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.dailyTargetLabel}</span>
+              <p className="text-sm font-extrabold text-white">{targetCalories} kcal / {targetProtein}g P</p>
+            </div>
           </div>
 
-          <div className="shrink-0 flex items-center gap-2 ml-2">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-[#1C2433] text-white text-xs font-bold px-3 py-2 rounded-xl border border-neutral-700 focus:outline-none focus:border-[#D4FF00]"
-            />
+          <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+            <div className="h-full bg-[#C4F82A] rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
 
-        {/* SECTION 1: MACRO & CALORIE PROGRESS SUMMARY */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Main Calorie Progress Card */}
-          <div className="lg:col-span-7 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 flex flex-col justify-between space-y-6 shadow-lg">
-            <div className="flex items-center justify-between">
+        {/* STEP 4: HOW DO YOU FEEL TODAY? (INTERACTIVE SLIDER) */}
+        {(() => {
+          const feelOptions = [
+            { id: "bad", label: t.feelBad, icon: "😫" },
+            { id: "sick", label: t.sick, icon: "🤒" },
+            { id: "not_great", label: t.notGreat, icon: "🙁" },
+            { id: "okay", label: t.okay, icon: "😐" },
+            { id: "good", label: t.good, icon: "🙂" },
+            { id: "great", label: t.great, icon: "🔥" }
+          ];
+          const currentIndex = Math.max(0, feelOptions.findIndex((opt) => opt.id === feelState));
+          const currentOpt = feelOptions[currentIndex] || feelOptions[4];
+
+          return (
+            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-extrabold text-white">{t.howDoYouFeel}</h2>
+                  <p className="text-xs text-neutral-400 font-medium">{t.feelSubtext}</p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#10141D] border border-neutral-700/80">
+                  <span className="text-xl">{currentOpt.icon}</span>
+                  <span className="text-xs font-black uppercase text-[#C4F82A] tracking-wide">{currentOpt.label}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <input
+                  type="range"
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={currentIndex}
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value, 10);
+                    if (feelOptions[idx]) {
+                      handleSelectFeel(feelOptions[idx].id as FeelState);
+                    }
+                  }}
+                  className="w-full h-3 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#C4F82A]"
+                />
+
+                <div className="flex justify-between px-1 text-[11px] font-bold text-neutral-400">
+                  {feelOptions.map((opt, i) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleSelectFeel(opt.id as FeelState)}
+                      className={`flex flex-col items-center gap-0.5 cursor-pointer transition-all ${i === currentIndex ? "text-[#C4F82A] font-extrabold scale-110" : "hover:text-white"}`}
+                    >
+                      <span className="text-lg">{opt.icon}</span>
+                      <span className="text-[10px] hidden sm:inline">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* STEP 5 & 6: WEEKLY WORKOUT SCHEDULE & WORKOUT PROGRESS */}
+        <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Dumbbell size={18} className="text-[#C4F82A]" />
               <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-[#D4FF00]" />
-                  <span>{isEN ? "Daily Calorie Balance" : "Asupan Kalori Harian"}</span>
-                </h2>
-                <p className="text-xs text-neutral-400">
-                  {selectedDate === formatDateKey(new Date()) ? (isEN ? "Today's Consumption" : "Konsumsi Hari Ini") : selectedDate}
+                <h2 className="text-base font-extrabold text-white">{t.weeklyWorkoutSchedule}</h2>
+                <p className="text-xs text-neutral-400 font-medium">
+                  {t.todaysFocus}: <span className="text-white font-bold">{selectedDayName} • {todayScheduleObj.focus}</span>
                 </p>
               </div>
-              <button
-                onClick={() => setShowAddMealModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-[#D4FF00]/10"
-              >
-                <Plus size={16} />
-                <span>{isEN ? "Add Meal" : "Catat Makanan"}</span>
-              </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 bg-[#111622] border border-neutral-800 rounded-2xl p-5">
-              <div>
-                <div className="text-xs text-neutral-400 font-semibold mb-1">{isEN ? "Target Calories" : "Target Harian"}</div>
-                <div className="text-xl sm:text-2xl font-black text-white">{targetCalories} <span className="text-xs font-normal text-neutral-500">kcal</span></div>
-              </div>
-              <div>
-                <div className="text-xs text-neutral-400 font-semibold mb-1">{isEN ? "Consumed" : "Sudah Dimakan"}</div>
-                <div className="text-xl sm:text-2xl font-black text-[#D4FF00]">{totalConsumedCalories} <span className="text-xs font-normal text-neutral-500">kcal</span></div>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <div className="text-xs text-neutral-400 font-semibold mb-1">{isEN ? "Remaining" : "Sisa Kalori"}</div>
-                <div className="text-xl sm:text-2xl font-black text-emerald-400">{remainingCalories} <span className="text-xs font-normal text-neutral-500">kcal</span></div>
-              </div>
-            </div>
+            <button
+              onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
+              className="px-3.5 py-1.5 rounded-full bg-[#10141D] border border-neutral-700/80 text-neutral-300 font-bold text-xs hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Layers size={14} />
+              <span>{showFullWeeklyOverview ? t.viewTodayOnly : t.viewFullWeeklySchedule}</span>
+            </button>
+          </div>
 
-            {/* Calorie Progress Bar */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-neutral-400">Target Progress</span>
-                <span className="text-[#D4FF00]">{Math.min(100, Math.round((totalConsumedCalories / targetCalories) * 100))}%</span>
+          <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+            <div className="h-full bg-[#C4F82A] rounded-full transition-all duration-300" style={{ width: `${overallWorkoutPercent}%` }}></div>
+          </div>
+
+          {!showFullWeeklyOverview ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {exercises.map((ex) => {
+                const percent = ex.targetSets > 0 ? Math.round((ex.completedSets / ex.targetSets) * 100) : 0;
+                const isDone = percent === 100;
+
+                return (
+                  <div
+                    key={ex.id}
+                    className={`border rounded-xl p-4 transition-all space-y-3 cursor-pointer ${
+                      isDone
+                        ? "bg-emerald-500/10 border-emerald-500/40 text-white"
+                        : ex.completedSets > 0
+                        ? "bg-amber-500/10 border-amber-500/40 text-white"
+                        : "bg-[#10141D] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                    onClick={() => setActiveWorkoutDetail(ex)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-extrabold text-sm text-white">{ex.name}</h3>
+                        <p className="text-xs text-neutral-400 font-medium">{ex.targetReps}</p>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                          isDone
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                            : ex.completedSets > 0
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            : "bg-neutral-800 text-neutral-400 border-neutral-700"
+                        }`}
+                      >
+                        {isDone ? t.statusCompleted : ex.completedSets > 0 ? t.statusInProgress : t.statusNotStarted}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {ex.setsState.map((isSetDone, setIdx) => (
+                          <button
+                            key={setIdx}
+                            onClick={() => handleToggleSet(ex.id, setIdx)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer border ${
+                              isSetDone
+                                ? "bg-[#C4F82A] text-black border-[#C4F82A] shadow-xs"
+                                : "bg-[#1A202C] text-neutral-300 border-neutral-700 hover:bg-neutral-800"
+                            }`}
+                          >
+                            <span>Set {setIdx + 1}</span>
+                            {isSetDone && <Check size={12} strokeWidth={3} />}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-xs font-black text-neutral-300">
+                        {ex.completedSets} / {ex.targetSets} {t.setUnit} ({percent}%)
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {weeklySchedule.map((daySch) => {
+                const isSelectedDay = daySch.day === selectedDayName;
+                return (
+                  <div
+                    key={daySch.day}
+                    className={`border rounded-xl p-3.5 transition-all space-y-2 ${
+                      isSelectedDay ? "bg-[#10141D] text-white border-[#C4F82A]/50" : "bg-[#10141D] border-neutral-800 text-neutral-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-lg font-black text-xs uppercase ${isSelectedDay ? "bg-[#C4F82A] text-black" : "bg-neutral-800 text-neutral-300"}`}>
+                          {daySch.day}
+                        </span>
+                        <h4 className="font-extrabold text-sm">{daySch.focus}</h4>
+                      </div>
+                      <span className="text-xs font-medium opacity-75">{daySch.exercises.length} {t.exerciseCount}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      {daySch.exercises.map((exItem) => (
+                        <div key={exItem.id} className={`p-2 rounded-lg text-xs border ${isSelectedDay ? "bg-slate-800 border-slate-700 text-slate-100" : "bg-slate-50 border-slate-200 text-slate-800"}`}>
+                          <p className="font-extrabold">{exItem.name}</p>
+                          <p className="text-[11px] opacity-75 font-medium">{exItem.targetReps}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* STEP 7: FOOD MEALS WITH NUTRITION PROGRESS BARS */}
+        <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Flame size={18} className="text-amber-400" />
+              <h2 className="text-base font-extrabold text-white">{t.foodMeals}</h2>
+            </div>
+            <button
+              onClick={() => setShowAddFoodModal(true)}
+              className="px-3.5 py-1.5 rounded-full bg-[#C4F82A] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#b2e61a] transition-all cursor-pointer shadow-xs"
+            >
+              <Plus size={14} />
+              <span>{t.addFoodBtn}</span>
+            </button>
+          </div>
+
+          {/* VISUAL MACRO PROGRESS BARS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Calories Bar */}
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-neutral-300">{t.caloriesLabel}</span>
+                <span className="font-black text-amber-400">
+                  {Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%
+                </span>
               </div>
-              <div className="w-full h-3 bg-neutral-800 rounded-full overflow-hidden p-0.5">
+              <div className="text-sm font-black text-white">
+                {totalCaloriesConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCalories} kcal</span>
+              </div>
+              <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
                 <div
-                  className="h-full bg-gradient-to-r from-[#D4FF00] to-emerald-400 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (totalConsumedCalories / targetCalories) * 100)}%` }}
+                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%` }}
                 ></div>
               </div>
             </div>
 
-            {/* Macro Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="bg-[#111622] border border-neutral-800/80 rounded-2xl p-3 text-center">
-                <div className="text-[11px] font-bold text-neutral-400 uppercase mb-1">Protein</div>
-                <div className="text-base sm:text-lg font-black text-white">{totalConsumedProtein}g <span className="text-[10px] text-neutral-500 font-normal">/ {targetProtein}g</span></div>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, (totalConsumedProtein / targetProtein) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div className="bg-[#111622] border border-neutral-800/80 rounded-2xl p-3 text-center">
-                <div className="text-[11px] font-bold text-neutral-400 uppercase mb-1">Karbo</div>
-                <div className="text-base sm:text-lg font-black text-white">{totalConsumedCarbs}g <span className="text-[10px] text-neutral-500 font-normal">/ {targetCarbs}g</span></div>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(100, (totalConsumedCarbs / targetCarbs) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div className="bg-[#111622] border border-neutral-800/80 rounded-2xl p-3 text-center">
-                <div className="text-[11px] font-bold text-neutral-400 uppercase mb-1">Lemak</div>
-                <div className="text-base sm:text-lg font-black text-white">{totalConsumedFat}g <span className="text-[10px] text-neutral-500 font-normal">/ {targetFat}g</span></div>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-rose-400 rounded-full" style={{ width: `${Math.min(100, (totalConsumedFat / targetFat) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div className="bg-[#111622] border border-neutral-800/80 rounded-2xl p-3 text-center">
-                <div className="text-[11px] font-bold text-neutral-400 uppercase mb-1">Serat</div>
-                <div className="text-base sm:text-lg font-black text-white">{totalConsumedFiber}g <span className="text-[10px] text-neutral-500 font-normal">/ {targetFiber}g</span></div>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.min(100, (totalConsumedFiber / targetFiber) * 100)}%` }}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Goal-Specific Card */}
-          {isHealthGoal ? (
-            /* Health & Vitality Card for Gaya Hidup Sehat & Fit */
-            <div className="lg:col-span-5 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 flex flex-col justify-between space-y-5 shadow-lg">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <HeartPulse className="w-5 h-5 text-[#D4FF00]" />
-                  <span>{isEN ? "Daily Vitality & Health" : "Keseimbangan Sehat & Fit"}</span>
-                </h2>
-                <span className="text-xs font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/20 px-2.5 py-1 rounded-full">
-                  Target Kesehatan Optimal
+            {/* Protein Bar */}
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-neutral-300">{t.proteinLabel}</span>
+                <span className="font-black text-indigo-400">
+                  {Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%
                 </span>
               </div>
-
-              <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="bg-[#161C28] border border-neutral-800 p-3 rounded-xl">
-                    <div className="text-[11px] text-neutral-400 font-semibold">{isEN ? "Hydration Goal" : "Target Hidrasi"}</div>
-                    <div className="text-base font-extrabold text-[#D4FF00]">{waterCups} / 12 Gelas</div>
-                  </div>
-                  <div className="bg-[#161C28] border border-neutral-800 p-3 rounded-xl">
-                    <div className="text-[11px] text-neutral-400 font-semibold">{isEN ? "Active Streak" : "Konsistensi Harian"}</div>
-                    <div className="text-base font-extrabold text-white">{streak} Hari 🔥</div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-neutral-400">{isEN ? "Energy Balance Status:" : "Status Keseimbangan Energi:"}</span>
-                    <span className="text-emerald-400">TDEE Balanced ({targetCalories} kcal)</span>
-                  </div>
-                  <div className="w-full h-3 bg-neutral-800 rounded-full overflow-hidden p-0.5">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#D4FF00] to-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, (totalConsumedCalories / targetCalories) * 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
+              <div className="text-sm font-black text-white">
+                {totalProteinConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetProtein} g</span>
               </div>
-
-              {/* Quick Water Intake Tracker */}
-              <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
-                    <Droplets className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white">{isEN ? "Water Hydration" : "Konsumsi Air Putih"}</div>
-                    <div className="text-xs text-neutral-400">{(waterCups * 0.25).toFixed(1)} Liter / 3.0 L Target</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleUpdateWaterCups(waterCups - 1)}
-                    className="w-7 h-7 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg font-bold flex items-center justify-center text-xs cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-extrabold text-white px-2">{waterCups} Gelas</span>
-                  <button
-                    onClick={() => handleUpdateWaterCups(waterCups + 1)}
-                    className="w-7 h-7 bg-[#D4FF00] text-black hover:bg-[#c4ec00] rounded-lg font-bold flex items-center justify-center text-xs cursor-pointer"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Goal Progress Tracker Card for Lose / Gain */
-            <div className="lg:col-span-5 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 flex flex-col justify-between space-y-5 shadow-lg">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-[#D4FF00]" />
-                  <span>{isEN ? "Weight Goal Progress" : "Progres Target BB"}</span>
-                </h2>
-                <span className="text-xs font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/20 px-2.5 py-1 rounded-full">
-                  {progressPercent}% Complete
-                </span>
-              </div>
-
-              <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center justify-between text-center">
-                  <div>
-                    <div className="text-[11px] text-neutral-400 font-semibold">{isEN ? "Start Weight" : "BB Awal"}</div>
-                    <div className="text-lg font-extrabold text-neutral-300">{startWeight} kg</div>
-                  </div>
-                  <div className="px-3 py-1 bg-[#D4FF00]/10 rounded-xl border border-[#D4FF00]/20 text-[#D4FF00] text-xs font-black">
-                    {isLoseGoal ? `-${(startWeight - weight).toFixed(1)} kg` : `+${(weight - startWeight).toFixed(1)} kg`}
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-neutral-400 font-semibold">{isEN ? "Target Weight" : "Target Akhir"}</div>
-                    <div className="text-lg font-extrabold text-[#D4FF00]">{targetWeight} kg</div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-neutral-400">{isEN ? "Current Weight:" : "BB Saat Ini:"} <strong className="text-white">{weight} kg</strong></span>
-                    <span className="text-emerald-400">{remainingKg} kg {isEN ? "remaining" : "lagi"}</span>
-                  </div>
-                  <div className="w-full h-3 bg-neutral-800 rounded-full overflow-hidden p-0.5">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#D4FF00] to-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${progressPercent}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Water Intake Tracker */}
-              <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
-                    <Droplets className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white">{isEN ? "Water Hydration" : "Konsumsi Air Putih"}</div>
-                    <div className="text-xs text-neutral-400">{(waterCups * 0.25).toFixed(1)} Liter / 3.0 L Target</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleUpdateWaterCups(waterCups - 1)}
-                    className="w-7 h-7 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg font-bold flex items-center justify-center text-xs cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-extrabold text-white px-2">{waterCups} Gelas</span>
-                  <button
-                    onClick={() => handleUpdateWaterCups(waterCups + 1)}
-                    className="w-7 h-7 bg-[#D4FF00] text-black hover:bg-[#c4ec00] rounded-lg font-bold flex items-center justify-center text-xs cursor-pointer"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 2: MEAL LOG JOURNAL FOR SELECTED DATE */}
-        <div className="bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-5 shadow-lg">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-[#D4FF00]" />
-                <span>{isEN ? `Meal Journal (${selectedDate})` : `Jurnal Makanan (${selectedDate})`}</span>
-              </h2>
-              <p className="text-xs text-neutral-400">
-                {isEN ? "All recorded food intake for this date" : "Daftar makanan yang tercatat pada tanggal ini"}
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowAddMealModal(true)}
-              className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
-            >
-              <Plus size={16} />
-              <span>{isEN ? "Add Food Item" : "Tambah Menu Makanan"}</span>
-            </button>
-          </div>
-
-          {loadingMeals ? (
-            <div className="text-center py-12 text-neutral-400 text-sm animate-pulse">
-              Memuat data jurnal makanan...
-            </div>
-          ) : meals.length === 0 ? (
-            <div className="bg-[#111622] border border-dashed border-neutral-800 rounded-2xl p-10 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-neutral-800 text-neutral-400 flex items-center justify-center mx-auto">
-                <Flame size={24} />
-              </div>
-              <p className="text-sm font-semibold text-neutral-300">
-                {isEN ? "No meals recorded for this date yet." : "Belum ada catatan makanan pada tanggal ini."}
-              </p>
-              <button
-                onClick={() => setShowAddMealModal(true)}
-                className="px-4 py-2 bg-[#1C2433] hover:bg-[#232D40] text-[#D4FF00] font-bold text-xs rounded-xl inline-flex items-center gap-1 border border-[#D4FF00]/20"
-              >
-                <Plus size={14} />
-                <span>Catat Makanan Pertama</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {meals.map((item) => (
+              <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
                 <div
-                  key={item.id}
-                  className="bg-[#111622] border border-neutral-800 hover:border-neutral-700 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#D4FF00]/10 border border-[#D4FF00]/20 text-[#D4FF00] flex items-center justify-center shrink-0 font-bold text-xs uppercase">
-                      {item.mealType ? item.mealType.charAt(0) : "M"}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-white truncate">{item.foodName}</h3>
-                      <div className="flex items-center gap-2 text-xs text-neutral-400 mt-0.5">
-                        <span className="text-[#D4FF00] font-extrabold">{item.calories} kcal</span>
-                        <span>• P:{item.protein}g</span>
-                        <span>• K:{item.carbs}g</span>
-                        <span>• L:{item.fat}g</span>
-                      </div>
-                    </div>
-                  </div>
+                  className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%` }}
+                ></div>
+              </div>
+            </div>
 
+            {/* Carbs Bar */}
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-neutral-300">{t.carbsLabel}</span>
+                <span className="font-black text-emerald-400">
+                  {Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-white">
+                {totalCarbsConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCarbs} g</span>
+              </div>
+              <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Fat Bar */}
+            <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-neutral-300">{t.fatLabel}</span>
+                <span className="font-black text-rose-400">
+                  {Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%
+                </span>
+              </div>
+              <div className="text-sm font-black text-white">
+                {totalFatConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetFat} g</span>
+              </div>
+              <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          {foodMeals.length === 0 ? (
+            <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-neutral-800 rounded-xl bg-[#10141D]">
+              {t.noMealsLogged}
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden bg-[#10141D]">
+              {foodMeals.map((item) => (
+                <div key={item.id} className="p-3 flex items-center justify-between hover:bg-neutral-800/60 transition-colors">
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {item.calories} kcal • P: {item.protein}g | C: {item.carbs}g | F: {item.fat}g
+                    </p>
+                  </div>
                   <button
-                    onClick={() => handleDeleteMeal(item.id)}
-                    className="p-2 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer shrink-0"
-                    title="Hapus"
+                    onClick={() => handleDeleteLogItem(item.id)}
+                    className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+                    title={t.delete}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               ))}
@@ -945,260 +1842,780 @@ export default function Dashboard({
           )}
         </div>
 
-        {/* SECTION 3: PERSONALIZED WORKOUT SCHEDULE & METRICS */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Workout Schedule with Interactive Checkboxes */}
-          <div className="lg:col-span-8 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-lg">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Dumbbell className="w-5 h-5 text-[#D4FF00]" />
-              <span>{isEN ? "Personalized Weekly Training Schedule" : "Jadwal Latihan Mingguan (Custom Plan)"}</span>
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              {workoutSchedule.map((item, idx) => {
-                const isChecked = !!workoutChecked[idx];
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => toggleWorkoutChecked(idx)}
-                    className={`border rounded-2xl p-4 flex items-center justify-between transition-all cursor-pointer ${
-                      isChecked
-                        ? "bg-[#D4FF00]/10 border-[#D4FF00]/40"
-                        : "bg-[#111622] border-neutral-800 hover:border-neutral-700"
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-[#D4FF00]">{item.day}</div>
-                      <div className="text-sm font-extrabold text-white mt-0.5">{item.title}</div>
-                      <div className="text-[11px] text-neutral-400 mt-1">{item.desc}</div>
-                    </div>
-                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                      isChecked
-                        ? "bg-[#D4FF00] text-black border-[#D4FF00]"
-                        : "border-neutral-700 text-transparent"
-                    }`}>
-                      ✓
-                    </div>
-                  </div>
-                );
-              })}
+        {/* STEP 8: WATER / HYDRATION */}
+        <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Droplets size={18} className="text-blue-400" />
+              <h2 className="text-base font-extrabold text-white">{t.waterHydration}</h2>
             </div>
-
-            {/* Log Latihan Hari Ini (WhatsApp & Dashboard API) */}
-            {workoutLogs.length > 0 && (
-              <div className="pt-4 border-t border-neutral-800 space-y-3">
-                <div className="text-xs font-bold text-[#D4FF00] flex items-center gap-1.5">
-                  <CheckCircle2 size={14} />
-                  <span>Catatan Latihan Selesai ({workoutLogs.length}):</span>
-                </div>
-                <div className="space-y-2">
-                  {workoutLogs.map((w: any) => (
-                    <div key={w.id} className="bg-[#111622] border border-neutral-800 rounded-xl p-3 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-extrabold text-white">{w.title}</div>
-                        <div className="text-[11px] text-neutral-400">⏱️ {w.durationMinutes || 45} min • 🔥 ~{w.caloriesBurned || 250} kcal</div>
-                        {w.notes && <div className="text-[10px] text-neutral-500 italic mt-0.5">{w.notes}</div>}
-                      </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteWorkout(w.id); }}
-                        className="text-neutral-500 hover:text-red-400 p-1 cursor-pointer"
-                        title="Hapus Log Latihan"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleQuickAddWater(250)}
+                className="px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/30 cursor-pointer"
+              >
+                {t.quickAdd250}
+              </button>
+              <button
+                onClick={() => handleQuickAddWater(500)}
+                className="px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/30 cursor-pointer"
+              >
+                {t.quickAdd500}
+              </button>
+              <button
+                onClick={() => setShowAddDrinkModal(true)}
+                className="px-3.5 py-1.5 rounded-full bg-[#C4F82A] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#b2e61a] transition-all cursor-pointer shadow-xs"
+              >
+                <Plus size={14} />
+                <span>{t.addDrinkBtn}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Health & BMR Calculator Summary */}
-          <div className="lg:col-span-4 bg-[#161C28] border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-lg flex flex-col justify-between">
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-3">
-                <Activity className="w-5 h-5 text-[#D4FF00]" />
-                <span>{isEN ? "BMR & TDEE Metrics" : "Metrik BMR & TDEE"}</span>
-              </h2>
-
-              <div className="space-y-3">
-                <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-3.5 flex justify-between items-center">
-                  <span className="text-xs text-neutral-400 font-semibold">BMR (Basal Metabolic):</span>
-                  <span className="text-sm font-black text-white">{bmrCalc.toLocaleString()} kcal</span>
-                </div>
-                <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-3.5 flex justify-between items-center">
-                  <span className="text-xs text-neutral-400 font-semibold">TDEE (Daily Energy):</span>
-                  <span className="text-sm font-black text-[#D4FF00]">{tdeeCalc.toLocaleString()} kcal</span>
-                </div>
-                <div className="bg-[#111622] border border-neutral-800 rounded-2xl p-3.5 flex justify-between items-center">
-                  <span className="text-xs text-neutral-400 font-semibold">
-                    {isLoseGoal ? "Calorie Deficit Goal:" : (activeUser.goal === "gain" ? "Calorie Surplus Goal:" : "Maintenance Goal:")}
-                  </span>
-                  <span className="text-sm font-black text-emerald-400">
-                    {isLoseGoal ? "-500 kcal / hari" : (activeUser.goal === "gain" ? "+400 kcal / hari" : "Sebatas TDEE Harian")}
-                  </span>
-                </div>
-              </div>
+              <span className="text-[10px] font-bold text-blue-400 uppercase">{t.hydrationTarget}</span>
+              <p className="text-lg font-black text-white">{totalHydrationMl} ml / 2,500 ml ({totalWaterCups} Gelas)</p>
             </div>
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 font-bold flex items-center justify-center text-base shadow-xs">
+              💧
+            </div>
+          </div>
 
-            <div className="bg-[#182130] border border-[#D4FF00]/20 rounded-2xl p-4 text-center space-y-2">
-              <div className="text-xs font-extrabold text-[#D4FF00] uppercase tracking-wider">
-                Personal WhatsApp AI Assistant
-              </div>
-              <p className="text-xs text-neutral-300">
-                Lakukan foto makanan atau ketik menu langsung di WhatsApp untuk autolink ke jurnal ini.
-              </p>
+          {hydrationLogs.length === 0 ? (
+            <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-neutral-800 rounded-xl bg-[#10141D]">
+              {t.noDrinksLogged}
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden bg-[#10141D]">
+              {hydrationLogs.map((item) => (
+                <div key={item.id} className="p-3 flex items-center justify-between hover:bg-neutral-800/60 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <Coffee size={16} className="text-blue-400" />
+                    <div>
+                      <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
+                      <p className="text-xs text-neutral-400 font-medium">
+                        {item.volumeMl || extractVolumeMlFromName(item.foodName)} ml • {item.calories || 0} kcal
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteLogItem(item.id)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    title={t.delete}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* STEP 9: REKOMENDASI MAX / MIA */}
+        <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-[#C4F82A]" />
+            <h2 className="text-base font-extrabold text-white">{t.coachRecommendation} ({coachName})</h2>
+          </div>
+
+          <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#C4F82A] text-black font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+              {isMaxPersona ? "M" : "N"}
+            </div>
+            <div className="space-y-0.5">
+              <h4 className="font-extrabold text-sm text-white">{coachName} {t.coachAdviceTitle}</h4>
+              <p className="text-sm text-neutral-300 font-medium leading-relaxed">{getCoachFeelingRecommendation()}</p>
             </div>
           </div>
         </div>
 
       </main>
 
-      {/* ADD MEAL MODAL WITH AI AUTO ESTIMATOR FOR LAYMEN USERS */}
+      {/* BEAUTIFUL MONTH CALENDAR PICKER MODAL */}
       <AnimatePresence>
-        {showAddMealModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
+        {showCalendarModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#161C28] border border-neutral-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+              className="bg-[#161B26] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-white"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-[#D4FF00]" />
-                  <span>Catat Makanan ({selectedDate})</span>
-                </h3>
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div>
+                  <h3 className="font-black text-lg text-white">{t.calendarModalTitle}</h3>
+                  <p className="text-xs text-neutral-400 font-medium">{t.calendarSubtext}</p>
+                </div>
+                <button onClick={() => setShowCalendarModal(false)} className="text-neutral-400 hover:text-white cursor-pointer p-1">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Month Navigation Controls */}
+              <div className="flex items-center justify-between bg-[#10141D] rounded-2xl p-3 border border-neutral-800">
                 <button
-                  onClick={() => setShowAddMealModal(false)}
-                  className="p-1.5 text-neutral-400 hover:text-white rounded-full hover:bg-neutral-800"
+                  type="button"
+                  onClick={handlePrevCalMonth}
+                  className="p-1.5 rounded-xl bg-[#1D2332] text-white border border-neutral-700 hover:bg-neutral-800 cursor-pointer transition-all"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="font-black text-sm text-white capitalize">{calMonthTitle}</span>
+                <button
+                  type="button"
+                  onClick={handleNextCalMonth}
+                  className="p-1.5 rounded-xl bg-[#1D2332] text-white border border-neutral-700 hover:bg-neutral-800 cursor-pointer transition-all"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              {/* 7-Day Day Names Header */}
+              <div className="grid grid-cols-7 gap-1 text-center font-black text-xs text-slate-400 uppercase">
+                {lang === "EN"
+                  ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                  : ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]}
+              </div>
+
+              {/* Month Grid Days */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {/* Empty slots before day 1 */}
+                {Array.from({ length: firstDayOfCalMonth }).map((_, idx) => (
+                  <div key={`empty-${idx}`} className="h-10" />
+                ))}
+
+                {/* Days of the month */}
+                {Array.from({ length: daysInCalMonth }).map((_, dayIdx) => {
+                  const dayNum = dayIdx + 1;
+                  const monthStr = String(calMonth + 1).padStart(2, "0");
+                  const dayStr = String(dayNum).padStart(2, "0");
+                  const dateStr = `${calYear}-${monthStr}-${dayStr}`;
+
+                  const isSelected = dateStr === selectedDate;
+                  const isToday = dateStr === todayDateStr;
+                  const isDisabled = dateStr < minDateStr || dateStr > todayDateStr;
+
+                  return (
+                    <button
+                      key={dateStr}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        setSelectedDate(dateStr);
+                        setShowCalendarModal(false);
+                      }}
+                      className={`h-10 rounded-xl font-extrabold text-xs transition-all flex flex-col items-center justify-center cursor-pointer border ${
+                        isSelected
+                          ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] shadow-md scale-105 font-black"
+                          : isToday
+                          ? "bg-[#C4F82A]/20 text-slate-900 border-[#99C700] font-black"
+                          : isDisabled
+                          ? "bg-slate-50 text-slate-300 border-transparent cursor-not-allowed"
+                          : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-200/70"
+                      }`}
+                    >
+                      <span>{dayNum}</span>
+                      {isToday && <span className="w-1 h-1 rounded-full bg-slate-900 mt-0.5"></span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Modal Footer Shortcuts */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setSelectedDate(todayDateStr);
+                    setShowCalendarModal(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#C4F82A] text-black hover:bg-[#b2e61a] cursor-pointer"
+                >
+                  {t.todayBtn}
+                </button>
+                <button
+                  onClick={() => setShowCalendarModal(false)}
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  {t.closeModal}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AUTO REMINDER MODAL */}
+      <AnimatePresence>
+        {/* COACH MOOD POPUP */}
+        {showCoachMoodPopup && coachMoodData && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4"
+            onClick={() => setShowCoachMoodPopup(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+            {/* Card */}
+            <div
+              className="relative w-full max-w-sm bg-[#161B26] border rounded-3xl p-6 shadow-2xl animate-[slideUp_0.35s_cubic-bezier(.16,1,.3,1)]"
+              style={{ borderColor: coachMoodData.color + "55" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Glow */}
+              <div
+                className="absolute -top-8 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full blur-3xl opacity-25 pointer-events-none"
+                style={{ background: coachMoodData.color }}
+              />
+
+              {/* Coach Avatar + Badge */}
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
+                  style={{ background: coachMoodData.color + "22", border: `1.5px solid ${coachMoodData.color}55` }}
+                >
+                  🏋️
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: coachMoodData.color }}>GymBuddy Coach</p>
+                  <h3 className="text-base font-extrabold text-white leading-tight">{coachMoodData.icon} {coachMoodData.title}</h3>
+                </div>
+              </div>
+
+              {/* Message */}
+              <p className="text-sm text-neutral-300 leading-relaxed mb-4 font-medium">
+                {coachMoodData.message}
+              </p>
+
+              {/* Tips */}
+              <div className="bg-[#10141D] rounded-2xl p-4 space-y-2 mb-5">
+                {coachMoodData.tips.map((tip, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-xs mt-0.5" style={{ color: coachMoodData!.color }}>›</span>
+                    <span className="text-xs text-neutral-300 font-medium">{tip}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA Button */}
+              <button
+                onClick={() => setShowCoachMoodPopup(false)}
+                className="w-full py-3 rounded-2xl font-extrabold text-sm transition-all active:scale-95"
+                style={{ background: coachMoodData.color, color: "#0d0f14" }}
+              >
+                Siap, Coach! 💪
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showAutoReminderModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-slate-900 font-black text-base">
+                  <Bell size={18} className="text-emerald-600" />
+                  <h3>{t.autoReminderTitle}</h3>
+                </div>
+                <button onClick={handleDismissReminder} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-sm font-semibold text-slate-800 leading-relaxed">
+                {t.autoReminderPrompt}
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold text-slate-600 uppercase">{t.selectReminderTime}</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {["16:00", "17:00", "19:00", "20:00"].map((timeStr) => (
+                    <button
+                      key={timeStr}
+                      onClick={() => setSelectedReminderTime(timeStr)}
+                      className={`py-2 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                        selectedReminderTime === timeStr
+                          ? "bg-[#181B26] text-[#C4F82A] border-[#181B26]"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {timeStr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={handleDismissReminder}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  {t.remindLater}
+                </button>
+                <button
+                  onClick={handleSetReminderTime}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-white hover:bg-slate-800 cursor-pointer shadow-xs"
+                >
+                  {t.setReminderBtn}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* WORKOUT DETAIL MODAL */}
+      <AnimatePresence>
+        {activeWorkoutDetail && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-black text-lg text-slate-900">{activeWorkoutDetail.name}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{t.workoutDetailTitle}</p>
+                </div>
+                <button onClick={() => setActiveWorkoutDetail(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-3.5 text-center">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">{t.targetRepsLabel}</span>
+                  <p className="text-sm font-extrabold text-slate-900">{activeWorkoutDetail.targetReps}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Progress Set</span>
+                  <p className="text-sm font-extrabold text-slate-900">
+                    {activeWorkoutDetail.completedSets} / {activeWorkoutDetail.targetSets} (
+                    {Math.round((activeWorkoutDetail.completedSets / activeWorkoutDetail.targetSets) * 100)}%)
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs font-black text-slate-700 uppercase">{t.setChecklistLabel}:</span>
+                <div className="space-y-2">
+                  {activeWorkoutDetail.setsState.map((isDone, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleToggleSet(activeWorkoutDetail.id, idx)}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                        isDone
+                          ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 font-extrabold text-sm">
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${isDone ? "bg-[#181B26] border-[#181B26] text-[#C4F82A]" : "bg-white border-slate-300"}`}>
+                          {isDone && <Check size={14} strokeWidth={3} />}
+                        </div>
+                        <span>Set {idx + 1}</span>
+                      </div>
+                      <span className="text-xs font-bold">{isDone ? t.setDone : t.setNotDone}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setActiveWorkoutDetail(null)}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-white hover:bg-slate-800 cursor-pointer shadow-xs"
+                >
+                  {t.closeModal}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADD LOG MODAL (AI AUTO-DETECTION) */}
+      <AnimatePresence>
+        {(showAddFoodModal || showAddDrinkModal) && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#181B26] to-slate-800 flex items-center justify-center text-[#C4F82A]">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">
+                      {showAddDrinkModal
+                        ? (lang === "EN" ? "Log Drink / Hydration" : "Tambah Log Minuman")
+                        : (lang === "EN" ? "AI Smart Food Log" : "Tambah Makanan AI")}
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      {lang === "EN" ? "AI auto-detects calories & macros" : "AI otomatis menghitung kalori & nutrisi"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddFoodModal(false);
+                    setShowAddDrinkModal(false);
+                    setAiPreview(null);
+                    setShowManualInputs(false);
+                  }}
+                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* AI Auto Estimator Box */}
-              <div className="bg-[#111622] border border-[#D4FF00]/30 rounded-2xl p-4 space-y-2">
-                <label className="text-xs font-extrabold text-[#D4FF00] flex items-center gap-1.5">
-                  <Sparkles size={14} />
-                  <span>Hitung Kalori Otomatis dengan AI</span>
-                </label>
-                <p className="text-[11px] text-neutral-400">
-                  Cukup ketik nama makanan dalam bahasa biasa (tanpa perlu tahu angka kalori):
-                </p>
-                <div className="flex gap-2 pt-1">
-                  <input
-                    type="text"
-                    placeholder="Contoh: 'nasi padang dada ayam' / 'wings 4 pcs & telur'"
-                    value={aiText}
-                    onChange={(e) => setAiText(e.target.value)}
-                    className="flex-1 bg-[#161C28] border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D4FF00]"
-                  />
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>{t.foodNameLabel}</span>
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <Sparkles size={10} /> Auto AI Detection
+                    </span>
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      type="text"
+                      value={itemNameInput}
+                      onChange={(e) => setItemNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !isAnalyzingAi) {
+                          handleSaveLogItem();
+                        }
+                      }}
+                      placeholder={showAddDrinkModal ? "misal: Air Putih 500ml, Kopi Susu, Jus Alpukat" : "misal: Nasi Padang Rendang + Teh Obeng"}
+                      className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all shadow-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5 flex items-start gap-1">
+                    <span>💡</span>
+                    <span>{t.comboHelpText}</span>
+                  </p>
+                </div>
+
+                {/* AI Loading State */}
+                {isAnalyzingAi && (
+                  <div className="p-3.5 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 animate-pulse">
+                    <Sparkles className="animate-spin text-[#C4F82A]" size={18} />
+                    <span className="text-xs font-bold text-slate-100">
+                      {lang === "EN" ? "AI is calculating calories & macros..." : "🤖 AI sedang mendeteksi kalori & nutrisi..."}
+                    </span>
+                  </div>
+                )}
+
+                {/* AI Preview Result */}
+                {aiPreview && !isAnalyzingAi && (
+                  <div className="p-3.5 bg-[#C4F82A]/15 border border-[#C4F82A]/40 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1">
+                        <Sparkles size={12} className="text-slate-800" /> Output Nutrisi AI:
+                      </span>
+                      <span className="text-xs font-black text-[#181B26] bg-[#C4F82A] px-2 py-0.5 rounded-md">
+                        {itemCalInput} kcal
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-700 pt-1">
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Protein</span>
+                        <span>{itemProteinInput}g</span>
+                      </div>
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Karbo</span>
+                        <span>{itemCarbsInput}g</span>
+                      </div>
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Lemak</span>
+                        <span>{itemFatInput}g</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Optional Manual Inputs Toggle */}
+                <div className="pt-1">
                   <button
                     type="button"
-                    disabled={analyzingAi || !aiText.trim()}
-                    onClick={handleAnalyzeAiFood}
-                    className="px-3.5 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl disabled:opacity-50 flex items-center gap-1 shrink-0 cursor-pointer shadow-sm"
+                    onClick={() => setShowManualInputs(!showManualInputs)}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
                   >
-                    {analyzingAi ? "Analyzing..." : "Hitung AI ✨"}
+                    <span>{showManualInputs ? "▲ Sembunyikan Input Manual" : "▼ Edit Nutrisi Manual (Opsional)"}</span>
                   </button>
-                </div>
-              </div>
 
-              <div className="text-center text-xs font-bold text-neutral-500 uppercase tracking-wider">
-                — atau isi manual —
-              </div>
-
-              <form onSubmit={handleAddMealSubmit} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-neutral-300 mb-1 block">Nama Makanan / Minuman</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Dada Ayam Panggang 150g"
-                    value={newFoodName}
-                    onChange={(e) => setNewFoodName(e.target.value)}
-                    className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-300 mb-1 block">Kalori (kcal)</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="350"
-                      value={newCalories}
-                      onChange={(e) => setNewCalories(e.target.value)}
-                      className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-neutral-300 mb-1 block">Kategori</label>
-                    <select
-                      value={newMealType}
-                      onChange={(e: any) => setNewMealType(e.target.value)}
-                      className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
+                  {showManualInputs && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 mt-2"
                     >
-                      <option value="breakfast">Sarapan</option>
-                      <option value="lunch">Makan Siang</option>
-                      <option value="dinner">Makan Malam</option>
-                      <option value="snack">Camilan</option>
-                    </select>
-                  </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.caloriesInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemCalInput}
+                          onChange={(e) => setItemCalInput(e.target.value)}
+                          placeholder="450"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.proteinInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemProteinInput}
+                          onChange={(e) => setItemProteinInput(e.target.value)}
+                          placeholder="25"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.carbsInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemCarbsInput}
+                          onChange={(e) => setItemCarbsInput(e.target.value)}
+                          placeholder="40"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.fatInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemFatInput}
+                          onChange={(e) => setItemFatInput(e.target.value)}
+                          placeholder="12"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-400 mb-1 block">Protein (g)</label>
-                    <input
-                      type="number"
-                      placeholder="30"
-                      value={newProtein}
-                      onChange={(e) => setNewProtein(e.target.value)}
-                      className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-neutral-400 mb-1 block">Karbo (g)</label>
-                    <input
-                      type="number"
-                      placeholder="40"
-                      value={newCarbs}
-                      onChange={(e) => setNewCarbs(e.target.value)}
-                      className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-neutral-400 mb-1 block">Lemak (g)</label>
-                    <input
-                      type="number"
-                      placeholder="10"
-                      value={newFat}
-                      onChange={(e) => setNewFat(e.target.value)}
-                      className="w-full bg-[#111622] border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#D4FF00]"
-                    />
-                  </div>
-                </div>
+                {/* ── Feature 1: Confirmation Panel ─────────────────────── */}
+                {aiConfirmStep && !isAnalyzingAi && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 p-4 bg-[#181B26] rounded-2xl space-y-3 border border-[#C4F82A]/30"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-[#C4F82A] flex items-center gap-1.5">
+                        <Sparkles size={12} /> Hasil Deteksi AI — Konfirmasi?
+                      </span>
+                      <span className="text-[11px] font-black text-white bg-[#C4F82A]/20 border border-[#C4F82A]/30 px-2 py-0.5 rounded-lg">
+                        {itemCalInput} kcal
+                      </span>
+                    </div>
 
+                    {/* Macro summary row */}
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Protein</span>
+                        <span className="text-white">{itemProteinInput}g</span>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Karbo</span>
+                        <span className="text-white">{itemCarbsInput}g</span>
+                      </div>
+                      <div className="bg-white/10 rounded-xl py-2">
+                        <span className="block text-[10px] text-white/50 font-semibold">Lemak</span>
+                        <span className="text-white">{itemFatInput}g</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-white/50 text-center">
+                      Nutrisi salah? Gunakan <em>"Edit Nutrisi Manual"</em> di atas lalu simpan.
+                    </p>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setAiConfirmStep(false);
+                          setShowManualInputs(true);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-white/70 hover:bg-white/10 cursor-pointer transition-colors"
+                      >
+                        ✏️ Edit Nutrisi
+                      </button>
+                      <button
+                        onClick={handleConfirmSave}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-black bg-[#C4F82A] text-[#181B26] hover:bg-[#d8ff45] cursor-pointer transition-colors shadow-sm"
+                      >
+                        ✅ Simpan ke Log
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setAiConfirmStep(false);
+                        setAiPreview(null);
+                        setItemNameInput("");
+                        setItemCalInput("");
+                        setItemProteinInput("");
+                        setItemCarbsInput("");
+                        setItemFatInput("");
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
+                    >
+                      ❌ Batal
+                    </button>
+                  </motion.div>
+                )}
+                {/* ── End Feature 1 ─────────────────────────────────────── */}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
-                  type="submit"
-                  className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold rounded-xl text-sm transition-all cursor-pointer mt-2"
+                  onClick={() => {
+                    setShowAddFoodModal(false);
+                    setShowAddDrinkModal(false);
+                    setAiPreview(null);
+                    setAiConfirmStep(false);
+                    setShowManualInputs(false);
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
-                  Simpan Makanan
+                  {t.closeModal}
                 </button>
-              </form>
+                {!aiConfirmStep && (
+                  <button
+                    onClick={handleAnalyzeAndPreview}
+                    disabled={isAnalyzingAi || !itemNameInput.trim()}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    {isAnalyzingAi ? (
+                      <>
+                        <Sparkles size={14} className="animate-spin" />
+                        <span>Mendeteksi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        <span>{lang === "EN" ? "AI Detect Nutrition" : "Deteksi Nutrisi AI"}</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* UPDATE WEIGHT MODAL */}
+      <AnimatePresence>
+        {showUpdateWeightModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="font-black text-base text-slate-900">{t.updateWeightTitle}</h3>
+                <button onClick={() => setShowUpdateWeightModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700">{t.weightInputLabel}</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={newWeightInput}
+                  onChange={(e) => setNewWeightInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-black focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setShowUpdateWeightModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  {t.closeModal}
+                </button>
+                <button
+                  onClick={() => {
+                    const w = Number(newWeightInput);
+                    if (w > 30 && w < 300) {
+                      setLiveUser((prev) => ({ ...prev, weight: w }));
+                    }
+                    setShowUpdateWeightModal(false);
+                  }}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 cursor-pointer shadow-xs"
+                >
+                  {t.saveWeight}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Coach Next-Step Bubble ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showCoachTip && coachTip && (
+          <motion.div
+            initial={{ y: 120, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 120, opacity: 0 }}
+            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            className="fixed bottom-6 left-4 right-4 z-50 max-w-md mx-auto"
+          >
+            <div className="bg-[#181B26] border border-[#C4F82A]/30 rounded-2xl shadow-2xl p-4 flex gap-3 items-start">
+              {/* Coach avatar badge */}
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#C4F82A]/15 border border-[#C4F82A]/30 flex items-center justify-center text-lg">
+                {isMaxPersona ? "🏋️" : "✨"}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-black text-[#C4F82A] mb-1 flex items-center gap-1.5">
+                  <Sparkles size={10} />
+                  {coachName} — Saran Selanjutnya
+                </p>
+                <p className="text-[12.5px] text-white/85 leading-relaxed font-medium">
+                  {coachTip}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowCoachTip(false)}
+                className="flex-shrink-0 text-white/30 hover:text-white/70 transition-colors cursor-pointer mt-0.5"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Progress bar showing auto-dismiss */}
+            <motion.div
+              initial={{ width: "100%" }}
+              animate={{ width: "0%" }}
+              transition={{ duration: 12, ease: "linear" }}
+              className="h-0.5 bg-[#C4F82A]/50 rounded-full mt-1 mx-1"
+            />
           </motion.div>
         )}
       </AnimatePresence>
+      {/* ── End Coach Bubble ────────────────────────────────────────────────── */}
+
     </div>
   );
 }

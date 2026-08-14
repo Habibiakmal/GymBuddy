@@ -297,11 +297,23 @@ function setWaterCups(rawPhone, cups, dateStr) {
   saveDb();
   return newCups;
 }
-function getMealTypeByHour(hour = (/* @__PURE__ */ new Date()).getHours()) {
-  if (hour >= 5 && hour < 11) return "breakfast";
-  if (hour >= 11 && hour < 15) return "lunch";
-  if (hour >= 15 && hour < 18) return "snack";
-  return "dinner";
+function getMealTypeByHour() {
+  try {
+    const wibHour = parseInt(
+      new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()),
+      10
+    );
+    if (wibHour >= 5 && wibHour < 11) return "breakfast";
+    if (wibHour >= 11 && wibHour < 15) return "lunch";
+    if (wibHour >= 15 && wibHour < 18) return "snack";
+    return "dinner";
+  } catch (e) {
+    const hour = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
+    if (hour >= 5 && hour < 11) return "breakfast";
+    if (hour >= 11 && hour < 15) return "lunch";
+    if (hour >= 15 && hour < 18) return "snack";
+    return "dinner";
+  }
 }
 var MONGODB_URI = process.env.MONGODB_URI || "";
 var mongoClient = null;
@@ -421,7 +433,7 @@ async function sendWhatsAppDirect(rawPhone, message) {
   }
   if (!sent && (process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN)) {
     try {
-      sent = await sendMetaWhatsappMessage(phone, message);
+      sent = Boolean(await sendMetaWhatsappMessage(phone, message));
       if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta to: ${phone}`);
     } catch (err) {
       console.error(`[WhatsApp Reminder] Error delivering via Meta to ${phone}:`, err?.message || err);
@@ -814,6 +826,7 @@ function calculateUserData(profile) {
     fiberGrams,
     injuries: profile?.injuries || ["none"],
     customInjury: profile?.customInjury || "",
+    allergies: profile?.allergies || ["none"],
     equipment: profile?.equipment || "full_gym",
     activeService,
     hasReceivedWelcome,
@@ -995,6 +1008,44 @@ function addMealLog(rawPhone, meal, targetDateStr) {
     }
   }
   saveDb();
+}
+function deleteLastMealLog(rawPhone, targetDateStr) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = targetDateStr || getLocalDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const altKey = `${altPhone}_${targetDate}`;
+  const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+  if (logs.length === 0) return null;
+  const deletedItem = logs[logs.length - 1];
+  const updatedLogs = logs.slice(0, -1);
+  if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
+  if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
+  saveDb();
+  return deletedItem;
+}
+function deleteMealLogByName(rawPhone, foodNameQuery, targetDateStr) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = targetDateStr || getLocalDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const altKey = `${altPhone}_${targetDate}`;
+  const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+  const queryLower = foodNameQuery.toLowerCase();
+  let matchIdx = -1;
+  for (let i = logs.length - 1; i >= 0; i--) {
+    if ((logs[i].foodName || "").toLowerCase().includes(queryLower)) {
+      matchIdx = i;
+      break;
+    }
+  }
+  if (matchIdx === -1) return null;
+  const deletedItem = logs[matchIdx];
+  const updatedLogs = logs.filter((_, i) => i !== matchIdx);
+  if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
+  if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
+  saveDb();
+  return deletedItem;
 }
 function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan") {
   const phone = normalizePhone(rawPhone);
@@ -1233,9 +1284,13 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
     insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung aktivitas harian
 \u{1F7E2} Kandungan makro terdistribusi dengan baik`;
   }
-  const now = /* @__PURE__ */ new Date();
-  const dateStr = now.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-  const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(":", ".");
+  const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
+  const wibIso = wibNow.toISOString();
+  const [wibDatePart, wibTimePart] = wibIso.split("T");
+  const [wibYear, wibMonth, wibDay] = wibDatePart.split("-");
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const dateStr = `${parseInt(wibDay)} ${monthNames[parseInt(wibMonth) - 1]} ${wibYear}`;
+  const timeStr = wibTimePart.substring(0, 5).replace(":", ".");
   const isMia = userData.persona === "mia" || userData.persona === "nikita";
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
   const coachComment = (parsedAi.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
@@ -1279,14 +1334,20 @@ ${portionDetailText}
 
 ${insightsFormatted}
 
-\u270F\uFE0F Koreksi Porsi
-Ketik: koreksi porsi [detail/porsi]
-
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F916} ${coachHeader}
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 
-"${coachComment}"`;
+"${coachComment}"
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2699\uFE0F AKSI CEPAT
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u270F\uFE0F Koreksi porsi? Balas:
+   _koreksi: [detail baru]_
+   contoh: "koreksi: nasinya 1 piring, ayam 2 potong"
+\u274C Hapus entry ini? Balas:
+   _hapus log terakhir_`;
 }
 function generateWelcomeMessages(userData) {
   const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, activeService, equipment, injuries, customInjury } = userData;
@@ -1777,6 +1838,95 @@ async function startServer() {
       waterCups
     });
   });
+  app.post("/api/ai/next-step", import_express.default.json(), async (req, res) => {
+    try {
+      const { phone, calories, protein, carbs, fat, targetCalories, targetProtein, targetCarbs, targetFat, goal, persona, name, mealName } = req.body;
+      const remCal = Math.max(0, (Number(targetCalories) || 2e3) - (Number(calories) || 0));
+      const remProt = Math.max(0, (Number(targetProtein) || 150) - (Number(protein) || 0));
+      const remCarb = Math.max(0, (Number(targetCarbs) || 200) - (Number(carbs) || 0));
+      const remFat = Math.max(0, (Number(targetFat) || 60) - (Number(fat) || 0));
+      let wibHour = 12;
+      try {
+        wibHour = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()), 10);
+      } catch (e) {
+        wibHour = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
+      }
+      const timeLabel = wibHour < 10 ? "pagi" : wibHour < 15 ? "siang" : wibHour < 18 ? "sore" : "malam";
+      const isMia = String(persona || "max").toLowerCase().includes("mia");
+      const coachName = isMia ? "Coach Mia" : "Coach Max";
+      const goalStr = goal === "lose" ? "menurunkan berat badan" : goal === "gain" ? "menaikkan massa otot" : "menjaga berat badan ideal";
+      const buildFallbackAdvice = () => {
+        const calPercent = Number(calories) / (Number(targetCalories) || 2e3);
+        let advice = "";
+        if (remProt > Number(targetProtein) * 0.8) {
+          advice = isMia ? `Protein kamu hari ini masih sangat rendah. Untuk meal berikutnya, prioritaskan sumber protein berkualitas \u2014 dada ayam rebus/panggang, telur rebus, atau tahu kukus. Minumnya air putih dulu ya biar metabolisme tetap optimal! \u{1F4AA}` : `Protein lo masih rendah banget! Next meal, gue rekomendasiin langsung serang protein dulu \u2014 dada ayam panggang, ikan bakar, atau telur rebus 3 biji. Jangan lupa minum air putih 500ml sekarang bro! \u{1F4A7}`;
+        } else if (remProt > remCarb && remProt > remFat && remProt > 30) {
+          const foodSugg = goal === "lose" ? isMia ? "dada ayam panggang, ikan tuna, atau putih telur" : "dada ayam grill, ikan bakar, atau tuna kalengan" : isMia ? "dada ayam + nasi merah, susu, atau protein shake" : "chicken rice bowl, tuna + nasi, atau mass gainer shake";
+          advice = isMia ? `Sisa protein kamu hari ini masih *${remProt}g* \u2014 lumayan banyak ya. Untuk meal ${timeLabel} berikutnya, fokuskan ke ${foodSugg}. Ini penting banget buat recovery dan perkembangan ototmu! \u2728` : `Bro, masih kurang *${remProt}g protein* nih. Next meal lo harus fokus ke ${foodSugg}. Otot lo butuh ini buat tumbuh! Gas jangan skip makan! \u{1F525}`;
+        } else if (calPercent > 0.85) {
+          advice = isMia ? `Kalori kamu udah hampir mencapai target hari ini! Kalau masih lapar di waktu ${timeLabel}, pilih camilan ringan aja ya \u2014 buah segar, salad, atau yogurt tanpa gula. Hindari yang berat supaya tetap di jalur ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target! Kalau laper ${timeLabel} ini, pilih yang ringan aja \u2014 buah, salad, atau yogurt. Jangan kalap makan berat lagi ya bro, kita lagi ngejer goal ${goalStr}! \u{1F4AF}`;
+        } else if (wibHour >= 13 && wibHour <= 15) {
+          const proteinSugg = goal === "gain" ? isMia ? "protein shake atau susu full cream" : "protein shake atau susu coklat" : isMia ? "teh hijau atau air lemon" : "air putih dingin atau teh tanpa gula";
+          advice = isMia ? `Waktu ${timeLabel} ini biasanya energi mulai turun. Yuk minum dulu \u2014 ${proteinSugg} sangat bagus buat menjaga energi! Kalau belum makan siang, pilih yang tinggi protein dan serat ya supaya kenyang lebih lama. \u{1F375}` : `${timeLabel.charAt(0).toUpperCase() + timeLabel.slice(1)} ini waktu yang rawan mager bro! Minum dulu \u2014 ${proteinSugg}. Kalau belum makan siang, langsung cari yang protein-nya tinggi ya! \u{1F4AA}`;
+        } else if (remFat < 10 && remFat > 0) {
+          advice = isMia ? `Lemak sehat kamu hari ini udah hampir terpenuhi. Untuk meal selanjutnya, pilih yang rendah lemak \u2014 dada ayam tanpa kulit, ikan rebus, atau sayuran kukus dengan sedikit olive oil. Tetap jaga keseimbangan nutrisinya ya! \u{1F966}` : `Lemak lo udah hampir habis jatahnya hari ini. Next meal, pilih yang low-fat aja \u2014 dada ayam tanpa kulit, ikan kukus, atau salad sayur. Jaga makro lo bro! \u26A1`;
+        } else {
+          const goalAdvice = goal === "lose" ? isMia ? "makanan tinggi serat dan protein rendah kalori \u2014 sayur, ayam rebus, atau ikan panggang" : "yang tinggi protein dan serat \u2014 ayam panggang, ikan, atau salad protein" : goal === "gain" ? isMia ? "karbohidrat kompleks dan protein \u2014 nasi merah, kentang, dada ayam, atau protein shake" : "combo karbo + protein \u2014 nasi + ayam geprek, atau chicken rice bowl ukuran besar" : isMia ? "makanan seimbang \u2014 nasi, lauk berprotein, dan sayuran" : "makanan seimbang \u2014 nasi + ayam/ikan + sayur, klasik tapi efektif";
+          advice = isMia ? `Untuk meal ${timeLabel} berikutnya, ${coachName} saranin pilih ${goalAdvice}. Ini pas banget buat mendukung tujuanmu ${goalStr}! Jangan lupa minum air putih minimal 250ml sebelum makan ya. \u{1F4A7}\u2728` : `Next meal ${timeLabel} ini, lo butuh ${goalAdvice}. Itu yang paling optimal buat goal lo ${goalStr}! Dan minum air putih sekarang \u2014 jangan tunggu haus. Gas! \u{1F4AA}\u{1F525}`;
+        }
+        return `\u{1F3AF} *SARAN MAKAN SELANJUTNYA \u2014 ${coachName.toUpperCase()}*
+
+${advice}`;
+      };
+      if (!getAi()) {
+        return res.json({ success: true, advice: buildFallbackAdvice() });
+      }
+      const prompt = `Kamu adalah ${coachName}, AI Coach dari GymBuddy.
+
+DATA USER:
+- Nama: ${name || "Member"}
+- Goal: ${goalStr}
+- Makanan baru saja dikonsumsi: "${mealName || "Makanan"}"
+- Waktu sekarang: ${timeLabel} (pukul ${wibHour}:xx WIB)
+
+SISA KEBUTUHAN NUTRISI HARI INI (setelah makan ini):
+- Kalori tersisa: ${remCal} kcal
+- Protein tersisa: ${remProt}g
+- Karbohidrat tersisa: ${remCarb}g
+- Lemak tersisa: ${remFat}g
+
+PERSONA:
+${isMia ? "Coach Mia: Perempuan, hangat, supportif, profesional. Tidak pernah bilang 'sayang/cinta/beb'. Sapaan sopan (kamu/aku)." : "Coach Max: Pria, tegas, penuh energi, gaya Jakarta gaul (lo/gue). Motivasional tapi realistis."}
+
+TUGAS:
+Berikan saran singkat (MAX 3 kalimat) tentang apa yang SEBAIKNYA DIMAKAN atau DIMINUM pada meal/snack selanjutnya berdasarkan:
+1. Sisa kebutuhan nutrisi hari ini (fokus pada makro yang paling defisit)
+2. Waktu (${timeLabel} \u2014 apakah ini saatnya snack, makan besar, atau cukup minum dulu?)
+3. Goal user (${goalStr})
+4. Sesuatu yang SPESIFIK dan ACTIONABLE \u2014 sebut nama makanan konkret, bukan generik
+
+PENTING:
+- Jangan copy/paste referensi apapun. Kreasikan sendiri dengan gaya ${coachName}.
+- Boleh pakai emoji 1-2 buah saja.
+- Output HANYA teks saran polos (bukan JSON). Mulai dengan "\u{1F3AF}" atau emoji relevan.
+- Kalau remCal < 200, sarankan hanya minuman/camilan ringan saja.
+- Kalau protein adalah defisit terbesar, itu harus jadi fokus utama saran.`;
+      try {
+        const rawAdvice = await generateGeminiContent(prompt);
+        const cleanedAdvice = (rawAdvice || "").replace(/```/g, "").trim();
+        const finalAdvice = cleanedAdvice.length > 20 ? `\u{1F3AF} *SARAN ${coachName.toUpperCase()}*
+
+${cleanedAdvice}` : buildFallbackAdvice();
+        return res.json({ success: true, advice: finalAdvice });
+      } catch (aiErr) {
+        console.warn("[next-step] AI error, using fallback:", aiErr);
+        return res.json({ success: true, advice: buildFallbackAdvice() });
+      }
+    } catch (err) {
+      console.error("[next-step] Error:", err);
+      res.status(500).json({ success: false, error: err.message || "Failed to generate advice" });
+    }
+  });
   app.post("/api/ai/analyze-food", import_express.default.json(), async (req, res) => {
     try {
       const { text } = req.body;
@@ -1784,98 +1934,282 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Text description is required" });
       }
       const cleanText = String(text).trim();
+      const lower = cleanText.toLowerCase();
       const getFallback = () => {
-        const lower = cleanText.toLowerCase();
-        let calories = 350;
-        let protein = 15;
-        let carbs = 40;
-        let fat = 12;
-        let fiber = 2;
-        let isHydration = false;
-        let volumeMl = 0;
-        if (lower.includes("air putih") || lower.includes("air mineral") || lower.includes("water")) {
+        let calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0, isHydration = false, volumeMl = 0;
+        if (lower.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
           calories = 0;
           protein = 0;
           carbs = 0;
           fat = 0;
-          fiber = 0;
           isHydration = true;
           volumeMl = 500;
-        } else if (lower.includes("teh") || lower.includes("kopi") || lower.includes("jus") || lower.includes("susu") || lower.includes("drink")) {
-          calories = 120;
-          protein = 4;
+        } else if (lower.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
+          calories = 10;
+          protein = 0;
+          carbs = 2;
+          fat = 0;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
+          calories = 150;
+          protein = 5;
           carbs = 18;
-          fat = 3;
+          fat = 6;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/teh\s*manis|teh\s*kotak|teh\s*pucuk/)) {
+          calories = 90;
+          protein = 0;
+          carbs = 22;
+          fat = 0;
           isHydration = true;
           volumeMl = 300;
-        } else if (lower.includes("ayam") || lower.includes("daging") || lower.includes("ikan") || lower.includes("telur") || lower.includes("steak") || lower.includes("rendang")) {
-          calories = 480;
-          protein = 32;
-          carbs = 35;
-          fat = 20;
-        } else if (lower.includes("nasi") || lower.includes("mie") || lower.includes("roti") || lower.includes("pasta")) {
-          calories = 420;
-          protein = 14;
-          carbs = 65;
-          fat = 10;
-        } else if (lower.includes("buah") || lower.includes("pisang") || lower.includes("apel") || lower.includes("salad")) {
-          calories = 160;
+        } else if (lower.match(/teh\s*tawar|green\s*tea|ocha/)) {
+          calories = 5;
+          protein = 0;
+          carbs = 1;
+          fat = 0;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/jus|juice/) && lower.match(/jeruk|orange/)) {
+          calories = 110;
           protein = 2;
-          carbs = 36;
+          carbs = 26;
+          fat = 0;
+          fiber = 1;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/susu|milk/) && lower.match(/full\s*cream|whole/)) {
+          calories = 150;
+          protein = 8;
+          carbs = 12;
+          fat = 8;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/milo|ovaltine/)) {
+          calories = 200;
+          protein = 5;
+          carbs = 35;
+          fat = 5;
+          isHydration = true;
+          volumeMl = 250;
+        } else if (lower.match(/soda|cola|sprite|fanta|coke|pepsi/)) {
+          calories = 140;
+          protein = 0;
+          carbs = 35;
+          fat = 0;
+          isHydration = true;
+          volumeMl = 330;
+        } else if (lower.match(/ayam\s*geprek|geprek/)) {
+          calories = 650;
+          protein = 32;
+          carbs = 65;
+          fat = 28;
+          fiber = 2;
+        } else if (lower.match(/ayam\s*goreng|fried\s*chicken/) && lower.match(/nasi|rice/)) {
+          calories = 580;
+          protein = 30;
+          carbs = 60;
+          fat = 22;
+          fiber = 1;
+        } else if (lower.match(/ayam\s*goreng|fried\s*chicken/)) {
+          calories = 320;
+          protein = 28;
+          carbs = 8;
+          fat = 18;
+          fiber = 0;
+        } else if (lower.match(/rendang/)) {
+          calories = 470;
+          protein = 40;
+          carbs = 12;
+          fat = 30;
+          fiber = 1;
+        } else if (lower.match(/telur\s*rebus|boiled\s*egg/)) {
+          calories = 155;
+          protein = 13;
+          carbs = 1;
+          fat = 11;
+          fiber = 0;
+        } else if (lower.match(/telur\s*goreng|fried\s*egg/)) {
+          calories = 185;
+          protein = 13;
+          carbs = 1;
+          fat = 14;
+          fiber = 0;
+        } else if (lower.match(/tempe\s*goreng/)) {
+          calories = 220;
+          protein = 14;
+          carbs = 12;
+          fat = 13;
+          fiber = 2;
+        } else if (lower.match(/tahu\s*goreng/)) {
+          calories = 165;
+          protein = 11;
+          carbs = 4;
+          fat = 12;
+          fiber = 0;
+        } else if (lower.match(/ikan\s*goreng|fried\s*fish/)) {
+          calories = 290;
+          protein = 25;
+          carbs = 5;
+          fat = 18;
+          fiber = 0;
+        } else if (lower.match(/nasi\s*putih|nasi\s*uduk/) || lower.match(/nasi/) && !lower.match(/goreng|padang/)) {
+          calories = 240;
+          protein = 5;
+          carbs = 52;
           fat = 1;
-          fiber = 5;
+          fiber = 1;
+        } else if (lower.match(/nasi\s*goreng/)) {
+          calories = 550;
+          protein = 18;
+          carbs = 65;
+          fat = 22;
+          fiber = 2;
+        } else if (lower.match(/mie\s*goreng|indomie\s*goreng/)) {
+          calories = 390;
+          protein = 9;
+          carbs = 55;
+          fat = 14;
+          fiber = 2;
+        } else if (lower.match(/mie\s*rebus|indomie\s*rebus/)) {
+          calories = 320;
+          protein = 8;
+          carbs = 48;
+          fat = 10;
+          fiber = 1;
+        } else if (lower.match(/roti\s*tawar|white\s*bread/)) {
+          calories = 265;
+          protein = 9;
+          carbs = 49;
+          fat = 3;
+          fiber = 3;
+        } else if (lower.match(/chicken\s*rice\s*bowl|rice\s*bowl/)) {
+          calories = 580;
+          protein = 35;
+          carbs = 60;
+          fat = 20;
+          fiber = 2;
+        } else if (lower.match(/nasi\s*padang/)) {
+          calories = 750;
+          protein = 38;
+          carbs = 70;
+          fat = 34;
+          fiber = 4;
+        } else if (lower.match(/bakso/)) {
+          calories = 420;
+          protein = 26;
+          carbs = 40;
+          fat = 18;
+          fiber = 2;
+        } else if (lower.match(/gado.gado|pecel/)) {
+          calories = 430;
+          protein = 16;
+          carbs = 52;
+          fat = 18;
+          fiber = 6;
+        } else if (lower.match(/batagor/)) {
+          calories = 450;
+          protein = 18;
+          carbs = 45;
+          fat = 22;
+          fiber = 3;
+        } else if (lower.match(/siomay/)) {
+          calories = 480;
+          protein = 24;
+          carbs = 42;
+          fat = 24;
+          fiber = 3;
+        } else if (lower.match(/soto\s*ayam/)) {
+          calories = 410;
+          protein = 25;
+          carbs = 50;
+          fat = 12;
+          fiber = 2;
+        } else {
+          calories = 350;
+          protein = 15;
+          carbs = 40;
+          fat = 12;
+          fiber = 2;
         }
-        return {
-          foodName: cleanText,
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          isHydration,
-          volumeMl,
-          mealType: getMealTypeByHour()
-        };
+        if (protein + carbs + fat > 0) {
+          calories = protein * 4 + carbs * 4 + fat * 9;
+        }
+        return { foodName: cleanText, calories, protein, carbs, fat, fiber, isHydration, volumeMl, mealType: getMealTypeByHour() };
       };
       if (!getAi()) {
         const fallback = getFallback();
         return res.json({ success: true, ...fallback, note: "Estimated using offline database" });
       }
-      const prompt = `Kamu adalah Nutritionist AI GymBuddy. User menginput nama makanan/minuman: "${cleanText}".
-Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tanpa markdown format):
+      const prompt = `Kamu adalah Nutritionist AI GymBuddy yang sangat akurat. Tugas: analisis makanan/minuman berikut dan berikan estimasi nutrisi yang TEPAT.
+
+INPUT USER: "${cleanText}"
+
+ATURAN WAJIB (MUTLAK, TIDAK BOLEH DILANGGAR):
+1. RUMUS KALORI: calories HARUS SAMA PERSIS dengan (protein \xD7 4) + (carbs \xD7 4) + (fat \xD7 9). Hitung ulang sebelum output!
+2. Estimasi porsi STANDAR orang Indonesia dewasa (bukan porsi miniatur).
+3. Jika input adalah minuman (kopi, teh, jus, air, susu, dll), set isHydration=true.
+4. Jika minuman berbasis susu/gula, kalori berkisar 100-250 kcal per sajian.
+
+DATABASE BENCHMARK NUTRISI INDONESIA (PANGANKU / USDA) \u2014 GUNAKAN SEBAGAI ACUAN:
+- Nasi Putih 1 centong (100g): 130 kcal | P:3g C:28g F:0.3g
+- Ayam Goreng (1 paha + kulit, 120g): 320 kcal | P:28g C:8g F:18g
+- Ayam Geprek + Nasi + Sambal: 650 kcal | P:32g C:65g F:28g
+- Chicken Rice Bowl + Telur: 580 kcal | P:35g C:60g F:20g
+- Nasi Padang (Rendang/Ayam + Sayur): 750 kcal | P:38g C:70g F:34g
+- Bakso Sapi + Mie: 420 kcal | P:26g C:40g F:18g
+- Tempe Goreng (2 potong): 220 kcal | P:14g C:12g F:13g
+- Telur Rebus (2 butir): 155 kcal | P:13g C:1g F:11g
+- Americano / Espresso (250ml): 10 kcal | P:0g C:2g F:0g
+- Kopi Susu / Latte (250ml): 150 kcal | P:5g C:18g F:6g
+- Teh Manis (300ml): 90 kcal | P:0g C:22g F:0g
+- Jus Jeruk (250ml): 110 kcal | P:2g C:26g F:0g
+- Batagor 1 porsi: 450 kcal | P:18g C:45g F:22g
+- Siomay Bandung: 480 kcal | P:24g C:42g F:24g
+- Soto Ayam + Nasi: 410 kcal | P:25g C:50g F:12g
+- Gado-Gado / Pecel: 430 kcal | P:16g C:52g F:18g
+
+OUTPUT: Hanya JSON valid, tanpa markdown, tanpa teks lain:
 {
-  "foodName": "${cleanText}",
-  "calories": 350,
-  "protein": 25,
-  "carbs": 40,
-  "fat": 10,
-  "fiber": 3,
+  "foodName": "Nama lengkap makanan dengan porsi (misal: Ayam Geprek + Nasi Putih 1 Porsi)",
+  "calories": 650,
+  "protein": 32,
+  "carbs": 65,
+  "fat": 28,
+  "fiber": 2,
   "isHydration": false,
   "volumeMl": 0,
-  "mealType": "lunch"
-}`;
+  "mealType": "lunch",
+  "portionNote": "Estimasi: 1 porsi standar (nasi 1 piring + ayam 1 dada)"
+}
+
+VERIFIKASI WAJIB sebelum output: (protein\xD74) + (carbs\xD74) + (fat\xD79) = calories. Jika tidak sama, koreksi calories!`;
       try {
         const rawText = await generateGeminiContent(prompt);
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed = extractAndParseJson(textOutput) || {};
         parsed.foodName = parsed.foodName || cleanText;
-        parsed.calories = Number(parsed.calories) || 300;
-        parsed.protein = Number(parsed.protein) || 15;
-        parsed.carbs = Number(parsed.carbs) || 35;
-        parsed.fat = Number(parsed.fat) || 10;
-        parsed.fiber = Number(parsed.fiber) || 2;
+        let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
+        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+        let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
+        const macroCalories = protein * 4 + carbs * 4 + fat * 9;
+        const calories = macroCalories > 0 ? macroCalories : Math.max(0, Math.round(Number(parsed.calories) || 0));
         parsed.mealType = parsed.mealType || getMealTypeByHour();
         res.json({
           success: true,
           foodName: parsed.foodName,
-          calories: parsed.calories,
-          protein: parsed.protein,
-          carbs: parsed.carbs,
-          fat: parsed.fat,
-          fiber: parsed.fiber,
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber,
           isHydration: Boolean(parsed.isHydration),
           volumeMl: Number(parsed.volumeMl) || 0,
-          mealType: parsed.mealType
+          mealType: parsed.mealType,
+          portionNote: parsed.portionNote || ""
         });
       } catch (aiErr) {
         console.warn("Gemini AI analyze-food error, using fallback:", aiErr);
@@ -2221,6 +2555,15 @@ Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website
           if (isWelcomeMessage) {
             const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
             const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
+            let updatedProfileNeeded = false;
+            if (nameMatch) {
+              userProfile.name = nameMatch[1].trim();
+              updatedProfileNeeded = true;
+            }
+            if (targetMatch) {
+              userProfile.goalTitle = targetMatch[1].trim();
+              updatedProfileNeeded = true;
+            }
             if (updatedProfileNeeded) {
               saveUserProfile(from, userProfile);
             }
@@ -2282,7 +2625,7 @@ Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website
               mealType: "snack"
             };
             addMealLog(from, workoutLogEntry);
-            dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
+            dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
             saveDb();
             responseMessages = [
               `\u{1F3CB}\uFE0F *CATATAN LATIHAN BERHASIL DISIMPAN!*
@@ -2546,10 +2889,10 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
       } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
-        let updatedProfileNeeded2 = false;
+        let updatedProfileNeeded = false;
         if (nameMatch && nameMatch[1].trim()) {
           userProfile.name = nameMatch[1].trim();
-          updatedProfileNeeded2 = true;
+          updatedProfileNeeded = true;
         }
         if (targetMatch && targetMatch[1].trim()) {
           const rawT = targetMatch[1].trim();
@@ -2564,9 +2907,9 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
             userProfile.goal = "gain";
             userProfile.goalTitle = "Menaikkan Berat Badan";
           }
-          updatedProfileNeeded2 = true;
+          updatedProfileNeeded = true;
         }
-        if (updatedProfileNeeded2) {
+        if (updatedProfileNeeded) {
           saveUserProfile(From, userProfile);
         }
         if (userProfile.hasReceivedWelcome) {
@@ -2659,7 +3002,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           mealType: "snack"
         };
         addMealLog(From, workoutLogEntry);
-        dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
+        dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
         saveDb();
         responseMessages = [
           `\u{1F3CB}\uFE0F *LATIHAN HARI INI DICATAT*
@@ -2966,6 +3309,125 @@ ${xmlOutput}`);
     }
     return null;
   }
+  function generateNutritionCardSVG(foodName, calories, protein, carbs, fat, fiber, healthScore, dayLabel, foodImageBase64, foodImageMime) {
+    const esc = (s) => escapeXml(String(s));
+    const nameWords = foodName.trim().split(" ");
+    let nameLine1 = foodName.trim();
+    let nameLine2 = "";
+    if (foodName.length > 22) {
+      const half = Math.ceil(nameWords.length / 2);
+      nameLine1 = nameWords.slice(0, half).join(" ");
+      nameLine2 = nameWords.slice(half).join(" ");
+    }
+    const starsHtml = Array.from({ length: 5 }, (_, i) => {
+      const filled = i < Math.round(healthScore);
+      return `<text x="${104 + i * 36}" y="186" font-size="28" fill="${filled ? "#F59E0B" : "#D1D5DB"}" font-family="serif">\u2605</text>`;
+    }).join("");
+    const imgContent = foodImageBase64 ? `<image href="data:${foodImageMime || "image/jpeg"};base64,${foodImageBase64}" x="40" y="210" width="520" height="310" clip-path="url(#imgClip)" preserveAspectRatio="xMidYMid slice" />` : `<rect x="40" y="210" width="520" height="310" rx="20" fill="#E5E7EB" /><text x="300" y="380" text-anchor="middle" font-size="18" fill="#9CA3AF" font-family="sans-serif">\u{1F4F7} Foto Makanan</text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 720" width="600" height="720">
+  <defs>
+    <clipPath id="imgClip"><rect x="40" y="210" width="520" height="310" rx="20" /></clipPath>
+    <!-- Macro chip gradients -->
+    <linearGradient id="gKal" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#F97316"/><stop offset="100%" stop-color="#EA580C"/></linearGradient>
+    <linearGradient id="gProt" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1C1917"/><stop offset="100%" stop-color="#292524"/></linearGradient>
+    <linearGradient id="gKarbo" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAB308"/><stop offset="100%" stop-color="#CA8A04"/></linearGradient>
+    <linearGradient id="gLemak" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#84CC16"/><stop offset="100%" stop-color="#65A30D"/></linearGradient>
+    <linearGradient id="gSerat" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#15803D"/><stop offset="100%" stop-color="#166534"/></linearGradient>
+    <filter id="cardShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0000001A"/>
+    </filter>
+  </defs>
+
+  <!-- Card background -->
+  <rect width="600" height="720" rx="28" fill="#FAFAF9" filter="url(#cardShadow)"/>
+
+  <!-- Header area -->
+  <!-- Food name -->
+  <text x="40" y="80" font-size="${nameLine2 ? "46" : "52"}" font-weight="800" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine1)}</text>
+  ${nameLine2 ? `<text x="40" y="136" font-size="46" font-weight="800" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine2)}</text>` : ""}
+
+  <!-- Day label -->
+  <text x="560" y="68" text-anchor="end" font-size="22" font-weight="500" fill="#78716C" font-family="system-ui, -apple-system, sans-serif">${esc(dayLabel)}</text>
+
+  <!-- Health score label -->
+  <text x="40" y="175" font-size="18" font-weight="700" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">Health Score:</text>
+  ${starsHtml}
+
+  <!-- Gizi AI badge -->
+  <rect x="468" y="154" width="92" height="32" rx="16" fill="none" stroke="#F97316" stroke-width="1.5"/>
+  <text x="514" y="175" text-anchor="middle" font-size="14" font-weight="600" fill="#F97316" font-family="system-ui, -apple-system, sans-serif">Gizi AI</text>
+
+  <!-- Food photo -->
+  ${imgContent}
+
+  <!-- Macro chips row \u2014 5 chips across -->
+  <!-- Kalori chip -->
+  <rect x="20" y="542" width="104" height="108" rx="20" fill="url(#gKal)"/>
+  <text x="72" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Kalori</text>
+  <text x="72" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${calories}</text>
+  <text x="72" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">kcal</text>
+
+  <!-- Protein chip -->
+  <rect x="134" y="542" width="104" height="108" rx="20" fill="url(#gProt)"/>
+  <text x="186" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Protein</text>
+  <text x="186" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${protein}</text>
+  <text x="186" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+
+  <!-- Karbo chip -->
+  <rect x="248" y="542" width="104" height="108" rx="20" fill="url(#gKarbo)"/>
+  <text x="300" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Karbo</text>
+  <text x="300" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${carbs}</text>
+  <text x="300" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+
+  <!-- Lemak chip -->
+  <rect x="362" y="542" width="104" height="108" rx="20" fill="url(#gLemak)"/>
+  <text x="414" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Lemak</text>
+  <text x="414" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#1C1917" font-family="system-ui, sans-serif">${fat}</text>
+  <text x="414" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(50,50,50,0.7)" font-family="system-ui, sans-serif">gr</text>
+
+  <!-- Serat chip -->
+  <rect x="476" y="542" width="104" height="108" rx="20" fill="url(#gSerat)"/>
+  <text x="528" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Serat</text>
+  <text x="528" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${fiber}</text>
+  <text x="528" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+
+  <!-- GymBuddy watermark -->
+  <text x="300" y="700" text-anchor="middle" font-size="13" font-weight="500" fill="#A8A29E" font-family="system-ui, sans-serif">GymBuddy \xB7 Gizi AI</text>
+</svg>`;
+  }
+  app.get(["/api/nutrition-card/:id.png", "/api/nutrition-card/:id.jpg"], async (req, res) => {
+    const rawId = req.params.id;
+    const id = String(rawId || "").replace(/\.(png|jpg|jpeg)$/i, "");
+    const cardData = dbData.nutritionCards ? dbData.nutritionCards[id] : null;
+    if (!cardData) {
+      return res.status(404).json({ error: "Card not found" });
+    }
+    const svgStr = generateNutritionCardSVG(
+      cardData.foodName,
+      cardData.calories,
+      cardData.protein,
+      cardData.carbs,
+      cardData.fat,
+      cardData.fiber,
+      cardData.healthScore,
+      cardData.dayLabel,
+      cardData.foodImageBase64,
+      cardData.foodImageMime
+    );
+    try {
+      const { Resvg } = await import("@resvg/resvg-js");
+      const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 600 } });
+      const pngData = resvg.render();
+      const pngBuffer = pngData.asPng();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(pngBuffer);
+    } catch (e) {
+      console.warn("[NutritionCard] Resvg failed, returning SVG:", e?.message);
+      res.setHeader("Content-Type", "image/svg+xml");
+      return res.send(svgStr);
+    }
+  });
   app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], async (req, res) => {
     const rawId = req.params.id;
     const idStr = Array.isArray(rawId) ? rawId[0] : rawId || "";
@@ -3648,6 +4110,100 @@ Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
       }
       const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
       const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+      const isDeleteLastLog = /^(hapus\s+log\s+terakhir|batal\s+log|cancel\s+log|delete\s+last|undo\s+log|hapus\s+yang\s+terakhir|cancel\s+entry)/i.test(userText.trim());
+      const isDeleteAllLog = /^(hapus\s+semua\s+log|clear\s+log|hapus\s+semua\s+makanan|reset\s+log\s+hari\s+ini)/i.test(userText.trim());
+      const deleteByNameMatch = userText.trim().match(/^hapus\s+log\s+(.+)/i);
+      if (isDeleteAllLog) {
+        const todayStr = getLocalDateStr();
+        const key = `${from}_${todayStr}`;
+        const altPhone2 = from.startsWith("0") ? "62" + from.substring(1) : from.startsWith("62") ? "0" + from.substring(2) : from;
+        const altKey2 = `${altPhone2}_${todayStr}`;
+        const deletedCount = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey2] || []).length;
+        if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
+        if (dbData.dailyLogs[altKey2]) dbData.dailyLogs[altKey2] = [];
+        saveDb();
+        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(
+          `\u{1F5D1}\uFE0F *SEMUA LOG HARI INI DIHAPUS*
+-----------------------------
+\u2705 ${deletedCount} entri makanan berhasil dihapus.
+\u{1F4CA} Kalori hari ini kembali ke 0 kcal.
+
+\u{1F4AC} *${coachN}*: "Log makanan hari ini sudah bersih. Yuk mulai catat lagi dari awal! \u{1F957}"`
+        )}</Message></Response>`;
+        return res.type("text/xml").send(twiml);
+      }
+      if (isDeleteLastLog) {
+        const deletedItem = deleteLastMealLog(from);
+        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+        const updatedTotals = getDailyTotals(from);
+        let replyMsg;
+        if (deletedItem) {
+          replyMsg = `\u274C *LOG DIHAPUS*
+-----------------------------
+\u2705 *"${deletedItem.foodName}"* berhasil dihapus dari catatan hari ini.
+
+\u{1F4CA} *Sisa Asupan Hari Ini:*
+\u{1F525} ${updatedTotals.calories} kcal  \u2022  \u{1F356} ${updatedTotals.protein}g protein
+\u{1F35A} ${updatedTotals.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals.fat}g lemak
+
+\u{1F4AC} *${coachN}*: "Oke, sudah dihapus! Mau catat yang lain?"`;
+        } else {
+          replyMsg = `\u2139\uFE0F *Tidak Ada Log yang Bisa Dihapus*
+-----------------------------
+Belum ada catatan makanan hari ini untuk dihapus.
+
+\u{1F4AC} *${coachN}*: "Mau catat makanan dulu? Kirim foto atau ketik nama makanannya!"`;
+        }
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyMsg)}</Message></Response>`;
+        res.type("text/xml").send(twiml);
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum2 = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum2 = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({ body: replyMsg, from: fromNum2, to: toNum2 });
+          } catch (e) {
+          }
+        }
+        return;
+      }
+      if (deleteByNameMatch && deleteByNameMatch[1]) {
+        const queryName = deleteByNameMatch[1].trim();
+        const deletedItem = deleteMealLogByName(from, queryName);
+        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+        const updatedTotals = getDailyTotals(from);
+        let replyMsg;
+        if (deletedItem) {
+          replyMsg = `\u274C *LOG DIHAPUS*
+-----------------------------
+\u2705 *"${deletedItem.foodName}"* berhasil dihapus!
+
+\u{1F4CA} *Sisa Asupan Hari Ini:*
+\u{1F525} ${updatedTotals.calories} kcal  \u2022  \u{1F356} ${updatedTotals.protein}g protein
+\u{1F35A} ${updatedTotals.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals.fat}g lemak
+
+\u{1F4AC} *${coachN}*: "Done! Mau koreksi atau catat yang lain?"`;
+        } else {
+          replyMsg = `\u26A0\uFE0F *Makanan Tidak Ditemukan*
+-----------------------------
+Tidak ada log "${queryName}" di catatan hari ini.
+
+Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untuk hapus entry terakhir.`;
+        }
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyMsg)}</Message></Response>`;
+        res.type("text/xml").send(twiml);
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum2 = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum2 = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({ body: replyMsg, from: fromNum2, to: toNum2 });
+          } catch (e) {
+          }
+        }
+        return;
+      }
       let responseMessages = [];
       let mediaUrlToSend = null;
       if (isWelcomeMessage) {
@@ -3750,7 +4306,7 @@ Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
           mealType: "snack"
         };
         addMealLog(from, workoutLogEntry);
-        dbData.dailyLogs[workoutKey] = [{ id: "completed", timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
+        dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
         saveDb();
         responseMessages = [
           `\u{1F3CB}\uFE0F *LATIHAN HARI INI DICATAT*
@@ -3942,8 +4498,9 @@ CATATAN:
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
               parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
               parsed.isFood = true;
-              addMealLog(from, {
-                id: `m-${Date.now()}`,
+              const mealId = `m-${Date.now()}`;
+              const savedMeal = {
+                id: mealId,
                 foodName: parsed.foodName || "Makanan",
                 calories: Number(parsed.calories) || 0,
                 protein: Number(parsed.protein) || 0,
@@ -3952,9 +4509,87 @@ CATATAN:
                 fiber: Number(parsed.fiber) || 0,
                 mealType: getMealTypeByHour(),
                 timestamp: (/* @__PURE__ */ new Date()).toISOString()
-              });
+              };
+              addMealLog(from, savedMeal);
+              userProfile.lastFoodLog = { ...savedMeal };
+              saveUserProfile(from, userProfile);
               const updatedTotals = getDailyTotals(from);
               responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals)];
+              if (imagePart) {
+                try {
+                  const wibDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+                  let wibDay = "";
+                  try {
+                    const wibDateStr = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long" }).format(/* @__PURE__ */ new Date());
+                    wibDay = wibDateStr.charAt(0).toUpperCase() + wibDateStr.slice(1);
+                  } catch {
+                    wibDay = wibDays[(/* @__PURE__ */ new Date()).getDay()];
+                  }
+                  const cardId = `nc-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
+                  if (!dbData.nutritionCards) dbData.nutritionCards = {};
+                  dbData.nutritionCards[cardId] = {
+                    foodName: parsed.foodName || "Makanan",
+                    calories: Number(parsed.calories) || 0,
+                    protein: Number(parsed.protein) || 0,
+                    carbs: Number(parsed.carbs) || 0,
+                    fat: Number(parsed.fat) || 0,
+                    fiber: Number(parsed.fiber) || 0,
+                    healthScore: Number(parsed.healthScore) || 7,
+                    dayLabel: wibDay,
+                    // Embed the original food photo back into the card
+                    foodImageBase64: imagePart.inlineData?.data || null,
+                    foodImageMime: imagePart.inlineData?.mimeType || "image/jpeg"
+                  };
+                  saveDb();
+                  const publicHost = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_PUBLIC_DOMAIN || "https://gymbuddy-backend-zfft.onrender.com";
+                  const cardUrl = `${publicHost.replace(/\/$/, "")}/api/nutrition-card/${cardId}.png`;
+                  mediaUrlToSend = cardUrl;
+                  console.log("[NutritionCard] Generated card URL:", cardUrl);
+                } catch (cardErr) {
+                  console.warn("[NutritionCard] Failed to generate card:", cardErr);
+                }
+              }
+              try {
+                const remCal = Math.max(0, (userData.targetCalories || 2e3) - updatedTotals.calories);
+                const remProt = Math.max(0, (userData.proteinGrams || 150) - updatedTotals.protein);
+                const remCarb = Math.max(0, (userData.carbGrams || 200) - updatedTotals.carbs);
+                const remFat = Math.max(0, (userData.fatGrams || 60) - updatedTotals.fat);
+                const isMiaCoach = (userData.persona || "max").toLowerCase().includes("mia");
+                const coachNameStr = isMiaCoach ? "Coach Mia" : "Coach Max";
+                const goalStr = userData.goal === "lose" ? "turun berat badan" : userData.goal === "gain" ? "naik massa otot" : "jaga berat badan";
+                let wibHour2 = 12;
+                try {
+                  wibHour2 = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()), 10);
+                } catch (e) {
+                  wibHour2 = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
+                }
+                const timeStr2 = wibHour2 < 10 ? "pagi" : wibHour2 < 15 ? "siang" : wibHour2 < 18 ? "sore" : "malam";
+                const calPercent = updatedTotals.calories / (userData.targetCalories || 2e3);
+                let nextStepTip = "";
+                if (remProt > (userData.proteinGrams || 150) * 0.75) {
+                  nextStepTip = isMiaCoach ? `Protein kamu hari ini masih sangat rendah (*${remProt}g tersisa*). Untuk meal ${timeStr2} berikutnya, prioritaskan dada ayam rebus, telur rebus, atau tahu kukus \u2014 protein tinggi biar otot dan metabolismu tetap optimal! \u{1F4AA}` : `Protein lo masih kurang *${remProt}g* bro. Next meal lo harus makan yang tinggi protein \u2014 dada ayam panggang, ikan bakar, atau telur rebus 3 biji. Jangan skip! \u{1F525}`;
+                } else if (remProt > remCarb && remProt > remFat && remProt > 25) {
+                  const sugg = userData.goal === "lose" ? isMiaCoach ? "dada ayam panggang atau ikan tuna" : "ayam grill atau ikan bakar tanpa nasi" : isMiaCoach ? "chicken rice bowl atau dada ayam + nasi merah" : "chicken rice bowl atau tuna rice bowl";
+                  nextStepTip = isMiaCoach ? `Sisa *${remProt}g protein* masih perlu kamu penuhi hari ini. Untuk meal ${timeStr2} selanjutnya, pilih ${sugg} \u2014 pas banget buat recovery dan mendukung ${goalStr}mu! \u2728` : `Lo masih butuh *${remProt}g protein* lagi hari ini! Langsung serang \u2014 ${sugg}. Otot lo butuh ini buat tumbuh, jangan delay! \u26A1`;
+                } else if (calPercent > 0.88) {
+                  nextStepTip = isMiaCoach ? `Kalori kamu hampir mencapai target hari ini! Kalau masih ingin makan ${timeStr2} ini, pilih camilan ringan saja \u2014 buah segar, salad, atau yogurt tanpa gula. Tetap konsisten ya buat ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target bro! Kalau laper, makan yang ringan aja \u2014 buah atau salad. Jangan over-eat, kita lagi ngejer ${goalStr}! \u{1F3AF}`;
+                } else if (wibHour2 >= 14 && wibHour2 <= 16 && remProt > 20) {
+                  const snackSugg = userData.goal === "gain" ? isMiaCoach ? "protein shake atau susu full cream" : "protein shake atau susu coklat \u2014 kalori ekstra yang bagus" : isMiaCoach ? "segenggam kacang almond atau yogurt Greek" : "kacang atau yogurt plain buat snack yang ga bikin kalori jebol";
+                  nextStepTip = isMiaCoach ? `Waktu ${timeStr2} ini cocok banget buat snack protein! Coba ${snackSugg} \u2014 ini bantu kamu penuhi sisa *${remProt}g protein* hari ini tanpa terlalu berat. \u{1F375}` : `${timeStr2.charAt(0).toUpperCase() + timeStr2.slice(1)} ini prime time buat snack protein! Gas ${snackSugg} sekarang. Lo masih butuh *${remProt}g protein* lagi! \u{1F4AA}`;
+                } else {
+                  const defaultSugg = userData.goal === "lose" ? isMiaCoach ? "makanan tinggi serat dan protein rendah kalori \u2014 sayur bening, ayam rebus, atau ikan kukus" : "ayam panggang + sayur, atau salad tuna \u2014 efektif buat fat loss" : userData.goal === "gain" ? isMiaCoach ? "karbohidrat + protein \u2014 nasi merah, kentang, atau oatmeal dengan ayam" : "nasi + ayam geprek atau chicken rice bowl ukuran besar" : isMiaCoach ? "makanan seimbang \u2014 nasi porsi sedang, lauk berprotein, dan sayuran" : "nasi + ayam/ikan + sayur \u2014 combo paling solid";
+                  nextStepTip = isMiaCoach ? `Untuk meal ${timeStr2} selanjutnya, ${coachNameStr} saranin ${defaultSugg}. Pas banget buat mendukung goal ${goalStr} kamu! Minum air putih 250ml dulu sebelum makan ya. \u{1F4A7}` : `Next meal ${timeStr2} ini, lo butuh ${defaultSugg}. Paling optimal buat ${goalStr} lo! Dan minum air sekarang \u2014 jangan tunggu haus bro. \u{1F4A7}\u{1F525}`;
+                }
+                if (nextStepTip) {
+                  responseMessages.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F3AF} SARAN ${coachNameStr.toUpperCase()}
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+
+${nextStepTip}`);
+                }
+              } catch (tipErr) {
+                console.warn("[next-step-tip] Error generating tip:", tipErr);
+              }
             } else if (parsed.intent === "DAILY_REKAP") {
               const totals = getDailyTotals(from);
               responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];

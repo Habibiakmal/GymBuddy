@@ -25,7 +25,9 @@ import {
   Brain,
   CheckCircle2,
   Sliders,
-  HelpCircle
+  HelpCircle,
+  Sparkles,
+  Lock
 } from "lucide-react";
 
 // WhatsApp Icon component
@@ -90,19 +92,39 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   const [weight, setWeight] = useState("65");
   const [height, setHeight] = useState("170");
   const [age, setAge] = useState("25");
+  const [userTargetWeight, setUserTargetWeight] = useState("");
+  const [allergies, setAllergies] = useState<string[]>(["none"]);
 
-  // Lifestyle & Challenges
+  const toggleAllergy = (allergyId: string) => {
+    setAllergies((prev) => {
+      if (allergyId === "none") return ["none"];
+      const filtered = prev.filter((a) => a !== "none");
+      if (filtered.includes(allergyId)) {
+        const next = filtered.filter((a) => a !== allergyId);
+        return next.length === 0 ? ["none"] : next;
+      } else {
+        return [...filtered, allergyId];
+      }
+    });
+  };
+
+  // Lifestyle & Workout Constraints
   const [activityLevel, setActivityLevel] = useState("sedentary");
   const [experience, setExperience] = useState("beginner");
   const [satisfaction, setSatisfaction] = useState("medium");
   const [challenges, setChallenges] = useState<string[]>(["nyerah", "gorengan"]);
 
+  // Physical Limitations / Injuries & Equipment
+  const [injuries, setInjuries] = useState<string[]>(["none"]);
+  const [customInjury, setCustomInjury] = useState("");
+  const [equipment, setEquipment] = useState<"full_gym" | "dumbbells" | "bodyweight">("full_gym");
+
   // Persona Selection
   const [persona, setPersona] = useState<"max" | "mia">("max");
 
-  // Plan Selection
-  const [selectedPlan, setSelectedPlan] = useState<"advanced" | "premium">("advanced");
-  const [selectedFeature, setSelectedFeature] = useState<"nutrition" | "coach" | null>(null);
+  // Plan Selection ('free_trial' | 'advanced' | 'premium')
+  const [selectedPlan, setSelectedPlan] = useState<"free_trial" | "advanced" | "premium">("free_trial");
+  const [selectedFeature, setSelectedFeature] = useState<"nutrition" | "coach" | null>("coach");
 
   // Phone Delivery
   const [phone, setPhone] = useState("");
@@ -128,18 +150,27 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     if (step === 13) {
       const saveProfile = async () => {
         let computedGoalTitle = "Gaya Hidup Sehat & Fit";
-        let computedTargetWeight = Number(weight) || 65;
+        
+        const hM = (Number(height) || 170) / 100;
+        const currentW = Number(weight) || 65;
+        const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+        const aiRecommendedW = Math.min(currentW - 2, Math.max(45, bmiIdealW));
 
+        let computedTargetWeight = Number(userTargetWeight) || currentW;
         if (goal === "lose") {
           computedGoalTitle = "Menurunkan Berat Badan";
-          computedTargetWeight = Math.max(40, Number(weight) - 7);
+          if (!userTargetWeight) computedTargetWeight = aiRecommendedW;
         } else if (goal === "gain") {
           computedGoalTitle = "Menaikkan Berat Badan";
-          computedTargetWeight = Number(weight) + 5;
+          if (!userTargetWeight) computedTargetWeight = currentW + 5;
         } else if (goal === "health" || goal === "maintain") {
           computedGoalTitle = "Gaya Hidup Sehat & Fit";
-          computedTargetWeight = Number(weight);
+          computedTargetWeight = currentW;
         }
+
+        const activeService = (selectedPlan === "premium" || selectedPlan === "free_trial") 
+          ? "both" 
+          : (selectedFeature === "coach" ? "workout" : "nutritionist");
 
         const userObj = {
           name,
@@ -152,15 +183,21 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           weight: Number(weight) || 65,
           startWeight: Number(weight) || 65,
           targetWeight: computedTargetWeight,
+          aiRecommendedTargetWeight: aiRecommendedW,
           height: Number(height) || 165,
           age: Number(age) || 25,
           activityLevel,
           experience,
           satisfaction,
           challenges,
+          injuries,
+          customInjury,
+          allergies: allergies.length > 0 ? allergies : ["none"],
+          equipment,
           persona,
           plan: selectedPlan,
           feature: selectedFeature,
+          activeService,
           phone
         };
 
@@ -239,7 +276,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
       case 8: return challenges.length > 0;
       case 9: return true; // Analysis 2 screen
       case 10: return true; // Persona selection has defaults
-      case 11: return selectedPlan === "advanced" || (selectedPlan === "premium" && selectedFeature !== null);
+      case 11: return selectedPlan === "free_trial" || selectedPlan === "premium" || (selectedPlan === "advanced" && selectedFeature !== null);
       case 12: return phone.trim().length >= 8;
       default: return true;
     }
@@ -420,6 +457,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   };
 
   const goalData = getGoalSpecificData();
+  const communityStats = getCommunityStats();
 
   return (
     <div className="fixed inset-0 z-50 bg-white font-['Inter'] overflow-y-auto selection:bg-[#D4FF00] selection:text-black p-4 md:p-6 lg:p-8">
@@ -691,74 +729,62 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
             )}
 
             {/* STEP 5: FIRST REPORT SCREEN */}
-            {step === 5 && (() => {
-              const stats = getCommunityStats();
-              return (
-                <motion.div
-                  key="step5"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
-                    <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
-                      {isEN ? "Community Insights" : "Statistik Komunitas"}
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-6 sm:p-8">
+                  <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest mb-3">
+                    {isEN ? "Community Insights" : "Statistik Komunitas"}
+                  </div>
+
+                  <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
+                    {communityStats.title}
+                  </h2>
+
+                  {/* METRIC GRID */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                          {communityStats.metric1.val}
+                        </span>
+                        <TrendingUp className="text-[#D4FF00] w-5 h-5" />
+                      </div>
+                      <div className="font-bold text-white text-sm sm:text-base mb-1">
+                        {communityStats.metric1.title}
+                      </div>
+                      <div className="text-xs text-neutral-400">
+                        {communityStats.metric1.desc}
+                      </div>
                     </div>
 
-                    <h2 className="text-xl sm:text-2xl font-['Archivo_Black'] text-white leading-snug mb-6">
-                      {stats.title}
-                    </h2>
-
-                    {/* METRIC GRID */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                            {stats.metric1.val}
-                          </span>
+                    <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
+                          {communityStats.metric2.val}
+                        </span>
+                        {communityStats.metric2.trend === "down" ? (
+                          <TrendingDown className="text-[#D4FF00] w-5 h-5" />
+                        ) : (
                           <TrendingUp className="text-[#D4FF00] w-5 h-5" />
-                        </div>
-                        <div className="font-bold text-white text-sm sm:text-base mb-1">
-                          {stats.metric1.title}
-                        </div>
-                        <div className="text-xs text-neutral-400">
-                          {stats.metric1.desc}
-                        </div>
+                        )}
                       </div>
-
-                      <div className="bg-[#161C28] rounded-xl p-5 border border-neutral-800">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <span className="text-4xl sm:text-5xl font-['Archivo_Black'] text-[#D4FF00]">
-                            {stats.metric2.val}
-                          </span>
-                          {stats.metric2.trend === "down" ? (
-                            <TrendingDown className="text-[#D4FF00] w-5 h-5" />
-                          ) : (
-                            <TrendingUp className="text-[#D4FF00] w-5 h-5" />
-                          )}
-                        </div>
-                        <div className="font-bold text-white text-sm sm:text-base mb-1">
-                          {stats.metric2.title}
-                        </div>
-                        <div className="text-xs text-neutral-400">
-                          {stats.metric2.desc}
-                        </div>
+                      <div className="font-bold text-white text-sm sm:text-base mb-1">
+                        {communityStats.metric2.title}
                       </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800 text-xs text-neutral-400 flex items-center gap-3">
-                      <Activity className="w-4 h-4 text-[#D4FF00] shrink-0" />
-                      <span>
-                        {isEN
-                          ? "Based on aggregated analysis of 12,400+ active GymBuddy users."
-                          : "Berdasarkan analisis teragregasi dari 12,400+ pengguna aktif GymBuddy."}
-                      </span>
+                      <div className="text-xs text-neutral-400">
+                        {communityStats.metric2.desc}
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              );
-            })()}
+                </div>
+              </motion.div>
+            )}
 
             {/* STEP 6: PERSONAL DATA & BIOMETRICS */}
             {step === 6 && (
@@ -771,13 +797,13 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 5 — Biometric Data" : "Langkah 5 — Data Biometrik"}
+                    {isEN ? "Step 5 — Biometric Data & Allergies" : "Langkah 5 — Data Biometrik & Alergi"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Physical & Metabolism Data" : "Data Fisik & Metabolisme"}
                   </h1>
                   <p className="text-neutral-400 text-sm">
-                    {isEN ? "Used to calculate BMR (Basal Metabolic Rate) and daily calorie needs." : "Digunakan untuk menghitung BMR (Basal Metabolic Rate) dan kebutuhan kalori harian."}
+                    {isEN ? "Used to calculate BMR (Basal Metabolic Rate) and customized daily meal plans." : "Digunakan untuk menghitung BMR dan rekomendasi nutrisi personal."}
                   </p>
                 </div>
 
@@ -823,8 +849,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         <Scale className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                         <input
                           type="number"
+                          min="1"
                           value={weight}
-                          onChange={(e) => setWeight(e.target.value)}
+                          onChange={(e) => setWeight(e.target.value.replace(/-/g, ''))}
                           placeholder="65"
                           className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                         />
@@ -839,8 +866,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         <Ruler className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                         <input
                           type="number"
+                          min="1"
                           value={height}
-                          onChange={(e) => setHeight(e.target.value)}
+                          onChange={(e) => setHeight(e.target.value.replace(/-/g, ''))}
                           placeholder="170"
                           className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                         />
@@ -857,11 +885,135 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                       <input
                         type="number"
+                        min="1"
                         value={age}
-                        onChange={(e) => setAge(e.target.value)}
+                        onChange={(e) => setAge(e.target.value.replace(/-/g, ''))}
                         placeholder="25"
                         className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                       />
+                    </div>
+                  </div>
+
+                  {/* Target Weight & AI Recommendation for Lose Weight */}
+                  {goal === "lose" && (() => {
+                    const hM = (Number(height) || 170) / 100;
+                    const currW = Number(weight) || 65;
+                    const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+                    const recW = Math.min(currW - 2, Math.max(45, bmiIdealW));
+                    const lossKg = Math.round((currW - recW) * 10) / 10;
+
+                    return (
+                      <div className="pt-2 space-y-3 border-t border-neutral-800/80">
+                        <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                          {isEN ? "Target Weight Goal (kg)" : "Target Berat Badan Impian (kg)"}
+                        </label>
+                        <div className="relative">
+                          <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="1"
+                            value={userTargetWeight || recW}
+                            onChange={(e) => setUserTargetWeight(e.target.value.replace(/-/g, ''))}
+                            placeholder={String(recW)}
+                            className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* AI Recommendation Card - HEAVILY HIGHLIGHTED DESIGN */}
+                        <div className="bg-gradient-to-br from-[#1F2B14] via-[#182332] to-[#111620] border-2 border-[#D4FF00] shadow-[0_0_25px_rgba(212,255,0,0.2)] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden">
+                          <div className="flex items-center justify-between">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4FF00] text-black font-['Archivo_Black'] text-[11px] uppercase tracking-wider shadow-md">
+                              <Sparkles className="w-3.5 h-3.5 fill-black" />
+                              <span>{isEN ? "AI HEALTHY RECOMMENDATION" : "REKOMENDASI TARGET SEHAT AI"}</span>
+                            </div>
+                            <span className="text-[11px] font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/30">
+                              BMI Ideal ~22.0
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 pt-1">
+                            <span className="text-3xl font-['Archivo_Black'] text-white">
+                              {recW} <span className="text-base font-bold text-[#D4FF00]">kg</span>
+                            </span>
+                            <span className="text-xs text-neutral-300 font-medium">
+                              ({isEN ? `Gradual loss ~${lossKg} kg` : `Proses bertahap turun ~${lossKg} kg`})
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-neutral-200 leading-relaxed font-medium">
+                            {isEN
+                              ? `Based on your height (${height || 170} cm), age (${age || 25} yrs), and current weight (${currW} kg), the healthiest long-term target is ${recW} kg.`
+                              : `Berdasarkan tinggi (${height || 170} cm), usia (${age || 25} th), dan BB awal (${currW} kg), target paling aman & sehat jangka panjang adalah ${recW} kg.`}
+                          </p>
+
+                          {/* Warning if user inputs a very low weight */}
+                          {userTargetWeight && Number(userTargetWeight) < recW - 4 && (
+                            <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-amber-300">
+                              <span>⚠️</span>
+                              <span>
+                                {isEN
+                                  ? `Target ${userTargetWeight} kg is quite low for your height (${height} cm). We recommend using the AI target (${recW} kg).`
+                                  : `Target ${userTargetWeight} kg cukup tergolong rendah untuk tinggi ${height} cm. Disarankan memakai rekomendasi AI (${recW} kg).`}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Action Button */}
+                          <button
+                            type="button"
+                            onClick={() => setUserTargetWeight(String(recW))}
+                            className="w-full py-2.5 px-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer active:scale-98"
+                          >
+                            <Sparkles className="w-4 h-4 fill-black" />
+                            <span>
+                              {isEN
+                                ? `Apply AI Recommended Target (${recW} kg)`
+                                : `Gunakan Target Rekomendasi AI (${recW} kg)`}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Food Allergies Question */}
+                  <div className="pt-4 space-y-3 border-t border-neutral-800">
+                    <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                      {isEN ? "Food Allergies & Dietary Restrictions" : "Alergi & Pantangan Makanan"}
+                    </label>
+                    <p className="text-xs text-neutral-400">
+                      {isEN
+                        ? "Select any foods you are allergic to so your personalized meal recommendations stay 100% safe."
+                        : "Pilih makanan yang menyebabkan alergi agar rekomendasi nutrisi dari AI disesuaikan secara aman."}
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { id: "none", label: isEN ? "No Allergies" : "Tidak Ada Alergi", icon: "✨" },
+                        { id: "peanuts", label: isEN ? "Peanuts & Nuts" : "Kacang-kacangan", icon: "🥜" },
+                        { id: "seafood", label: isEN ? "Seafood & Fish" : "Seafood / Udang", icon: "🦐" },
+                        { id: "dairy", label: isEN ? "Dairy & Lactose" : "Susu / Laktosa", icon: "🥛" },
+                        { id: "eggs", label: isEN ? "Eggs" : "Telur", icon: "🥚" },
+                        { id: "gluten", label: isEN ? "Gluten & Wheat" : "Gluten / Gandum", icon: "🌾" },
+                        { id: "soy", label: isEN ? "Soy / Tofu" : "Kedelai / Tahu", icon: "🫛" }
+                      ].map((opt) => {
+                        const isSelected = allergies.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleAllergy(opt.id)}
+                            className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              isSelected
+                                ? "bg-[#D4FF00]/10 border-[#D4FF00] text-[#D4FF00]"
+                                : "bg-[#111620] border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                            }`}
+                          >
+                            <span>{opt.icon}</span>
+                            <span className="truncate">{opt.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -962,6 +1114,88 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Sub 4: Equipment Availability for Workout Coach */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                    {isEN ? "Available Workout Equipment" : "Ketersediaan Alat Latihan (Equipment)"}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {[
+                      { id: "full_gym", title: isEN ? "Full Gym Equipment" : "Alat Gym Lengkap", desc: isEN ? "Barbells, Cable, Machines" : "Gym Commercial / Fitness Center" },
+                      { id: "dumbbells", title: isEN ? "Dumbbells Only" : "Dumbbell di Rumah", desc: isEN ? "Home dumbbells & bench" : "Set Dumbbell / Beban Rumah" },
+                      { id: "bodyweight", title: isEN ? "Bodyweight (No Equipment)" : "Tanpa Alat / Rumah", desc: isEN ? "Calisthenics & Home Workouts" : "Latihan Pakai Beban Tubuh" }
+                    ].map((eq) => (
+                      <button
+                        key={eq.id}
+                        type="button"
+                        onClick={() => setEquipment(eq.id as any)}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          equipment === eq.id
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                            : "bg-[#111620] text-white border-neutral-800 hover:border-neutral-700"
+                        }`}
+                      >
+                        <p className="font-extrabold text-xs sm:text-sm mb-0.5">{eq.title}</p>
+                        <p className={`text-[11px] ${equipment === eq.id ? "text-black/80 font-medium" : "text-neutral-400"}`}>{eq.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub 5: Physical Limitations / Injuries */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                      {isEN ? "Injuries or Physical Limitations (Optional)" : "Cedera atau Keterbatasan Fisik (Opsional)"}
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      {isEN ? "AI Coach will adapt exercises" : "AI akan menyesuaikan gerakan"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: "none", label: isEN ? "None (Fully Healthy)" : "Sehat (Tanpa Cedera)" },
+                      { id: "knee", label: isEN ? "Knee Pain" : "Nyeri Lutut" },
+                      { id: "lower_back", label: isEN ? "Lower Back Pain" : "Nyeri Punggung Bawah" },
+                      { id: "shoulder", label: isEN ? "Shoulder Injury" : "Cedera Bahu" },
+                      { id: "hypertension", label: isEN ? "Vertigo / High BP" : "Vertigo / Darah Tinggi" }
+                    ].map((inj) => {
+                      const isSel = injuries.includes(inj.id);
+                      return (
+                        <button
+                          key={inj.id}
+                          type="button"
+                          onClick={() => {
+                            if (inj.id === "none") {
+                              setInjuries(["none"]);
+                            } else {
+                              setInjuries((prev) => {
+                                const filter = prev.filter((i) => i !== "none");
+                                return filter.includes(inj.id) ? filter.filter((i) => i !== inj.id) : [...filter, inj.id];
+                              });
+                            }
+                          }}
+                          className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center justify-between cursor-pointer ${
+                            isSel
+                              ? "bg-[#D4FF00]/10 border-[#D4FF00] text-[#D4FF00]"
+                              : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                          }`}
+                        >
+                          <span>{inj.label}</span>
+                          {isSel && <Check size={14} className="text-[#D4FF00] shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    value={customInjury}
+                    onChange={(e) => setCustomInjury(e.target.value)}
+                    placeholder={isEN ? "Other specific condition (e.g. wrist pain, asthma...)" : "Catatan khusus lain (misal: nyeri pergelangan tangan, asma...)"}
+                    className="w-full bg-[#111620] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                  />
                 </div>
               </motion.div>
             )}
@@ -1224,37 +1458,82 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     <Check size={20} />
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
-                    {isEN ? "Select Your Plan" : "Pilih Plan Kamu"}
+                    {isEN ? "Select Your Plan" : "Pilih Paket Kamu"}
                   </h2>
                 </div>
-                <p className="text-sm sm:text-base text-neutral-400 mb-8 max-w-lg">
+                <p className="text-sm sm:text-base text-neutral-400 mb-6 max-w-lg">
                   {isEN
-                    ? "Customize according to your needs. Choose full access to all features or focus on a single feature."
-                    : "Sesuaikan dengan kebutuhanmu. Pilih akses penuh ke semua fitur atau fokus pada satu fitur saja."}
+                    ? "Start with a 2-day free trial or select a full plan tailored to your fitness goals."
+                    : "Mulai dengan uji coba gratis 2 hari atau pilih paket penuh sesuai kebutuhan kebugaranmu."}
                 </p>
 
-                <div className="space-y-4 max-w-2xl flex-grow">
-                  {/* Advanced Plan */}
+                <div className="space-y-3.5 max-w-2xl flex-grow">
+                  {/* Option 1: 2-Day Free Trial */}
                   <button
                     onClick={() => {
-                      setSelectedPlan("advanced");
+                      setSelectedPlan("free_trial");
                       setSelectedFeature(null);
                     }}
-                    className={`w-full text-left p-5 sm:p-6 rounded-2xl border transition-all ${
-                      selectedPlan === "advanced"
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                      selectedPlan === "free_trial"
                         ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-600"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-start justify-between mb-1">
                       <div>
-                        <h3 className={`font-['Archivo_Black'] text-lg uppercase ${
-                          selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
-                        }`}>
-                          Advanced Plan
-                        </h3>
-                        <p className="text-sm text-neutral-400 mt-1">
-                          {isEN ? "Full access to all Gym Buddy AI features" : "Akses penuh ke semua fitur Gym Buddy AI"}
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "free_trial" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "2-Day Free Trial" : "Uji Coba Gratis 2 Hari"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            FREE $0
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN
+                            ? "Full access to both AI Workout Coach & Nutritionist for 48 hours. No credit card required."
+                            : "Akses penuh 2 AI (Workout & Nutrisi) selama 48 jam tanpa bayar sama sekali."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selectedPlan === "free_trial" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "free_trial" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Advanced Plan ($5 / Rp 79.000) */}
+                  <div
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all ${
+                      selectedPlan === "advanced"
+                        ? "bg-[#161B22] border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedPlan("advanced");
+                        if (!selectedFeature) setSelectedFeature("coach");
+                      }}
+                      className="w-full flex items-start justify-between text-left cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            Advanced Plan
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
+                            {isEN ? "$5 / mo" : "Rp 79rb / bln"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN ? "Focus 100% on 1 feature of your choice" : "Fokus 100% pada 1 fitur pilihanmu"}
                         </p>
                       </div>
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
@@ -1262,100 +1541,102 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       }`}>
                         {selectedPlan === "advanced" && <Check size={14} className="text-black stroke-[3]" />}
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 text-xs text-white">
-                        <Activity size={14} className="text-[#D4FF3D]" />
-                        <span>AI Coach</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 text-xs text-white">
-                        <Leaf size={14} className="text-[#D4FF3D]" />
-                        <span>Nutrition AI</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Premium Plan */}
-                  <div
-                    className={`w-full text-left p-5 sm:p-6 rounded-2xl border transition-all ${
-                      selectedPlan === "premium"
-                        ? "bg-[#161B22] border-neutral-500"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-600"
-                    }`}
-                  >
-                    <button
-                      onClick={() => setSelectedPlan("premium")}
-                      className="w-full flex items-start justify-between mb-2 text-left"
-                    >
-                      <div>
-                        <h3 className="font-['Archivo_Black'] text-lg uppercase text-white">
-                          Premium Plan
-                        </h3>
-                        <p className="text-sm text-neutral-400 mt-1">
-                          {isEN ? "Focus on 1 feature of your choice" : "Fokus pada satu fitur pilihanmu"}
-                        </p>
-                      </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selectedPlan === "premium" ? "border-white bg-white" : "border-neutral-600"
-                      }`}>
-                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
-                      </div>
                     </button>
-                    
-                    {/* Sub-selection for Premium */}
-                    {selectedPlan === "premium" && (
-                      <div className="mt-5 space-y-3 pt-4 border-t border-neutral-800">
-                        <p className="text-sm font-medium text-neutral-300">
-                          {isEN ? "Select 1 feature to activate:" : "Pilih 1 fitur untuk diaktifkan:"}
+
+                    {/* Sub-selection for Advanced */}
+                    {selectedPlan === "advanced" && (
+                      <div className="mt-4 space-y-2 pt-3 border-t border-neutral-800">
+                        <p className="text-xs font-bold text-neutral-300">
+                          {isEN ? "Select 1 feature to activate:" : "Pilih 1 fitur spesialisasi yang diaktifkan:"}
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFeature("coach");
                             }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedFeature === "coach"
                                 ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
                                 : "bg-black/40 border-transparent hover:border-neutral-700"
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                               selectedFeature === "coach" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
                             }`}>
-                              <Activity size={18} />
+                              <Activity size={16} />
                             </div>
                             <div className="text-left">
-                              <p className={`font-bold text-sm ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Coach</p>
-                              <p className="text-xs text-neutral-500">{isEN ? "Form analysis & plans" : "Analisis form & jadwal"}</p>
+                              <p className={`font-bold text-xs ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Workout Coach</p>
+                              <p className="text-[10px] text-neutral-500">{isEN ? "Form check & workout split" : "Koreksi postur & jadwal gym"}</p>
                             </div>
                           </button>
-                          
+
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFeature("nutrition");
                             }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedFeature === "nutrition"
                                 ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
                                 : "bg-black/40 border-transparent hover:border-neutral-700"
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                               selectedFeature === "nutrition" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
                             }`}>
-                              <Leaf size={18} />
+                              <Leaf size={16} />
                             </div>
                             <div className="text-left">
-                              <p className={`font-bold text-sm ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>Nutrition AI</p>
-                              <p className="text-xs text-neutral-500">{isEN ? "Meal logging & analysis" : "Analisis & log makanan"}</p>
+                              <p className={`font-bold text-xs ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>AI Nutritionist</p>
+                              <p className="text-[10px] text-neutral-500">{isEN ? "Meal logging & macro targets" : "Hitung kalori & foto makanan"}</p>
                             </div>
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {/* Option 3: Premium Plan ($8 / Rp 139.000) */}
+                  <button
+                    onClick={() => {
+                      setSelectedPlan("premium");
+                      setSelectedFeature(null);
+                    }}
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                      selectedPlan === "premium"
+                        ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "premium" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "Premium Plan (All-Access)" : "Paket Premium (All-Access)"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            {isEN ? "$8 / mo" : "Rp 139rb / bln"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+                          {isEN
+                            ? "Both AIs (Nutritionist + Workout Coach), Gemini Pro Vision & Visual Infographic Poster Generation."
+                            : "2 AI Sekaligus (Nutrisi + Workout Coach), Presisi Tinggi Gemini Pro & Generasi Poster Visual Gym."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selectedPlan === "premium" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -1442,47 +1723,182 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               </motion.div>
             )}
 
-            {/* STEP 14: SUCCESS & OPEN WHATSAPP */}
-            {step === 14 && (
-              <motion.div
-                key="step14"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center text-center space-y-6 min-h-[45vh]"
-              >
-                <div className="w-16 h-16 bg-[#25D366]/10 rounded-full flex items-center justify-center border border-[#25D366]/30">
-                  <Check className="w-8 h-8 text-[#25D366]" strokeWidth={3} />
-                </div>
+            {/* STEP 14: FINAL ONBOARDING TRANSITION SCREEN */}
+            {step === 14 && (() => {
+              const userW = Number(weight) || 65;
+              const userH = Number(height) || 170;
+              const userA = Number(age) || 25;
+              const userG = gender || "pria";
+              const userGoal = goal || "lose";
+              const userAct = activityLevel || "light";
 
-                <div className="space-y-2 max-w-sm">
-                  <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                    {isEN ? "Plan Ready to Send!" : "Rencana Siap Dikirim!"}
-                  </h2>
-                  <p className="text-neutral-400 text-sm">
-                    {isEN
-                      ? `Hello ${name}! GymBuddy AI has calculated your BMR and constructed a custom daily nutrition guide for you.`
-                      : `Halo ${name}! GymBuddy AI telah menghitung BMR dan menyusun panduan nutrisi harian khusus untukmu.`}
-                  </p>
-                </div>
+              const hM = userH / 100;
+              const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+              const recW = Math.min(userW - 2, Math.max(45, bmiIdealW));
 
-                <motion.a
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}?text=${encodeURIComponent(
-                    isEN
-                      ? `Hello GymBuddy AI! 👋 I am ${name}, my target is ${goalData.title}. Please send my analysis & daily targets.`
-                      : `Halo GymBuddy AI! 👋 Saya ${name}, target saya adalah ${goalData.title}. Tolong kirimkan analisis & target harian saya.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onComplete}
-                  className="mt-4 px-8 py-4 bg-[#25D366] text-black font-extrabold rounded-full text-base hover:bg-[#20bd5a] transition-all flex items-center gap-2.5 cursor-pointer"
+              let targetW = Number(userTargetWeight) || userW;
+              if (userGoal === "lose" && !userTargetWeight) targetW = recW;
+              else if (userGoal === "gain" && !userTargetWeight) targetW = userW + 5;
+
+              const bmr = userG === "wanita"
+                ? 10 * userW + 6.25 * userH - 5 * userA - 161
+                : 10 * userW + 6.25 * userH - 5 * userA + 5;
+
+              const actMultipliers: Record<string, number> = {
+                sedentary: 1.2,
+                light: 1.375,
+                moderate: 1.55,
+                active: 1.725
+              };
+              const tdee = Math.round(bmr * (actMultipliers[userAct] || 1.375));
+
+              let targetCal = tdee;
+              if (userGoal === "lose") targetCal = Math.max(1200, Math.round(tdee - 500));
+              else if (userGoal === "gain") targetCal = Math.round(tdee + 400);
+
+              const proteinGram = Math.round((targetCal * 0.30) / 4);
+              const carbsGram = Math.round((targetCal * 0.45) / 4);
+              const fatGram = Math.round((targetCal * 0.25) / 9);
+
+              const weightDiffKg = Math.round(Math.abs(userW - targetW) * 10) / 10;
+              const estWeeks = userGoal === "maintain" || weightDiffKg === 0 ? 0 : Math.max(2, Math.ceil(weightDiffKg / 0.75));
+
+              return (
+                <motion.div
+                  key="step14"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-5 max-w-md mx-auto text-left pb-6"
                 >
-                  <WhatsAppIcon className="w-5 h-5" />
-                  <span>{isEN ? "Open WhatsApp & Get Plan" : "Buka WhatsApp & Terima Rencana"}</span>
-                </motion.a>
-              </motion.div>
-            )}
+                  {/* 1. Onboarding Completion Badge at Top */}
+                  <div className="flex items-center gap-3 bg-[#161C28] border border-[#25D366]/40 p-3.5 rounded-2xl shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-[#25D366]/20 border border-[#25D366]/40 flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5 text-[#25D366]" strokeWidth={3} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-['Archivo_Black'] text-[#25D366] uppercase tracking-wider">
+                        {isEN ? "ONBOARDING COMPLETE" : "ONBOARDING SELESAI"}
+                      </div>
+                      <div className="text-xs font-bold text-white">
+                        {isEN ? "Questionnaire Finished & Profile Configured" : "Kuesioner Selesai & Profil Berhasil Dibuat"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Strong Headline & Supporting Text */}
+                  <div className="space-y-2 pt-1">
+                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                      {isEN ? "Let’s build your nutrition plan!" : "Mari buat rencana nutrisimu!"}
+                    </h1>
+                    <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
+                      {isEN
+                        ? "In just 3 minutes, you’ll discover your daily calorie needs and get an estimate of how long it may take to reach your ideal weight."
+                        : "Hanya dalam 3 menit, kamu akan menemukan kebutuhan kalori harianmu dan estimasi waktu untuk mencapai berat badan idealmu."}
+                    </p>
+                  </div>
+
+                  {/* 3. Locked Calorie Target Summary */}
+                  <div className="bg-gradient-to-br from-[#1F2B14] via-[#161B22] to-[#111620] border-2 border-[#D4FF00] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden shadow-[0_0_30px_rgba(212,255,0,0.15)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-[#D4FF00]" />
+                        {isEN ? "Estimated Daily Calorie Target" : "Estimasi Target Kalori Harian"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase shadow-sm">
+                        <Lock className="w-3 h-3 text-black" />
+                        {isEN ? "LOCKED TARGET" : "TARGET TERKUNCI"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 pt-1">
+                      <span className="text-3xl sm:text-4xl font-['Archivo_Black'] text-white">
+                        {targetCal.toLocaleString()}
+                      </span>
+                      <span className="text-sm font-extrabold text-[#D4FF00]">kcal / {isEN ? "day" : "hari"}</span>
+                    </div>
+
+                    <p className="text-[11px] text-neutral-300 font-medium">
+                      {isEN
+                        ? `Personalized based on ${userW} kg, ${userH} cm, age ${userA}, and ${userG}.`
+                        : `Dihitung khusus berdasarkan ${userW} kg, ${userH} cm, usia ${userA} th (${userG}).`}
+                    </p>
+                  </div>
+
+                  {/* 4. Simple Weight Progress Visualization */}
+                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-neutral-400 font-bold uppercase tracking-wider">
+                      <span>{isEN ? "Weight Progress Estimation" : "Estimasi Progres Berat Badan"}</span>
+                      {estWeeks > 0 && (
+                        <span className="text-[#D4FF00] font-extrabold bg-[#D4FF00]/10 px-2 py-0.5 rounded-lg border border-[#D4FF00]/30">
+                          {isEN ? `Est. ~${estWeeks} Weeks` : `Estimasi ~${estWeeks} Minggu`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="text-left">
+                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Current" : "Awal"}</div>
+                        <div className="text-xl font-['Archivo_Black'] text-white">{userW} <span className="text-xs text-neutral-400">kg</span></div>
+                      </div>
+
+                      <div className="flex-1 px-4 flex items-center justify-center flex-col">
+                        <div className="w-full bg-neutral-800 h-2.5 rounded-full relative overflow-hidden">
+                          <div className="bg-gradient-to-r from-[#D4FF00] to-[#25D366] h-full rounded-full w-2/3"></div>
+                        </div>
+                        <div className="text-[10px] font-bold text-[#D4FF00] mt-1.5">
+                          {userGoal === "lose" ? `-${weightDiffKg} kg Target` : userGoal === "gain" ? `+${weightDiffKg} kg Target` : "Menjaga BB Ideal"}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Goal" : "Target"}</div>
+                        <div className="text-xl font-['Archivo_Black'] text-[#D4FF00]">{targetW} <span className="text-xs text-neutral-400">kg</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Compact Macro Summary */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                      {isEN ? "Estimated Daily Macros" : "Estimasi Makronutrisi Harian"}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="bg-[#161C28] border border-purple-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-purple-400 uppercase">Protein</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{proteinGram}g</div>
+                        <div className="text-[10px] text-neutral-400">30% target</div>
+                      </div>
+
+                      <div className="bg-[#161C28] border border-cyan-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-cyan-400 uppercase">Carbs</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{carbsGram}g</div>
+                        <div className="text-[10px] text-neutral-400">45% target</div>
+                      </div>
+
+                      <div className="bg-[#161C28] border border-rose-500/30 rounded-xl p-3 text-center">
+                        <div className="text-[10px] font-bold text-rose-400 uppercase">Fat</div>
+                        <div className="text-base sm:text-lg font-['Archivo_Black'] text-white">{fatGram}g</div>
+                        <div className="text-[10px] text-neutral-400">25% target</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. Prominent "Lanjut" CTA Button */}
+                  <div className="pt-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={onComplete}
+                      className="w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Lanjut</span>
+                      <ChevronRight size={22} className="stroke-[3]" />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
 
           </AnimatePresence>
         </main>
