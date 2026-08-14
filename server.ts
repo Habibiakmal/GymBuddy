@@ -619,7 +619,7 @@ function getWibTimeStr(d: Date = new Date()): string {
 // Helper to handle reminder set/change/disable commands across all webhooks
 function handleReminderCommand(userText: string, userProfile: any, phone: string, userData: any): string[] | null {
   const isReminderKeyword = /(?:reminder|pengingat|ingatkan|ingetin|ingatin|inget|remind|jadwal\s*ingat|scheduler|ganti|ubah|update|jadiin|jadikan)/i.test(userText);
-  const isTimeOrControlKeyword = /(?:jam|pengingat|reminder|ingetin|ingatin|inget|ingatkan|remind|scheduler|jadwal|matikan|nonaktifkan|hidupkan|nyalakan|aktifkan)/i.test(userText);
+  const isTimeOrControlKeyword = /(?:jam|pengingat|reminder|ingetin|ingatin|inget|ingatkan|remind|scheduler|jadwal|matikan|nonaktifkan|hidupkan|nyalakan|aktifkan|\d{1,2}[:.]\d{2})/i.test(userText);
 
   if (!isReminderKeyword || !isTimeOrControlKeyword) {
     return null;
