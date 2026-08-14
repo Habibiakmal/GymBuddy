@@ -638,6 +638,9 @@ export default function Dashboard({
   const [itemFatInput, setItemFatInput] = useState("");
   const [itemVolumeInput, setItemVolumeInput] = useState("250");
   const [newWeightInput, setNewWeightInput] = useState(String(initialUser.weight || 70));
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
+  const [showManualInputs, setShowManualInputs] = useState(false);
+  const [aiPreview, setAiPreview] = useState<any>(null);
 
   const normalizePhone = (phone: string): string => {
     if (!phone) return "";
@@ -953,17 +956,67 @@ export default function Dashboard({
     setShowAutoReminderModal(false);
   };
 
-  // Combo Splitting Handler for new entries
+  // AI Food Text Analysis Helper
+  const handleAnalyzeAiFoodText = async (textToAnalyze?: string) => {
+    const queryText = (textToAnalyze || itemNameInput).trim();
+    if (!queryText) return null;
+
+    setIsAnalyzingAi(true);
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: queryText })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setItemCalInput(String(data.calories || 0));
+          setItemProteinInput(String(data.protein || 0));
+          setItemCarbsInput(String(data.carbs || 0));
+          setItemFatInput(String(data.fat || 0));
+          setAiPreview(data);
+          setIsAnalyzingAi(false);
+          return data;
+        }
+      }
+    } catch (e) {
+      console.error("Error analyzing food with AI:", e);
+    }
+    setIsAnalyzingAi(false);
+    return null;
+  };
+
+  // Combo Splitting Handler for new entries with AI Auto-Detection
   const handleSaveLogItem = async () => {
     if (!itemNameInput.trim()) return;
 
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    let cal = Number(itemCalInput) || 0;
+    let prot = Number(itemProteinInput) || 0;
+    let carb = Number(itemCarbsInput) || 0;
+    let fat = Number(itemFatInput) || 0;
+
+    // If user didn't enter calories manually, perform AI auto-detection!
+    if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
+      const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
+      if (aiRes) {
+        cal = Number(aiRes.calories) || 0;
+        prot = Number(aiRes.protein) || 0;
+        carb = Number(aiRes.carbs) || 0;
+        fat = Number(aiRes.fat) || 0;
+      }
+    }
+
     const { foods, drinks } = splitAndCategorizeComboText(
       itemNameInput,
-      Number(itemCalInput) || 0,
-      Number(itemProteinInput) || 0,
-      Number(itemCarbsInput) || 0,
-      Number(itemFatInput) || 0
+      cal,
+      prot,
+      carb,
+      fat
     );
 
     const newItems = [...foods, ...drinks];
@@ -990,6 +1043,8 @@ export default function Dashboard({
     setItemProteinInput("");
     setItemCarbsInput("");
     setItemFatInput("");
+    setAiPreview(null);
+    setShowManualInputs(false);
     setShowAddFoodModal(false);
     setShowAddDrinkModal(false);
   };
@@ -2066,7 +2121,7 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* ADD LOG MODAL */}
+      {/* ADD LOG MODAL (AI AUTO-DETECTION) */}
       <AnimatePresence>
         {(showAddFoodModal || showAddDrinkModal) && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -2077,11 +2132,27 @@ export default function Dashboard({
               className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-black text-base text-slate-900">{t.addMealModalTitle}</h3>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#181B26] to-slate-800 flex items-center justify-center text-[#C4F82A]">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">
+                      {showAddDrinkModal
+                        ? (lang === "EN" ? "Log Drink / Hydration" : "Tambah Log Minuman")
+                        : (lang === "EN" ? "AI Smart Food Log" : "Tambah Makanan AI")}
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      {lang === "EN" ? "AI auto-detects calories & macros" : "AI otomatis menghitung kalori & nutrisi"}
+                    </p>
+                  </div>
+                </div>
                 <button
                   onClick={() => {
                     setShowAddFoodModal(false);
                     setShowAddDrinkModal(false);
+                    setAiPreview(null);
+                    setShowManualInputs(false);
                   }}
                   className="text-slate-400 hover:text-slate-700 cursor-pointer"
                 >
@@ -2089,80 +2160,161 @@ export default function Dashboard({
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700">{t.foodNameLabel}</label>
-                  <input
-                    type="text"
-                    value={itemNameInput}
-                    onChange={(e) => setItemNameInput(e.target.value)}
-                    placeholder="misal: Nasi Ayam McD + Kopi"
-                    className="w-full mt-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    {t.comboHelpText}
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>{t.foodNameLabel}</span>
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <Sparkles size={10} /> Auto AI Detection
+                    </span>
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      type="text"
+                      value={itemNameInput}
+                      onChange={(e) => setItemNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !isAnalyzingAi) {
+                          handleSaveLogItem();
+                        }
+                      }}
+                      placeholder={showAddDrinkModal ? "misal: Air Putih 500ml, Kopi Susu, Jus Alpukat" : "misal: Nasi Padang Rendang + Teh Obeng"}
+                      className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all shadow-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5 flex items-start gap-1">
+                    <span>💡</span>
+                    <span>{t.comboHelpText}</span>
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">{t.caloriesInputLabel}</label>
-                    <input
-                      type="number"
-                      value={itemCalInput}
-                      onChange={(e) => setItemCalInput(e.target.value)}
-                      placeholder="450"
-                      className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
-                    />
+                {/* AI Loading State */}
+                {isAnalyzingAi && (
+                  <div className="p-3.5 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 animate-pulse">
+                    <Sparkles className="animate-spin text-[#C4F82A]" size={18} />
+                    <span className="text-xs font-bold text-slate-100">
+                      {lang === "EN" ? "AI is calculating calories & macros..." : "🤖 AI sedang mendeteksi kalori & nutrisi..."}
+                    </span>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">{t.proteinInputLabel}</label>
-                    <input
-                      type="number"
-                      value={itemProteinInput}
-                      onChange={(e) => setItemProteinInput(e.target.value)}
-                      placeholder="25"
-                      className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
-                    />
+                )}
+
+                {/* AI Preview Result */}
+                {aiPreview && !isAnalyzingAi && (
+                  <div className="p-3.5 bg-[#C4F82A]/15 border border-[#C4F82A]/40 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1">
+                        <Sparkles size={12} className="text-slate-800" /> Output Nutrisi AI:
+                      </span>
+                      <span className="text-xs font-black text-[#181B26] bg-[#C4F82A] px-2 py-0.5 rounded-md">
+                        {itemCalInput} kcal
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-700 pt-1">
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Protein</span>
+                        <span>{itemProteinInput}g</span>
+                      </div>
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Karbo</span>
+                        <span>{itemCarbsInput}g</span>
+                      </div>
+                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
+                        <span className="block text-[10px] text-slate-400 font-semibold">Lemak</span>
+                        <span>{itemFatInput}g</span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">{t.carbsInputLabel}</label>
-                    <input
-                      type="number"
-                      value={itemCarbsInput}
-                      onChange={(e) => setItemCarbsInput(e.target.value)}
-                      placeholder="40"
-                      className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">{t.fatInputLabel}</label>
-                    <input
-                      type="number"
-                      value={itemFatInput}
-                      onChange={(e) => setItemFatInput(e.target.value)}
-                      placeholder="12"
-                      className="w-full mt-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
+                )}
+
+                {/* Optional Manual Inputs Toggle */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowManualInputs(!showManualInputs)}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{showManualInputs ? "▲ Sembunyikan Input Manual" : "▼ Edit Nutrisi Manual (Opsional)"}</span>
+                  </button>
+
+                  {showManualInputs && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 mt-2"
+                    >
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.caloriesInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemCalInput}
+                          onChange={(e) => setItemCalInput(e.target.value)}
+                          placeholder="450"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.proteinInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemProteinInput}
+                          onChange={(e) => setItemProteinInput(e.target.value)}
+                          placeholder="25"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.carbsInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemCarbsInput}
+                          onChange={(e) => setItemCarbsInput(e.target.value)}
+                          placeholder="40"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">{t.fatInputLabel}</label>
+                        <input
+                          type="number"
+                          value={itemFatInput}
+                          onChange={(e) => setItemFatInput(e.target.value)}
+                          placeholder="12"
+                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   onClick={() => {
                     setShowAddFoodModal(false);
                     setShowAddDrinkModal(false);
+                    setAiPreview(null);
+                    setShowManualInputs(false);
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   {t.closeModal}
                 </button>
                 <button
                   onClick={handleSaveLogItem}
-                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 cursor-pointer shadow-xs"
+                  disabled={isAnalyzingAi || !itemNameInput.trim()}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
                 >
-                  {t.saveEntry}
+                  {isAnalyzingAi ? (
+                    <>
+                      <Sparkles size={14} className="animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} />
+                      <span>{lang === "EN" ? "Save & AI Detect" : "Simpan & Deteksi AI"}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

@@ -1783,43 +1783,105 @@ async function startServer() {
       if (!text || !String(text).trim()) {
         return res.status(400).json({ success: false, error: "Text description is required" });
       }
+      const cleanText = String(text).trim();
+      const getFallback = () => {
+        const lower = cleanText.toLowerCase();
+        let calories = 350;
+        let protein = 15;
+        let carbs = 40;
+        let fat = 12;
+        let fiber = 2;
+        let isHydration = false;
+        let volumeMl = 0;
+        if (lower.includes("air putih") || lower.includes("air mineral") || lower.includes("water")) {
+          calories = 0;
+          protein = 0;
+          carbs = 0;
+          fat = 0;
+          fiber = 0;
+          isHydration = true;
+          volumeMl = 500;
+        } else if (lower.includes("teh") || lower.includes("kopi") || lower.includes("jus") || lower.includes("susu") || lower.includes("drink")) {
+          calories = 120;
+          protein = 4;
+          carbs = 18;
+          fat = 3;
+          isHydration = true;
+          volumeMl = 300;
+        } else if (lower.includes("ayam") || lower.includes("daging") || lower.includes("ikan") || lower.includes("telur") || lower.includes("steak") || lower.includes("rendang")) {
+          calories = 480;
+          protein = 32;
+          carbs = 35;
+          fat = 20;
+        } else if (lower.includes("nasi") || lower.includes("mie") || lower.includes("roti") || lower.includes("pasta")) {
+          calories = 420;
+          protein = 14;
+          carbs = 65;
+          fat = 10;
+        } else if (lower.includes("buah") || lower.includes("pisang") || lower.includes("apel") || lower.includes("salad")) {
+          calories = 160;
+          protein = 2;
+          carbs = 36;
+          fat = 1;
+          fiber = 5;
+        }
+        return {
+          foodName: cleanText,
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber,
+          isHydration,
+          volumeMl,
+          mealType: getMealTypeByHour()
+        };
+      };
       if (!getAi()) {
-        return res.status(500).json({ success: false, error: "AI service unavailable" });
+        const fallback = getFallback();
+        return res.json({ success: true, ...fallback, note: "Estimated using offline database" });
       }
-      const prompt = `Kamu adalah Nutritionist AI GymBuddy. User menginput makanan/minuman: "${text}".
+      const prompt = `Kamu adalah Nutritionist AI GymBuddy. User menginput nama makanan/minuman: "${cleanText}".
 Estimasi porsi standar orang Indonesia dan keluarkan output JSON valid saja (tanpa markdown format):
 {
-  "foodName": "Nama Makanan/Minuman",
+  "foodName": "${cleanText}",
   "calories": 350,
   "protein": 25,
   "carbs": 40,
   "fat": 10,
   "fiber": 3,
+  "isHydration": false,
+  "volumeMl": 0,
   "mealType": "lunch"
 }`;
-      const rawText = await generateGeminiContent(prompt);
-      const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
-      let parsed = {};
       try {
-        parsed = JSON.parse(textOutput);
-      } catch (e) {
-        parsed = { foodName: text, calories: 250, protein: 15, carbs: 30, fat: 8, fiber: 2, mealType: "lunch" };
+        const rawText = await generateGeminiContent(prompt);
+        const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
+        let parsed = extractAndParseJson(textOutput) || {};
+        parsed.foodName = parsed.foodName || cleanText;
+        parsed.calories = Number(parsed.calories) || 300;
+        parsed.protein = Number(parsed.protein) || 15;
+        parsed.carbs = Number(parsed.carbs) || 35;
+        parsed.fat = Number(parsed.fat) || 10;
+        parsed.fiber = Number(parsed.fiber) || 2;
+        parsed.mealType = parsed.mealType || getMealTypeByHour();
+        res.json({
+          success: true,
+          foodName: parsed.foodName,
+          calories: parsed.calories,
+          protein: parsed.protein,
+          carbs: parsed.carbs,
+          fat: parsed.fat,
+          fiber: parsed.fiber,
+          isHydration: Boolean(parsed.isHydration),
+          volumeMl: Number(parsed.volumeMl) || 0,
+          mealType: parsed.mealType
+        });
+      } catch (aiErr) {
+        console.warn("Gemini AI analyze-food error, using fallback:", aiErr);
+        const fallback = getFallback();
+        res.json({ success: true, ...fallback, note: "Fallback estimation" });
       }
-      parsed.isFood = true;
-      parsed = validateAndNormalizeNutrition(parsed, false);
-      res.json({
-        success: true,
-        foodName: parsed.foodName || text,
-        calories: Number(parsed.calories) || 250,
-        protein: Number(parsed.protein) || 15,
-        carbs: Number(parsed.carbs) || 30,
-        fat: Number(parsed.fat) || 8,
-        fiber: Number(parsed.fiber) || 2,
-        satietyScore: parsed.satietyScore || 7,
-        healthScore: parsed.healthScore || 8,
-        confidenceText: parsed.confidenceText,
-        mealType: parsed.mealType || getMealTypeByHour()
-      });
     } catch (err) {
       console.error("Error analyzing food text:", err);
       res.status(500).json({ success: false, error: err.message || "Failed to analyze food" });
