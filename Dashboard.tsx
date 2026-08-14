@@ -1196,19 +1196,30 @@ export default function Dashboard({
     setAllLogs(updated);
 
     // Immediately persist deletion to localStorage — this is the source of truth.
-    // Store the updated (post-delete) array so that refresh will read the correct state.
     const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
       localStorage.setItem(localKey, JSON.stringify(updated));
     } catch (e) {}
 
-    // Fire-and-forget: sync deletion to both local and remote servers.
-    // Failures here are non-critical since localStorage is authoritative.
+    // Sync deletion to both local and remote servers
     const deleteFromServer = async (baseUrl: string) => {
       try {
+        // 1. Delete the specific meal by ID
         await fetch(`${baseUrl}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
           method: "DELETE"
         });
+        // 2. Full synchronization: update the entire day's log list on server
+        await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${selectedDate}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ meals: updated, date: selectedDate })
+        });
+        // 3. If all items were removed, explicitly call bulk DELETE endpoint as well
+        if (updated.length === 0) {
+          await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${selectedDate}`, {
+            method: "DELETE"
+          });
+        }
       } catch (e) {}
     };
     deleteFromServer(""); // local server

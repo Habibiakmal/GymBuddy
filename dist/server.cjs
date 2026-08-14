@@ -836,9 +836,11 @@ function calculateUserData(profile) {
 }
 function getDailyTotals(rawPhone, targetDateStr) {
   const phone = normalizePhone(rawPhone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const targetDate = targetDateStr || getTodayDateStr();
   const key = `${phone}_${targetDate}`;
-  const logs = dbData.dailyLogs[key] || [];
+  const altKey = `${altPhone}_${targetDate}`;
+  const logs = dbData.dailyLogs[key] !== void 0 ? dbData.dailyLogs[key] : dbData.dailyLogs[altKey] !== void 0 ? dbData.dailyLogs[altKey] : [];
   let calories = 0;
   let protein = 0;
   let carbs = 0;
@@ -2224,18 +2226,15 @@ VERIFIKASI WAJIB sebelum output: (protein\xD74) + (carbs\xD74) + (fat\xD79) = ca
   app.get("/api/user/:phone/meals", (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
+    const key = `${phone}_${targetDate}`;
+    const altKey = `${altPhone}_${targetDate}`;
     let logs = [];
-    const primaryKey = `${phone}_${targetDate}`;
-    if (dbData.dailyLogs[primaryKey] && Array.isArray(dbData.dailyLogs[primaryKey])) {
-      logs = [...dbData.dailyLogs[primaryKey]];
-    }
-    if (logs.length === 0) {
-      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-      const altKey = `${altPhone}_${targetDate}`;
-      if (dbData.dailyLogs[altKey] && Array.isArray(dbData.dailyLogs[altKey])) {
-        logs = [...dbData.dailyLogs[altKey]];
-      }
+    if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key])) {
+      logs = [...dbData.dailyLogs[key]];
+    } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey])) {
+      logs = [...dbData.dailyLogs[altKey]];
     }
     res.json({ success: true, phone, date: targetDate, logs });
   });
@@ -2267,14 +2266,42 @@ VERIFIKASI WAJIB sebelum output: (protein\xD74) + (carbs\xD74) + (fat\xD79) = ca
   });
   app.delete("/api/user/:phone/meals/:mealId", (req, res) => {
     const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
     const { mealId } = req.params;
     const key = `${phone}_${targetDate}`;
+    const altKey = `${altPhone}_${targetDate}`;
     if (dbData.dailyLogs[key]) {
       dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m) => m.id !== mealId);
-      saveDb();
     }
-    res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || [] });
+    if (dbData.dailyLogs[altKey]) {
+      dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== mealId);
+    }
+    saveDb();
+    res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
+  });
+  app.delete("/api/user/:phone/meals", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const key = `${phone}_${targetDate}`;
+    const altKey = `${altPhone}_${targetDate}`;
+    dbData.dailyLogs[key] = [];
+    dbData.dailyLogs[altKey] = [];
+    saveDb();
+    res.json({ success: true, phone, date: targetDate, logs: [] });
+  });
+  app.put("/api/user/:phone/meals", import_express.default.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || req.body?.date || getLocalDateStr();
+    const key = `${phone}_${targetDate}`;
+    const altKey = `${altPhone}_${targetDate}`;
+    const rawMeals = Array.isArray(req.body?.meals) ? req.body.meals : Array.isArray(req.body) ? req.body : [];
+    dbData.dailyLogs[key] = rawMeals;
+    dbData.dailyLogs[altKey] = rawMeals;
+    saveDb();
+    res.json({ success: true, phone, date: targetDate, logs: rawMeals });
   });
   app.get("/api/user/:phone/water", (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -3187,39 +3214,6 @@ ${xmlOutput}`);
       console.error("Error processing Twilio webhook:", error);
       res.sendStatus(500);
     }
-  });
-  app.get("/api/user/:phone/meals", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-    const targetDate = req.query.date || getTodayDateStr();
-    const key = `${phone}_${targetDate}`;
-    const altKey = `${altPhone}_${targetDate}`;
-    let logs = dbData.dailyLogs[key] ? [...dbData.dailyLogs[key]] : dbData.dailyLogs[altKey] ? [...dbData.dailyLogs[altKey]] : [];
-    let calories = 0, protein = 0, carbs = 0, fat = 0;
-    logs.forEach((m) => {
-      calories += Number(m.calories) || 0;
-      protein += Number(m.protein) || 0;
-      carbs += Number(m.carbs) || 0;
-      fat += Number(m.fat) || 0;
-    });
-    res.json({
-      success: true,
-      phone,
-      date: targetDate,
-      totals: { calories, protein, carbs, fat },
-      logs
-    });
-  });
-  app.delete("/api/user/:phone/meals/:mealId", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const { mealId } = req.params;
-    const targetDate = req.query.date || getTodayDateStr();
-    const key = `${phone}_${targetDate}`;
-    if (dbData.dailyLogs[key]) {
-      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m) => m.id !== mealId);
-      saveDb();
-    }
-    res.json({ success: true });
   });
   async function generateGeminiImage(promptText) {
     const rawEq = promptText.match(/for ([A-Z0-9\s]+)\./i);
@@ -4347,7 +4341,7 @@ Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untu
           const isMia = userData.persona === "mia" || userData.persona === "nikita";
           const personaInstruction = isMia ? `PERSONA MIA: Coach wanita bernama Coach Mia. Sangat santun, ramah, halus, lembut, dan profesional. DILARANG KERAS panggil "sayang/cinta/beb". Gunakan sapaan sopan (aku/kamu).` : `PERSONA MAX: Coach pria bernama Coach Max. Tegas, penuh energi, gaul Jakarta (lo/gue).`;
           const dailyTotals = getDailyTotals(from);
-          const todayMealLogsStr = (dbData.dailyLogs[`${from}_${getLocalDateStr()}`] || []).map((m) => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") || "Belum ada catatan makanan hari ini";
+          const todayMealLogsStr = dailyTotals.logs.length > 0 ? dailyTotals.logs.map((m) => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") : "Belum ada catatan makanan hari ini";
           const equipmentKeywords = ["alat", "mesin", "cara pakai", "cara memakai", "cara makai", "gimana cara", "how to", "dumbbell", "barbell", "barbel", "bench", "squat rack", "lat pulldown", "leg press", "chest press", "cable", "treadmill", "elliptical", "kettlebell", "smith machine", "pull up", "gym"];
           const hasEquipmentText = equipmentKeywords.some((kw) => lowerText.includes(kw));
           const isEquipmentQuery = imagePart && (hasEquipmentText || lowerText.length < 10) || !imagePart && hasEquipmentText && (lowerText.includes("cara") || lowerText.includes("pakai") || lowerText.includes("alat") || lowerText.includes("mesin"));
