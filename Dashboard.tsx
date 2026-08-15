@@ -1580,60 +1580,30 @@ export default function Dashboard({
         {/* TAB 1: HOME (DASHBOARD RINGKASAN) */}
         {/* ========================================================================= */}
         {activeTab === "home" && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                    {t.welcomeBack}, {activeUser.name || "Member"} 👋
-                  </h1>
-                  {selectedDate !== todayDateStr && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[11px] border border-amber-500/40">
-                      {t.historicalLogNotice} {selectedDate}
-                    </span>
-                  )}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-lg shadow-sm shrink-0">
+                  {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
                 </div>
-                <p className="text-sm text-neutral-400 font-semibold mt-0.5">
-                  {selectedDayName}, {selectedDate} • {todayScheduleObj.focus}
-                </p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      {activeUser.name || "Member"}
+                    </h1>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1">
+                      🔥 {currentStreak} {t.activeDaysConsecutive}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                    {selectedDayName}, {selectedDate} • {todayScheduleObj.focus}
+                  </p>
+                </div>
               </div>
 
-              {/* Date Navigation Ribbon without Scrollbars + Calendar Modal Opener */}
-              <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
-                {!isSelectedDateInRibbon && (
-                  <button
-                    onClick={() => setSelectedDate(todayDateStr)}
-                    className="px-3 py-2 rounded-xl bg-amber-500 text-white font-extrabold text-xs flex items-center gap-1 hover:bg-amber-600 transition-all cursor-pointer shadow-xs shrink-0"
-                  >
-                    <RotateCcw size={13} />
-                    <span>{t.todayBtn}</span>
-                  </button>
-                )}
-
-                {/* Static 7-Day Date Ribbon */}
-                <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0">
-                  {ribbonDates.map((d) => {
-                    const isSel = d.dateStr === selectedDate;
-                    return (
-                      <button
-                        key={d.dateStr}
-                        type="button"
-                        onClick={() => setSelectedDate(d.dateStr)}
-                        className={`flex flex-col items-center justify-center w-11 h-13 rounded-xl font-bold text-xs transition-all cursor-pointer border shrink-0 ${
-                          isSel
-                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-sm scale-105"
-                            : "bg-[#161B26] text-neutral-300 border-neutral-800 hover:bg-neutral-800 hover:text-white"
-                        }`}
-                      >
-                        <span className="text-[10px] uppercase opacity-70 font-semibold">{d.dayName}</span>
-                        <span className="text-sm font-black">{d.dayNum}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Calendar Modal Launcher Button */}
+              {/* Action Buttons: Calendar & Sync */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => {
@@ -1644,138 +1614,148 @@ export default function Dashboard({
                     }
                     setShowCalendarModal(true);
                   }}
-                  className="flex items-center justify-center w-11 h-13 rounded-xl font-bold text-xs bg-[#161B26] text-white hover:bg-neutral-800 transition-all cursor-pointer shadow-xs shrink-0 border border-neutral-800"
-                  title={t.pickDateTooltip}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer"
                 >
-                  <CalendarIcon size={18} className="text-[#D4FF00]" />
+                  <CalendarIcon size={15} className="text-[#D4FF00]" />
+                  <span>Kalender</span>
                 </button>
 
-                {/* Realtime WhatsApp Sync Button */}
                 <button
                   type="button"
                   onClick={() => fetchLogsForDate(selectedDate, false)}
                   disabled={isSyncing}
-                  className={`flex items-center justify-center gap-1.5 px-3 h-13 rounded-xl font-bold text-xs bg-[#161B26] text-white hover:bg-neutral-800 hover:border-[#D4FF00]/50 transition-all cursor-pointer shadow-xs shrink-0 border border-neutral-800 ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer ${
                     isSyncing ? "opacity-75" : ""
                   }`}
-                  title={isSyncing ? (t.syncing || "Menyinkronkan...") : (t.syncWhatsApp || "Sinkronkan Data WhatsApp")}
+                  title={t.syncWhatsApp || "Sync WhatsApp"}
                 >
-                  <RefreshCw size={15} className={`text-[#D4FF00] ${isSyncing ? "animate-spin" : ""}`} />
-                  <span className="hidden sm:inline text-[11px] font-bold text-neutral-300">
-                    {isSyncing ? (t.syncing || "Sync...") : (t.syncWhatsApp || "Sync WA")}
-                  </span>
+                  <RefreshCw size={14} className={`text-[#D4FF00] ${isSyncing ? "animate-spin" : ""}`} />
+                  <span>{isSyncing ? "Syncing..." : "Sync WA"}</span>
                 </button>
               </div>
             </div>
 
-            {/* STEP 2: SUMMARY RIBBON STAT CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Current Streak */}
-              <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">{t.currentStreak}</span>
-                  <p className="text-2xl font-black text-white">{currentStreak} <span className="text-xs font-bold text-neutral-400">{t.activeDaysConsecutive}</span></p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-lg border border-amber-500/30">
-                  🔥
+            {/* 7-DAY DATE NAVIGATION CAROUSEL */}
+            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
+              {!isSelectedDateInRibbon && (
+                <button
+                  onClick={() => setSelectedDate(todayDateStr)}
+                  className="px-3.5 py-3 rounded-2xl bg-amber-500 text-black font-extrabold text-xs flex items-center gap-1 shrink-0 shadow-sm"
+                >
+                  <RotateCcw size={13} />
+                  <span>Hari Ini</span>
+                </button>
+              )}
+
+              {ribbonDates.map((d) => {
+                const isSel = d.dateStr === selectedDate;
+                return (
+                  <button
+                    key={d.dateStr}
+                    type="button"
+                    onClick={() => setSelectedDate(d.dateStr)}
+                    className={`flex flex-col items-center justify-center flex-1 min-w-[50px] py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer border ${
+                      isSel
+                        ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-sm scale-102"
+                        : "bg-[#121722] text-neutral-400 border-white/[0.06] hover:bg-[#18202E] hover:text-white"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase font-bold opacity-80">{d.dayName}</span>
+                    <span className="text-sm font-black mt-0.5">{d.dayNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* STEP 2: SUMMARY METRICS (NUTRITION & HYDRATION) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Calories Target */}
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Kalori Masuk</span>
+                <p className="text-xl sm:text-2xl font-black text-white">
+                  {totalCaloriesConsumed}
+                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ {targetCalories} kcal</span>
+                </p>
+                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%` }}
+                  />
                 </div>
               </div>
 
-              {/* Longest Streak */}
-              <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{t.longestStreak}</span>
-                  <p className="text-2xl font-black text-white">{longestStreak} <span className="text-xs font-bold text-neutral-400">{t.recordStreakDays}</span></p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-lg border border-indigo-500/30">
-                  🏆
-                </div>
-              </div>
-
-              {/* Calorie Goal */}
-              <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">{t.caloriesLabel}</span>
-                  <p className="text-2xl font-black text-white">{totalCaloriesConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCalories} kcal</span></p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-lg border border-emerald-500/30">
-                  🥗
+              {/* Protein Target */}
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Protein</span>
+                <p className="text-xl sm:text-2xl font-black text-white">
+                  {totalProteinConsumed}g
+                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ {targetProtein}g</span>
+                </p>
+                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-indigo-400 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%` }}
+                  />
                 </div>
               </div>
 
               {/* Water Intake */}
-              <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Hydration</span>
-                  <p className="text-2xl font-black text-white">{totalHydrationMl} <span className="text-xs font-bold text-neutral-400">/ 2,500 ml</span></p>
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Air Minum</span>
+                <p className="text-xl sm:text-2xl font-black text-white">
+                  {totalHydrationMl}
+                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ 2500 ml</span>
+                </p>
+                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-blue-400 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
+                  />
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-lg border border-blue-500/30">
-                  💧
+              </div>
+
+              {/* Target Weight Goal */}
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Target Berat</span>
+                <p className="text-xl sm:text-2xl font-black text-[#D4FF00]">
+                  {weight} kg
+                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">➔ {targetWeight} kg</span>
+                </p>
+                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
+                  <div className="h-full bg-[#D4FF00] rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
             </div>
 
-            {/* STEP 3: TARGET GOALS OVERVIEW */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target size={18} className="text-[#D4FF00]" />
-                  <h2 className="text-base font-extrabold text-white">{t.targetGoals}</h2>
-                </div>
-                <span className="text-xs font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-3 py-1 rounded-full">
-                  {progressPercent}% Complete
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.mainGoalTitle}</span>
-                  <p className="text-sm font-extrabold text-white">{goalTitle}</p>
-                </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.currentWeightLabel} → {t.targetWeightLabel}</span>
-                  <p className="text-sm font-extrabold text-white">{weight} kg → {targetWeight} kg ({t.remainingLabel} {remainingKg} kg)</p>
-                </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3 space-y-0.5">
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase">{t.dailyTargetLabel}</span>
-                  <p className="text-sm font-extrabold text-white">{targetCalories} kcal / {targetProtein}g P</p>
-                </div>
-              </div>
-
-              <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
-                <div className="h-full bg-[#D4FF00] rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
-              </div>
-            </div>
-
-            {/* QUICK TODAY'S WORKOUT SUMMARY CARD */}
-            <div className="bg-gradient-to-r from-[#182332] to-[#121A24] border border-neutral-800/90 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* TODAY'S WORKOUT CARD */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shrink-0">
-                  <Dumbbell size={24} />
+                <div className="w-12 h-12 rounded-2xl bg-[#18202E] border border-white/[0.08] flex items-center justify-center text-[#D4FF00] shrink-0">
+                  <Dumbbell size={22} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
-                      {lang === "EN" ? "Today's Workout" : "Latihan Hari Ini"}
+                      Latihan Hari Ini
                     </span>
-                    <span className="text-xs text-neutral-400 font-bold">{selectedDayName}</span>
+                    <span className="text-xs text-neutral-400 font-semibold">{selectedDayName}</span>
                   </div>
                   <h3 className="text-base font-extrabold text-white mt-1">{todayScheduleObj.focus}</h3>
-                  <p className="text-xs text-neutral-400 font-medium">{exercises.length} Gerakan • {overallWorkoutPercent}% Selesai</p>
+                  <p className="text-xs text-neutral-400 font-medium">{exercises.length} Menu Gerakan • {overallWorkoutPercent}% Selesai</p>
                 </div>
               </div>
 
               <button
                 onClick={() => setActiveTab("workouts")}
-                className="w-full sm:w-auto px-4 py-2.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+                className="w-full sm:w-auto px-4 py-2.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
               >
-                <span>{lang === "EN" ? "Open Full Workout Plan" : "Buka Menu Latihan Lengkap"}</span>
+                <span>Buka Menu Latihan</span>
                 <ArrowRight size={14} />
               </button>
             </div>
 
-            {/* STEP 7: FOOD MEALS WITH NUTRITION PROGRESS BARS */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
+            {/* FOOD MEALS LIST */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Flame size={18} className="text-amber-400" />
@@ -1784,117 +1764,38 @@ export default function Dashboard({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowScanModal(true)}
-                    className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#D4FF00]/20 to-[#25D366]/20 border border-[#D4FF00]/40 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    className="px-3.5 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Camera size={14} />
-                    <span>{lang === "EN" ? "Scan Photo" : "Scan Foto AI"}</span>
+                    <span>Scan Foto</span>
                   </button>
                   <button
                     onClick={() => setShowAddFoodModal(true)}
-                    className="px-3.5 py-1.5 rounded-full bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
+                    className="px-3.5 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer"
                   >
                     <Plus size={14} />
-                    <span>{t.addFoodBtn}</span>
+                    <span>Tambah</span>
                   </button>
-                </div>
-              </div>
-
-              {/* VISUAL MACRO PROGRESS BARS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Calories Bar */}
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-neutral-300">{t.caloriesLabel}</span>
-                    <span className="font-black text-amber-400">
-                      {Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-white">
-                    {totalCaloriesConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCalories} kcal</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Protein Bar */}
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-neutral-300">{t.proteinLabel}</span>
-                    <span className="font-black text-indigo-400">
-                      {Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-white">
-                    {totalProteinConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetProtein} g</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
-                    <div
-                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Carbs Bar */}
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-neutral-300">{t.carbsLabel}</span>
-                    <span className="font-black text-emerald-400">
-                      {Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-white">
-                    {totalCarbsConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetCarbs} g</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.round((totalCarbsConsumed / targetCarbs) * 100))}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Fat Bar */}
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-2 shadow-xs">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-neutral-300">{t.fatLabel}</span>
-                    <span className="font-black text-rose-400">
-                      {Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-black text-white">
-                    {totalFatConsumed} <span className="text-xs font-bold text-neutral-400">/ {targetFat} g</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
-                    <div
-                      className="h-full bg-rose-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.round((totalFatConsumed / targetFat) * 100))}%` }}
-                    ></div>
-                  </div>
                 </div>
               </div>
 
               {foodMeals.length === 0 ? (
-                <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-neutral-800 rounded-xl bg-[#10141D]">
+                <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-white/[0.08] rounded-xl bg-[#0E131F]">
                   {t.noMealsLogged}
                 </div>
               ) : (
-                <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden bg-[#10141D]">
+                <div className="divide-y divide-white/[0.06] border border-white/[0.06] rounded-xl overflow-hidden bg-[#0E131F]">
                   {foodMeals.map((item) => (
-                    <div key={item.id} className="p-3 flex items-center justify-between hover:bg-neutral-800/60 transition-colors">
+                    <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
                       <div>
                         <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
-                        <p className="text-xs text-neutral-400 font-medium">
+                        <p className="text-xs text-neutral-400 font-medium mt-0.5">
                           {item.calories} kcal • P: {item.protein}g | C: {item.carbs}g | F: {item.fat}g
                         </p>
                       </div>
                       <button
                         onClick={() => handleDeleteLogItem(item.id)}
-                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                         title={t.delete}
                       >
                         <Trash2 size={15} />
@@ -1905,8 +1806,8 @@ export default function Dashboard({
               )}
             </div>
 
-            {/* STEP 8: WATER / HYDRATION */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
+            {/* WATER & HYDRATION TRACKER */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Droplets size={18} className="text-blue-400" />
@@ -1915,140 +1816,44 @@ export default function Dashboard({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleQuickAddWater(250)}
-                    className="px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/30 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 cursor-pointer"
                   >
-                    {t.quickAdd250}
+                    +250 ml
                   </button>
                   <button
                     onClick={() => handleQuickAddWater(500)}
-                    className="px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/30 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 cursor-pointer"
                   >
-                    {t.quickAdd500}
-                  </button>
-                  <button
-                    onClick={() => setShowAddDrinkModal(true)}
-                    className="px-3.5 py-1.5 rounded-full bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
-                  >
-                    <Plus size={14} />
-                    <span>{t.addDrinkBtn}</span>
+                    +500 ml
                   </button>
                 </div>
               </div>
 
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex items-center justify-between">
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-blue-400 uppercase">{t.hydrationTarget}</span>
-                  <p className="text-lg font-black text-white">{totalHydrationMl} ml / 2,500 ml ({totalWaterCups} Gelas)</p>
+                  <span className="text-[10px] font-bold text-blue-400 uppercase">Target Hidrasi Harian</span>
+                  <p className="text-base font-black text-white">{totalHydrationMl} ml / 2,500 ml ({totalWaterCups} Gelas)</p>
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 font-bold flex items-center justify-center text-base shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-300 font-bold flex items-center justify-center text-sm">
                   💧
                 </div>
               </div>
-
-              {hydrationLogs.length === 0 ? (
-                <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-neutral-800 rounded-xl bg-[#10141D]">
-                  {t.noDrinksLogged}
-                </div>
-              ) : (
-                <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden bg-[#10141D]">
-                  {hydrationLogs.map((item) => (
-                    <div key={item.id} className="p-3 flex items-center justify-between hover:bg-neutral-800/60 transition-colors">
-                      <div className="flex items-center gap-2.5">
-                        <Coffee size={16} className="text-blue-400" />
-                        <div>
-                          <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
-                          <p className="text-xs text-neutral-400 font-medium">
-                            {item.volumeMl || extractVolumeMlFromName(item.foodName)} ml • {item.calories || 0} kcal
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteLogItem(item.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                        title={t.delete}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* STEP 4: HOW DO YOU FEEL TODAY? (INTERACTIVE SLIDER) */}
-            {(() => {
-              const feelOptions = [
-                { id: "bad", label: t.feelBad, icon: "😫" },
-                { id: "sick", label: t.sick, icon: "🤒" },
-                { id: "not_great", label: t.notGreat, icon: "🙁" },
-                { id: "okay", label: t.okay, icon: "😐" },
-                { id: "good", label: t.good, icon: "🙂" },
-                { id: "great", label: t.great, icon: "🔥" }
-              ];
-              const currentIndex = Math.max(0, feelOptions.findIndex((opt) => opt.id === feelState));
-              const currentOpt = feelOptions[currentIndex] || feelOptions[4];
-
-              return (
-                <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-extrabold text-white">{t.howDoYouFeel}</h2>
-                      <p className="text-xs text-neutral-400 font-medium">{t.feelSubtext}</p>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#10141D] border border-neutral-700/80">
-                      <span className="text-xl">{currentOpt.icon}</span>
-                      <span className="text-xs font-black uppercase text-[#D4FF00] tracking-wide">{currentOpt.label}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 pt-1">
-                    <input
-                      type="range"
-                      min={0}
-                      max={5}
-                      step={1}
-                      value={currentIndex}
-                      onChange={(e) => {
-                        const idx = parseInt(e.target.value, 10);
-                        if (feelOptions[idx]) {
-                          handleSelectFeel(feelOptions[idx].id as FeelState);
-                        }
-                      }}
-                      className="w-full h-3 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-[#D4FF00]"
-                    />
-
-                    <div className="flex justify-between px-1 text-[11px] font-bold text-neutral-400">
-                      {feelOptions.map((opt, i) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => handleSelectFeel(opt.id as FeelState)}
-                          className={`flex flex-col items-center gap-0.5 cursor-pointer transition-all ${i === currentIndex ? "text-[#D4FF00] font-extrabold scale-110" : "hover:text-white"}`}
-                        >
-                          <span className="text-lg">{opt.icon}</span>
-                          <span className="text-[10px] hidden sm:inline">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* STEP 9: REKOMENDASI MAX / MIA */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
+            {/* MOOD & COACH RECOMMENDATION */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
               <div className="flex items-center gap-2">
                 <Sparkles size={18} className="text-[#D4FF00]" />
-                <h2 className="text-base font-extrabold text-white">{t.coachRecommendation} ({coachName})</h2>
+                <h2 className="text-base font-extrabold text-white">Saran {coachName} Hari Ini</h2>
               </div>
 
-              <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
-                  {isMaxPersona ? "M" : "N"}
+              <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shrink-0">
+                  {isMaxPersona ? "🏋️" : "✨"}
                 </div>
                 <div className="space-y-0.5">
-                  <h4 className="font-extrabold text-sm text-white">{coachName} {t.coachAdviceTitle}</h4>
-                  <p className="text-sm text-neutral-300 font-medium leading-relaxed">{getCoachFeelingRecommendation()}</p>
+                  <h4 className="font-extrabold text-sm text-white">{coachName}</h4>
+                  <p className="text-xs text-neutral-300 font-medium leading-relaxed">{getCoachFeelingRecommendation()}</p>
                 </div>
               </div>
             </div>
@@ -2059,34 +1864,29 @@ export default function Dashboard({
         {/* TAB 2: WORKOUTS (JADWAL & SESI LATIHAN) */}
         {/* ========================================================================= */}
         {activeTab === "workouts" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <Dumbbell size={24} className="text-[#D4FF00]" />
-                  <span>{lang === "EN" ? "Workout Routine" : "Jadwal & Latihan Gym"}</span>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <Dumbbell size={22} className="text-[#D4FF00]" />
+                  <span>Jadwal & Latihan Gym</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% {lang === "EN" ? "completed" : "selesai"})
+                  {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% Selesai)
                 </p>
               </div>
 
               <button
                 onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
-                className="px-3.5 py-1.5 rounded-full bg-[#161B26] border border-neutral-700/80 text-neutral-300 font-bold text-xs hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Layers size={14} />
-                <span>{showFullWeeklyOverview ? t.viewTodayOnly : t.viewFullWeeklySchedule}</span>
+                <span>{showFullWeeklyOverview ? "Lihat Hari Ini" : "Jadwal 7 Hari"}</span>
               </button>
             </div>
 
-            {/* Overall Workout Progress Bar */}
-            <div className="w-full h-2.5 bg-neutral-800 rounded-full overflow-hidden border border-neutral-700/60">
-              <div className="h-full bg-[#D4FF00] rounded-full transition-all duration-300" style={{ width: `${overallWorkoutPercent}%` }}></div>
-            </div>
-
             {!showFullWeeklyOverview ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {exercises.map((ex) => {
                   const percent = ex.targetSets > 0 ? Math.round((ex.completedSets / ex.targetSets) * 100) : 0;
                   const isDone = percent === 100;
@@ -2096,17 +1896,17 @@ export default function Dashboard({
                       key={ex.id}
                       className={`border rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 ${
                         isDone
-                          ? "bg-emerald-500/10 border-emerald-500/40 text-white"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-white"
                           : ex.completedSets > 0
-                          ? "bg-amber-500/10 border-amber-500/40 text-white"
-                          : "bg-[#161B26] border-neutral-800 hover:border-neutral-700"
+                          ? "bg-amber-500/10 border-amber-500/30 text-white"
+                          : "bg-[#121722] border-white/[0.06] hover:border-white/[0.12]"
                       }`}
                       onClick={() => setActiveWorkoutDetail(ex)}
                     >
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-extrabold text-base text-white">{ex.name}</h3>
-                          <p className="text-xs text-neutral-400 font-semibold mt-0.5">{ex.targetReps} • {ex.targetSets} Sets Target</p>
+                          <p className="text-xs text-neutral-400 font-semibold mt-0.5">{ex.targetReps} • {ex.targetSets} Sets</p>
                         </div>
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
@@ -2121,20 +1921,20 @@ export default function Dashboard({
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-neutral-800/80">
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
+                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                           {ex.setsState.map((isSetDone, setIdx) => (
                             <button
                               key={setIdx}
                               onClick={() => handleToggleSet(ex.id, setIdx)}
                               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer border ${
                                 isSetDone
-                                  ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm scale-105"
-                                  : "bg-[#10141D] text-neutral-300 border-neutral-700 hover:bg-neutral-800"
+                                  ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-xs"
+                                  : "bg-[#18202E] text-neutral-300 border-white/[0.08] hover:bg-neutral-800"
                               }`}
                             >
                               <span>Set {setIdx + 1}</span>
-                              {isSetDone && <Check size={13} strokeWidth={3} />}
+                              {isSetDone && <Check size={12} strokeWidth={3} />}
                             </button>
                           ))}
                         </div>
@@ -2147,14 +1947,14 @@ export default function Dashboard({
                 })}
               </div>
             ) : (
-              <div className="space-y-4 pt-1">
+              <div className="space-y-4">
                 {weeklySchedule.map((daySch) => {
                   const isSelectedDay = daySch.day === selectedDayName;
                   return (
                     <div
                       key={daySch.day}
                       className={`border rounded-2xl p-4 sm:p-5 transition-all space-y-3 ${
-                        isSelectedDay ? "bg-[#161B26] text-white border-[#D4FF00]/50" : "bg-[#161B26] border-neutral-800 text-neutral-300"
+                        isSelectedDay ? "bg-[#121722] text-white border-[#D4FF00]/40" : "bg-[#121722] border-white/[0.06] text-neutral-300"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2164,12 +1964,12 @@ export default function Dashboard({
                           </span>
                           <h4 className="font-extrabold text-base text-white">{daySch.focus}</h4>
                         </div>
-                        <span className="text-xs font-semibold text-neutral-400">{daySch.exercises.length} {t.exerciseCount}</span>
+                        <span className="text-xs font-semibold text-neutral-400">{daySch.exercises.length} Menu Gerakan</span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                         {daySch.exercises.map((exItem) => (
-                          <div key={exItem.id} className="p-3 rounded-xl text-xs border bg-[#10141D] border-neutral-800 text-neutral-200">
+                          <div key={exItem.id} className="p-3 rounded-xl text-xs border bg-[#0E131F] border-white/[0.06] text-neutral-200">
                             <p className="font-extrabold text-white text-sm">{exItem.name}</p>
                             <p className="text-[11px] text-neutral-400 font-medium mt-0.5">{exItem.targetReps}</p>
                           </div>
@@ -2187,45 +1987,39 @@ export default function Dashboard({
         {/* TAB 3: PROGRESS (PROYEKSI & HISTORI PROGRES) */}
         {/* ========================================================================= */}
         {activeTab === "progress" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <TrendingUp size={24} className="text-[#D4FF00]" />
-                  <span>{lang === "EN" ? "Progress & Analytics" : "Proyeksi & Analisis Progres"}</span>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <TrendingUp size={22} className="text-[#D4FF00]" />
+                  <span>Proyeksi & Analisis Progres</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {t.mainGoalTitle}: {goalTitle} ({weight} kg → {targetWeight} kg)
+                  Target: {goalTitle} ({weight} kg ➔ {targetWeight} kg)
                 </p>
               </div>
 
               <button
                 onClick={() => setShowUpdateWeightModal(true)}
-                className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm"
               >
                 <span>{t.updateWeightTitle}</span>
               </button>
             </div>
 
-            {/* WEIGHT PROJECTION GRAPH CARD */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
+            {/* WEIGHT PROJECTION GRAPH */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity size={18} className="text-[#D4FF00]" />
-                  <h2 className="text-base font-extrabold text-white">
-                    {lang === "EN" ? "Calibrated Body Weight Trajectory" : "Kurva Proyeksi Berat Badan AI"}
-                  </h2>
-                </div>
+                <h3 className="font-extrabold text-base text-white">Kurva Capaian Body Goal AI</h3>
                 <span className="text-xs font-black text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-3 py-1 rounded-full">
                   Target: {targetWeight} kg
                 </span>
               </div>
 
-              {/* Dynamic SVG Curve Chart */}
-              <div className="bg-[#10141D] border border-neutral-800/80 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between text-xs text-neutral-400 font-bold border-b border-neutral-800 pb-2">
+              <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between text-xs text-neutral-400 font-bold border-b border-white/[0.06] pb-2">
                   <span>Start: {startWeight || weight} kg</span>
-                  <span>Target Date: ~12 Minggu</span>
+                  <span>Target Waktu: ~12 Minggu</span>
                   <span className="text-[#D4FF00]">Target: {targetWeight} kg</span>
                 </div>
 
@@ -2237,17 +2031,15 @@ export default function Dashboard({
                         <stop offset="100%" stopColor="#25D366" stopOpacity="1" />
                       </linearGradient>
                       <linearGradient id="areaFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.25" />
+                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.2" />
                         <stop offset="100%" stopColor="#D4FF00" stopOpacity="0.0" />
                       </linearGradient>
                     </defs>
 
-                    {/* Grid lines */}
-                    <line x1="0" y1="40" x2="500" y2="40" stroke="#252F42" strokeDasharray="4 4" strokeWidth="1" />
-                    <line x1="0" y1="80" x2="500" y2="80" stroke="#252F42" strokeDasharray="4 4" strokeWidth="1" />
-                    <line x1="0" y1="120" x2="500" y2="120" stroke="#252F42" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="0" y1="40" x2="500" y2="40" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="0" y1="80" x2="500" y2="80" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="0" y1="120" x2="500" y2="120" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
 
-                    {/* Area under curve */}
                     {targetWeight < weight ? (
                       <path d="M 30 50 Q 250 80, 470 120 L 470 150 L 30 150 Z" fill="url(#areaFill)" />
                     ) : targetWeight > weight ? (
@@ -2256,7 +2048,6 @@ export default function Dashboard({
                       <path d="M 30 80 L 470 80 L 470 150 L 30 150 Z" fill="url(#areaFill)" />
                     )}
 
-                    {/* Trajectory curve */}
                     {targetWeight < weight ? (
                       <path d="M 30 50 Q 250 80, 470 120" fill="none" stroke="url(#curveGlow)" strokeWidth="4" strokeLinecap="round" />
                     ) : targetWeight > weight ? (
@@ -2265,13 +2056,11 @@ export default function Dashboard({
                       <path d="M 30 80 L 470 80" fill="none" stroke="url(#curveGlow)" strokeWidth="4" strokeLinecap="round" />
                     )}
 
-                    {/* Start node */}
                     <circle cx="30" cy={targetWeight < weight ? 50 : targetWeight > weight ? 120 : 80} r="6" fill="#111620" stroke="#D4FF00" strokeWidth="3" />
                     <text x="30" y={targetWeight < weight ? 35 : targetWeight > weight ? 140 : 65} fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">
                       {weight} kg (Now)
                     </text>
 
-                    {/* End node */}
                     <circle cx="470" cy={targetWeight < weight ? 120 : targetWeight > weight ? 50 : 80} r="7" fill="#D4FF00" stroke="#111620" strokeWidth="2" />
                     <text x="470" y={targetWeight < weight ? 142 : targetWeight > weight ? 38 : 65} fill="#D4FF00" fontSize="12" fontWeight="900" textAnchor="middle">
                       {targetWeight} kg (Goal)
@@ -2280,19 +2069,18 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Progress Stat Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-4 text-center space-y-1">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
                   <span className="text-xs text-neutral-400 font-bold uppercase">{t.startWeightLabel}</span>
-                  <p className="text-xl font-black text-white">{startWeight || weight} kg</p>
+                  <p className="text-lg font-black text-white">{startWeight || weight} kg</p>
                 </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-4 text-center space-y-1">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
                   <span className="text-xs text-neutral-400 font-bold uppercase">{t.currentWeightLabel}</span>
-                  <p className="text-xl font-black text-[#D4FF00]">{weight} kg</p>
+                  <p className="text-lg font-black text-[#D4FF00]">{weight} kg</p>
                 </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-4 text-center space-y-1">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
                   <span className="text-xs text-neutral-400 font-bold uppercase">{t.remainingLabel}</span>
-                  <p className="text-xl font-black text-white">{remainingKg} kg</p>
+                  <p className="text-lg font-black text-white">{remainingKg} kg</p>
                 </div>
               </div>
             </div>
@@ -2300,15 +2088,15 @@ export default function Dashboard({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: PROFILE & COACH (PROFIL MEMBER & PENGATURAN) */}
+        {/* TAB 4: PROFILE & COACH (PROFIL & PENGATURAN) */}
         {/* ========================================================================= */}
         {activeTab === "profile" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <User size={24} className="text-[#D4FF00]" />
-                  <span>{lang === "EN" ? "Member Profile & Coach AI" : "Profil Member & Coach AI"}</span>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <User size={22} className="text-[#D4FF00]" />
+                  <span>Profil & Coach AI</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
                   {activeUser.name || "Member"} • WhatsApp {activeUser.phone || "-"}
@@ -2317,7 +2105,7 @@ export default function Dashboard({
 
               <button
                 onClick={toggleLanguage}
-                className="px-3.5 py-1.5 bg-[#161B26] border border-neutral-800 rounded-xl text-xs font-bold text-neutral-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#18202E] border border-white/[0.08] rounded-xl text-xs font-bold text-neutral-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
               >
                 <Globe size={14} className="text-[#D4FF00]" />
                 <span>{lang}</span>
@@ -2325,10 +2113,10 @@ export default function Dashboard({
             </div>
 
             {/* Coach Persona Card */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-xl shadow-md">
+                  <div className="w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-xl shadow-sm">
                     {isMaxPersona ? "🏋️" : "✨"}
                   </div>
                   <div>
@@ -2341,31 +2129,31 @@ export default function Dashboard({
                   href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-[#25D366] hover:bg-[#1ebd59] text-black font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                  className="px-4 py-2 bg-[#25D366] hover:bg-[#1ebd59] text-black font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
                   <MessageSquare size={15} />
-                  <span>Chat di WhatsApp</span>
+                  <span>WhatsApp</span>
                 </a>
               </div>
             </div>
 
-            {/* Member Biometrics Grid */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs space-y-3">
-              <h3 className="font-extrabold text-sm text-white">{lang === "EN" ? "Biometrics & Targets" : "Data Fisik & Target Harian"}</h3>
+            {/* Biometrics */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
+              <h3 className="font-extrabold text-sm text-white">Data Fisik & Target Harian</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-0.5">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase">{t.weightInputLabel}</span>
                   <p className="text-base font-black text-white">{weight} kg</p>
                 </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-0.5">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase">Tinggi Badan</span>
                   <p className="text-base font-black text-white">{activeUser.height || 170} cm</p>
                 </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-0.5">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase">Target Kalori</span>
                   <p className="text-base font-black text-white">{targetCalories} kcal</p>
                 </div>
-                <div className="bg-[#10141D] border border-neutral-800 rounded-xl p-3.5 space-y-0.5">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase">Target Protein</span>
                   <p className="text-base font-black text-white">{targetProtein} g</p>
                 </div>
@@ -2373,7 +2161,7 @@ export default function Dashboard({
             </div>
 
             {/* Account Settings & Logout */}
-            <div className="bg-[#161B26] border border-neutral-800/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex items-center justify-between">
               <button
                 onClick={handleDeleteAccount}
                 className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1.5 cursor-pointer"
@@ -2415,10 +2203,10 @@ export default function Dashboard({
                   </div>
                   <div>
                     <h3 className="font-['Archivo_Black'] text-white text-base">
-                      {lang === "EN" ? "AI Meal Photo Scanner" : "Scan Foto Makanan AI"}
+                      Scan Foto Makanan AI
                     </h3>
                     <p className="text-xs text-neutral-400 font-medium">
-                      {lang === "EN" ? "Upload or take photo for instant nutrition analysis" : "Foto makanan untuk hitung kalori & nutrisi otomatis"}
+                      Foto makanan untuk hitung kalori & nutrisi otomatis
                     </p>
                   </div>
                 </div>
@@ -2442,15 +2230,15 @@ export default function Dashboard({
                   </div>
                   <div>
                     <p className="font-extrabold text-white text-sm">
-                      {lang === "EN" ? "Take a Photo or Upload from Gallery" : "Ambil Foto atau Pilih dari Galeri"}
+                      Ambil Foto atau Pilih dari Galeri
                     </p>
                     <p className="text-xs text-neutral-400 font-medium mt-1">
-                      {lang === "EN" ? "Supports JPG, PNG (Max 10MB)" : "Mendukung Nasi Padang, Ayam, Kopi, Salad, dll."}
+                      Mendukung Nasi Padang, Ayam, Kopi, Salad, dll.
                     </p>
                   </div>
                   <label className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs transition-all cursor-pointer shadow-md active:scale-98">
                     <Upload size={16} />
-                    <span>{lang === "EN" ? "Choose Photo / Open Camera" : "Buka Kamera / Pilih Foto"}</span>
+                    <span>Buka Kamera / Pilih Foto</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -2465,7 +2253,7 @@ export default function Dashboard({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Photo Preview with Laser Scanner Beam */}
+                  {/* Photo Preview */}
                   <div className="relative rounded-2xl overflow-hidden border border-neutral-800 max-h-56 bg-black flex items-center justify-center">
                     <img src={scanImage} alt="Scanned Meal" className="w-full h-full object-cover max-h-56" />
                     {scanLoading && (
@@ -2473,7 +2261,7 @@ export default function Dashboard({
                         <div className="w-full h-1 bg-gradient-to-r from-transparent via-[#D4FF00] to-transparent animate-pulse absolute top-1/2 -translate-y-1/2 shadow-[0_0_15px_#D4FF00]" />
                         <Sparkles size={24} className="text-[#D4FF00] animate-spin" />
                         <span className="text-xs font-black text-[#D4FF00] bg-black/80 px-3 py-1 rounded-full border border-[#D4FF00]/40">
-                          {lang === "EN" ? "Analyzing Calories & Macros..." : "Menganalisis Kalori & Nutrisi via AI..."}
+                          Menganalisis Kalori & Nutrisi via AI...
                         </span>
                       </div>
                     )}
@@ -2541,7 +2329,7 @@ export default function Dashboard({
                         className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
                       >
                         <Check size={16} strokeWidth={3} />
-                        <span>{lang === "EN" ? "Save to Today's Food Log" : "Simpan ke Jurnal Makan Hari Ini"}</span>
+                        <span>Simpan ke Jurnal Makan Hari Ini</span>
                       </button>
                     </motion.div>
                   )}
@@ -2553,13 +2341,13 @@ export default function Dashboard({
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* DOCKED 5-TAB MOBILE GLASSMORPHISM NAVIGATION BAR (MOBILE ONLY) */}
+      {/* CLEAN DOCKED 5-TAB MOBILE NAVIGATION BAR (MOBILE ONLY) */}
       {/* ========================================================================= */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#111620]/95 backdrop-blur-xl border-t border-neutral-800/80 px-4 py-2 max-w-lg mx-auto flex items-center justify-around shadow-[0_-5px_25px_rgba(0,0,0,0.6)] rounded-t-3xl sm:rounded-full sm:bottom-4 lg:hidden">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#0C101A]/95 backdrop-blur-2xl border-t border-white/[0.08] px-4 py-2 flex items-center justify-around shadow-[0_-8px_30px_rgba(0,0,0,0.7)] lg:hidden">
         {/* Tab 1: Home */}
         <button
           onClick={() => setActiveTab("home")}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
             activeTab === "home" ? "text-[#D4FF00]" : "text-neutral-400 hover:text-white"
           }`}
         >
@@ -2570,47 +2358,47 @@ export default function Dashboard({
         {/* Tab 2: Workouts */}
         <button
           onClick={() => setActiveTab("workouts")}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
             activeTab === "workouts" ? "text-[#D4FF00]" : "text-neutral-400 hover:text-white"
           }`}
         >
           <Dumbbell size={20} className={activeTab === "workouts" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">{lang === "EN" ? "Workouts" : "Latihan"}</span>
+          <span className="text-[10px] font-extrabold tracking-tight">Latihan</span>
         </button>
 
-        {/* Tab 3: CENTER ELEVATED CAMERA SCAN BUTTON */}
-        <div className="-mt-8">
+        {/* Center Elevate Button: Scan */}
+        <div className="-mt-7">
           <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => setShowScanModal(true)}
-            className="w-14 h-14 rounded-full bg-[#D4FF00] text-black flex flex-col items-center justify-center shadow-[0_0_25px_rgba(212,255,0,0.5)] border-4 border-[#0F141C] cursor-pointer"
+            className="w-13 h-13 rounded-full bg-[#D4FF00] text-black flex flex-col items-center justify-center shadow-[0_4px_20px_rgba(212,255,0,0.4)] border-3 border-[#0C101A] cursor-pointer"
             title="Scan Foto Makanan AI"
           >
-            <Camera size={22} className="stroke-[2.5]" />
+            <Camera size={20} className="stroke-[2.5]" />
           </motion.button>
         </div>
 
         {/* Tab 4: Progress */}
         <button
           onClick={() => setActiveTab("progress")}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
             activeTab === "progress" ? "text-[#D4FF00]" : "text-neutral-400 hover:text-white"
           }`}
         >
           <TrendingUp size={20} className={activeTab === "progress" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">{lang === "EN" ? "Progress" : "Progres"}</span>
+          <span className="text-[10px] font-extrabold tracking-tight">Progres</span>
         </button>
 
-        {/* Tab 5: Profile & Coach */}
+        {/* Tab 5: Profile */}
         <button
           onClick={() => setActiveTab("profile")}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
             activeTab === "profile" ? "text-[#D4FF00]" : "text-neutral-400 hover:text-white"
           }`}
         >
           <User size={20} className={activeTab === "profile" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">{lang === "EN" ? "Coach" : "Profil"}</span>
+          <span className="text-[10px] font-extrabold tracking-tight">Profil</span>
         </button>
       </nav>
 
