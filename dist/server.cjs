@@ -1840,6 +1840,19 @@ async function startServer() {
       waterCups
     });
   });
+  app.get("/api/check-phone/:phone", (req, res) => {
+    const raw = req.params.phone || "";
+    const phone = normalizePhone(raw);
+    const isValidFormat = /^08\d{7,11}$/.test(phone);
+    const existingUser = getUserProfile(phone);
+    res.json({
+      success: true,
+      phone,
+      isValidFormat,
+      isRegistered: Boolean(existingUser),
+      name: existingUser?.name || null
+    });
+  });
   app.post("/api/ai/next-step", import_express.default.json(), async (req, res) => {
     try {
       const { phone, calories, protein, carbs, fat, targetCalories, targetProtein, targetCarbs, targetFat, goal, persona, name, mealName } = req.body;

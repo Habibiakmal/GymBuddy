@@ -264,6 +264,68 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     );
   };
 
+  // WhatsApp Phone Number Validator (Indonesian mobile prefixes & lengths)
+  const validateWhatsAppPhone = (raw: string) => {
+    let clean = raw.replace(/\D/g, "");
+    if (clean.startsWith("62")) clean = clean.substring(2);
+    else if (clean.startsWith("0")) clean = clean.substring(1);
+
+    if (clean.length === 0) {
+      return {
+        isValid: false,
+        cleaned: "",
+        operator: "",
+        message: isEN ? "Enter your active WhatsApp number." : "Masukkan nomor WhatsApp aktif Anda.",
+        status: "empty"
+      };
+    }
+
+    if (!clean.startsWith("8")) {
+      return {
+        isValid: false,
+        cleaned: clean,
+        operator: "",
+        message: isEN ? "Indonesian mobile numbers start with 8 (e.g. 812...)" : "Nomor HP Indonesia diawali angka 8 (misal: 812...)",
+        status: "invalid_prefix"
+      };
+    }
+
+    let operator = "WhatsApp";
+    if (/^(811|812|813|821|822|823|851|852|853)/.test(clean)) operator = "Telkomsel / by.U";
+    else if (/^(814|815|816|855|856|857|858)/.test(clean)) operator = "Indosat / IM3";
+    else if (/^(817|818|819|859|877|878)/.test(clean)) operator = "XL / AXIS";
+    else if (/^(895|896|897|898|899)/.test(clean)) operator = "Tri (3)";
+    else if (/^(881|882|883|884|885|886|887|888|889)/.test(clean)) operator = "Smartfren";
+
+    if (clean.length < 9) {
+      return {
+        isValid: false,
+        cleaned: clean,
+        operator,
+        message: isEN ? `Number incomplete (${clean.length}/9-13 digits)` : `Nomor belum lengkap (${clean.length}/9-13 digit)`,
+        status: "too_short"
+      };
+    }
+
+    if (clean.length > 13) {
+      return {
+        isValid: false,
+        cleaned: clean,
+        operator,
+        message: isEN ? "Number too long (max 13 digits)" : "Nomor terlalu panjang (maksimal 13 digit)",
+        status: "too_long"
+      };
+    }
+
+    return {
+      isValid: true,
+      cleaned: clean,
+      operator,
+      message: isEN ? `Valid WhatsApp number (${operator})` : `Format WhatsApp valid (${operator})`,
+      status: "valid"
+    };
+  };
+
   const canProceed = () => {
     switch (step) {
       case 1: return name.trim().length > 0;
@@ -277,7 +339,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
       case 9: return true; // Analysis 2 screen
       case 10: return true; // Persona selection has defaults
       case 11: return selectedPlan === "free_trial" || selectedPlan === "premium" || (selectedPlan === "advanced" && selectedFeature !== null);
-      case 12: return phone.trim().length >= 8;
+      case 12: return validateWhatsAppPhone(phone).isValid;
       default: return true;
     }
   };
@@ -1642,54 +1704,106 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
             )}
 
             {/* STEP 12: PHONE NUMBER & WHATSAPP DELIVERY */}
-            {step === 12 && (
-              <motion.div
-                key="step12"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6 sm:space-y-8"
-              >
-                <div className="space-y-2">
-                  <div className="text-xs font-['Inter'] font-bold text-[#25D366] uppercase tracking-widest flex items-center gap-1.5">
-                    <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
-                    <span>{isEN ? "Final Step" : "Langkah Terakhir"}</span>
+            {step === 12 && (() => {
+              const phoneVal = validateWhatsAppPhone(phone);
+              return (
+                <motion.div
+                  key="step12"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6 sm:space-y-8"
+                >
+                  <div className="space-y-2">
+                    <div className="text-xs font-['Inter'] font-bold text-[#25D366] uppercase tracking-widest flex items-center gap-1.5">
+                      <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                      <span>{isEN ? "Final Step" : "Langkah Terakhir"}</span>
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                      {isEN ? "WhatsApp Plan Delivery Number" : "Nomor WhatsApp Pengiriman Rencana"}
+                    </h1>
+                    <p className="text-neutral-400 text-sm">
+                      {isEN
+                        ? "Your nutrition targets & personal analysis plan will be sent directly by the GymBuddy Assistant to your WhatsApp."
+                        : "Rencana target nutrisi & analisis personal akan dikirimkan langsung oleh Asisten GymBuddy ke WhatsApp Anda."}
+                    </p>
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
-                    {isEN ? "WhatsApp Plan Delivery Number" : "Nomor WhatsApp Pengiriman Rencana"}
-                  </h1>
-                  <p className="text-neutral-400 text-sm">
-                    {isEN
-                      ? "Your nutrition targets & personal analysis plan will be sent directly by the GymBuddy Assistant to your WhatsApp."
-                      : "Rencana target nutrisi & analisis personal akan dikirimkan langsung oleh Asisten GymBuddy ke WhatsApp Anda."}
-                  </p>
-                </div>
 
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
-                    <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
+                  <div className="space-y-2.5">
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                        <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
+                        <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, "");
+                          if (val.startsWith("62")) val = val.substring(2);
+                          else if (val.startsWith("0")) val = val.substring(1);
+                          setPhone(val);
+                        }}
+                        placeholder="81234567890"
+                        autoFocus
+                        className={`w-full bg-[#111620] border rounded-xl pl-24 pr-12 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none transition-colors ${
+                          phone.length === 0
+                            ? "border-neutral-800 focus:border-[#25D366]"
+                            : phoneVal.isValid
+                            ? "border-[#25D366] bg-[#111620]"
+                            : "border-amber-500/60 focus:border-amber-500"
+                        }`}
+                      />
+                      {phone.length > 0 && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                          {phoneVal.isValid ? (
+                            <div className="w-6 h-6 rounded-full bg-[#25D366]/20 border border-[#25D366] flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 text-[#25D366]" strokeWidth={3} />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-xs font-bold">
+                              !
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Realtime Phone Validation Feedback Badge */}
+                    {phone.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 ${
+                          phoneVal.isValid
+                            ? "bg-[#25D366]/10 border-[#25D366]/30 text-[#25D366]"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{phoneVal.isValid ? "✅" : "⚠️"}</span>
+                          <span>{phoneVal.message}</span>
+                        </div>
+                        {phoneVal.operator && (
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white shrink-0">
+                            {phoneVal.operator}
+                          </span>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                    placeholder="81234567890"
-                    autoFocus
-                    className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-24 pr-5 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#25D366]"
-                  />
-                </div>
 
-                <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
-                  <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
-                  <span>
-                    {isEN
-                      ? "Privacy guaranteed. Your number is only used for personal report delivery & nutrition guidance."
-                      : "Kerahasiaan terjamin. Nomor Anda hanya digunakan untuk pengiriman laporan personal & panduan nutrisi."}
-                  </span>
-                </div>
-              </motion.div>
-            )}
+                  <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
+                    <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
+                    <span>
+                      {isEN
+                        ? "Privacy guaranteed. Your number is only used for personal report delivery & nutrition guidance."
+                        : "Kerahasiaan terjamin. Nomor Anda hanya digunakan untuk pengiriman laporan personal & panduan nutrisi."}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })()}
 
             {/* STEP 13: PLAN GENERATION LOADER */}
             {step === 13 && (
@@ -1824,38 +1938,95 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     </p>
                   </div>
 
-                  {/* 4. Simple Weight Progress Visualization */}
-                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-neutral-400 font-bold uppercase tracking-wider">
-                      <span>{isEN ? "Weight Progress Estimation" : "Estimasi Progres Berat Badan"}</span>
-                      {estWeeks > 0 && (
-                        <span className="text-[#D4FF00] font-extrabold bg-[#D4FF00]/10 px-2 py-0.5 rounded-lg border border-[#D4FF00]/30">
-                          {isEN ? `Est. ~${estWeeks} Weeks` : `Estimasi ~${estWeeks} Minggu`}
-                        </span>
-                      )}
-                    </div>
+                  {/* 4. Proyeksi Progres Graph Card (Matching Screenshot 2) */}
+                  {(() => {
+                    const targetDateObj = new Date(Date.now() + Math.max(8, estWeeks || 12) * 7 * 86400000);
+                    const targetDateFormatted = new Intl.DateTimeFormat(isEN ? "en-US" : "id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric"
+                    }).format(targetDateObj);
 
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="text-left">
-                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Current" : "Awal"}</div>
-                        <div className="text-xl font-['Archivo_Black'] text-white">{userW} <span className="text-xs text-neutral-400">kg</span></div>
-                      </div>
-
-                      <div className="flex-1 px-4 flex items-center justify-center flex-col">
-                        <div className="w-full bg-neutral-800 h-2.5 rounded-full relative overflow-hidden">
-                          <div className="bg-gradient-to-r from-[#D4FF00] to-[#25D366] h-full rounded-full w-2/3"></div>
+                    return (
+                      <div className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md relative overflow-hidden">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight font-['Archivo_Black']">
+                            {isEN ? "Progress Projection" : "Proyeksi progres"}
+                          </h3>
+                          {estWeeks > 0 && (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30">
+                              ~{estWeeks} {isEN ? "Weeks" : "Minggu"}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[10px] font-bold text-[#D4FF00] mt-1.5">
-                          {userGoal === "lose" ? `-${weightDiffKg} kg Target` : userGoal === "gain" ? `+${weightDiffKg} kg Target` : "Menjaga BB Ideal"}
+
+                        {/* Visual Trajectory Graph */}
+                        <div className="relative pt-8 pb-2">
+                          {/* Start Weight Tag (Top Left) */}
+                          <div className="absolute left-2 top-1 px-2.5 py-1 rounded-lg bg-neutral-800/90 border border-neutral-700 text-white font-extrabold text-xs shadow-xs">
+                            {userW} kg
+                          </div>
+
+                          {/* Target Weight Pill (Highlight Badge above target dot) */}
+                          <div
+                            className="absolute px-3.5 py-1 rounded-xl bg-[#25D366] text-white font-['Archivo_Black'] text-xs sm:text-sm shadow-lg shadow-[#25D366]/30 -translate-x-1/2 z-10 flex items-center gap-1"
+                            style={{
+                              left: userGoal === "maintain" ? "52%" : "70%",
+                              top: userGoal === "gain" ? "-4px" : userGoal === "lose" ? "12px" : "0px"
+                            }}
+                          >
+                            <span>{targetW} kg</span>
+                          </div>
+
+                          {/* Smooth Bezier Trajectory SVG Curve */}
+                          <svg className="w-full h-24 overflow-visible" viewBox="0 0 340 75" fill="none">
+                            {/* Horizontal Guideline Dashes */}
+                            <line x1="0" y1="15" x2="340" y2="15" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                            <line x1="0" y1="42" x2="340" y2="42" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                            <line x1="0" y1="68" x2="340" y2="68" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+
+                            {/* Curve Trajectories by Goal */}
+                            {userGoal === "gain" ? (
+                              <>
+                                <path d="M 20,58 C 90,58 150,22 235,20 L 320,20" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <circle cx="20" cy="58" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                                <circle cx="235" cy="20" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                              </>
+                            ) : userGoal === "lose" ? (
+                              <>
+                                <path d="M 20,20 C 90,20 150,55 235,58 L 320,58" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <circle cx="20" cy="20" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                                <circle cx="235" cy="58" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                              </>
+                            ) : (
+                              <>
+                                <path d="M 20,44 C 80,42 130,30 180,30 L 320,30" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <circle cx="20" cy="44" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                                <circle cx="180" cy="30" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                              </>
+                            )}
+                          </svg>
+
+                          {/* Goal Label text */}
+                          <div className="text-right pr-3 pt-1">
+                            <span className="text-xs sm:text-sm font-bold text-[#25D366]">
+                              {userGoal === "lose"
+                                ? (isEN ? `Weight Loss (-${weightDiffKg} kg)` : `Turun berat badan (-${weightDiffKg} kg)`)
+                                : userGoal === "gain"
+                                ? (isEN ? `Muscle Gain (+${weightDiffKg} kg)` : `Naik massa otot (+${weightDiffKg} kg)`)
+                                : (isEN ? "Maintain weight" : "Jaga berat badan")}
+                            </span>
+                          </div>
+
+                          {/* Timeline Dates at Bottom */}
+                          <div className="flex items-center justify-between text-xs font-bold text-neutral-400 pt-2.5 border-t border-neutral-800/80">
+                            <span className="pl-1 text-neutral-400">{isEN ? "Today" : "Hari ini"}</span>
+                            <span className="pr-3 text-neutral-300 font-semibold">{targetDateFormatted}</span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <div className="text-[10px] font-bold text-neutral-500 uppercase">{isEN ? "Goal" : "Target"}</div>
-                        <div className="text-xl font-['Archivo_Black'] text-[#D4FF00]">{targetW} <span className="text-xs text-neutral-400">kg</span></div>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* 5. Compact Macro Summary */}
                   <div className="space-y-2">
@@ -1883,12 +2054,29 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     </div>
                   </div>
 
-                  {/* 6. Prominent "Lanjut" CTA Button */}
+                  {/* 6. Prominent "Lanjut" CTA Button - Launches WhatsApp & Navigates to Dashboard */}
                   <div className="pt-3">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={onComplete}
+                      onClick={() => {
+                        try {
+                          const cleaned = phone.replace(/\D/g, "");
+                          const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : (cleaned.startsWith("8") ? "0" + cleaned : cleaned);
+                          
+                          // Launch WhatsApp to Twilio Sandbox (+14155238886) with initial greeting
+                          const welcomeMsg = `Halo GymBuddy AI! Nama saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya! 🎯`;
+                          const waUrl = `https://wa.me/14155238886?text=${encodeURIComponent(welcomeMsg)}`;
+                          window.open(waUrl, "_blank", "noopener,noreferrer");
+                        } catch (e) {
+                          console.error("Failed to launch WhatsApp:", e);
+                        }
+
+                        // Complete onboarding and enter dashboard
+                        if (onComplete) {
+                          onComplete();
+                        }
+                      }}
                       className="w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <span>Lanjut</span>
@@ -1920,10 +2108,10 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                   {step === 5 || step === 9
                     ? (isEN ? "Continue to Next Stage →" : "Lanjut ke Tahap Berikutnya →")
                     : step === 12
-                    ? (isEN ? "Send Plan to WhatsApp" : "Kirim Rencana ke WhatsApp")
+                    ? (isEN ? "Generate My Nutrition Plan →" : "Buat Rencana Nutrisi Saya →")
                     : (isEN ? "Continue" : "Lanjut")}
                 </span>
-                {canProceed() && step !== 5 && step !== 9 && step !== 12 && (
+                {canProceed() && step !== 5 && step !== 9 && (
                   <ChevronRight size={18} className="stroke-[3]" />
                 )}
               </button>

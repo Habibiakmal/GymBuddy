@@ -2156,6 +2156,21 @@ async function startServer() {
     });
   });
 
+  // Phone validation & registration checker endpoint
+  app.get("/api/check-phone/:phone", (req, res) => {
+    const raw = req.params.phone || "";
+    const phone = normalizePhone(raw);
+    const isValidFormat = /^08\d{7,11}$/.test(phone);
+    const existingUser = getUserProfile(phone);
+    res.json({
+      success: true,
+      phone,
+      isValidFormat,
+      isRegistered: Boolean(existingUser),
+      name: existingUser?.name || null
+    });
+  });
+
   // ─── AI Coach Next-Step Advice Endpoint ────────────────────────────────────
   // Called by Dashboard after user confirms a food log save.
   // Returns a short, personalized "what to eat/drink next" tip from the coach.
