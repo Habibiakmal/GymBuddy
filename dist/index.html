@@ -23,15 +23,39 @@
     <meta name="twitter:description" content="Personal Trainer & Nutrition Coach berbasis AI 24/7 langsung di WhatsApp." />
     <meta name="twitter:image" content="https://gymbuddygroup.com/hero.png" />
 
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="theme-color" content="#111111" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GymBuddy" />
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-BRtsTKIL.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-bDmjaZDI.css">
+    <script type="module" crossorigin src="/assets/index-BeAfMRA7.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DzeI4_Sw.css">
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('GymBuddy PWA Service Worker registered with scope:', registration.scope);
+            })
+            .catch((error) => {
+              console.warn('GymBuddy PWA Service Worker registration failed:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
 

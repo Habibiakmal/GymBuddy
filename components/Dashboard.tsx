@@ -36,6 +36,7 @@ import {
   RotateCcw,
   RefreshCw
 } from "lucide-react";
+import PWAInstallBanner from "./PWAInstallBanner";
 
 interface MealItem {
   id: string;
@@ -1451,6 +1452,9 @@ export default function Dashboard({
       {/* RIGHT MAIN CONTENT CONTAINER */}
       <main className="flex-1 bg-[#0F141C] border border-neutral-800/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm text-white">
         
+        {/* PWA INSTALL BANNER (Non-intrusive, auto hides when installed/dismissed) */}
+        <PWAInstallBanner language={lang} />
+
         {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
