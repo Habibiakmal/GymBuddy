@@ -1638,6 +1638,97 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     </div>
                   </OptionCard>
                 </div>
+
+                {/* LIVE WHATSAPP CHAT COMPARISON SIMULATOR */}
+                <div className="bg-[#0B141A] border border-white/[0.08] rounded-2xl overflow-hidden shadow-xl mt-4">
+                  {/* Simulated Chat Header */}
+                  <div className="bg-[#1F2C34] px-4 py-3 flex items-center justify-between border-b border-white/[0.06]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shadow-xs">
+                        {persona === "max" ? "🏋️" : "✨"}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-white text-xs font-bold">
+                            {persona === "max" ? "Coach MAX (Gym & Fitness)" : "Coach MIA (Nutrition & Support)"}
+                          </h4>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#25D366]" />
+                        </div>
+                        <p className="text-[10px] text-neutral-400 font-medium">
+                          {isEN ? "WhatsApp AI Assistant • Online" : "Asisten AI WhatsApp • Online"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] uppercase font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 px-2 py-0.5 rounded-md border border-[#D4FF00]/20">
+                      {isEN ? "Live Response Preview" : "Simulasi Respon Chat"}
+                    </span>
+                  </div>
+
+                  {/* Chat Bubbles Container */}
+                  <div className="p-4 space-y-3 bg-[#0B141A]">
+                    {/* User Bubble (Right) */}
+                    <div className="flex justify-end">
+                      <div className="bg-[#005C4B] text-white rounded-2xl rounded-tr-xs px-3.5 py-2.5 max-w-[85%] text-xs shadow-xs space-y-1">
+                        <p className="leading-relaxed font-medium">
+                          {isEN
+                            ? "Coach, I just had a double bacon cheeseburger and large fries for lunch 🍔🍟. Is that okay?"
+                            : "Coach, siang ini aku makan nasi padang lauk rendang + telor dadar 🍛. Aman gak ya?"}
+                        </p>
+                        <span className="text-[9px] text-white/60 block text-right">12:45 PM ✓✓</span>
+                      </div>
+                    </div>
+
+                    {/* Coach AI Response Bubble (Left) */}
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={persona}
+                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex justify-start"
+                      >
+                        <div className="bg-[#202C33] text-white rounded-2xl rounded-tl-xs px-3.5 py-2.5 max-w-[92%] text-xs shadow-xs space-y-2 border border-white/[0.04]">
+                          {persona === "max" ? (
+                            <p className="leading-relaxed text-neutral-200">
+                              {isEN ? (
+                                <>
+                                  <strong className="text-[#D4FF00]">⚠️ ~950 kcal & 55g fat.</strong> That is almost half your daily budget in one meal.
+                                  <br /><br />
+                                  Tonight, keep dinner strictly <strong className="text-white">grilled chicken breast + steamed greens (sub-400 kcal)</strong> and do not skip your scheduled chest & cardio workout today. <strong>Stay disciplined! 🏋️</strong>
+                                </>
+                              ) : (
+                                <>
+                                  <strong className="text-[#D4FF00]">⚠️ Rendang + telor dadar ~850 kcal & 45g lemak.</strong> Nasi padang boleh sesekali, tapi jatah kalori makan malammu sisa <span className="underline font-bold">400 kcal</span>.
+                                  <br /><br />
+                                  Malam ini wajib makan <strong className="text-white">dada ayam rebus / tahu-tempe kukus</strong> tanpa santan/minyak, plus selesaikan target workout 4 set hari ini biar surplusnya terbakar! <strong>Disiplin, jangan kendor! 🏋️</strong>
+                                </>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="leading-relaxed text-neutral-200">
+                              {isEN ? (
+                                <>
+                                  <strong className="text-emerald-400">✨ Sounds delicious!</strong> Do not feel guilty—the beef patty still provided great protein (~35g) for your muscles 💪.
+                                  <br /><br />
+                                  Since lunch was calorie-dense (~950 kcal), let us balance it tonight with a lighter meal like a <strong className="text-white">warm chicken soup or crisp salad</strong>. Proud of you for logging honestly! Keep it up 🥰
+                                </>
+                              ) : (
+                                <>
+                                  <strong className="text-emerald-400">✨ Enak banget!</strong> Nasi padang tetep ada protein bagusnya kok dari rendang (~25g protein) 💪.
+                                  <br /><br />
+                                  Karena santan dan minyaknya cukup padat kalori (~850 kcal), malam ini kita seimbangkan dengan makan malam yang lebih segar ya, misalnya <strong className="text-white">sup ayam bening atau sayur bayam</strong>. Kamu hebat banget udah jujur mencatat makananmu hari ini! Tetap semangat ya 🥰
+                                </>
+                              )}
+                            </p>
+                          )}
+                          <span className="text-[9px] text-neutral-400 block text-right">12:46 PM</span>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </div>
               </motion.div>
             )}
 
