@@ -1462,7 +1462,7 @@ export default function Dashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#F3F4F8] text-slate-900 font-['Inter'] p-3 sm:p-5 md:p-6 flex flex-col md:flex-row gap-5 selection:bg-[#C4F82A] selection:text-black">
+    <div className="min-h-screen bg-[#0A0D14] text-white font-['Inter'] p-0 sm:p-4 lg:p-6 flex flex-col lg:flex-row gap-5 selection:bg-[#D4FF00] selection:text-black">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -1479,31 +1479,31 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* FLOATING DARK CHARCOAL SIDEBAR PANEL */}
-      <aside className="w-full md:w-72 bg-[#181B26] text-white p-6 flex flex-col justify-between shrink-0 rounded-3xl border border-slate-800 shadow-xl md:min-h-[92vh]">
+      {/* FLOATING SIDEBAR PANEL (DESKTOP ONLY - NEVER ON MOBILE) */}
+      <aside className="hidden lg:flex w-72 bg-[#121722] text-white p-6 flex-col justify-between shrink-0 rounded-3xl border border-white/[0.06] shadow-xl min-h-[92vh]">
         <div className="space-y-6">
           {/* GymBuddy Logo & App Title */}
           <div className="flex items-center justify-between">
             <GymBuddyLogo size={32} showText textClassName="text-xl text-white font-extrabold tracking-tight" />
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-black text-slate-300 hover:text-white cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#18202E] border border-white/[0.08] text-xs font-black text-slate-300 hover:text-white cursor-pointer"
             >
               <Globe size={12} className="text-slate-400" />
-              <span className={lang === "ID" ? "text-[#C4F82A] font-bold" : "text-slate-500"}>ID</span>
+              <span className={lang === "ID" ? "text-[#D4FF00] font-bold" : "text-slate-500"}>ID</span>
               <span className="text-slate-600">|</span>
-              <span className={lang === "EN" ? "text-[#C4F82A] font-bold" : "text-slate-500"}>EN</span>
+              <span className={lang === "EN" ? "text-[#D4FF00] font-bold" : "text-slate-500"}>EN</span>
             </button>
           </div>
 
           {/* User Profile Card */}
-          <div className="bg-[#212534] border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-[#C4F82A] text-black font-black flex items-center justify-center text-lg shadow-sm">
+          <div className="bg-[#18202E] border border-white/[0.06] rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-lg shadow-sm">
               {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
             </div>
             <div className="overflow-hidden">
               <h3 className="font-extrabold text-sm text-white truncate">{activeUser.name || "Member"}</h3>
-              <span className="text-xs font-semibold text-[#C4F82A] block">{coachName} Member</span>
+              <span className="text-xs font-semibold text-[#D4FF00] block">{coachName} Member</span>
             </div>
           </div>
 
@@ -1519,7 +1519,7 @@ export default function Dashboard({
 
             <button
               onClick={onBackToHome}
-              className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#212534] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
+              className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#18202E] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
             >
               <ArrowLeft size={18} />
               <span>{t.landingPage}</span>
@@ -1539,13 +1539,13 @@ export default function Dashboard({
 
         {/* Sidebar Bottom CTA & Account Actions */}
         <div className="pt-6 space-y-3">
-          <div className="bg-gradient-to-br from-[#212534] to-[#181B26] border border-slate-800 rounded-2xl p-4 space-y-2 text-center">
+          <div className="bg-[#18202E] border border-white/[0.06] rounded-2xl p-4 space-y-2 text-center">
             <span className="text-xs font-bold text-slate-400 uppercase">{t.mainGoalTitle}</span>
             <p className="text-sm font-extrabold text-white">{goalTitle}</p>
             <div className="pt-1 flex justify-center">
               <button
                 onClick={() => setShowUpdateWeightModal(true)}
-                className="px-3 py-1 rounded-full bg-[#C4F82A] text-black text-xs font-extrabold hover:bg-[#b2e61a] transition-all cursor-pointer"
+                className="px-3 py-1 rounded-full bg-[#D4FF00] text-black text-xs font-extrabold hover:bg-[#c4ec00] transition-all cursor-pointer"
               >
                 {t.updateWeightTitle}
               </button>
@@ -1563,7 +1563,7 @@ export default function Dashboard({
 
             <button
               onClick={onLogout}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#18202E] transition-colors cursor-pointer"
               title={t.logout}
             >
               <LogOut size={18} />
@@ -1573,7 +1573,7 @@ export default function Dashboard({
       </aside>
 
       {/* RIGHT MAIN CONTENT CONTAINER */}
-      <main className="flex-1 bg-[#0F141C] border border-neutral-800/80 rounded-3xl p-5 sm:p-6 md:p-8 space-y-6 overflow-y-auto shadow-sm text-white">
+      <main className="flex-1 bg-[#0A0D14] sm:bg-[#0F141C] border-0 sm:border sm:border-white/[0.06] rounded-none sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto shadow-sm text-white pb-24 lg:pb-8">
         
         {/* PWA INSTALL BANNER (Non-intrusive, auto hides when installed/dismissed) */}
         {/* ========================================================================= */}
