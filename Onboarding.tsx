@@ -344,6 +344,56 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     }
   };
 
+  const handleGoalSelect = (newGoal: "maintain" | "lose" | "gain" | "health") => {
+    setGoal(newGoal);
+    setUserTargetWeight("");
+    if (newGoal === "maintain") {
+      setGoalEvent("daily");
+      setGoalSecondary(["portion_control"]);
+      setChallenges(["nyerah", "kalori"]);
+    } else if (newGoal === "lose") {
+      setGoalEvent("target_year");
+      setGoalSecondary(["belly_fat"]);
+      setChallenges(["gorengan", "malam"]);
+    } else if (newGoal === "gain") {
+      setGoalEvent("lean_bulk");
+      setGoalSecondary(["muscle_definition"]);
+      setChallenges(["kenyang", "protein_kurang"]);
+    } else {
+      setGoalEvent("metabolic");
+      setGoalSecondary(["stamina"]);
+      setChallenges(["skip_meals", "lemas"]);
+    }
+  };
+
+  const getChallengesByGoal = () => {
+    if (goal === "lose") {
+      return [
+        { id: "gorengan", icon: Utensils, title: isEN ? "Snacking & High-Calorie Foods" : "Ngemil & Makanan Tinggi Kalori", desc: isEN ? "Cravings for fried snacks, sweets, or processed food." : "Sering lapar mata dan sulit membatasi gorengan atau yang manis." },
+        { id: "malam", icon: Clock, title: isEN ? "Late Night Cravings" : "Lapar Mata di Malam Hari", desc: isEN ? "Appetite spikes during evening or relaxation hours." : "Nafsu makan melonjak saat malam atau waktu santai." },
+        { id: "kalori", icon: Scale, title: isEN ? "Uncertain Portions & Calorie Counting" : "Bingung Menakar Porsi & Kalori", desc: isEN ? "No time or tools to weigh food grams manually." : "Tidak punya waktu atau timbangan gramasi manual." },
+        { id: "masak", icon: Flame, title: isEN ? "Limited Cooking Time" : "Waktu Masak Terbatas", desc: isEN ? "Frequently buying takeout or ordering online food." : "Sering membeli makanan luar atau memesan online." },
+        { id: "nyerah", icon: Zap, title: isEN ? "Quitting on Minor Setbacks" : "Mudah Nyerah Saat Khilaf Makan", desc: isEN ? "One cheat meal leads to total diet breakdown." : "Khilaf satu kali membuat diet langsung berantakan." }
+      ];
+    } else if (goal === "gain") {
+      return [
+        { id: "kenyang", icon: Utensils, title: isEN ? "Feeling Full Quickly" : "Cepat Kenyang / Susah Makan Banyak", desc: isEN ? "Struggling to finish large calorie-dense meals." : "Sulit menghabiskan porsi makan besar untuk surplus kalori." },
+        { id: "protein_kurang", icon: Dumbbell, title: isEN ? "Hard to Meet Daily Protein Target" : "Sulit Memenuhi Target Protein", desc: isEN ? "Unsure which high-protein food sources to choose." : "Bingung mencari sumber makanan tinggi protein yang praktis." },
+        { id: "metabolisme_cepat", icon: Zap, title: isEN ? "Fast Metabolism / Hard Gainer" : "Metabolisme Terlalu Cepat (Hard Gainer)", desc: isEN ? "Body burns calories rapidly, hard to gain weight." : "Berat badan sulit naik meskipun merasa sudah makan banyak." },
+        { id: "jadwal_latihan", icon: Clock, title: isEN ? "Inconsistent Gym Schedule" : "Jadwal Latihan Kurang Teratur", desc: isEN ? "Busy routines causing missed progressive overload sessions." : "Kesibukan harian membuat sesi latihan sering terlewat." },
+        { id: "bingung_menu", icon: Flame, title: isEN ? "Unsure About High-Calorie Meal Prep" : "Bingung Menu Padat Kalori Bersih", desc: isEN ? "Fear of gaining excess belly fat instead of muscle." : "Takut salah makan malah buncit daripada berotot." }
+      ];
+    } else {
+      return [
+        { id: "skip_meals", icon: Clock, title: isEN ? "Irregular Meal Times" : "Jam Makan Tidak Teratur", desc: isEN ? "Work schedule causes skipped or delayed meals." : "Jadwal kerja padat sering membuat telat atau skip makan." },
+        { id: "lemas", icon: Zap, title: isEN ? "Mid-Day Energy Crashes" : "Mudah Lemas di Siang Hari", desc: isEN ? "Post-lunch fatigue lowering productivity." : "Tubuh mudah mengantuk dan loyo setelah makan siang." },
+        { id: "jajan_sembarangan", icon: Utensils, title: isEN ? "Frequent Random Snacking" : "Sering Jajan Sembarangan", desc: isEN ? "Eating without tracking nutritional balance." : "Makan sembarangan tanpa memperhatikan gizi seimbang." },
+        { id: "stres_tidur", icon: HeartPulse, title: isEN ? "Stress & Poor Sleep" : "Stres Kerja & Kurang Tidur", desc: isEN ? "Affects metabolism and overall daily well-being." : "Mempengaruhi pemulihan tubuh dan nafsu makan." },
+        { id: "konsistensi_olahraga", icon: Dumbbell, title: isEN ? "Maintaining Fitness Consistency" : "Konsistensi Olahraga Rutin", desc: isEN ? "Hard to maintain weekly physical activity routines." : "Sulit menyisihkan waktu rutin untuk aktif bergerak." }
+      ];
+    }
+  };
+
   // Dynamic Options Map based on Goal
   const getGoalSpecificData = () => {
     switch (goal) {
@@ -650,7 +700,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     <OptionCard
                       key={item.id}
                       selected={goal === item.id}
-                      onClick={() => setGoal(item.id as any)}
+                      onClick={() => handleGoalSelect(item.id as any)}
                       className="flex items-start gap-4"
                     >
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1039,6 +1089,97 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     );
                   })()}
 
+                  {/* Target Weight & AI Recommendation for Muscle Gain */}
+                  {goal === "gain" && (() => {
+                    const currW = Number(weight) || 65;
+                    const recW = currW + 5;
+                    const gainKg = 5;
+
+                    return (
+                      <div className="pt-2 space-y-3 border-t border-neutral-800/80">
+                        <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                          {isEN ? "Target Weight Goal (kg)" : "Target Berat Badan & Massa Otot (kg)"}
+                        </label>
+                        <div className="relative">
+                          <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="1"
+                            value={userTargetWeight || recW}
+                            onChange={(e) => setUserTargetWeight(e.target.value.replace(/-/g, ''))}
+                            placeholder={String(recW)}
+                            className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* AI Clean Bulking Recommendation Card */}
+                        <div className="bg-gradient-to-br from-[#1F2B14] via-[#182332] to-[#111620] border-2 border-[#D4FF00] shadow-[0_0_25px_rgba(212,255,0,0.2)] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden">
+                          <div className="flex items-center justify-between">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4FF00] text-black font-['Archivo_Black'] text-[11px] uppercase tracking-wider shadow-md">
+                              <Sparkles className="w-3.5 h-3.5 fill-black" />
+                              <span>{isEN ? "AI CLEAN BULK TARGET" : "TARGET BULKING BERSIH AI"}</span>
+                            </div>
+                            <span className="text-[11px] font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/30">
+                              Surplus ~+400 kcal
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 pt-1">
+                            <span className="text-3xl font-['Archivo_Black'] text-white">
+                              {recW} <span className="text-base font-bold text-[#D4FF00]">kg</span>
+                            </span>
+                            <span className="text-xs text-neutral-300 font-medium">
+                              ({isEN ? `Gradual lean gain ~${gainKg} kg` : `Fokus kenaikan massa otot ~${gainKg} kg`})
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-neutral-200 leading-relaxed font-medium">
+                            {isEN
+                              ? `To build muscle without adding excess body fat, a controlled lean bulk target of ${recW} kg with optimal protein distribution is recommended.`
+                              : `Untuk membangun massa otot tanpa menimbun lemak berlebih, target bulking bersih di ${recW} kg dengan asupan protein terukur sangat ideal.`}
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => setUserTargetWeight(String(recW))}
+                            className="w-full py-2.5 px-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer active:scale-98"
+                          >
+                            <Sparkles className="w-4 h-4 fill-black" />
+                            <span>{isEN ? `Apply AI Recommended Target (${recW} kg)` : `Gunakan Target Rekomendasi AI (${recW} kg)`}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* AI Recommendation for Maintain Weight */}
+                  {(goal === "maintain" || goal === "health") && (() => {
+                    const currW = Number(weight) || 65;
+
+                    return (
+                      <div className="pt-2 space-y-3 border-t border-neutral-800/80">
+                        <div className="bg-gradient-to-br from-[#161F2E] via-[#111620] to-[#161B22] border border-[#25D366]/40 rounded-2xl p-4 sm:p-5 space-y-2.5 shadow-md">
+                          <div className="flex items-center justify-between">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#25D366]/20 text-[#25D366] font-['Archivo_Black'] text-[11px] uppercase tracking-wider border border-[#25D366]/30">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>{isEN ? "BODY RECOMPOSITION & STABILITY" : "REKOMPOSISI TUBUH & STABILITAS"}</span>
+                            </div>
+                            <span className="text-xs font-black text-white bg-white/10 px-2.5 py-1 rounded-lg">
+                              {currW} kg
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                            {isEN
+                              ? `Your target weight is set to maintain your current ${currW} kg while optimizing fat-to-muscle ratio, daily energy, and metabolic health.`
+                              : `Target berat badan dikunci stabil di ${currW} kg dengan fokus pembakaran lemak halus, peningkatan massa otot, dan kestabilan energi harian.`}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Food Allergies Question */}
                   <div className="pt-4 space-y-3 border-t border-neutral-800">
                     <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
@@ -1284,13 +1425,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                 </div>
 
                 <div className="space-y-2.5">
-                  {[
-                    { id: "nyerah", icon: Zap, title: isEN ? "Maintaining Consistency" : "Kesulitan Menjaga Konsistensi", desc: isEN ? "Minor mistakes lead to frustration and quitting mid-way." : "Kesalahan kecil memicu rasa kecewa sehingga berhenti di tengah jalan." },
-                    { id: "gorengan", icon: Utensils, title: isEN ? "Snacking & Processed Foods" : "Ngemil & Makanan Olahan", desc: isEN ? "Cravings make it difficult to control snack portions." : "Sering lapar mata dan sulit membatasi porsi cemilan." },
-                    { id: "kalori", icon: Scale, title: isEN ? "Hesitation Counting Portions" : "Keraguan Menghitung Porsi", desc: isEN ? "Lacking time or tools for manual gram scales." : "Tidak memiliki waktu atau timbangan gramasi manual." },
-                    { id: "malam", icon: Clock, title: isEN ? "Late Night Cravings" : "Keinginan Makan di Malam Hari", desc: isEN ? "Appetite spikes during evening or resting hours." : "Nafsu makan meningkat saat malam atau waktu istirahat." },
-                    { id: "masak", icon: Flame, title: isEN ? "Limited Cooking Time" : "Keterbatasan Waktu Memasak", desc: isEN ? "Frequently buying takeout or ordering online food." : "Sering membeli makanan luar atau memesan secara online." }
-                  ].map((ch) => (
+                  {getChallengesByGoal().map((ch) => (
                     <OptionCard
                       key={ch.id}
                       selected={challenges.includes(ch.id)}
@@ -1875,7 +2010,10 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
               const fatGram = Math.round((targetCal * 0.25) / 9);
 
               const weightDiffKg = Math.round(Math.abs(userW - targetW) * 10) / 10;
-              const estWeeks = userGoal === "maintain" || weightDiffKg === 0 ? 0 : Math.max(2, Math.ceil(weightDiffKg / 0.75));
+              const isWeightLoss = targetW < userW;
+              const isWeightGain = targetW > userW;
+              const isMaintain = targetW === userW || userGoal === "maintain" || userGoal === "health";
+              const estWeeks = isMaintain ? 12 : (isWeightLoss ? Math.max(2, Math.ceil(weightDiffKg / 0.75)) : Math.max(4, Math.ceil(weightDiffKg / 0.35)));
 
               return (
                 <motion.div
@@ -1953,26 +2091,29 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight font-['Archivo_Black']">
                             {isEN ? "Progress Projection" : "Proyeksi progres"}
                           </h3>
-                          {estWeeks > 0 && (
-                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30">
-                              ~{estWeeks} {isEN ? "Weeks" : "Minggu"}
-                            </span>
-                          )}
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30">
+                            ~{estWeeks} {isEN ? "Weeks" : "Minggu"}
+                          </span>
                         </div>
 
                         {/* Visual Trajectory Graph */}
                         <div className="relative pt-8 pb-2">
-                          {/* Start Weight Tag (Top Left) */}
-                          <div className="absolute left-2 top-1 px-2.5 py-1 rounded-lg bg-neutral-800/90 border border-neutral-700 text-white font-extrabold text-xs shadow-xs">
+                          {/* Start Weight Tag (Left) */}
+                          <div
+                            className="absolute left-2 px-2.5 py-1 rounded-lg bg-neutral-800/90 border border-neutral-700 text-white font-extrabold text-xs shadow-xs transition-all"
+                            style={{
+                              top: isMaintain ? "12px" : isWeightLoss ? "0px" : "36px"
+                            }}
+                          >
                             {userW} kg
                           </div>
 
-                          {/* Target Weight Pill (Highlight Badge above target dot) */}
+                          {/* Target Weight Pill (Highlight Badge above/at target dot) */}
                           <div
-                            className="absolute px-3.5 py-1 rounded-xl bg-[#25D366] text-white font-['Archivo_Black'] text-xs sm:text-sm shadow-lg shadow-[#25D366]/30 -translate-x-1/2 z-10 flex items-center gap-1"
+                            className="absolute px-3.5 py-1 rounded-xl bg-[#25D366] text-white font-['Archivo_Black'] text-xs sm:text-sm shadow-lg shadow-[#25D366]/30 -translate-x-1/2 z-10 flex items-center gap-1 transition-all"
                             style={{
-                              left: userGoal === "maintain" ? "52%" : "70%",
-                              top: userGoal === "gain" ? "-4px" : userGoal === "lose" ? "12px" : "0px"
+                              left: isMaintain ? "52%" : "68%",
+                              top: isMaintain ? "12px" : isWeightLoss ? "36px" : "0px"
                             }}
                           >
                             <span>{targetW} kg</span>
@@ -1981,28 +2122,28 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           {/* Smooth Bezier Trajectory SVG Curve */}
                           <svg className="w-full h-24 overflow-visible" viewBox="0 0 340 75" fill="none">
                             {/* Horizontal Guideline Dashes */}
-                            <line x1="0" y1="15" x2="340" y2="15" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
-                            <line x1="0" y1="42" x2="340" y2="42" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
-                            <line x1="0" y1="68" x2="340" y2="68" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                            <line x1="0" y1="18" x2="340" y2="18" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                            <line x1="0" y1="40" x2="340" y2="40" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                            <line x1="0" y1="62" x2="340" y2="62" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
 
                             {/* Curve Trajectories by Goal */}
-                            {userGoal === "gain" ? (
+                            {isWeightGain ? (
                               <>
-                                <path d="M 20,58 C 90,58 150,22 235,20 L 320,20" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
-                                <circle cx="20" cy="58" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="235" cy="20" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                                <path d="M 20,56 C 85,56 145,20 220,20 L 320,20" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <circle cx="20" cy="56" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                                <circle cx="220" cy="20" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
                               </>
-                            ) : userGoal === "lose" ? (
+                            ) : isWeightLoss ? (
                               <>
-                                <path d="M 20,20 C 90,20 150,55 235,58 L 320,58" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <path d="M 20,20 C 85,20 145,56 220,56 L 320,56" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
                                 <circle cx="20" cy="20" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="235" cy="58" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                                <circle cx="220" cy="56" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
                               </>
                             ) : (
                               <>
-                                <path d="M 20,44 C 80,42 130,30 180,30 L 320,30" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
-                                <circle cx="20" cy="44" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="180" cy="30" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                                <path d="M 20,40 L 320,40" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                                <circle cx="20" cy="40" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                                <circle cx="180" cy="40" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
                               </>
                             )}
                           </svg>
@@ -2010,11 +2151,11 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           {/* Goal Label text */}
                           <div className="text-right pr-3 pt-1">
                             <span className="text-xs sm:text-sm font-bold text-[#25D366]">
-                              {userGoal === "lose"
+                              {isWeightLoss
                                 ? (isEN ? `Weight Loss (-${weightDiffKg} kg)` : `Turun berat badan (-${weightDiffKg} kg)`)
-                                : userGoal === "gain"
+                                : isWeightGain
                                 ? (isEN ? `Muscle Gain (+${weightDiffKg} kg)` : `Naik massa otot (+${weightDiffKg} kg)`)
-                                : (isEN ? "Maintain weight" : "Jaga berat badan")}
+                                : (isEN ? `Maintain weight (Stable at ${userW} kg)` : `Jaga berat badan (Stabil di ${userW} kg)`)}
                             </span>
                           </div>
 
