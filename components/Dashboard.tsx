@@ -1509,79 +1509,19 @@ export default function Dashboard({
 
           {/* Navigation Pill List */}
           <nav className="space-y-2">
-            <button
-              onClick={() => setActiveTab("home")}
-              className={`w-full px-4 py-3 rounded-2xl font-black text-sm flex items-center justify-between transition-all cursor-pointer ${
-                activeTab === "home"
-                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/20"
-                  : "text-slate-400 hover:text-white hover:bg-[#212534]"
-              }`}
-            >
+            <button className="w-full px-4 py-3 rounded-2xl bg-[#D4FF00] text-black font-black text-sm flex items-center justify-between transition-all cursor-pointer shadow-md">
               <div className="flex items-center gap-3">
-                <Home size={18} />
+                <BarChart2 size={18} />
                 <span>Dashboard</span>
               </div>
-              {activeTab === "home" && <ChevronRight size={16} />}
-            </button>
-
-            <button
-              onClick={() => setActiveTab("workouts")}
-              className={`w-full px-4 py-3 rounded-2xl font-black text-sm flex items-center justify-between transition-all cursor-pointer ${
-                activeTab === "workouts"
-                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/20"
-                  : "text-slate-400 hover:text-white hover:bg-[#212534]"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Dumbbell size={18} />
-                <span>{lang === "EN" ? "Workouts" : "Jadwal Latihan"}</span>
-              </div>
-              {activeTab === "workouts" && <ChevronRight size={16} />}
-            </button>
-
-            <button
-              onClick={() => setShowScanModal(true)}
-              className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-[#D4FF00]/20 to-[#25D366]/20 border border-[#D4FF00]/40 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-sm flex items-center gap-3 transition-all cursor-pointer shadow-xs"
-            >
-              <Camera size={18} />
-              <span>{lang === "EN" ? "Scan Meal (AI)" : "Scan Foto Makanan AI"}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("progress")}
-              className={`w-full px-4 py-3 rounded-2xl font-black text-sm flex items-center justify-between transition-all cursor-pointer ${
-                activeTab === "progress"
-                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/20"
-                  : "text-slate-400 hover:text-white hover:bg-[#212534]"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <TrendingUp size={18} />
-                <span>{lang === "EN" ? "Progress Chart" : "Proyeksi & Progress"}</span>
-              </div>
-              {activeTab === "progress" && <ChevronRight size={16} />}
-            </button>
-
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`w-full px-4 py-3 rounded-2xl font-black text-sm flex items-center justify-between transition-all cursor-pointer ${
-                activeTab === "profile"
-                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/20"
-                  : "text-slate-400 hover:text-white hover:bg-[#212534]"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <User size={18} />
-                <span>{lang === "EN" ? "Coach & Profile" : "Profil & Coach"}</span>
-              </div>
-              {activeTab === "profile" && <ChevronRight size={16} />}
+              <ChevronRight size={16} />
             </button>
 
             <button
               onClick={onBackToHome}
-              className="w-full px-4 py-2.5 rounded-2xl text-slate-400 hover:text-white hover:bg-[#212534] font-bold text-xs flex items-center gap-3 transition-all cursor-pointer pt-3 border-t border-slate-800/80"
+              className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#212534] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={18} />
               <span>{t.landingPage}</span>
             </button>
 
@@ -2613,9 +2553,9 @@ export default function Dashboard({
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* DOCKED 5-TAB MOBILE & DESKTOP GLASSMORPHISM NAVIGATION BAR */}
+      {/* DOCKED 5-TAB MOBILE GLASSMORPHISM NAVIGATION BAR (MOBILE ONLY) */}
       {/* ========================================================================= */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#111620]/95 backdrop-blur-xl border-t border-neutral-800/80 px-4 py-2 max-w-lg lg:max-w-2xl mx-auto flex items-center justify-around shadow-[0_-5px_25px_rgba(0,0,0,0.6)] rounded-t-3xl sm:rounded-full sm:bottom-4">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#111620]/95 backdrop-blur-xl border-t border-neutral-800/80 px-4 py-2 max-w-lg mx-auto flex items-center justify-around shadow-[0_-5px_25px_rgba(0,0,0,0.6)] rounded-t-3xl sm:rounded-full sm:bottom-4 lg:hidden">
         {/* Tab 1: Home */}
         <button
           onClick={() => setActiveTab("home")}
