@@ -1870,7 +1870,7 @@ export default function Dashboard({
             </div>
 
             {/* WATER & HYDRATION TRACKER */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Droplets size={18} className="text-blue-400" />
@@ -1879,28 +1879,93 @@ export default function Dashboard({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleQuickAddWater(250)}
-                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
                   >
                     +250 ml
                   </button>
                   <button
                     onClick={() => handleQuickAddWater(500)}
-                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
                   >
                     +500 ml
                   </button>
                 </div>
               </div>
 
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5 flex items-center justify-between">
+              {/* Hydration Target Banner */}
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-blue-400 uppercase">Target Hidrasi Harian</span>
-                  <p className="text-base font-black text-white">{totalHydrationMl} ml / 2,500 ml ({totalWaterCups} Gelas)</p>
+                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Target Hidrasi Harian</span>
+                  <p className="text-base sm:text-lg font-black text-white">{totalHydrationMl} ml <span className="text-xs text-neutral-400 font-medium">/ 2,500 ml ({totalWaterCups} Gelas)</span></p>
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-300 font-bold flex items-center justify-center text-sm">
-                  💧
+                
+                {/* 8 Interactive Visual Water Cups */}
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: 8 }).map((_, idx) => {
+                    const isFilled = idx < totalWaterCups;
+                    return (
+                      <div
+                        key={idx}
+                        className={`w-5 h-7 rounded-md border flex items-end p-0.5 transition-all ${
+                          isFilled
+                            ? "bg-blue-500/20 border-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.4)]"
+                            : "bg-[#0A0D14] border-white/10 opacity-40"
+                        }`}
+                      >
+                        <div
+                          className={`w-full rounded-xs transition-all ${
+                            isFilled ? "bg-blue-400 h-full" : "h-0"
+                          }`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* LIST OF HYDRATION LOG ITEMS */}
+              {hydrationLogs.length === 0 ? (
+                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-4 text-center">
+                  <p className="text-xs text-neutral-400 font-medium">
+                    Belum ada catatan air minum hari ini. Tap <strong className="text-blue-300">+250 ml</strong> atau <strong className="text-blue-300">+500 ml</strong> di atas untuk mencatat!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                    Riwayat Minum Hari Ini ({hydrationLogs.length})
+                  </span>
+                  <div className="space-y-2">
+                    {hydrationLogs.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between transition-all hover:border-white/15"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-300 flex items-center justify-center text-sm font-bold">
+                            💧
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
+                            <p className="text-[11px] text-neutral-400 font-medium">
+                              {item.volumeMl || 250} ml {item.time ? `• ${item.time}` : ""}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLogItem(item.id)}
+                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                          title={t.delete}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* MOOD & COACH RECOMMENDATION */}
