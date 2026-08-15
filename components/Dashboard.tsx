@@ -2160,6 +2160,20 @@ export default function Dashboard({
               </div>
             </div>
 
+            {/* Quick Links & Landing Page */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 shadow-xs">
+              <button
+                onClick={onBackToHome}
+                className="w-full py-3 px-4 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-white font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <ArrowLeft size={16} className="text-[#D4FF00]" />
+                  <span>Kembali ke Halaman Depan (Landing Page)</span>
+                </div>
+                <ChevronRight size={16} className="text-neutral-500" />
+              </button>
+            </div>
+
             {/* Account Settings & Logout */}
             <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex items-center justify-between">
               <button
