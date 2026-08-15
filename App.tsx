@@ -6,6 +6,7 @@ import TestimonialCarousel from "./components/TestimonialCarousel";
 import LoginModal from "./components/LoginModal";
 import GymBuddyLogo from "./components/Logo";
 import Dashboard from "./components/Dashboard";
+import SplashScreen from "./components/SplashScreen";
 import {
   motion,
   useMotionValue,
@@ -37,6 +38,7 @@ import {
 } from "lucide-react";
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [language, setLanguage] = useState<"EN" | "ID">("EN");
   const [activePricing, setActivePricing] = useState("PREMIUM");
   const [specialization, setSpecialization] = useState<"nutrition" | "vision">(
@@ -338,69 +340,90 @@ export default function App() {
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(null);
   const activeFaqs = language === "EN" ? faqsEN : faqsID;
 
+  const splashOverlay = (
+    <AnimatePresence>
+      {showSplash && (
+        <SplashScreen onFinish={() => setShowSplash(false)} />
+      )}
+    </AnimatePresence>
+  );
+
   if (isAppOnboarding) {
     return (
-      <Onboarding
-        language={language}
-        onComplete={() => {
-          setIsAppOnboarding(false);
-          try {
-            const stored = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user");
-            if (stored) {
-              handleLoginSuccess(JSON.parse(stored));
-            } else {
+      <>
+        {splashOverlay}
+        <Onboarding
+          language={language}
+          onComplete={() => {
+            setIsAppOnboarding(false);
+            try {
+              const stored = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user");
+              if (stored) {
+                handleLoginSuccess(JSON.parse(stored));
+              } else {
+                setViewMode("dashboard");
+              }
+            } catch (e) {
               setViewMode("dashboard");
             }
-          } catch (e) {
-            setViewMode("dashboard");
-          }
-        }}
-      />
+          }}
+        />
+      </>
     );
   }
 
   if (viewMode === "dashboard" && currentUser) {
     return (
-      <Dashboard
-        user={currentUser}
-        language={language}
-        onLogout={handleLogout}
-        onBackToHome={() => setViewMode("landing")}
-        onResetData={handleResetAllData}
-      />
+      <>
+        {splashOverlay}
+        <Dashboard
+          user={currentUser}
+          language={language}
+          onLogout={handleLogout}
+          onBackToHome={() => setViewMode("landing")}
+          onResetData={handleResetAllData}
+        />
+      </>
     );
   }
 
   if (isPricingPage) {
     return (
-      <PricingPage
-        language={language}
-        onBack={() => setIsPricingPage(false)}
-        onLanguageChange={(lang) => setLanguage(lang)}
-        onSelectPlanAndStart={(plan, feature) => {
-          setIsPricingPage(false);
-          setIsAppOnboarding(true);
-        }}
-      />
+      <>
+        {splashOverlay}
+        <PricingPage
+          language={language}
+          onBack={() => setIsPricingPage(false)}
+          onLanguageChange={(lang) => setLanguage(lang)}
+          onSelectPlanAndStart={(plan, feature) => {
+            setIsPricingPage(false);
+            setIsAppOnboarding(true);
+          }}
+        />
+      </>
     );
   }
 
   if (showcaseVariant) {
     return (
-      <FeatureShowcase
-        variant={showcaseVariant}
-        language={language}
-        onBack={() => setShowcaseVariant(null)}
-        onSwitchVariant={(v) => setShowcaseVariant(v)}
-        onOnboardingRequest={() => {
-          setShowcaseVariant(null);
-          setIsAppOnboarding(true);
-        }}
-      />
+      <>
+        {splashOverlay}
+        <FeatureShowcase
+          variant={showcaseVariant}
+          language={language}
+          onBack={() => setShowcaseVariant(null)}
+          onSwitchVariant={(v) => setShowcaseVariant(v)}
+          onOnboardingRequest={() => {
+            setShowcaseVariant(null);
+            setIsAppOnboarding(true);
+          }}
+        />
+      </>
     );
   }
   return (
     <div className="min-h-screen bg-white font-sans text-neutral-900 selection:bg-[#D4FF00] selection:text-black">
+      {splashOverlay}
       <div className="pb-12">
         {/* HERO SECTION */}
         <div className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 lg:pt-8">
