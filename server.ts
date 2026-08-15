@@ -306,6 +306,7 @@ interface DbSchema {
   waterLogs: Record<string, number>;
   infographics?: Record<string, any>;
   generatedImages?: Record<string, any>;
+  nutritionCards?: Record<string, any>;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");

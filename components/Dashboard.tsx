@@ -33,7 +33,8 @@ import {
   MessageSquare,
   BarChart2,
   CheckSquare,
-  RotateCcw
+  RotateCcw,
+  RefreshCw
 } from "lucide-react";
 
 interface MealItem {
@@ -344,7 +345,10 @@ const translations = {
     calendarModalTitle: "Kalender Pemilih Tanggal",
     calendarSubtext: "Pilih tanggal sejak kamu terdaftar di GymBuddy",
     todayBtn: "Hari Ini",
-    historicalLogNotice: "Menampilkan log histori tanggal"
+    historicalLogNotice: "Menampilkan log histori tanggal",
+    syncWhatsApp: "Sinkronkan WhatsApp",
+    syncing: "Menyinkronkan...",
+    syncedJustNow: "Tersinkronisasi Realtime"
   },
   EN: {
     memberDashboard: "MEMBER DASHBOARD",
@@ -378,11 +382,11 @@ const translations = {
     great: "Great",
     weeklyWorkoutSchedule: "Weekly Workout Schedule",
     todaysFocus: "Workout Focus",
-    viewFullWeeklySchedule: "View Full Schedule (Mon - Sun)",
-    viewTodayOnly: "Back to Today's Workout",
+    viewFullWeeklySchedule: "View Full Weekly Schedule (Mon - Sun)",
+    viewTodayOnly: "Back to Today's Schedule",
     todaysFocusProgress: "Today's Workout Progress",
     setsCompleted: "sets completed",
-    setUnit: "Set",
+    setUnit: "Sets",
     statusNotStarted: "Not Started",
     statusInProgress: "In Progress",
     statusCompleted: "Completed",
@@ -390,13 +394,13 @@ const translations = {
     exerciseCount: "Exercises",
     foodMeals: "Food Meals",
     addFoodBtn: "Add Food",
-    noMealsLogged: "No solid meals logged for today.",
-    waterHydration: "Water / Hydration",
+    noMealsLogged: "No solid food logged today.",
+    waterHydration: "Water & Hydration",
     addDrinkBtn: "Add Drink",
     hydrationTarget: "Daily Hydration Target",
     quickAdd250: "+250 ml Water",
     quickAdd500: "+500 ml Water",
-    noDrinksLogged: "No drinks logged for today.",
+    noDrinksLogged: "No drinks logged today.",
     coachRecommendation: "Coach Recommendation",
     coachAdviceTitle: "Coach Advice",
     autoReminderTitle: "Daily Workout Reminder",
@@ -428,7 +432,10 @@ const translations = {
     calendarModalTitle: "Date Picker Calendar",
     calendarSubtext: "Select any date since your registration at GymBuddy",
     todayBtn: "Today",
-    historicalLogNotice: "Showing historical log for"
+    historicalLogNotice: "Showing historical log for",
+    syncWhatsApp: "Sync WhatsApp",
+    syncing: "Syncing...",
+    syncedJustNow: "Synced in Realtime"
   }
 };
 
@@ -790,59 +797,83 @@ export default function Dashboard({
 
   const { currentStreak, longestStreak } = calculateStreaks();
 
-  // Fetch & Auto-Split Combo Logs
-  const fetchLogsForDate = async (dateStr: string) => {
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+
+  // Fetch & Auto-Split Combo Logs with Stale-While-Revalidate & Server Priority
+  const fetchLogsForDate = async (dateStr: string, silent = false) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
-    // PRIORITY 1: Always read localStorage first — it is the authoritative local state.
-    // localStorage is updated immediately on add/delete, so it is always more up-to-date
-    // than the remote server which may lag behind or serve stale data.
-    let rawLogs: MealItem[] = [];
-    let hasLocalData = false;
+    // 1. Immediate Display from local cache (fast initial render, no flicker)
     try {
       const localData = localStorage.getItem(localKey);
       if (localData !== null) {
         const parsed = JSON.parse(localData);
-        if (Array.isArray(parsed)) {
-          rawLogs = parsed;
-          hasLocalData = true;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sanitizedLocal = sanitizeAndSplitComboLogs(parsed);
+          setAllLogs(sanitizedLocal);
         }
       }
     } catch (e) {}
 
-    // PRIORITY 2: Only fetch from server if localStorage has NO data for this date at all.
-    // This avoids stale server data overwriting fresh local deletes/adds.
-    if (!hasLocalData) {
-      const tryFetchMeals = async (baseUrl: string) => {
-        try {
-          const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && Array.isArray(data.logs)) {
-              return data.logs as MealItem[];
-            }
-          }
-        } catch (e) {}
-        return null;
-      };
+    if (!silent) setIsSyncing(true);
 
-      const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com")) || [];
-      if (serverLogs.length > 0) {
-        rawLogs = serverLogs;
-        // Cache fetched server data into localStorage for future fast reads
+    // 2. Query Server for latest WhatsApp logs & database entries
+    const tryFetchMeals = async (baseUrl: string) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`, {
+          headers: { "Cache-Control": "no-cache" }
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.success && Array.isArray(data.logs)) {
+            return data.logs as MealItem[];
+          }
+        }
+      } catch (e) {}
+      return null;
+    };
+
+    try {
+      const primaryUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
+
+      if (serverLogs !== null && Array.isArray(serverLogs)) {
+        // Authoritative server data received (includes all WhatsApp entries)
+        const sanitized = sanitizeAndSplitComboLogs(serverLogs);
+        setAllLogs(sanitized);
         try {
-          localStorage.setItem(localKey, JSON.stringify(rawLogs));
+          localStorage.setItem(localKey, JSON.stringify(serverLogs));
         } catch (e) {}
       }
-    }
 
-    const sanitized = sanitizeAndSplitComboLogs(rawLogs);
-    setAllLogs(sanitized);
+      // Also refresh live user profile in background (for streaks, live target, & weight sync)
+      try {
+        const userRes = await fetch(`/api/user/${normPhone}`).catch(() => null);
+        let uData = userRes && userRes.ok ? await userRes.json().catch(() => null) : null;
+        if (!uData) {
+          const remUserRes = await fetch(`${primaryUrl}/api/user/${normPhone}`).catch(() => null);
+          if (remUserRes && remUserRes.ok) {
+            uData = await remUserRes.json().catch(() => null);
+          }
+        }
+        if (uData && (uData.name || uData.user || uData.profile)) {
+          const p = uData.profile || uData.user || uData;
+          setLiveUser((prev) => ({ ...prev, ...p, streak: uData.streak ?? prev.streak ?? 1 }));
+        }
+      } catch (e) {}
+
+      setLastSyncTime(new Date());
+    } catch (err) {
+      console.warn("[Dashboard] Sync note:", err);
+    } finally {
+      if (!silent) setIsSyncing(false);
+    }
   };
 
   useEffect(() => {
-    fetchLogsForDate(selectedDate);
+    fetchLogsForDate(selectedDate, false);
 
     try {
       const storedFeel = localStorage.getItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`);
@@ -859,6 +890,30 @@ export default function Dashboard({
     } catch (e) {
       setExercises(todayScheduleObj.exercises);
     }
+
+    // Auto-poll WhatsApp updates every 8 seconds silently
+    const intervalId = setInterval(() => {
+      fetchLogsForDate(selectedDate, true);
+    }, 8000);
+
+    // Auto-sync when window / browser tab gains focus or visibility
+    const handleFocus = () => {
+      fetchLogsForDate(selectedDate, false);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchLogsForDate(selectedDate, false);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [selectedDate, activeUser.phone]);
 
   const saveExercisesState = (updatedEx: WorkoutExercise[]) => {
@@ -1465,6 +1520,22 @@ export default function Dashboard({
               title={t.pickDateTooltip}
             >
               <CalendarIcon size={18} className="text-[#C4F82A]" />
+            </button>
+
+            {/* Realtime WhatsApp Sync Button */}
+            <button
+              type="button"
+              onClick={() => fetchLogsForDate(selectedDate, false)}
+              disabled={isSyncing}
+              className={`flex items-center justify-center gap-1.5 px-3 h-13 rounded-xl font-bold text-xs bg-[#161B26] text-white hover:bg-neutral-800 hover:border-[#C4F82A]/50 transition-all cursor-pointer shadow-xs shrink-0 border border-neutral-800 ${
+                isSyncing ? "opacity-75" : ""
+              }`}
+              title={isSyncing ? (t.syncing || "Menyinkronkan...") : (t.syncWhatsApp || "Sinkronkan Data WhatsApp")}
+            >
+              <RefreshCw size={15} className={`text-[#C4F82A] ${isSyncing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline text-[11px] font-bold text-neutral-300">
+                {isSyncing ? (t.syncing || "Sync...") : (t.syncWhatsApp || "Sync WA")}
+              </span>
             </button>
           </div>
         </div>
