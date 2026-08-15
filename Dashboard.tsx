@@ -1992,7 +1992,7 @@ export default function Dashboard({
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
                   <TrendingUp size={22} className="text-[#D4FF00]" />
-                  <span>Proyeksi & Analisis Progres</span>
+                  <span>Progres Berat Badan</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
                   Target: {goalTitle} ({weight} kg ➔ {targetWeight} kg)
@@ -2003,14 +2003,14 @@ export default function Dashboard({
                 onClick={() => setShowUpdateWeightModal(true)}
                 className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm"
               >
-                <span>{t.updateWeightTitle}</span>
+                <span>Perbarui Berat</span>
               </button>
             </div>
 
             {/* WEIGHT PROJECTION GRAPH */}
             <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-white">Kurva Capaian Body Goal AI</h3>
+                <h3 className="font-extrabold text-base text-white">Kurva Proyeksi Target</h3>
                 <span className="text-xs font-black text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-3 py-1 rounded-full">
                   Target: {targetWeight} kg
                 </span>
@@ -2018,8 +2018,8 @@ export default function Dashboard({
 
               <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between text-xs text-neutral-400 font-bold border-b border-white/[0.06] pb-2">
-                  <span>Start: {startWeight || weight} kg</span>
-                  <span>Target Waktu: ~12 Minggu</span>
+                  <span>Awal: {startWeight || weight} kg</span>
+                  <span>Estimasi: ~12 Minggu</span>
                   <span className="text-[#D4FF00]">Target: {targetWeight} kg</span>
                 </div>
 
@@ -2058,12 +2058,12 @@ export default function Dashboard({
 
                     <circle cx="30" cy={targetWeight < weight ? 50 : targetWeight > weight ? 120 : 80} r="6" fill="#111620" stroke="#D4FF00" strokeWidth="3" />
                     <text x="30" y={targetWeight < weight ? 35 : targetWeight > weight ? 140 : 65} fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">
-                      {weight} kg (Now)
+                      {weight} kg (Sekarang)
                     </text>
 
                     <circle cx="470" cy={targetWeight < weight ? 120 : targetWeight > weight ? 50 : 80} r="7" fill="#D4FF00" stroke="#111620" strokeWidth="2" />
                     <text x="470" y={targetWeight < weight ? 142 : targetWeight > weight ? 38 : 65} fill="#D4FF00" fontSize="12" fontWeight="900" textAnchor="middle">
-                      {targetWeight} kg (Goal)
+                      {targetWeight} kg (Target)
                     </text>
                   </svg>
                 </div>
@@ -2071,15 +2071,15 @@ export default function Dashboard({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">{t.startWeightLabel}</span>
+                  <span className="text-xs text-neutral-400 font-bold uppercase">Berat Awal</span>
                   <p className="text-lg font-black text-white">{startWeight || weight} kg</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">{t.currentWeightLabel}</span>
+                  <span className="text-xs text-neutral-400 font-bold uppercase">Saat Ini</span>
                   <p className="text-lg font-black text-[#D4FF00]">{weight} kg</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">{t.remainingLabel}</span>
+                  <span className="text-xs text-neutral-400 font-bold uppercase">Sisa</span>
                   <p className="text-lg font-black text-white">{remainingKg} kg</p>
                 </div>
               </div>
@@ -2088,7 +2088,7 @@ export default function Dashboard({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: PROFILE & COACH (PROFIL & PENGATURAN) */}
+        {/* TAB 4: PROFILE & SETTINGS (PROFIL & PENGATURAN) */}
         {/* ========================================================================= */}
         {activeTab === "profile" && (
           <div className="space-y-5">
@@ -2096,10 +2096,10 @@ export default function Dashboard({
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
                   <User size={22} className="text-[#D4FF00]" />
-                  <span>Profil & Coach AI</span>
+                  <span>Profil & Pengaturan</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {activeUser.name || "Member"} • WhatsApp {activeUser.phone || "-"}
+                  {activeUser.name || "Member"} • {activeUser.phone || "-"}
                 </p>
               </div>
 
@@ -2121,7 +2121,7 @@ export default function Dashboard({
                   </div>
                   <div>
                     <h3 className="font-extrabold text-base text-white">{coachName}</h3>
-                    <p className="text-xs text-[#D4FF00] font-bold">{isMaxPersona ? "Pelatih Gym & Disiplin Tegas" : "Nutritionist Ramah & Supportif"}</p>
+                    <p className="text-xs text-[#D4FF00] font-bold">{isMaxPersona ? "Pelatih Gym" : "Nutritionist"}</p>
                   </div>
                 </div>
 
@@ -2142,7 +2142,7 @@ export default function Dashboard({
               <h3 className="font-extrabold text-sm text-white">Data Fisik & Target Harian</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{t.weightInputLabel}</span>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Berat Badan</span>
                   <p className="text-base font-black text-white">{weight} kg</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
