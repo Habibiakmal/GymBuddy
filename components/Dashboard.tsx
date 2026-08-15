@@ -1667,62 +1667,125 @@ export default function Dashboard({
               })}
             </div>
 
-            {/* STEP 2: SUMMARY METRICS (NUTRITION & HYDRATION) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {/* Calories Target */}
-              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Kalori Masuk</span>
-                <p className="text-xl sm:text-2xl font-black text-white">
-                  {totalCaloriesConsumed}
-                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ {targetCalories} kcal</span>
-                </p>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
-                  <div
-                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, Math.round((totalCaloriesConsumed / targetCalories) * 100))}%` }}
-                  />
-                </div>
-              </div>
+            {/* STEP 2: DYNAMIC HERO ACTIVITY & MACRO GAUGE CARD */}
+            <div className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+              {/* Subtle ambient light glow in background */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00D2FF]/5 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Protein Target */}
-              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Protein</span>
-                <p className="text-xl sm:text-2xl font-black text-white">
-                  {totalProteinConsumed}g
-                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ {targetProtein}g</span>
-                </p>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
-                  <div
-                    className="h-full bg-indigo-400 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / targetProtein) * 100))}%` }}
-                  />
-                </div>
-              </div>
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                {/* Circular Activity Gauge */}
+                <div className="flex items-center gap-5 w-full md:w-auto">
+                  <div className="relative w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                      {/* Background track */}
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="48"
+                        className="stroke-[#1C2638]"
+                        strokeWidth="10"
+                        fill="transparent"
+                      />
+                      {/* Animated Progress Ring */}
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="48"
+                        stroke="url(#calorieGlowGrad)"
+                        strokeWidth="10"
+                        strokeDasharray={2 * Math.PI * 48}
+                        strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, totalCaloriesConsumed / (targetCalories || 2000)))}
+                        strokeLinecap="round"
+                        fill="transparent"
+                        className="transition-all duration-700 ease-out"
+                      />
+                      <defs>
+                        <linearGradient id="calorieGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#25D366" />
+                          <stop offset="100%" stopColor="#D4FF00" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
 
-              {/* Water Intake */}
-              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Air Minum</span>
-                <p className="text-xl sm:text-2xl font-black text-white">
-                  {totalHydrationMl}
-                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">/ 2500 ml</span>
-                </p>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
-                  <div
-                    className="h-full bg-blue-400 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
-                  />
-                </div>
-              </div>
+                    {/* Inside Circle Content */}
+                    <div className="absolute flex flex-col items-center justify-center text-center">
+                      <Flame size={18} className="text-[#D4FF00] animate-pulse" />
+                      <span className="text-xl sm:text-2xl font-black text-white leading-none mt-1">
+                        {Math.max(0, targetCalories - totalCaloriesConsumed)}
+                      </span>
+                      <span className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
+                        kcal sisa
+                      </span>
+                    </div>
+                  </div>
 
-              {/* Target Weight Goal */}
-              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 space-y-1">
-                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Target Berat</span>
-                <p className="text-xl sm:text-2xl font-black text-[#D4FF00]">
-                  {weight} kg
-                  <span className="text-xs text-neutral-400 font-semibold block sm:inline sm:ml-1">➔ {targetWeight} kg</span>
-                </p>
-                <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden mt-2">
-                  <div className="h-full bg-[#D4FF00] rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+                  {/* Ring Summary Text */}
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
+                      Target Harian
+                    </span>
+                    <h3 className="text-lg font-black text-white">
+                      {totalCaloriesConsumed} <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories} kcal</span>
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {totalCaloriesConsumed >= targetCalories ? "🎯 Target kalori harian tercapai!" : "🔥 Energi siap untuk aktivitas & gym"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Macro Progress Breakdown Bars */}
+                <div className="w-full md:w-64 space-y-3.5 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-white/[0.06] md:pl-6">
+                  {/* Protein */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-neutral-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#D4FF00]" />
+                        <span>Protein</span>
+                      </span>
+                      <span className="text-white font-mono">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
+                    </div>
+                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-400 to-[#D4FF00] rounded-full transition-all duration-500 shadow-[0_0_8px_#D4FF00]"
+                        style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / (targetProtein || 1)) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Air Minum */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-neutral-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
+                        <span>Air Minum</span>
+                      </span>
+                      <span className="text-white font-mono">{totalHydrationMl} <span className="text-neutral-500 font-normal">/ 2500ml</span></span>
+                    </div>
+                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500 shadow-[0_0_8px_#00D2FF]"
+                        style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Body Goal */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-neutral-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span>Target Berat</span>
+                      </span>
+                      <span className="text-[#D4FF00] font-mono">{weight} kg <span className="text-neutral-500 font-normal">➔ {targetWeight}kg</span></span>
+                    </div>
+                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
