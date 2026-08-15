@@ -3318,88 +3318,113 @@ ${xmlOutput}`);
   }
   function generateNutritionCardSVG(foodName, calories, protein, carbs, fat, fiber, healthScore, dayLabel, foodImageBase64, foodImageMime) {
     const esc = (s) => escapeXml(String(s));
-    const nameWords = foodName.trim().split(" ");
-    let nameLine1 = foodName.trim();
+    const cleanFoodName = (foodName || "Menu Makanan").trim();
+    const nameWords = cleanFoodName.split(" ");
+    let nameLine1 = cleanFoodName;
     let nameLine2 = "";
-    if (foodName.length > 22) {
-      const half = Math.ceil(nameWords.length / 2);
-      nameLine1 = nameWords.slice(0, half).join(" ");
-      nameLine2 = nameWords.slice(half).join(" ");
+    if (cleanFoodName.length > 28) {
+      const mid = Math.ceil(nameWords.length / 2);
+      nameLine1 = nameWords.slice(0, mid).join(" ");
+      nameLine2 = nameWords.slice(mid).join(" ");
     }
-    const starsHtml = Array.from({ length: 5 }, (_, i) => {
-      const filled = i < Math.round(healthScore);
-      return `<text x="${104 + i * 36}" y="186" font-size="28" fill="${filled ? "#F59E0B" : "#D1D5DB"}" font-family="serif">\u2605</text>`;
-    }).join("");
-    const imgContent = foodImageBase64 ? `<image href="data:${foodImageMime || "image/jpeg"};base64,${foodImageBase64}" x="40" y="210" width="520" height="310" clip-path="url(#imgClip)" preserveAspectRatio="xMidYMid slice" />` : `<rect x="40" y="210" width="520" height="310" rx="20" fill="#E5E7EB" /><text x="300" y="380" text-anchor="middle" font-size="18" fill="#9CA3AF" font-family="sans-serif">\u{1F4F7} Foto Makanan</text>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 720" width="600" height="720">
+    const numHealthScore = Math.min(5, Math.max(1, Number(healthScore) || 4));
+    const scoreFormatted = numHealthScore.toFixed(1);
+    const scoreRatingText = numHealthScore >= 4 ? "Sangat Sehat" : numHealthScore >= 3 ? "Sehat Seimbang" : "Perlu Penyesuaian";
+    const imgContent = foodImageBase64 ? `<image href="data:${foodImageMime || "image/jpeg"};base64,${foodImageBase64}" x="36" y="195" width="528" height="300" clip-path="url(#imgClip)" preserveAspectRatio="xMidYMid slice" />` : `<rect x="36" y="195" width="528" height="300" rx="20" fill="#141C2A" /><text x="300" y="355" text-anchor="middle" font-size="18" font-weight="600" fill="#64748B" font-family="system-ui, sans-serif">\u{1F4F7} Foto Makanan</text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 780" width="600" height="780">
   <defs>
-    <clipPath id="imgClip"><rect x="40" y="210" width="520" height="310" rx="20" /></clipPath>
-    <!-- Macro chip gradients -->
-    <linearGradient id="gKal" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#F97316"/><stop offset="100%" stop-color="#EA580C"/></linearGradient>
-    <linearGradient id="gProt" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1C1917"/><stop offset="100%" stop-color="#292524"/></linearGradient>
-    <linearGradient id="gKarbo" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EAB308"/><stop offset="100%" stop-color="#CA8A04"/></linearGradient>
-    <linearGradient id="gLemak" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#84CC16"/><stop offset="100%" stop-color="#65A30D"/></linearGradient>
-    <linearGradient id="gSerat" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#15803D"/><stop offset="100%" stop-color="#166534"/></linearGradient>
-    <filter id="cardShadow" x="-5%" y="-5%" width="110%" height="110%">
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0000001A"/>
+    <clipPath id="imgClip"><rect x="36" y="195" width="528" height="300" rx="20" /></clipPath>
+    
+    <!-- Linear Gradients for Macros -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0F1420"/>
+      <stop offset="100%" stop-color="#080C14"/>
+    </linearGradient>
+    <linearGradient id="calGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22C55E"/>
+      <stop offset="100%" stop-color="#D4FF00"/>
+    </linearGradient>
+
+    <filter id="glowShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
     </filter>
   </defs>
 
-  <!-- Card background -->
-  <rect width="600" height="720" rx="28" fill="#FAFAF9" filter="url(#cardShadow)"/>
+  <!-- Main Obsidian Card Background -->
+  <rect width="600" height="780" rx="32" fill="url(#cardGrad)" filter="url(#glowShadow)"/>
+  <rect width="598" height="778" x="1" y="1" rx="31" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1.5"/>
 
-  <!-- Header area -->
-  <!-- Food name -->
-  <text x="40" y="80" font-size="${nameLine2 ? "46" : "52"}" font-weight="800" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine1)}</text>
-  ${nameLine2 ? `<text x="40" y="136" font-size="46" font-weight="800" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine2)}</text>` : ""}
+  <!-- TOP HEADER: GymBuddy Official Logo & Date Pill -->
+  <!-- Official GymBuddy Logo SVG -->
+  <g transform="translate(36, 32) scale(0.55)">
+    <rect width="64" height="64" rx="32" fill="#141C2B" />
+    <path d="M30.6 32.0694L34.2 27.7639H46.6L39.8 38.0972L26.6 44.9861L36.6 32.0694H30.6Z" fill="#D4FF00" />
+    <path d="M51 17H27C25.9333 17 23.4 17.775 21.8 20.875C20.2 23.975 15.2667 34.5093 13 39.3889H25L21 48L23.4 46.7083L32.6 34.2222H22.6C22.0667 34.3657 21.24 34.1361 22.2 32.0694C23.16 30.0028 25 25.7546 25.8 23.8889C26.0667 23.3148 26.84 22.1667 27.8 22.1667H38.6L35.8 26.0417H43.4L51 17Z" fill="#FFFFFF" />
+  </g>
 
-  <!-- Day label -->
-  <text x="560" y="68" text-anchor="end" font-size="22" font-weight="500" fill="#78716C" font-family="system-ui, -apple-system, sans-serif">${esc(dayLabel)}</text>
+  <!-- Brand Typography -->
+  <text x="80" y="55" font-size="16" font-weight="900" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.5">GYMBUDDY</text>
+  <text x="175" y="55" font-size="12" font-weight="800" fill="#D4FF00" font-family="system-ui, sans-serif" letter-spacing="1">VISION AI</text>
 
-  <!-- Health score label -->
-  <text x="40" y="175" font-size="18" font-weight="700" fill="#1C1917" font-family="system-ui, -apple-system, sans-serif">Health Score:</text>
-  ${starsHtml}
+  <!-- Day Badge (Top Right) -->
+  <rect x="444" y="32" width="120" height="34" rx="17" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.08"/>
+  <text x="504" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">${esc(dayLabel || "Hari Ini")}</text>
 
-  <!-- Gizi AI badge -->
-  <rect x="468" y="154" width="92" height="32" rx="16" fill="none" stroke="#F97316" stroke-width="1.5"/>
-  <text x="514" y="175" text-anchor="middle" font-size="14" font-weight="600" fill="#F97316" font-family="system-ui, -apple-system, sans-serif">Gizi AI</text>
+  <!-- FOOD TITLE (Crisp, modern line wrapping) -->
+  <text x="36" y="${nameLine2 ? 104 : 116}" font-size="${nameLine2 ? 26 : 28}" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine1)}</text>
+  ${nameLine2 ? `<text x="36" y="138" font-size="24" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine2)}</text>` : ""}
 
-  <!-- Food photo -->
+  <!-- HEALTH SCORE PILL (Clean, zero overlap) -->
+  <rect x="36" y="${nameLine2 ? 152 : 142}" width="220" height="32" rx="16" fill="#141C2B" stroke="#D4FF00" stroke-opacity="0.3" stroke-width="1"/>
+  <text x="48" y="${nameLine2 ? 173 : 163}" font-size="14" fill="#D4FF00" font-family="sans-serif">\u2605</text>
+  <text x="66" y="${nameLine2 ? 173 : 163}" font-size="12" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${scoreFormatted} / 5.0</text>
+  <text x="130" y="${nameLine2 ? 173 : 163}" font-size="11" font-weight="600" fill="#94A3B8" font-family="system-ui, sans-serif">\u2022 ${scoreRatingText}</text>
+
+  <!-- FOOD PHOTO -->
   ${imgContent}
+  <rect x="36" y="195" width="528" height="300" rx="20" fill="none" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="1.5"/>
 
-  <!-- Macro chips row \u2014 5 chips across -->
-  <!-- Kalori chip -->
-  <rect x="20" y="542" width="104" height="108" rx="20" fill="url(#gKal)"/>
-  <text x="72" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Kalori</text>
-  <text x="72" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${calories}</text>
-  <text x="72" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">kcal</text>
+  <!-- HERO CALORIE BAR -->
+  <rect x="36" y="510" width="528" height="68" rx="20" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <text x="56" y="552" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">\u{1F525} ${calories}</text>
+  <text x="175" y="550" font-size="14" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">TOTAL KALORI (kcal)</text>
+  <text x="544" y="550" text-anchor="end" font-size="12" font-weight="700" fill="#D4FF00" font-family="system-ui, sans-serif">Padat Energi</text>
 
-  <!-- Protein chip -->
-  <rect x="134" y="542" width="104" height="108" rx="20" fill="url(#gProt)"/>
-  <text x="186" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Protein</text>
-  <text x="186" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${protein}</text>
-  <text x="186" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+  <!-- 4 BALANCED MACRO CARDS -->
+  <!-- 1. Protein Card -->
+  <rect x="36" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <rect x="48" y="602" width="8" height="8" rx="4" fill="#10B981"/>
+  <text x="62" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Protein</text>
+  <text x="98" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${protein}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <rect x="48" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
+  <rect x="48" y="676" width="${Math.min(100, Math.round(protein * 2.5))}" height="5" rx="2.5" fill="#10B981"/>
 
-  <!-- Karbo chip -->
-  <rect x="248" y="542" width="104" height="108" rx="20" fill="url(#gKarbo)"/>
-  <text x="300" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Karbo</text>
-  <text x="300" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${carbs}</text>
-  <text x="300" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+  <!-- 2. Karbohidrat Card -->
+  <rect x="170" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <rect x="182" y="602" width="8" height="8" rx="4" fill="#F59E0B"/>
+  <text x="196" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Karbo</text>
+  <text x="232" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${carbs}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <rect x="182" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
+  <rect x="182" y="676" width="${Math.min(100, Math.round(carbs * 1.5))}" height="5" rx="2.5" fill="#F59E0B"/>
 
-  <!-- Lemak chip -->
-  <rect x="362" y="542" width="104" height="108" rx="20" fill="url(#gLemak)"/>
-  <text x="414" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Lemak</text>
-  <text x="414" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#1C1917" font-family="system-ui, sans-serif">${fat}</text>
-  <text x="414" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(50,50,50,0.7)" font-family="system-ui, sans-serif">gr</text>
+  <!-- 3. Lemak Card -->
+  <rect x="304" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <rect x="316" y="602" width="8" height="8" rx="4" fill="#8B5CF6"/>
+  <text x="330" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Lemak</text>
+  <text x="366" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fat}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <rect x="316" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
+  <rect x="316" y="676" width="${Math.min(100, Math.round(fat * 2.2))}" height="5" rx="2.5" fill="#8B5CF6"/>
 
-  <!-- Serat chip -->
-  <rect x="476" y="542" width="104" height="108" rx="20" fill="url(#gSerat)"/>
-  <text x="528" y="568" text-anchor="middle" font-size="13" font-weight="500" fill="rgba(255,255,255,0.85)" font-family="system-ui, sans-serif">Serat</text>
-  <text x="528" y="610" text-anchor="middle" font-size="36" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${fiber}</text>
-  <text x="528" y="635" text-anchor="middle" font-size="12" font-weight="400" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif">gr</text>
+  <!-- 4. Serat Card -->
+  <rect x="440" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <rect x="452" y="602" width="8" height="8" rx="4" fill="#06B6D4"/>
+  <text x="466" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Serat</text>
+  <text x="502" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fiber}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <rect x="452" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
+  <rect x="452" y="676" width="${Math.min(100, Math.round(fiber * 8))}" height="5" rx="2.5" fill="#06B6D4"/>
 
-  <!-- GymBuddy watermark -->
-  <text x="300" y="700" text-anchor="middle" font-size="13" font-weight="500" fill="#A8A29E" font-family="system-ui, sans-serif">GymBuddy \xB7 Gizi AI</text>
+  <!-- FOOTER BRANDING -->
+  <text x="300" y="745" text-anchor="middle" font-size="11" font-weight="700" fill="#475569" font-family="system-ui, sans-serif" letter-spacing="1">GYMBUDDY \xB7 AI NUTRITION ENGINE</text>
 </svg>`;
   }
   app.get(["/api/nutrition-card/:id.png", "/api/nutrition-card/:id.jpg"], async (req, res) => {
