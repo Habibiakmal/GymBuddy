@@ -42,8 +42,13 @@ import {
   Play,
   Info,
   Watch,
-  Bell,
-  Volume2
+  Volume2,
+  LayoutGrid,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Edit3,
+  Sliders
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem } from "../data/exerciseDb";
@@ -758,6 +763,120 @@ export default function Dashboard({
   // Coach Mood Popup State
   const [showCoachMoodPopup, setShowCoachMoodPopup] = useState(false);
   const [coachMoodData, setCoachMoodData] = useState<{ icon: string; title: string; message: string; tips: string[]; color: string } | null>(null);
+
+  // Dashboard Card Layout Customization State
+  type CardId = "hero" | "feel_coach" | "workout" | "food" | "hydration";
+  const DEFAULT_CARD_ORDER: CardId[] = ["hero", "feel_coach", "workout", "food", "hydration"];
+
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => {
+    try {
+      const stored = localStorage.getItem("gymbuddy_dashboard_card_order");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_CARD_ORDER;
+  });
+
+  const saveCardOrder = (newOrder: CardId[]) => {
+    setCardOrder(newOrder);
+    try {
+      localStorage.setItem("gymbuddy_dashboard_card_order", JSON.stringify(newOrder));
+    } catch (e) {}
+  };
+
+  const moveCard = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= cardOrder.length) return;
+    const updated = [...cardOrder];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+    saveCardOrder(updated);
+  };
+
+  const [showLayoutModal, setShowLayoutModal] = useState(false);
+  const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
+
+  // Main Goal Dynamic Edit Modal State
+  const [showGoalEditModal, setShowGoalEditModal] = useState(false);
+  const [editGoal, setEditGoal] = useState<"lose" | "gain" | "maintain" | "healthy">(
+    (activeUser.goal as any) || "lose"
+  );
+  const [editTargetWeight, setEditTargetWeight] = useState<string>(
+    String(activeUser.targetWeight || activeUser.weight || 65)
+  );
+  const [editWeight, setEditWeight] = useState<string>(String(activeUser.weight || 70));
+  const [editHeight, setEditHeight] = useState<string>(String(activeUser.height || 170));
+  const [editPace, setEditPace] = useState<"steady" | "moderate" | "aggressive">("moderate");
+
+  useEffect(() => {
+    if (activeUser) {
+      setEditGoal((activeUser.goal as any) || "lose");
+      setEditTargetWeight(String(activeUser.targetWeight || activeUser.weight || 65));
+      setEditWeight(String(activeUser.weight || 70));
+      setEditHeight(String(activeUser.height || 170));
+    }
+  }, [activeUser, showGoalEditModal]);
+
+  const handleSaveGoalChanges = () => {
+    const currentW = Math.max(30, Number(editWeight) || 70);
+    const currentH = Math.max(100, Number(editHeight) || 170);
+    let newTargetWeight = currentW;
+
+    if (editGoal === "lose") {
+      newTargetWeight = Math.max(35, Number(editTargetWeight) || Math.max(45, currentW - 5));
+    } else if (editGoal === "gain") {
+      newTargetWeight = Math.max(35, Number(editTargetWeight) || currentW + 5);
+    } else {
+      newTargetWeight = currentW;
+    }
+
+    let newGoalTitle = "";
+    if (editGoal === "lose") newGoalTitle = lang === "EN" ? "Weight Loss" : "Menurunkan Berat Badan";
+    else if (editGoal === "gain") newGoalTitle = lang === "EN" ? "Muscle Gain & Bulking" : "Menaikkan Massa Otot & BB";
+    else if (editGoal === "maintain") newGoalTitle = lang === "EN" ? "Maintain Weight" : "Menjaga Berat Badan";
+    else newGoalTitle = lang === "EN" ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Bugar";
+
+    const isMale = (activeUser.gender || "pria").toLowerCase() === "pria" || (activeUser.gender || "").toLowerCase() === "male";
+    const bmr = 10 * currentW + 6.25 * currentH - 5 * (activeUser.age || 25) + (isMale ? 5 : -161);
+    let computedCalories = Math.round(bmr * 1.4);
+    let computedProtein = Math.round(currentW * 2.0);
+
+    if (editGoal === "lose") {
+      const deficit = editPace === "aggressive" ? 600 : editPace === "steady" ? 300 : 450;
+      computedCalories = Math.max(1300, computedCalories - deficit);
+      computedProtein = Math.round(currentW * 2.2);
+    } else if (editGoal === "gain") {
+      computedCalories += 400;
+      computedProtein = Math.round(currentW * 2.2);
+    } else {
+      computedProtein = Math.round(currentW * 1.8);
+    }
+
+    const updatedUser = {
+      ...activeUser,
+      goal: editGoal,
+      goalTitle: newGoalTitle,
+      weight: currentW,
+      targetWeight: newTargetWeight,
+      height: currentH,
+      targetCalories: computedCalories,
+      targetProtein: computedProtein,
+    };
+
+    setActiveUser(updatedUser);
+    try {
+      const normP = normalizePhone(activeUser.phone || "user");
+      localStorage.setItem(`gymbuddy_user_${normP}`, JSON.stringify(updatedUser));
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(updatedUser));
+    } catch (e) {}
+
+    setShowGoalEditModal(false);
+    setReminderNotificationMsg(lang === "EN" ? "Goal updated successfully! 🎯" : "Goal berhasil diperbarui! 🎯");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
 
   // 5-Tab Mobile Navigation State
   const [activeTab, setActiveTab] = useState<"home" | "workouts" | "progress" | "profile">("home");
@@ -1769,8 +1888,18 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Action Buttons: Calendar & Sync */}
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {/* Action Buttons: Calendar, Sync & Layout */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowLayoutModal(true)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title={isEN ? "Customize Dashboard Cards Layout" : "Atur Tata Letak Card Dashboard"}
+                >
+                  <LayoutGrid size={15} className="text-[#D4FF00]" />
+                  <span>{isEN ? "Layout" : "Tata Letak"}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1781,23 +1910,23 @@ export default function Dashboard({
                     }
                     setShowCalendarModal(true);
                   }}
-                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >
                   <CalendarIcon size={15} className="text-[#D4FF00]" />
-                  <span>Kalender</span>
+                  <span>{t.todayBtn ? (isEN ? "Calendar" : "Kalender") : "Kalender"}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => fetchLogsForDate(selectedDate, false)}
                   disabled={isSyncing}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
                     isSyncing ? "opacity-75" : ""
                   }`}
                   title={t.syncWhatsApp || "Sync WhatsApp"}
                 >
                   <RefreshCw size={14} className={`text-[#D4FF00] ${isSyncing ? "animate-spin" : ""}`} />
-                  <span>{isSyncing ? "Syncing..." : "Sync WA"}</span>
+                  <span>{isSyncing ? (isEN ? "Syncing..." : "Menyinkronkan...") : "Sync WA"}</span>
                 </button>
               </div>
             </div>
@@ -1810,7 +1939,7 @@ export default function Dashboard({
                   className="px-3.5 py-3 rounded-2xl bg-amber-500 text-black font-extrabold text-xs flex items-center gap-1 shrink-0 shadow-sm"
                 >
                   <RotateCcw size={13} />
-                  <span>Hari Ini</span>
+                  <span>{t.todayBtn}</span>
                 </button>
               )}
 
@@ -1834,324 +1963,414 @@ export default function Dashboard({
               })}
             </div>
 
-            {/* STEP 2: DYNAMIC HERO ACTIVITY & MACRO GAUGE CARD */}
-            <div className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
-              {/* Subtle ambient light glow in background */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/5 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00D2FF]/5 rounded-full blur-3xl pointer-events-none" />
+            {/* DYNAMIC USER-REORDERABLE CARDS */}
+            {cardOrder.map((cardId, cardIdx) => {
+              // ── CARD 1: HERO ACTIVITY & GAUGE CARD ──
+              if (cardId === "hero") {
+                return (
+                  <div key="hero" className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/5 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00D2FF]/5 rounded-full blur-3xl pointer-events-none" />
 
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                {/* Circular Activity Gauge */}
-                <div className="flex items-center gap-5 w-full md:w-auto">
-                  <div className="relative w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                      {/* Background track */}
-                      <circle
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        className="stroke-[#1C2638]"
-                        strokeWidth="10"
-                        fill="transparent"
-                      />
-                      {/* Animated Progress Ring */}
-                      <circle
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        stroke="url(#calorieGlowGrad)"
-                        strokeWidth="10"
-                        strokeDasharray={2 * Math.PI * 48}
-                        strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, totalCaloriesConsumed / (targetCalories || 2000)))}
-                        strokeLinecap="round"
-                        fill="transparent"
-                        className="transition-all duration-700 ease-out"
-                      />
-                      <defs>
-                        <linearGradient id="calorieGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#25D366" />
-                          <stop offset="100%" stopColor="#D4FF00" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
+                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                      {/* Circular Activity Gauge */}
+                      <div className="flex items-center gap-5 w-full md:w-auto">
+                        <div className="relative w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center">
+                          <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="48" className="stroke-[#1C2638]" strokeWidth="10" fill="transparent" />
+                            <circle
+                              cx="60"
+                              cy="60"
+                              r="48"
+                              stroke="url(#calorieGlowGrad)"
+                              strokeWidth="10"
+                              strokeDasharray={2 * Math.PI * 48}
+                              strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, totalCaloriesConsumed / (targetCalories || 2000)))}
+                              strokeLinecap="round"
+                              fill="transparent"
+                              className="transition-all duration-700 ease-out"
+                            />
+                            <defs>
+                              <linearGradient id="calorieGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#25D366" />
+                                <stop offset="100%" stopColor="#D4FF00" />
+                              </linearGradient>
+                            </defs>
+                          </svg>
 
-                    {/* Inside Circle Content */}
-                    <div className="absolute flex flex-col items-center justify-center text-center">
-                      <Flame size={18} className="text-[#D4FF00] animate-pulse" />
-                      <span className="text-xl sm:text-2xl font-black text-white leading-none mt-1">
-                        {Math.max(0, targetCalories - totalCaloriesConsumed)}
-                      </span>
-                      <span className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
-                        kcal sisa
-                      </span>
-                    </div>
-                  </div>
+                          <div className="absolute flex flex-col items-center justify-center text-center">
+                            <Flame size={18} className="text-[#D4FF00] animate-pulse" />
+                            <span className="text-xl sm:text-2xl font-black text-white leading-none mt-1">
+                              {Math.max(0, targetCalories - totalCaloriesConsumed)}
+                            </span>
+                            <span className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
+                              {isEN ? "kcal left" : "kcal sisa"}
+                            </span>
+                          </div>
+                        </div>
 
-                  {/* Ring Summary Text */}
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
-                      Target Harian
-                    </span>
-                    <h3 className="text-lg font-black text-white">
-                      {totalCaloriesConsumed} <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories} kcal</span>
-                    </h3>
-                    <p className="text-xs text-neutral-400 font-medium">
-                      {totalCaloriesConsumed >= targetCalories ? "🎯 Target kalori harian tercapai!" : "🔥 Energi siap untuk aktivitas & gym"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Macro Progress Breakdown Bars */}
-                <div className="w-full md:w-64 space-y-3.5 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-white/[0.06] md:pl-6">
-                  {/* Protein */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-neutral-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#D4FF00]" />
-                        <span>Protein</span>
-                      </span>
-                      <span className="text-white font-mono">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
-                    </div>
-                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-400 to-[#D4FF00] rounded-full transition-all duration-500 shadow-[0_0_8px_#D4FF00]"
-                        style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / (targetProtein || 1)) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Air Minum */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-neutral-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
-                        <span>Air Minum</span>
-                      </span>
-                      <span className="text-white font-mono">{totalHydrationMl} <span className="text-neutral-500 font-normal">/ 2500ml</span></span>
-                    </div>
-                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500 shadow-[0_0_8px_#00D2FF]"
-                        style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Body Goal */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-neutral-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-400" />
-                        <span>Target Berat</span>
-                      </span>
-                      <span className="text-[#D4FF00] font-mono">{weight} kg <span className="text-neutral-500 font-normal">➔ {targetWeight}kg</span></span>
-                    </div>
-                    <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* TODAY'S WORKOUT CARD */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-[#18202E] border border-white/[0.08] flex items-center justify-center text-[#D4FF00] shrink-0">
-                  <Dumbbell size={22} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
-                      Latihan Hari Ini
-                    </span>
-                    <span className="text-xs text-neutral-400 font-semibold">{selectedDayName}</span>
-                  </div>
-                  <h3 className="text-base font-extrabold text-white mt-1">{todayScheduleObj.focus}</h3>
-                  <p className="text-xs text-neutral-400 font-medium">{exercises.length} Menu Gerakan • {overallWorkoutPercent}% Selesai</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setActiveTab("workouts")}
-                className="w-full sm:w-auto px-4 py-2.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-              >
-                <span>Buka Menu Latihan</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-
-            {/* FOOD MEALS LIST */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Flame size={18} className="text-amber-400" />
-                  <h2 className="text-base font-extrabold text-white">{t.foodMeals}</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowScanModal(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Camera size={14} />
-                    <span>Scan Foto</span>
-                  </button>
-                  <button
-                    onClick={() => setShowAddFoodModal(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer"
-                  >
-                    <Plus size={14} />
-                    <span>Tambah</span>
-                  </button>
-                </div>
-              </div>
-
-              {foodMeals.length === 0 ? (
-                <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-white/[0.08] rounded-xl bg-[#0E131F]">
-                  {t.noMealsLogged}
-                </div>
-              ) : (
-                <div className="divide-y divide-white/[0.06] border border-white/[0.06] rounded-xl overflow-hidden bg-[#0E131F]">
-                  {foodMeals.map((item) => (
-                    <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-                      <div>
-                        <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
-                        <p className="text-xs text-neutral-400 font-medium mt-0.5">
-                          {item.calories} kcal • P: {item.protein}g | C: {item.carbs}g | F: {item.fat}g
-                        </p>
+                        {/* Ring Summary Text */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
+                            {t.dailyTargetLabel}
+                          </span>
+                          <h3 className="text-lg font-black text-white">
+                            {totalCaloriesConsumed} <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories} kcal</span>
+                          </h3>
+                          <p className="text-xs text-neutral-400 font-medium">
+                            {totalCaloriesConsumed >= targetCalories ? (isEN ? "🎯 Daily calorie target achieved!" : "🎯 Target kalori harian tercapai!") : (isEN ? "🔥 Energy ready for daily fitness & gym" : "🔥 Energi siap untuk aktivitas & gym")}
+                          </p>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteLogItem(item.id)}
-                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                        title={t.delete}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            {/* WATER & HYDRATION TRACKER */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Droplets size={18} className="text-blue-400" />
-                  <h2 className="text-base font-extrabold text-white">{t.waterHydration}</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleQuickAddWater(250)}
-                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
-                  >
-                    +250 ml
-                  </button>
-                  <button
-                    onClick={() => handleQuickAddWater(500)}
-                    className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
-                  >
-                    +500 ml
-                  </button>
-                </div>
-              </div>
+                      {/* Macro Progress Breakdown Bars */}
+                      <div className="w-full md:w-64 space-y-3.5 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-white/[0.06] md:pl-6">
+                        {/* Protein */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#D4FF00]" />
+                              <span>{t.proteinLabel}</span>
+                            </span>
+                            <span className="text-white font-mono">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-400 to-[#D4FF00] rounded-full transition-all duration-500 shadow-[0_0_8px_#D4FF00]"
+                              style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / (targetProtein || 1)) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
 
-              {/* Hydration Target Banner */}
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Target Hidrasi Harian</span>
-                  <p className="text-base sm:text-lg font-black text-white">{totalHydrationMl} ml <span className="text-xs text-neutral-400 font-medium">/ 2,500 ml ({totalWaterCups} Gelas)</span></p>
-                </div>
-                
-                {/* 8 Interactive Visual Water Cups */}
-                <div className="flex items-center gap-1.5">
-                  {Array.from({ length: 8 }).map((_, idx) => {
-                    const isFilled = idx < totalWaterCups;
-                    return (
-                      <div
-                        key={idx}
-                        className={`w-5 h-7 rounded-md border flex items-end p-0.5 transition-all ${
-                          isFilled
-                            ? "bg-blue-500/20 border-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.4)]"
-                            : "bg-[#0A0D14] border-white/10 opacity-40"
-                        }`}
-                      >
+                        {/* Air Minum */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
+                              <span>{isEN ? "Water Intake" : "Air Minum"}</span>
+                            </span>
+                            <span className="text-white font-mono">{totalHydrationMl} <span className="text-neutral-500 font-normal">/ 2500ml</span></span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                            <div
+                              className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500 shadow-[0_0_8px_#00D2FF]"
+                              style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Body Goal with clickable Edit */}
                         <div
-                          className={`w-full rounded-xs transition-all ${
-                            isFilled ? "bg-blue-400 h-full" : "h-0"
-                          }`}
-                        />
+                          onClick={() => setShowGoalEditModal(true)}
+                          className="space-y-1.5 cursor-pointer group/goal hover:opacity-90 transition-opacity"
+                          title={isEN ? "Click to edit goal & target" : "Klik untuk ubah goal & target"}
+                        >
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-400" />
+                              <span className="group-hover/goal:text-[#D4FF00] transition-colors">{t.targetWeightLabel}</span>
+                              <Edit3 size={11} className="text-neutral-500 group-hover/goal:text-[#D4FF00]" />
+                            </span>
+                            <span className="text-[#D4FF00] font-mono">{weight} kg <span className="text-neutral-500 font-normal">➔ {targetWeight}kg</span></span>
+                          </div>
+                          <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                              style={{ width: `${progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              }
 
-              {/* LIST OF HYDRATION LOG ITEMS */}
-              {hydrationLogs.length === 0 ? (
-                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-4 text-center">
-                  <p className="text-xs text-neutral-400 font-medium">
-                    Belum ada catatan air minum hari ini. Tap <strong className="text-blue-300">+250 ml</strong> atau <strong className="text-blue-300">+500 ml</strong> di atas untuk mencatat!
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2 pt-1">
-                  <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
-                    Riwayat Minum Hari Ini ({hydrationLogs.length})
-                  </span>
-                  <div className="space-y-2">
-                    {hydrationLogs.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between transition-all hover:border-white/15"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-300 flex items-center justify-center text-sm font-bold">
-                            💧
+              // ── CARD 2: FEEL SELECTOR & COACH RECOMMENDATION (PLACED DIRECTLY TOGETHER) ──
+              if (cardId === "feel_coach") {
+                return (
+                  <div key="feel_coach" className="space-y-3">
+                    {/* FEEL SELECTOR CARD */}
+                    <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles size={16} className="text-[#D4FF00]" />
+                          <h3 className="text-sm font-extrabold text-white">
+                            {t.howDoYouFeel}
+                          </h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                          {feelState === "great" ? t.great : feelState === "good" ? t.good : feelState === "okay" ? t.okay : feelState === "not_great" ? t.notGreat : feelState === "sick" ? t.sick : t.feelBad}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+                        {[
+                          { key: "great", emoji: "🔥", label: t.great },
+                          { key: "good", emoji: "🙂", label: t.good },
+                          { key: "okay", emoji: "😐", label: t.okay },
+                          { key: "not_great", emoji: "🙁", label: t.notGreat },
+                          { key: "sick", emoji: "🤒", label: t.sick },
+                          { key: "bad", emoji: "😫", label: t.feelBad },
+                        ].map((f) => {
+                          const isSelected = feelState === f.key;
+                          return (
+                            <button
+                              key={f.key}
+                              type="button"
+                              onClick={() => handleSelectFeel(f.key as FeelState)}
+                              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer border ${
+                                isSelected
+                                  ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black scale-105 shadow-md"
+                                  : "bg-[#0E131F] text-neutral-400 border-white/[0.06] hover:bg-[#18202E] hover:text-white"
+                              }`}
+                            >
+                              <span className="text-xl sm:text-2xl">{f.emoji}</span>
+                              <span className="text-[9px] sm:text-[10px] font-bold mt-1 truncate max-w-full">{f.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* COACH RECOMMENDATION — DIRECTLY BELOW FEEL ROW */}
+                    <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                            {isMaxPersona ? "🏋️" : "✨"}
                           </div>
                           <div>
-                            <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
-                            <p className="text-[11px] text-neutral-400 font-medium">
-                              {item.volumeMl || 250} ml {item.time ? `• ${item.time}` : ""}
-                            </p>
+                            <h2 className="text-sm font-extrabold text-white">
+                              {isEN ? `${coachName}'s Recommendation` : `Saran ${coachName} Hari Ini`}
+                            </h2>
+                            <span className="text-[10px] font-semibold text-[#D4FF00] block">
+                              {isMaxPersona ? (isEN ? "Strength Coach" : "Pelatih Gym & Otot") : (isEN ? "Nutritionist" : "Ahli Gizi & Pola Makan")}
+                            </span>
                           </div>
                         </div>
 
                         <button
-                          type="button"
-                          onClick={() => handleDeleteLogItem(item.id)}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                          title={t.delete}
+                          onClick={() => {
+                            const moodData = {
+                              great: { icon: "🔥", title: isEN ? "You're at your peak!" : "Lo lagi di puncak!", message: isEN ? "Maximum energy! Finish your workout sets & meet your daily protein!" : "Energi maksimal! Gas tuntaskan menu workout hari ini & penuhi target protein!", tips: [isEN ? "Progressive overload" : "Kejar progressive overload", isEN ? "Log meals realtime" : "Log makanan secara realtime", isEN ? "2.5L hydration" : "Cukupi 2.5L hidrasi"], color: "#D4FF00" },
+                              good: { icon: "🙂", title: isEN ? "Solid day!" : "Hari yang solid!", message: isEN ? "Great condition for structured workout and clean nutrition." : "Kondisi sangat baik untuk latihan terstruktur dan makanan bergizi.", tips: [isEN ? "Focus on best form" : "Latihan sesuai form terbaik", isEN ? "Post-workout protein" : "Konsumsi protein pasca latihan"], color: "#4ade80" },
+                              okay: { icon: "😐", title: isEN ? "Keep consistent!" : "Tetap konsisten!", message: isEN ? "Start with a 10-minute dynamic warmup to build momentum." : "Mulai pelan-pelan dengan pemanasan 10 menit untuk menaikkan fokus.", tips: [isEN ? "Dynamic warmup" : "Warmup dinamis 10 mnt", isEN ? "Don't skip the session" : "Jangan skip sesi"], color: "#facc15" },
+                              not_great: { icon: "🙁", title: isEN ? "Listen to your body" : "Dengarkan tubuhmu", message: isEN ? "If fatigued, reduce weights and focus on stretching or light walk." : "Jika lelah, kurangi beban dan fokus pada peregangan atau jalan kaki santai.", tips: [isEN ? "Light walk / mobility" : "Latihan ringan / kardio santai", isEN ? "Early sleep" : "Tidur lebih awal"], color: "#fb923c" },
+                              sick: { icon: "🤒", title: isEN ? "Rest is progress" : "Fokus istirahat & sembuh", message: isEN ? "Rest is essential for recovery. Skip heavy lifting and nourish your body." : "Rest adalah bagian dari progress. Istirahat total dan makan makanan hangat bergizi.", tips: [isEN ? "Skip heavy lifting" : "Skip latihan berat", isEN ? "Hydrate & electrolytes" : "Minum air hangat & vitamin"], color: "#f87171" },
+                              bad: { icon: "😫", title: isEN ? "Time to recharge" : "Waktunya recharge", message: isEN ? "Take a recovery day. Stress management and sleep come first." : "Jangan paksakan beban berat saat stres atau lelah berlebih. Refresh pikiranmu.", tips: [isEN ? "Quality sleep" : "Istirahat berkualitas", isEN ? "Clean whole foods" : "Makan bersih & cukup air"], color: "#a78bfa" }
+                            }[feelState] || { icon: "🏋️", title: "Saran Harian", message: getCoachFeelingRecommendation(), tips: ["Tetap konsisten!"], color: "#D4FF00" };
+                            setCoachMoodData(moodData);
+                            setShowCoachMoodPopup(true);
+                          }}
+                          className="text-xs font-bold text-[#D4FF00] hover:underline cursor-pointer"
                         >
-                          <Trash2 size={15} />
+                          {isEN ? "View Tip" : "Buka Detail"}
                         </button>
                       </div>
-                    ))}
+
+                      <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 flex items-start gap-3">
+                        <p className="text-xs text-neutral-300 font-medium leading-relaxed">
+                          {getCoachFeelingRecommendation()}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                );
+              }
 
-            {/* MOOD & COACH RECOMMENDATION */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-[#D4FF00]" />
-                <h2 className="text-base font-extrabold text-white">Saran {coachName} Hari Ini</h2>
-              </div>
+              // ── CARD 3: TODAY'S WORKOUT CARD ──
+              if (cardId === "workout") {
+                return (
+                  <div key="workout" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-[#18202E] border border-white/[0.08] flex items-center justify-center text-[#D4FF00] shrink-0">
+                        <Dumbbell size={22} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
+                            {isEN ? "Today's Workout" : "Latihan Hari Ini"}
+                          </span>
+                          <span className="text-xs text-neutral-400 font-semibold">{selectedDayName}</span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-white mt-1">{todayScheduleObj.focus}</h3>
+                        <p className="text-xs text-neutral-400 font-medium">{exercises.length} {t.exerciseCount} • {overallWorkoutPercent}% {t.statusCompleted}</p>
+                      </div>
+                    </div>
 
-              <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shrink-0">
-                  {isMaxPersona ? "🏋️" : "✨"}
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="font-extrabold text-sm text-white">{coachName}</h4>
-                  <p className="text-xs text-neutral-300 font-medium leading-relaxed">{getCoachFeelingRecommendation()}</p>
-                </div>
-              </div>
-            </div>
+                    <button
+                      onClick={() => setActiveTab("workouts")}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    >
+                      <span>{isEN ? "Open Workout Schedule" : "Buka Menu Latihan"}</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                );
+              }
+
+              // ── CARD 4: FOOD MEALS LIST ──
+              if (cardId === "food") {
+                return (
+                  <div key="food" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Flame size={18} className="text-amber-400" />
+                        <h2 className="text-base font-extrabold text-white">{t.foodMeals}</h2>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowScanModal(true)}
+                          className="px-3.5 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                        >
+                          <Camera size={14} />
+                          <span>{isEN ? "Scan Photo" : "Scan Foto"}</span>
+                        </button>
+                        <button
+                          onClick={() => setShowAddFoodModal(true)}
+                          className="px-3.5 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
+                        >
+                          <Plus size={14} />
+                          <span>{isEN ? "Add Meal" : "Tambah"}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {foodMeals.length === 0 ? (
+                      <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-white/[0.08] rounded-xl bg-[#0E131F]">
+                        {t.noMealsLogged}
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-white/[0.06] border border-white/[0.06] rounded-xl overflow-hidden bg-[#0E131F]">
+                        {foodMeals.map((item) => (
+                          <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+                            <div>
+                              <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
+                              <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                                {item.calories} kcal • P: {item.protein}g | C: {item.carbs}g | F: {item.fat}g
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteLogItem(item.id)}
+                              className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title={t.delete}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // ── CARD 5: WATER & HYDRATION TRACKER ──
+              if (cardId === "hydration") {
+                return (
+                  <div key="hydration" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Droplets size={18} className="text-blue-400" />
+                        <h2 className="text-base font-extrabold text-white">{t.waterHydration}</h2>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleQuickAddWater(250)}
+                          className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
+                        >
+                          +250 ml
+                        </button>
+                        <button
+                          onClick={() => handleQuickAddWater(500)}
+                          className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
+                        >
+                          +500 ml
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Hydration Target Banner */}
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">{t.hydrationTarget}</span>
+                        <p className="text-base sm:text-lg font-black text-white">{totalHydrationMl} ml <span className="text-xs text-neutral-400 font-medium">/ 2,500 ml ({totalWaterCups} {isEN ? "Glasses" : "Gelas"})</span></p>
+                      </div>
+                      
+                      {/* 8 Interactive Visual Water Cups */}
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: 8 }).map((_, idx) => {
+                          const isFilled = idx < totalWaterCups;
+                          return (
+                            <div
+                              key={idx}
+                              className={`w-5 h-7 rounded-md border flex items-end p-0.5 transition-all ${
+                                isFilled
+                                  ? "bg-blue-500/20 border-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.4)]"
+                                  : "bg-[#0A0D14] border-white/10 opacity-40"
+                              }`}
+                            >
+                              <div
+                                className={`w-full rounded-xs transition-all ${
+                                  isFilled ? "bg-blue-400 h-full" : "h-0"
+                                }`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* LIST OF HYDRATION LOG ITEMS */}
+                    {hydrationLogs.length === 0 ? (
+                      <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-4 text-center">
+                        <p className="text-xs text-neutral-400 font-medium">
+                          {isEN ? "No water logged today. Tap +250 ml or +500 ml above to record!" : "Belum ada catatan air minum hari ini. Tap +250 ml atau +500 ml di atas untuk mencatat!"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pt-1">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                          {isEN ? `Today's Water History (${hydrationLogs.length})` : `Riwayat Minum Hari Ini (${hydrationLogs.length})`}
+                        </span>
+                        <div className="space-y-2">
+                          {hydrationLogs.map((item) => (
+                            <div
+                              key={item.id}
+                              className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between transition-all hover:border-white/15"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-300 flex items-center justify-center text-sm font-bold">
+                                  💧
+                                </div>
+                                <div>
+                                  <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
+                                  <p className="text-[11px] text-neutral-400 font-medium">
+                                    {item.volumeMl || 250} ml {item.time ? `• ${item.time}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLogItem(item.id)}
+                                className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                title={t.delete}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return null;
+            })}
           </div>
         )}
 
@@ -2461,25 +2680,53 @@ export default function Dashboard({
 
             {/* Biometrics */}
             <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
-              <h3 className="font-extrabold text-sm text-white">Data Fisik & Target Harian</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-sm text-white">{isEN ? "Biometrics & Daily Targets" : "Data Fisik & Target Harian"}</h3>
+                <button
+                  onClick={() => setShowGoalEditModal(true)}
+                  className="px-3 py-1.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <Edit3 size={13} />
+                  <span>{isEN ? "Edit Goal" : "Ubah Goal"}</span>
+                </button>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Berat Badan</span>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Weight" : "Berat Badan"}</span>
                   <p className="text-base font-black text-white">{weight} kg</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Tinggi Badan</span>
-                  <p className="text-base font-black text-white">{activeUser.height || 170} cm</p>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Weight" : "Target BB"}</span>
+                  <p className="text-base font-black text-[#D4FF00]">{targetWeight} kg</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Target Kalori</span>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Calories" : "Target Kalori"}</span>
                   <p className="text-base font-black text-white">{targetCalories} kcal</p>
                 </div>
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Target Protein</span>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Protein" : "Target Protein"}</span>
                   <p className="text-base font-black text-white">{targetProtein} g</p>
                 </div>
               </div>
+            </div>
+
+            {/* Current Active Goal Banner */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-lg">
+                  🎯
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{isEN ? "Active Main Goal" : "Goal Utama Aktif"}</span>
+                  <h4 className="text-sm sm:text-base font-black text-white">{goalTitle}</h4>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGoalEditModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold transition-all cursor-pointer"
+              >
+                {isEN ? "Change" : "Ganti"}
+              </button>
             </div>
 
             {/* Quick Links & Landing Page */}
@@ -2856,7 +3103,7 @@ export default function Dashboard({
         {/* COACH MOOD POPUP */}
         {showCoachMoodPopup && coachMoodData && (
           <div
-            className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
             onClick={() => setShowCoachMoodPopup(false)}
           >
             {/* Backdrop */}
@@ -4018,48 +4265,450 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* ── Coach Next-Step Bubble ──────────────────────────────────────────── */}
+      {/* DASHBOARD CARD LAYOUT CUSTOMIZATION MODAL */}
       <AnimatePresence>
-        {showCoachTip && coachTip && (
-          <motion.div
-            initial={{ y: 120, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 120, opacity: 0 }}
-            transition={{ type: "spring", damping: 22, stiffness: 260 }}
-            className="fixed bottom-6 left-4 right-4 z-50 max-w-md mx-auto"
-          >
-            <div className="bg-[#181B26] border border-[#C4F82A]/30 rounded-2xl shadow-2xl p-4 flex gap-3 items-start">
-              {/* Coach avatar badge */}
-              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#C4F82A]/15 border border-[#C4F82A]/30 flex items-center justify-center text-lg">
-                {isMaxPersona ? "🏋️" : "✨"}
+        {showLayoutModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#121722] border border-white/[0.08] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-white"
+            >
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                    <LayoutGrid size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-white">
+                      {isEN ? "Customize Dashboard Cards" : "Atur Tata Letak Card Dashboard"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {isEN ? "Reorder cards to fit your workout workflow" : "Ubah urutan card sesuai kebutuhanmu"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowLayoutModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-black text-[#C4F82A] mb-1 flex items-center gap-1.5">
-                  <Sparkles size={10} />
-                  {coachName} — Saran Selanjutnya
-                </p>
-                <p className="text-[12.5px] text-white/85 leading-relaxed font-medium">
-                  {coachTip}
-                </p>
+              {/* Cards Reordering List */}
+              <div className="space-y-2.5">
+                {cardOrder.map((id, idx) => {
+                  const cardNames: Record<CardId, { label: string; icon: string; desc: string }> = {
+                    hero: { label: isEN ? "Calorie & Activity Hero" : "Ringkasan Kalori & Metrik", icon: "⚡", desc: isEN ? "Target calories, protein & hydration gauge" : "Target kalori, protein & lingkaran aktivitas" },
+                    feel_coach: { label: isEN ? "Mood Feeling & Coach Advice" : "Perasaan & Rekomendasi Coach", icon: "✨", desc: isEN ? "Daily readiness check & coach advice" : "Check-in perasaan hari ini & saran coach" },
+                    workout: { label: isEN ? "Today's Workout" : "Latihan Hari Ini", icon: "🏋️", desc: isEN ? "Daily training schedule & exercises" : "Menu latihan & status set hari ini" },
+                    food: { label: isEN ? "Food Meals Journal" : "Jurnal Makanan", icon: "🥗", desc: isEN ? "Logged solid meals & photo scanner" : "Catatan makanan padat & scan AI" },
+                    hydration: { label: isEN ? "Water & Hydration Tracker" : "Pelacak Air & Hidrasi", icon: "💧", desc: isEN ? "Daily water cups & quick log" : "Visual gelas air & catatan minum" },
+                  };
+                  const meta = cardNames[id] || { label: id, icon: "📋", desc: "" };
+
+                  return (
+                    <div
+                      key={id}
+                      className="bg-[#0E131F] border border-white/[0.06] hover:border-white/15 rounded-2xl p-3.5 flex items-center justify-between transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{meta.icon}</span>
+                        <div>
+                          <h4 className="text-xs sm:text-sm font-extrabold text-white">{meta.label}</h4>
+                          <p className="text-[11px] text-neutral-400 font-medium">{meta.desc}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveCard(idx, "up")}
+                          disabled={idx === 0}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#D4FF00] hover:text-black text-neutral-300 disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:text-neutral-300 transition-all cursor-pointer"
+                          title="Move Up"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCard(idx, "down")}
+                          disabled={idx === cardOrder.length - 1}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#D4FF00] hover:text-black text-neutral-300 disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:text-neutral-300 transition-all cursor-pointer"
+                          title="Move Down"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => saveCardOrder(DEFAULT_CARD_ORDER)}
+                  className="text-xs font-bold text-neutral-400 hover:text-amber-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw size={13} />
+                  <span>{isEN ? "Reset to Default" : "Reset ke Default"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLayoutModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs transition-all cursor-pointer shadow-md"
+                >
+                  {isEN ? "Done" : "Selesai"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DYNAMIC GOAL & TARGET WEIGHT EDIT MODAL */}
+      <AnimatePresence>
+        {showGoalEditModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 280 }}
+              className="bg-[#121722] border border-white/[0.08] rounded-t-3xl sm:rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00] text-black flex items-center justify-center font-black text-lg shadow-sm">
+                    🎯
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-white">
+                      {isEN ? "Edit Main Goal & Physical Targets" : "Ubah Goal Utama & Target Fisik"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {isEN ? "Form automatically adjusts based on your chosen goal" : "Form otomatis disesuaikan berdasarkan goal yang kamu pilih"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGoalEditModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Step 1: Select Main Goal */}
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold text-neutral-300 uppercase tracking-wider block">
+                  {isEN ? "1. Select Main Fitness Goal" : "1. Pilih Goal Utama Kamu"}
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { id: "lose", label: isEN ? "Weight Loss" : "Menurunkan Berat Badan", icon: "📉", desc: isEN ? "Burn fat & calorie deficit" : "Bakar lemak & defisit kalori" },
+                    { id: "gain", label: isEN ? "Muscle Gain" : "Menaikkan Otot & BB", icon: "📈", desc: isEN ? "Build muscle & surplus" : "Bentuk otot & surplus kalori" },
+                    { id: "maintain", label: isEN ? "Maintain Weight" : "Menjaga Berat Badan", icon: "⚖️", desc: isEN ? "Tone & energy balance" : "Kebugaran & stabilkan BB" },
+                    { id: "healthy", label: isEN ? "Healthy & Energized" : "Gaya Hidup Sehat & Fit", icon: "⚡", desc: isEN ? "Daily stamina & wellness" : "Stamina harian & pola sehat" },
+                  ].map((g) => {
+                    const isSelected = editGoal === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => {
+                          setEditGoal(g.id as any);
+                          if (g.id === "maintain" || g.id === "healthy") {
+                            setEditTargetWeight(editWeight || "70");
+                          } else if (g.id === "lose" && Number(editTargetWeight) >= Number(editWeight)) {
+                            setEditTargetWeight(String(Math.max(45, Number(editWeight) - 5)));
+                          } else if (g.id === "gain" && Number(editTargetWeight) <= Number(editWeight)) {
+                            setEditTargetWeight(String(Number(editWeight) + 5));
+                          }
+                        }}
+                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-[#D4FF00]/10 border-[#D4FF00] text-white shadow-[0_0_12px_rgba(212,255,0,0.15)]"
+                            : "bg-[#0E131F] border-white/[0.06] text-neutral-400 hover:border-white/20 hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">{g.icon}</span>
+                          <span className="text-xs font-extrabold text-white">{g.label}</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 font-medium leading-tight">{g.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Step 2: Adaptive Follow-up Inputs Based on Goal */}
+              <div className="space-y-4 pt-1">
+                <label className="text-xs font-extrabold text-neutral-300 uppercase tracking-wider block">
+                  {isEN ? "2. Target & Biometrics Details" : "2. Rincian Target & Data Fisik"}
+                </label>
+
+                {/* DYNAMIC FORM: WEIGHT LOSS */}
+                {editGoal === "lose" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 space-y-3.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-neutral-300">
+                        {isEN ? "Target Weight (kg)" : "Target Berat Badan (kg)"}
+                      </label>
+                      {/* AI Healthy Weight Recommendation helper button */}
+                      {(() => {
+                        const hM = (Number(editHeight) || 170) / 100;
+                        const bmiW = Math.round(22 * hM * hM * 2) / 2;
+                        const recW = Math.min(Number(editWeight) - 2, Math.max(45, bmiW));
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setEditTargetWeight(String(recW))}
+                            className="text-[10px] font-bold text-[#D4FF00] bg-[#D4FF00]/10 hover:bg-[#D4FF00]/20 px-2 py-1 rounded-lg border border-[#D4FF00]/30 transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Sparkles size={11} />
+                            <span>{isEN ? `AI Ideal: ${recW} kg` : `Rekomendasi Sehat: ${recW} kg`}</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editTargetWeight}
+                      onChange={(e) => setEditTargetWeight(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#121722] border border-white/[0.08] rounded-xl text-base font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                      placeholder="60"
+                    />
+
+                    {/* Deficit Pace Selector */}
+                    <div>
+                      <label className="text-[11px] font-bold text-neutral-400 block mb-1.5">
+                        {isEN ? "Deficit Pace / Speed:" : "Kecepatan Defisit / Penurunan:"}
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: "steady", label: isEN ? "Steady (0.5 kg/w)" : "Santai (~0.5 kg/mgg)" },
+                          { id: "moderate", label: isEN ? "Ideal (0.75 kg/w)" : "Ideal (~0.75 kg/mgg)" },
+                          { id: "aggressive", label: isEN ? "Fast (1.0 kg/w)" : "Cepat (~1 kg/mgg)" },
+                        ].map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setEditPace(p.id as any)}
+                            className={`py-2 px-1 rounded-xl text-[10px] font-extrabold transition-all border cursor-pointer ${
+                              editPace === p.id
+                                ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                                : "bg-[#121722] text-neutral-400 border-white/[0.06] hover:text-white"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* DYNAMIC FORM: MUSCLE GAIN */}
+                {editGoal === "gain" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 space-y-3.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-neutral-300">
+                        {isEN ? "Target Weight (kg)" : "Target Berat Badan (kg)"}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setEditTargetWeight(String(Number(editWeight) + 5))}
+                        className="text-[10px] font-bold text-[#D4FF00] bg-[#D4FF00]/10 hover:bg-[#D4FF00]/20 px-2 py-1 rounded-lg border border-[#D4FF00]/30 transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <Sparkles size={11} />
+                        <span>{isEN ? `Clean Bulk: +5 kg` : `Target Bulk: +5 kg`}</span>
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editTargetWeight}
+                      onChange={(e) => setEditTargetWeight(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#121722] border border-white/[0.08] rounded-xl text-base font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                      placeholder="75"
+                    />
+                    <p className="text-[11px] text-neutral-400 font-medium">
+                      {isEN ? "✨ Surplus ~400 kcal/day targeted for progressive overload and muscle hypertrophy without excessive fat gain." : "✨ Surplus ~400 kcal/hari difokuskan untuk progressive overload dan pembentukan otot optimal tanpa lemak berlebih."}
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* DYNAMIC FORM: MAINTAIN / HEALTHY */}
+                {(editGoal === "maintain" || editGoal === "healthy") && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 space-y-2"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-extrabold text-[#D4FF00]">
+                      <CheckCircle2 size={14} />
+                      <span>{isEN ? "Maintenance Energy Balance" : "Keseimbangan Energi Harian"}</span>
+                    </div>
+                    <p className="text-xs text-neutral-300 font-medium leading-relaxed">
+                      {isEN
+                        ? "Target weight is locked to your current weight. Daily calorie and macro recommendations are tuned for high vitality, stamina, and workout recovery."
+                        : "Target berat badan dipertahankan sama dengan berat saat ini. Kalori dan makro disesuaikan untuk kebugaran harian, stamina tinggi, dan performa olahraga."}
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Current Weight & Height Input fields */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-neutral-400 block mb-1">
+                      {isEN ? "Current Weight (kg)" : "BB Saat Ini (kg)"}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editWeight}
+                      onChange={(e) => setEditWeight(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#0E131F] border border-white/[0.08] rounded-xl text-sm font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-neutral-400 block mb-1">
+                      {isEN ? "Height (cm)" : "Tinggi Badan (cm)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={editHeight}
+                      onChange={(e) => setEditHeight(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#0E131F] border border-white/[0.08] rounded-xl text-sm font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Macro Recalculation Preview Banner */}
+                {(() => {
+                  const cW = Math.max(30, Number(editWeight) || 70);
+                  const cH = Math.max(100, Number(editHeight) || 170);
+                  const isMale = (activeUser.gender || "pria").toLowerCase() === "pria" || (activeUser.gender || "").toLowerCase() === "male";
+                  const bmr = 10 * cW + 6.25 * cH - 5 * (activeUser.age || 25) + (isMale ? 5 : -161);
+                  let previewCal = Math.round(bmr * 1.4);
+                  let previewProt = Math.round(cW * 2.0);
+
+                  if (editGoal === "lose") {
+                    const deficit = editPace === "aggressive" ? 600 : editPace === "steady" ? 300 : 450;
+                    previewCal = Math.max(1300, previewCal - deficit);
+                    previewProt = Math.round(cW * 2.2);
+                  } else if (editGoal === "gain") {
+                    previewCal += 400;
+                    previewProt = Math.round(cW * 2.2);
+                  } else {
+                    previewProt = Math.round(cW * 1.8);
+                  }
+
+                  return (
+                    <div className="bg-[#151D2C] border border-[#D4FF00]/25 rounded-2xl p-4 space-y-2">
+                      <span className="text-[10px] font-black text-[#D4FF00] uppercase tracking-wider block">
+                        ⚡ {isEN ? "AI Target Preview (Calculated)" : "Kalkulasi Target Nutrisi Baru (AI)"}
+                      </span>
+                      <div className="grid grid-cols-2 gap-3 text-center">
+                        <div className="bg-[#0E131F] rounded-xl p-2.5">
+                          <span className="text-[10px] text-neutral-400 block font-semibold">{t.caloriesLabel}</span>
+                          <span className="text-base font-black text-white">{previewCal} kcal</span>
+                        </div>
+                        <div className="bg-[#0E131F] rounded-xl p-2.5">
+                          <span className="text-[10px] text-neutral-400 block font-semibold">{t.proteinLabel}</span>
+                          <span className="text-base font-black text-[#D4FF00]">{previewProt} g</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setShowGoalEditModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  {t.closeModal}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGoalChanges}
+                  className="px-6 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all cursor-pointer shadow-lg active:scale-98"
+                >
+                  {isEN ? "Save New Goal" : "Simpan Perubahan Goal"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Coach Next-Step Bubble (Centered Popup) ──────────────────────────── */}
+      <AnimatePresence>
+        {showCoachTip && coachTip && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]"
+            onClick={() => setShowCoachTip(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-[#161B26] border border-[#D4FF00]/40 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3.5">
+                {/* Coach avatar badge */}
+                <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-xl shadow-md">
+                  {isMaxPersona ? "🏋️" : "✨"}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black text-[#D4FF00] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Sparkles size={12} />
+                    {coachName} — {isEN ? "Next Recommendation" : "Saran Selanjutnya"}
+                  </p>
+                  <p className="text-sm text-neutral-200 leading-relaxed font-medium">
+                    {coachTip}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowCoachTip(false)}
+                  className="flex-shrink-0 text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
               <button
                 onClick={() => setShowCoachTip(false)}
-                className="flex-shrink-0 text-white/30 hover:text-white/70 transition-colors cursor-pointer mt-0.5"
+                className="w-full py-3 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs transition-all cursor-pointer shadow-md active:scale-98"
               >
-                <X size={16} />
+                {isEN ? "Got it, Coach! 💪" : "Siap, Paham Coach! 💪"}
               </button>
-            </div>
-
-            {/* Progress bar showing auto-dismiss */}
-            <motion.div
-              initial={{ width: "100%" }}
-              animate={{ width: "0%" }}
-              transition={{ duration: 12, ease: "linear" }}
-              className="h-0.5 bg-[#C4F82A]/50 rounded-full mt-1 mx-1"
-            />
-          </motion.div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
       {/* ── End Coach Bubble ────────────────────────────────────────────────── */}

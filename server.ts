@@ -558,10 +558,16 @@ function initDb() {
     saveDb();
   }
 
+  // Ensure default demo and requested accounts are seeded
+  seedTestUserData("085156919826");
+
   // Also load from MongoDB if configured (runs async, overrides file data)
   if (MONGODB_URI) {
     loadFromMongo().then(loaded => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
+      if (!dbData.users["085156919826"]) {
+        seedTestUserData("085156919826");
+      }
     });
   }
 }
@@ -785,12 +791,17 @@ function getTodayDateStr(): string {
 function getUserProfile(rawPhone: string) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
+  if (phone === "085156919826" && !dbData.users[phone]) {
+    seedTestUserData(phone);
+  }
   if (dbData.users[phone]) return dbData.users[phone];
   for (const [key, value] of Object.entries(dbData.users)) {
     if (normalizePhone(key) === phone) {
       return value;
     }
   }
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  if (dbData.users[altPhone]) return dbData.users[altPhone];
   return null;
 }
 
@@ -4282,13 +4293,29 @@ Keluarkan output JSON valid:
     const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
     const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
 
-    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    // Match with real exercise database
+    const dbMatch = findExerciseOrEquipment(rawEqName || parsed.generalReply || "");
 
-    const partsList = Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : ["Pegangan Utama", "Beban Principal", "Pengunci", "Support Pad"];
-    const stepsList = Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Latihan", "Gerakan Akhir"];
-    const tipsList = Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
-    const mistakesList = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : ["Menggunakan momentum", "Postur membungkuk"];
+    const desc = (dbMatch && dbMatch.equipmentSetup?.[0]) || parsed.description || "Melatih kelompok otot target secara optimal.";
+    const muscles = (dbMatch && dbMatch.targetMuscles?.join(", ")) || parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+
+    const partsList = Array.isArray(parsed.parts) && parsed.parts.length > 0
+      ? parsed.parts
+      : (dbMatch && dbMatch.equipmentSetup ? dbMatch.equipmentSetup : ["Pegangan Utama", "Beban Principal", "Pengunci", "Support Pad"]);
+
+    const stepsList = (dbMatch && dbMatch.instructions && dbMatch.instructions.length > 0)
+      ? dbMatch.instructions
+      : (Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Latihan", "Gerakan Akhir"]);
+
+    const tipsList = (dbMatch && dbMatch.dosAndDonts?.dos && dbMatch.dosAndDonts.dos.length > 0)
+      ? dbMatch.dosAndDonts.dos
+      : (Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"]);
+
+    const mistakesList = (dbMatch && dbMatch.dosAndDonts?.donts && dbMatch.dosAndDonts.donts.length > 0)
+      ? dbMatch.dosAndDonts.donts
+      : (Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : ["Menggunakan momentum", "Postur membungkuk"]);
+
+    const exerciseMediaUrl = dbMatch?.gifUrl || dbMatch?.thumbnailUrl || (dbMatch?.imageFrames && dbMatch.imageFrames[0]) || "";
 
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
@@ -4442,6 +4469,14 @@ Keluarkan output JSON valid:
       </div>
     </div>
 
+    ${exerciseMediaUrl ? `
+    <!-- DEMONSTRASI VISUAL WORKOUT DATABASE -->
+    <div style="margin-bottom: 20px; border-radius: 16px; overflow: hidden; background: #0c0e14; border: 1.5px solid rgba(234, 179, 8, 0.35); text-align: center; padding: 12px;">
+      <div style="font-size: 11px; font-weight: 800; color: #eab308; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">🎬 DEMONSTRASI GERAKAN & FORM</div>
+      <img src="${exerciseMediaUrl}" alt="${eqName}" style="max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; display: inline-block;" />
+    </div>
+    ` : ''}
+
     <!-- BAGIAN ALAT -->
     <div class="section-box">
       <div class="sec-title">🔩 BAGIAN UTAMA ALAT</div>
@@ -4518,36 +4553,53 @@ Keluarkan output JSON valid:
   });
 
   function formatEquipmentTutorialCard(parsed: any, userData: any): string {
+    const rawEqName = (parsed.equipmentName || "").trim();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
+
+    // Lookup real exercise in database
+    const dbMatch = findExerciseOrEquipment(rawEqName || parsed.generalReply || "");
+    const eqName = (dbMatch ? dbMatch.indonesianName : (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName)).toUpperCase();
+
+    const desc = (dbMatch && dbMatch.equipmentSetup?.[0]) || parsed.description || "Melatih kelompok otot target secara optimal.";
+    const muscles = (dbMatch && dbMatch.targetMuscles?.join(", ")) || parsed.targetMuscles || "Otot Target Latihan";
+
+    const parts = (dbMatch && dbMatch.equipmentSetup && dbMatch.equipmentSetup.length > 0)
+      ? dbMatch.equipmentSetup.map((p: string, i: number) => `  ${i + 1}️⃣ *${p}*`).join("\n")
+      : (Array.isArray(parsed.parts) && parsed.parts.length > 0
+        ? parsed.parts.map((p: string, i: number) => `  ${i + 1}️⃣ *${p}*`).join("\n")
+        : "  1️⃣ *Pegangan Utama / Grip*: Menjaga posisi tangan\n  2️⃣ *Beban / Resistance*: Pengatur intensitas\n  3️⃣ *Support Pad / Pijakan*: Menjaga stabilitas postur");
+
+    const steps = (dbMatch && dbMatch.instructions && dbMatch.instructions.length > 0)
+      ? dbMatch.instructions.map((s: string, i: number) => `  ${i + 1}️⃣ *${s}*`).join("\n")
+      : (Array.isArray(parsed.steps) && parsed.steps.length > 0
+        ? parsed.steps.map((s: string, i: number) => `  ${i + 1}️⃣ *${s}*`).join("\n")
+        : "  1️⃣ *Atur Posisi*: Sesuaikan beban & posisi awal\n  2️⃣ *Posisi Awal*: Kencangkan otot core dan pegang alat\n  3️⃣ *Gerakan Latihan*: Tarik/Dorong beban perlahan\n  4️⃣ *Gerakan Akhir*: Kembali ke posisi semula secara terkontrol");
+
+    const tips = (dbMatch && dbMatch.dosAndDonts?.dos && dbMatch.dosAndDonts.dos.length > 0)
+      ? dbMatch.dosAndDonts.dos.map((t: string) => `  ✅ ${t}`).join("\n")
+      : (Array.isArray(parsed.tips) && parsed.tips.length > 0
+        ? parsed.tips.map((t: string) => `  ✅ ${t}`).join("\n")
+        : "  ✅ Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  ✅ Jaga punggung tetap lurus, jangan membungkuk\n  ✅ Fokus pada kontraksi otot target");
+
+    const mistakes = (dbMatch && dbMatch.dosAndDonts?.donts && dbMatch.dosAndDonts.donts.length > 0)
+      ? dbMatch.dosAndDonts.donts.map((m: string) => `  ⚠️ ${m}`).join("\n")
+      : (Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0
+        ? parsed.mistakes.map((m: string) => `  ⚠️ ${m}`).join("\n")
+        : "  ⚠️ Menggunakan ayunan/momentum, bukan kekuatan otot\n  ⚠️ Postur punggung melengkung saat beban berat");
+
+    const mediaVisual = dbMatch?.gifUrl || dbMatch?.thumbnailUrl || (dbMatch?.imageFrames && dbMatch.imageFrames[0]) || "";
+
     const infoId = `info-${Date.now()}`;
     if (!dbData.infographics) dbData.infographics = {};
-    dbData.infographics[infoId] = { parsed, userData, timestamp: new Date().toISOString() };
+    dbData.infographics[infoId] = {
+      parsed: { ...parsed, equipmentName: eqName, description: desc, targetMuscles: muscles, parts: dbMatch?.equipmentSetup || parsed.parts, steps: dbMatch?.instructions || parsed.steps, tips: dbMatch?.dosAndDonts?.dos || parsed.tips, mistakes: dbMatch?.dosAndDonts?.donts || parsed.mistakes },
+      userData,
+      timestamp: new Date().toISOString()
+    };
     saveDb();
 
     const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
     const infographicUrl = `${baseUrl}/infographic/${infoId}`;
-
-    const rawEqName = (parsed.equipmentName || "").trim();
-    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
-    const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
-
-    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Otot Target Latihan";
-    
-    const parts = Array.isArray(parsed.parts) && parsed.parts.length > 0
-      ? parsed.parts.map((p: string, i: number) => `  ${i + 1}️⃣ *${p}*`).join("\n")
-      : "  1️⃣ *Pegangan Utama / Grip*: Menjaga posisi tangan\n  2️⃣ *Beban / Resistance*: Pengatur intensitas\n  3️⃣ *Support Pad / Pijakan*: Menjaga stabilitas postur";
-
-    const steps = Array.isArray(parsed.steps) && parsed.steps.length > 0
-      ? parsed.steps.map((s: string, i: number) => `  ${i + 1}️⃣ *${s}*`).join("\n")
-      : "  1️⃣ *Atur Posisi*: Sesuaikan beban & posisi awal\n  2️⃣ *Posisi Awal*: Kencangkan otot core dan pegang alat\n  3️⃣ *Gerakan Latihan*: Tarik/Dorong beban perlahan\n  4️⃣ *Gerakan Akhir*: Kembali ke posisi semula secara terkontrol";
-
-    const tips = Array.isArray(parsed.tips) && parsed.tips.length > 0
-      ? parsed.tips.map((t: string) => `  ✅ ${t}`).join("\n")
-      : "  ✅ Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  ✅ Jaga punggung tetap lurus, jangan membungkuk\n  ✅ Fokus pada kontraksi otot target";
-
-    const mistakes = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0
-      ? parsed.mistakes.map((m: string) => `  ⚠️ ${m}`).join("\n")
-      : "  ⚠️ Menggunakan ayunan/momentum, bukan kekuatan otot\n  ⚠️ Postur punggung melengkung saat beban berat";
 
     // Customize sets/reps to user goal!
     let defaultSets = "3 - 4 Set";

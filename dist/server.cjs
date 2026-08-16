@@ -42914,6 +42914,46 @@ function getMealTypeByHour() {
     return "dinner";
   }
 }
+function seedTestUserData(phone) {
+  const norm = normalizePhone(phone);
+  if (dbData.users[norm]) return;
+  saveUserProfile(norm, {
+    name: norm === "085156919826" ? "WHOOOISBUNNY" : "Member",
+    phone: norm,
+    goal: "gain",
+    goalTitle: "Menaikkan Massa Otot & BB",
+    weight: 70,
+    startWeight: 70,
+    targetWeight: 75,
+    height: 175,
+    age: 25,
+    gender: "pria",
+    persona: "max",
+    activityLevel: "active"
+  });
+  const dToday = /* @__PURE__ */ new Date();
+  const dYesterday = new Date(Date.now() - 864e5);
+  const d2DaysAgo = new Date(Date.now() - 864e5 * 2);
+  const formatD = (d) => getLocalDateStr(d);
+  const todayKey = `${norm}_${formatD(dToday)}`;
+  const yesterdayKey = `${norm}_${formatD(dYesterday)}`;
+  const twoDaysKey = `${norm}_${formatD(d2DaysAgo)}`;
+  dbData.dailyLogs[todayKey] = [
+    { id: "m-1", foodName: "Nasi Merah 150g & Dada Ayam Panggang", calories: 420, protein: 42, carbs: 40, fat: 8, timestamp: `${formatD(dToday)}T07:30:00.000Z`, mealType: "breakfast" },
+    { id: "m-2", foodName: "Whey Protein Shake & Pisang", calories: 260, protein: 30, carbs: 28, fat: 3, timestamp: `${formatD(dToday)}T10:15:00.000Z`, mealType: "snack" },
+    { id: "m-3", foodName: "Tumis Sapi Lada Hitam & Broccoli", calories: 510, protein: 38, carbs: 35, fat: 18, timestamp: `${formatD(dToday)}T13:00:00.000Z`, mealType: "lunch" }
+  ];
+  dbData.dailyLogs[yesterdayKey] = [
+    { id: "m-y1", foodName: "Oatmeal Proteina & Buah Beri", calories: 350, protein: 22, carbs: 48, fat: 7, timestamp: `${formatD(dYesterday)}T08:00:00.000Z`, mealType: "breakfast" },
+    { id: "m-y2", foodName: "Ikan Salmon Panggang & Kentang Rebus", calories: 580, protein: 45, carbs: 42, fat: 22, timestamp: `${formatD(dYesterday)}T12:30:00.000Z`, mealType: "lunch" },
+    { id: "m-y3", foodName: "Salad Ayam Caesar (Low Fat)", calories: 390, protein: 36, carbs: 15, fat: 16, timestamp: `${formatD(dYesterday)}T19:00:00.000Z`, mealType: "dinner" }
+  ];
+  dbData.dailyLogs[twoDaysKey] = [
+    { id: "m-2d1", foodName: "Telur Rebus 3 Butir & Roti Gandum", calories: 340, protein: 26, carbs: 24, fat: 14, timestamp: `${formatD(d2DaysAgo)}T07:45:00.000Z`, mealType: "breakfast" },
+    { id: "m-2d2", foodName: "Nasi Uduk & Ayam Goreng (Refeed)", calories: 720, protein: 35, carbs: 75, fat: 28, timestamp: `${formatD(d2DaysAgo)}T13:00:00.000Z`, mealType: "lunch" },
+    { id: "m-2d3", foodName: "Greek Yogurt & Madu", calories: 180, protein: 18, carbs: 20, fat: 2, timestamp: `${formatD(d2DaysAgo)}T20:30:00.000Z`, mealType: "snack" }
+  ];
+}
 var MONGODB_URI = process.env.MONGODB_URI || "";
 var mongoClient = null;
 var mongoConnected = false;
@@ -42990,9 +43030,13 @@ function initDb() {
   } else {
     saveDb();
   }
+  seedTestUserData("085156919826");
   if (MONGODB_URI) {
     loadFromMongo().then((loaded) => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
+      if (!dbData.users["085156919826"]) {
+        seedTestUserData("085156919826");
+      }
     });
   }
 }
@@ -43198,12 +43242,17 @@ function getTodayDateStr() {
 function getUserProfile(rawPhone) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
+  if (phone === "085156919826" && !dbData.users[phone]) {
+    seedTestUserData(phone);
+  }
   if (dbData.users[phone]) return dbData.users[phone];
   for (const [key, value] of Object.entries(dbData.users)) {
     if (normalizePhone(key) === phone) {
       return value;
     }
   }
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  if (dbData.users[altPhone]) return dbData.users[altPhone];
   return null;
 }
 function getOrCreateUserProfile(rawPhone, userText) {
@@ -46401,12 +46450,14 @@ ${xmlOutput}`);
     const rawEqName = (parsed.equipmentName || "ALAT GYM").trim();
     const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
     const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
-    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Punggung, Glutes, Hamstring";
-    const partsList = Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : ["Pegangan Utama", "Beban Principal", "Pengunci", "Support Pad"];
-    const stepsList = Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Latihan", "Gerakan Akhir"];
-    const tipsList = Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
-    const mistakesList = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : ["Menggunakan momentum", "Postur membungkuk"];
+    const dbMatch = findExerciseOrEquipment(rawEqName || parsed.generalReply || "");
+    const desc = dbMatch && dbMatch.equipmentSetup?.[0] || parsed.description || "Melatih kelompok otot target secara optimal.";
+    const muscles = dbMatch && dbMatch.targetMuscles?.join(", ") || parsed.targetMuscles || "Punggung, Glutes, Hamstring";
+    const partsList = Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts : dbMatch && dbMatch.equipmentSetup ? dbMatch.equipmentSetup : ["Pegangan Utama", "Beban Principal", "Pengunci", "Support Pad"];
+    const stepsList = dbMatch && dbMatch.instructions && dbMatch.instructions.length > 0 ? dbMatch.instructions : Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps : ["Atur Posisi", "Posisi Awal", "Gerakan Latihan", "Gerakan Akhir"];
+    const tipsList = dbMatch && dbMatch.dosAndDonts?.dos && dbMatch.dosAndDonts.dos.length > 0 ? dbMatch.dosAndDonts.dos : Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips : ["Gerakan perlahan", "Fokus kontraksi otot"];
+    const mistakesList = dbMatch && dbMatch.dosAndDonts?.donts && dbMatch.dosAndDonts.donts.length > 0 ? dbMatch.dosAndDonts.donts : Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes : ["Menggunakan momentum", "Postur membungkuk"];
+    const exerciseMediaUrl = dbMatch?.gifUrl || dbMatch?.thumbnailUrl || dbMatch?.imageFrames && dbMatch.imageFrames[0] || "";
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
     let defaultRest = "60 - 90 Detik";
@@ -46556,6 +46607,14 @@ ${xmlOutput}`);
       </div>
     </div>
 
+    ${exerciseMediaUrl ? `
+    <!-- DEMONSTRASI VISUAL WORKOUT DATABASE -->
+    <div style="margin-bottom: 20px; border-radius: 16px; overflow: hidden; background: #0c0e14; border: 1.5px solid rgba(234, 179, 8, 0.35); text-align: center; padding: 12px;">
+      <div style="font-size: 11px; font-weight: 800; color: #eab308; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">\u{1F3AC} DEMONSTRASI GERAKAN & FORM</div>
+      <img src="${exerciseMediaUrl}" alt="${eqName}" style="max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; display: inline-block;" />
+    </div>
+    ` : ""}
+
     <!-- BAGIAN ALAT -->
     <div class="section-box">
       <div class="sec-title">\u{1F529} BAGIAN UTAMA ALAT</div>
@@ -46630,21 +46689,27 @@ ${xmlOutput}`);
     res.send(html);
   });
   function formatEquipmentTutorialCard(parsed, userData) {
+    const rawEqName = (parsed.equipmentName || "").trim();
+    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
+    const dbMatch = findExerciseOrEquipment(rawEqName || parsed.generalReply || "");
+    const eqName = (dbMatch ? dbMatch.indonesianName : isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
+    const desc = dbMatch && dbMatch.equipmentSetup?.[0] || parsed.description || "Melatih kelompok otot target secara optimal.";
+    const muscles = dbMatch && dbMatch.targetMuscles?.join(", ") || parsed.targetMuscles || "Otot Target Latihan";
+    const parts = dbMatch && dbMatch.equipmentSetup && dbMatch.equipmentSetup.length > 0 ? dbMatch.equipmentSetup.map((p, i) => `  ${i + 1}\uFE0F\u20E3 *${p}*`).join("\n") : Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts.map((p, i) => `  ${i + 1}\uFE0F\u20E3 *${p}*`).join("\n") : "  1\uFE0F\u20E3 *Pegangan Utama / Grip*: Menjaga posisi tangan\n  2\uFE0F\u20E3 *Beban / Resistance*: Pengatur intensitas\n  3\uFE0F\u20E3 *Support Pad / Pijakan*: Menjaga stabilitas postur";
+    const steps = dbMatch && dbMatch.instructions && dbMatch.instructions.length > 0 ? dbMatch.instructions.map((s, i) => `  ${i + 1}\uFE0F\u20E3 *${s}*`).join("\n") : Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps.map((s, i) => `  ${i + 1}\uFE0F\u20E3 *${s}*`).join("\n") : "  1\uFE0F\u20E3 *Atur Posisi*: Sesuaikan beban & posisi awal\n  2\uFE0F\u20E3 *Posisi Awal*: Kencangkan otot core dan pegang alat\n  3\uFE0F\u20E3 *Gerakan Latihan*: Tarik/Dorong beban perlahan\n  4\uFE0F\u20E3 *Gerakan Akhir*: Kembali ke posisi semula secara terkontrol";
+    const tips = dbMatch && dbMatch.dosAndDonts?.dos && dbMatch.dosAndDonts.dos.length > 0 ? dbMatch.dosAndDonts.dos.map((t) => `  \u2705 ${t}`).join("\n") : Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips.map((t) => `  \u2705 ${t}`).join("\n") : "  \u2705 Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  \u2705 Jaga punggung tetap lurus, jangan membungkuk\n  \u2705 Fokus pada kontraksi otot target";
+    const mistakes = dbMatch && dbMatch.dosAndDonts?.donts && dbMatch.dosAndDonts.donts.length > 0 ? dbMatch.dosAndDonts.donts.map((m) => `  \u26A0\uFE0F ${m}`).join("\n") : Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes.map((m) => `  \u26A0\uFE0F ${m}`).join("\n") : "  \u26A0\uFE0F Menggunakan ayunan/momentum, bukan kekuatan otot\n  \u26A0\uFE0F Postur punggung melengkung saat beban berat";
+    const mediaVisual = dbMatch?.gifUrl || dbMatch?.thumbnailUrl || dbMatch?.imageFrames && dbMatch.imageFrames[0] || "";
     const infoId = `info-${Date.now()}`;
     if (!dbData.infographics) dbData.infographics = {};
-    dbData.infographics[infoId] = { parsed, userData, timestamp: (/* @__PURE__ */ new Date()).toISOString() };
+    dbData.infographics[infoId] = {
+      parsed: { ...parsed, equipmentName: eqName, description: desc, targetMuscles: muscles, parts: dbMatch?.equipmentSetup || parsed.parts, steps: dbMatch?.instructions || parsed.steps, tips: dbMatch?.dosAndDonts?.dos || parsed.tips, mistakes: dbMatch?.dosAndDonts?.donts || parsed.mistakes },
+      userData,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
     saveDb();
     const baseUrl = process.env.RENDER_EXTERNAL_URL || "https://gymbuddy-backend-zfft.onrender.com";
     const infographicUrl = `${baseUrl}/infographic/${infoId}`;
-    const rawEqName = (parsed.equipmentName || "").trim();
-    const isGeneric = !rawEqName || rawEqName.includes("THIS MACHINE") || rawEqName.includes("Nama Alat Gym");
-    const eqName = (isGeneric ? "ALAT GYM / MESIN LATIHAN" : rawEqName).toUpperCase();
-    const desc = parsed.description || "Melatih kelompok otot target secara optimal.";
-    const muscles = parsed.targetMuscles || "Otot Target Latihan";
-    const parts = Array.isArray(parsed.parts) && parsed.parts.length > 0 ? parsed.parts.map((p, i) => `  ${i + 1}\uFE0F\u20E3 *${p}*`).join("\n") : "  1\uFE0F\u20E3 *Pegangan Utama / Grip*: Menjaga posisi tangan\n  2\uFE0F\u20E3 *Beban / Resistance*: Pengatur intensitas\n  3\uFE0F\u20E3 *Support Pad / Pijakan*: Menjaga stabilitas postur";
-    const steps = Array.isArray(parsed.steps) && parsed.steps.length > 0 ? parsed.steps.map((s, i) => `  ${i + 1}\uFE0F\u20E3 *${s}*`).join("\n") : "  1\uFE0F\u20E3 *Atur Posisi*: Sesuaikan beban & posisi awal\n  2\uFE0F\u20E3 *Posisi Awal*: Kencangkan otot core dan pegang alat\n  3\uFE0F\u20E3 *Gerakan Latihan*: Tarik/Dorong beban perlahan\n  4\uFE0F\u20E3 *Gerakan Akhir*: Kembali ke posisi semula secara terkontrol";
-    const tips = Array.isArray(parsed.tips) && parsed.tips.length > 0 ? parsed.tips.map((t) => `  \u2705 ${t}`).join("\n") : "  \u2705 Gerakan perlahan & terkontrol (3 dtk turun, 1 dtk naik)\n  \u2705 Jaga punggung tetap lurus, jangan membungkuk\n  \u2705 Fokus pada kontraksi otot target";
-    const mistakes = Array.isArray(parsed.mistakes) && parsed.mistakes.length > 0 ? parsed.mistakes.map((m) => `  \u26A0\uFE0F ${m}`).join("\n") : "  \u26A0\uFE0F Menggunakan ayunan/momentum, bukan kekuatan otot\n  \u26A0\uFE0F Postur punggung melengkung saat beban berat";
     let defaultSets = "3 - 4 Set";
     let defaultReps = "10 - 15 Repetisi";
     let defaultRest = "60 - 90 Detik";

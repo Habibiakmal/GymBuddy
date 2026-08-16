@@ -123,6 +123,28 @@ export default function LoginModal({
       } catch (e) {}
     }
 
+    // 4. Fallback account seed for 085156919826
+    if (!foundProfile && normPhone === "085156919826") {
+      foundProfile = {
+        name: "WHOOOISBUNNY",
+        phone: "085156919826",
+        goal: "gain",
+        goalTitle: "Menaikkan Massa Otot & BB",
+        weight: 70,
+        startWeight: 70,
+        targetWeight: 75,
+        height: 175,
+        age: 25,
+        gender: "pria",
+        persona: "max",
+        activityLevel: "active"
+      };
+      try {
+        localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(foundProfile));
+        localStorage.setItem("gymbuddy_active_session", JSON.stringify(foundProfile));
+      } catch (e) {}
+    }
+
     if (foundProfile) {
       setUserProfile(foundProfile);
       if (foundProgress) setProgressData(foundProgress);
