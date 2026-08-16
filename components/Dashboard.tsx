@@ -1126,10 +1126,18 @@ export default function Dashboard({
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
+    // ── Auto-start notification schedulers if permission already granted ──
+    if (notificationService.getPermission() === "granted") {
+      const userName = activeUser.name?.split(" ")[0] || "Bro";
+      const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
+      notificationService.startAllSchedulers(userName, focus, 7);
+    }
+
     return () => {
       clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
+      notificationService.stopAllSchedulers();
     };
   }, [selectedDate, activeUser.phone]);
 
@@ -1626,16 +1634,20 @@ export default function Dashboard({
                 const granted = await notificationService.requestPermission();
                 if (granted) {
                   notificationService.sendTestNotification();
-                  setReminderNotificationMsg("Notifikasi Apple Watch & PWA Aktif! 🔔");
+                  // Start all daily schedulers now that permission is granted
+                  const userName = activeUser.name?.split(" ")[0] || "Bro";
+                  const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
+                  notificationService.startAllSchedulers(userName, focus, 7);
+                  setReminderNotificationMsg("Notifikasi & Scheduler Harian Aktif! 🔔");
                   setTimeout(() => setReminderNotificationMsg(null), 4000);
                 } else {
-                  alert("Izin notifikasi belum diaktifkan di browsermu.");
+                  alert("Izin notifikasi belum diaktifkan di browsermu. Pastikan Allow di popup browser.");
                 }
               }}
               className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-slate-800 border border-white/[0.06] text-neutral-400 hover:text-white text-xs font-bold flex items-center gap-3 transition-all cursor-pointer"
             >
               <Bell size={16} className="text-[#D4FF00]" />
-              <span>Tes Notifikasi PWA</span>
+              <span>Aktifkan Notifikasi & Scheduler</span>
             </button>
 
             <button
