@@ -48,7 +48,8 @@ import {
   ArrowUp,
   ArrowDown,
   Edit3,
-  Sliders
+  Sliders,
+  Upload
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem } from "../data/exerciseDb";

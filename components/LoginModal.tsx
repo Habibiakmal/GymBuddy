@@ -123,21 +123,21 @@ export default function LoginModal({
       } catch (e) {}
     }
 
-    // 4. Fallback account seed for 085156919826
-    if (!foundProfile && normPhone === "085156919826") {
+    // 4. Auto-generate starter profile for ANY phone number if DB is offline or user is new
+    if (!foundProfile) {
       foundProfile = {
-        name: "WHOOOISBUNNY",
-        phone: "085156919826",
-        goal: "gain",
-        goalTitle: "Menaikkan Massa Otot & BB",
-        weight: 70,
-        startWeight: 70,
-        targetWeight: 75,
-        height: 175,
+        name: normPhone === "085156919826" ? "WHOOOISBUNNY" : `Member ${normPhone.slice(-4)}`,
+        phone: normPhone,
+        goal: normPhone === "085156919826" ? "gain" : "healthy",
+        goalTitle: normPhone === "085156919826" ? "Menaikkan Massa Otot & BB" : (isEN ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Bugar"),
+        weight: normPhone === "085156919826" ? 70 : 65,
+        startWeight: normPhone === "085156919826" ? 70 : 65,
+        targetWeight: normPhone === "085156919826" ? 75 : 65,
+        height: 170,
         age: 25,
         gender: "pria",
         persona: "max",
-        activityLevel: "active"
+        activityLevel: "moderate"
       };
       try {
         localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(foundProfile));
@@ -152,13 +152,6 @@ export default function LoginModal({
         onLoginSuccess(foundProfile);
       }
       onClose();
-    } else {
-      setErrorMsg(
-        isEN
-          ? `Phone number +62 ${cleanedPhone} is not registered yet. Please complete onboarding first.`
-          : `Nomor WhatsApp +62 ${cleanedPhone} belum terdaftar di database. Silakan isi kuesioner terlebih dahulu.`
-      );
-      setUserProfile(null);
     }
 
     setLoading(false);
