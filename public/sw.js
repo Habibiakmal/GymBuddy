@@ -1,7 +1,5 @@
-const CACHE_NAME = "gymbuddy-pwa-v1";
+const CACHE_NAME = "gymbuddy-pwa-v4";
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
   "/manifest.json",
   "/favicon.png",
   "/favicon.svg",
@@ -10,8 +8,9 @@ const STATIC_ASSETS = [
   "/icon-512.png"
 ];
 
-// Install Event: Pre-cache App Shell
+// Install Event: Pre-cache App Shell & Skip Waiting
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch((err) => {
@@ -19,10 +18,9 @@ self.addEventListener("install", (event) => {
       });
     })
   );
-  self.skipWaiting();
 });
 
-// Activate Event: Cleanup Old Caches
+// Activate Event: Cleanup All Old Caches and Claim Clients
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -33,12 +31,11 @@ self.addEventListener("activate", (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch Event: Network-First for APIs, Stale-While-Revalidate for Static Assets
+// Fetch Event: Network-First for Navigation & HTML, Stale-While-Revalidate for other assets
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -48,17 +45,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 1. API Calls: Network-First (live data preferred, fallback to cache)
+  // 1. Navigation / HTML Requests: Always NETWORK-FIRST (Never serve stale HTML)
+  if (request.mode === "navigate" || request.headers.get("accept")?.includes("text/html") || url.pathname === "/" || url.pathname === "/index.html") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          return response;
+        })
+        .catch(() => caches.match("/index.html") || caches.match("/"))
+    );
+    return;
+  }
+
+  // 2. API Calls: Network-First
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response && response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
           return response;
         })
         .catch(() => caches.match(request))
@@ -66,27 +69,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2. Static Assets & App Shell: Stale-While-Revalidate
+  // 3. Static Assets: Cache with Network Fallback
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === "basic") {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
+      return (
+        cachedResponse ||
+        fetch(request).then((networkResponse) => {
           return networkResponse;
         })
-        .catch(() => {
-          // If offline and requesting navigation, return cached index.html
-          if (request.mode === "navigate") {
-            return caches.match("/index.html");
-          }
-        });
-
-      return cachedResponse || fetchPromise;
+      );
     })
   );
 });
