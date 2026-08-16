@@ -717,6 +717,44 @@ export default function Dashboard({
   const [selectedReminderTime, setSelectedReminderTime] = useState("17:00");
   const [reminderNotificationMsg, setReminderNotificationMsg] = useState<string | null>(null);
 
+  // Notification Scheduler Settings
+  const [showNotifSettingsModal, setShowNotifSettingsModal] = useState(false);
+  const [notifSettings, setNotifSettings] = useState(() => {
+    try {
+      const stored = localStorage.getItem("gymbuddy_notif_settings");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      workoutEnabled: true,
+      workoutHour: 7,
+      workoutMinute: 0,
+      hydrationEnabled: true,
+      hydrationInterval: 2,
+      streakEnabled: true,
+      permissionGranted: false,
+    };
+  });
+
+  const saveNotifSettings = (updated: typeof notifSettings) => {
+    setNotifSettings(updated);
+    try { localStorage.setItem("gymbuddy_notif_settings", JSON.stringify(updated)); } catch {}
+  };
+
+  const applyNotifSchedulers = (settings: typeof notifSettings) => {
+    notificationService.stopAllSchedulers();
+    const userName = activeUser.name?.split(" ")[0] || "Bro";
+    const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
+    if (settings.workoutEnabled) {
+      notificationService.startDailyWorkoutScheduler(userName, focus, settings.workoutHour, settings.workoutMinute);
+    }
+    if (settings.hydrationEnabled) {
+      notificationService.startHydrationScheduler(settings.hydrationInterval);
+    }
+    if (settings.streakEnabled) {
+      notificationService.scheduleStreakReminder(userName);
+    }
+  };
+
   // Coach Mood Popup State
   const [showCoachMoodPopup, setShowCoachMoodPopup] = useState(false);
   const [coachMoodData, setCoachMoodData] = useState<{ icon: string; title: string; message: string; tips: string[]; color: string } | null>(null);
@@ -1630,24 +1668,20 @@ export default function Dashboard({
             </button>
 
             <button
-              onClick={async () => {
-                const granted = await notificationService.requestPermission();
-                if (granted) {
-                  notificationService.sendTestNotification();
-                  // Start all daily schedulers now that permission is granted
-                  const userName = activeUser.name?.split(" ")[0] || "Bro";
-                  const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
-                  notificationService.startAllSchedulers(userName, focus, 7);
-                  setReminderNotificationMsg("Notifikasi & Scheduler Harian Aktif! 🔔");
-                  setTimeout(() => setReminderNotificationMsg(null), 4000);
-                } else {
-                  alert("Izin notifikasi belum diaktifkan di browsermu. Pastikan Allow di popup browser.");
-                }
-              }}
-              className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-slate-800 border border-white/[0.06] text-neutral-400 hover:text-white text-xs font-bold flex items-center gap-3 transition-all cursor-pointer"
+              onClick={() => setShowNotifSettingsModal(true)}
+              className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-slate-800 border border-white/[0.06] text-neutral-400 hover:text-white text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer"
             >
-              <Bell size={16} className="text-[#D4FF00]" />
-              <span>Aktifkan Notifikasi & Scheduler</span>
+              <div className="flex items-center gap-3">
+                <Bell size={16} className="text-[#D4FF00]" />
+                <span>Notifikasi & Scheduler</span>
+              </div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                notifSettings.permissionGranted
+                  ? "bg-[#D4FF00]/20 text-[#D4FF00]"
+                  : "bg-neutral-800 text-neutral-500"
+              }`}>
+                {notifSettings.permissionGranted ? "AKTIF" : "OFF"}
+              </span>
             </button>
 
             <button
@@ -3450,6 +3484,210 @@ export default function Dashboard({
       )}
 
 
+
+      {/* ─── NOTIFICATION SCHEDULER SETTINGS MODAL ─────────────────────────── */}
+      {showNotifSettingsModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99999, backgroundColor: "rgba(0,0,0,0.80)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNotifSettingsModal(false); }}
+        >
+          <div
+            style={{ backgroundColor: "#111620", border: "1px solid #1e2535", borderRadius: "24px", padding: "20px", maxWidth: "420px", width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 30px 60px rgba(0,0,0,0.9)", color: "white" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1e2535", paddingBottom: "14px", marginBottom: "18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "12px", backgroundColor: "rgba(212,255,0,0.12)", border: "1px solid rgba(212,255,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Bell size={20} color="#D4FF00" />
+                </div>
+                <div>
+                  <h3 style={{ fontWeight: 900, fontSize: "15px", color: "white", margin: 0 }}>Notifikasi & Scheduler</h3>
+                  <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0 0" }}>Atur kapan GymBuddy mengingatkanmu</p>
+                </div>
+              </div>
+              <button onClick={() => setShowNotifSettingsModal(false)} style={{ background: "#1e2535", border: "none", borderRadius: "10px", padding: "6px", cursor: "pointer", color: "#64748b" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Permission Status Banner */}
+            <div style={{ backgroundColor: notifSettings.permissionGranted ? "rgba(212,255,0,0.08)" : "rgba(255,100,100,0.08)", border: `1px solid ${notifSettings.permissionGranted ? "rgba(212,255,0,0.25)" : "rgba(255,100,100,0.25)"}`, borderRadius: "14px", padding: "12px 14px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: "12px", color: notifSettings.permissionGranted ? "#D4FF00" : "#ff6b6b" }}>
+                  {notifSettings.permissionGranted ? "✅ Notifikasi Aktif" : "❌ Izin Belum Diberikan"}
+                </div>
+                <div style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+                  {notifSettings.permissionGranted ? "Scheduler berjalan di background" : "Klik Aktifkan untuk meminta izin"}
+                </div>
+              </div>
+              {!notifSettings.permissionGranted && (
+                <button
+                  onClick={async () => {
+                    const granted = await notificationService.requestPermission();
+                    if (granted) {
+                      const updated = { ...notifSettings, permissionGranted: true };
+                      saveNotifSettings(updated);
+                      applyNotifSchedulers(updated);
+                      notificationService.sendTestNotification();
+                    } else {
+                      alert("Pastikan Allow di popup browser. Coba di browser lain jika tidak muncul.");
+                    }
+                  }}
+                  style={{ padding: "8px 14px", borderRadius: "10px", backgroundColor: "#D4FF00", color: "#000", fontWeight: 900, fontSize: "11px", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  Aktifkan →
+                </button>
+              )}
+            </div>
+
+            {/* ─── Scheduler Cards ─── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+              {/* 1. Workout Reminder */}
+              <div style={{ backgroundColor: "#161C28", border: "1px solid #1e2535", borderRadius: "16px", padding: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: notifSettings.workoutEnabled ? "12px" : "0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "20px" }}>🏋️</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Pengingat Workout</div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>
+                        {notifSettings.workoutEnabled
+                          ? `Setiap hari jam ${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`
+                          : "Nonaktif"}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Toggle */}
+                  <div
+                    onClick={() => {
+                      const updated = { ...notifSettings, workoutEnabled: !notifSettings.workoutEnabled };
+                      saveNotifSettings(updated);
+                      if (notifSettings.permissionGranted) applyNotifSchedulers(updated);
+                    }}
+                    style={{ width: "44px", height: "24px", borderRadius: "12px", backgroundColor: notifSettings.workoutEnabled ? "#D4FF00" : "#1e2535", border: `1px solid ${notifSettings.workoutEnabled ? "#D4FF00" : "#333"}`, cursor: "pointer", position: "relative", transition: "all 0.2s" }}
+                  >
+                    <div style={{ position: "absolute", top: "3px", left: notifSettings.workoutEnabled ? "22px" : "3px", width: "16px", height: "16px", borderRadius: "50%", backgroundColor: notifSettings.workoutEnabled ? "#000" : "#555", transition: "left 0.2s" }} />
+                  </div>
+                </div>
+
+                {notifSettings.workoutEnabled && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap" }}>Jam:</span>
+                    <input
+                      type="time"
+                      value={`${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(":").map(Number);
+                        const updated = { ...notifSettings, workoutHour: h, workoutMinute: m };
+                        saveNotifSettings(updated);
+                        if (notifSettings.permissionGranted) applyNotifSchedulers(updated);
+                      }}
+                      style={{ flex: 1, padding: "8px 12px", borderRadius: "10px", backgroundColor: "#0d1117", border: "1px solid #262d3d", color: "white", fontSize: "13px", fontWeight: 700, outline: "none" }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Hydration Reminder */}
+              <div style={{ backgroundColor: "#161C28", border: "1px solid #1e2535", borderRadius: "16px", padding: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: notifSettings.hydrationEnabled ? "12px" : "0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "20px" }}>💧</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Pengingat Minum Air</div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>
+                        {notifSettings.hydrationEnabled
+                          ? `Setiap ${notifSettings.hydrationInterval} jam (08:00–20:00)`
+                          : "Nonaktif"}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    onClick={() => {
+                      const updated = { ...notifSettings, hydrationEnabled: !notifSettings.hydrationEnabled };
+                      saveNotifSettings(updated);
+                      if (notifSettings.permissionGranted) applyNotifSchedulers(updated);
+                    }}
+                    style={{ width: "44px", height: "24px", borderRadius: "12px", backgroundColor: notifSettings.hydrationEnabled ? "#D4FF00" : "#1e2535", border: `1px solid ${notifSettings.hydrationEnabled ? "#D4FF00" : "#333"}`, cursor: "pointer", position: "relative", transition: "all 0.2s" }}
+                  >
+                    <div style={{ position: "absolute", top: "3px", left: notifSettings.hydrationEnabled ? "22px" : "3px", width: "16px", height: "16px", borderRadius: "50%", backgroundColor: notifSettings.hydrationEnabled ? "#000" : "#555", transition: "left 0.2s" }} />
+                  </div>
+                </div>
+
+                {notifSettings.hydrationEnabled && (
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {[1, 2, 3, 4].map((h) => (
+                      <button
+                        key={h}
+                        onClick={() => {
+                          const updated = { ...notifSettings, hydrationInterval: h };
+                          saveNotifSettings(updated);
+                          if (notifSettings.permissionGranted) applyNotifSchedulers(updated);
+                        }}
+                        style={{ flex: 1, padding: "8px 4px", borderRadius: "10px", backgroundColor: notifSettings.hydrationInterval === h ? "#D4FF00" : "#0d1117", border: `1px solid ${notifSettings.hydrationInterval === h ? "#D4FF00" : "#262d3d"}`, color: notifSettings.hydrationInterval === h ? "#000" : "#64748b", fontWeight: 800, fontSize: "12px", cursor: "pointer" }}
+                      >
+                        {h}j
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Streak Guard */}
+              <div style={{ backgroundColor: "#161C28", border: "1px solid #1e2535", borderRadius: "16px", padding: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "20px" }}>🔥</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Penjaga Streak</div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>
+                        {notifSettings.streakEnabled ? "Ingatkan jam 20:00 jika belum log hari ini" : "Nonaktif"}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    onClick={() => {
+                      const updated = { ...notifSettings, streakEnabled: !notifSettings.streakEnabled };
+                      saveNotifSettings(updated);
+                      if (notifSettings.permissionGranted) applyNotifSchedulers(updated);
+                    }}
+                    style={{ width: "44px", height: "24px", borderRadius: "12px", backgroundColor: notifSettings.streakEnabled ? "#D4FF00" : "#1e2535", border: `1px solid ${notifSettings.streakEnabled ? "#D4FF00" : "#333"}`, cursor: "pointer", position: "relative", transition: "all 0.2s" }}
+                  >
+                    <div style={{ position: "absolute", top: "3px", left: notifSettings.streakEnabled ? "22px" : "3px", width: "16px", height: "16px", borderRadius: "50%", backgroundColor: notifSettings.streakEnabled ? "#000" : "#555", transition: "left 0.2s" }} />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer actions */}
+            <div style={{ marginTop: "16px", display: "flex", gap: "8px" }}>
+              {notifSettings.permissionGranted && (
+                <button
+                  onClick={() => {
+                    applyNotifSchedulers(notifSettings);
+                    notificationService.sendTestNotification();
+                    setShowNotifSettingsModal(false);
+                    setReminderNotificationMsg("Scheduler diperbarui & notifikasi tes dikirim! 🔔");
+                    setTimeout(() => setReminderNotificationMsg(null), 3500);
+                  }}
+                  style={{ flex: 1, padding: "13px", borderRadius: "14px", backgroundColor: "#D4FF00", color: "#000", fontWeight: 900, fontSize: "12px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                >
+                  <Bell size={14} color="black" />
+                  Simpan & Kirim Tes
+                </button>
+              )}
+              <button
+                onClick={() => setShowNotifSettingsModal(false)}
+                style={{ flex: notifSettings.permissionGranted ? 0 : 1, padding: "13px 18px", borderRadius: "14px", backgroundColor: "#1e2535", color: "#94a3b8", fontWeight: 700, fontSize: "12px", border: "1px solid #262d3d", cursor: "pointer" }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADD LOG MODAL (AI AUTO-DETECTION) */}
       <AnimatePresence>
