@@ -1214,11 +1214,35 @@ export default function Dashboard({
       const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
-        // Authoritative server data received (includes all WhatsApp entries)
-        const sanitized = sanitizeAndSplitComboLogs(serverLogs);
+        let currentLocal: MealItem[] = [];
+        try {
+          const lData = localStorage.getItem(localKey);
+          if (lData) currentLocal = JSON.parse(lData);
+        } catch (e) {}
+
+        // Intelligent merge: combine server logs with any unsynced local logs
+        const merged: MealItem[] = [...serverLogs];
+        if (Array.isArray(currentLocal) && currentLocal.length > 0) {
+          for (const loc of currentLocal) {
+            const alreadyExists = merged.some((m) => m.id === loc.id || (m.foodName === loc.foodName && m.calories === loc.calories && (m.timestamp === loc.timestamp || m.time === loc.time)));
+            if (!alreadyExists) {
+              merged.push(loc);
+              // Push unsynced local meal to server
+              try {
+                fetch(`${primaryUrl}/api/user/${normPhone}/meals`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ...loc, date: dateStr })
+                }).catch(() => {});
+              } catch (e) {}
+            }
+          }
+        }
+
+        const sanitized = sanitizeAndSplitComboLogs(merged);
         setAllLogs(sanitized);
         try {
-          localStorage.setItem(localKey, JSON.stringify(serverLogs));
+          localStorage.setItem(localKey, JSON.stringify(merged));
         } catch (e) {}
       }
 
