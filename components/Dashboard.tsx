@@ -868,6 +868,8 @@ export default function Dashboard({
   const [explorerCategory, setExplorerCategory] = useState<string>("all");
   const [selectedExplorerItem, setSelectedExplorerItem] = useState<ExerciseItem | null>(null);
   const [viewingDetailExercise, setViewingDetailExercise] = useState<ExerciseItem | null>(null);
+  const [showWatchConnectModal, setShowWatchConnectModal] = useState(false);
+  const [watchLinkCopied, setWatchLinkCopied] = useState(false);
 
   // Modals
   const [showAddFoodModal, setShowAddFoodModal] = useState(false);
@@ -1608,18 +1610,16 @@ export default function Dashboard({
               <ChevronRight size={16} />
             </button>
 
-            {onOpenWatchMode && (
-              <button
-                onClick={onOpenWatchMode}
-                className="w-full px-4 py-3 rounded-2xl bg-[#18202E] hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-extrabold text-sm flex items-center justify-between transition-all cursor-pointer group shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
-                  <span>Mode Apple Watch</span>
-                </div>
-                <ChevronRight size={16} />
-              </button>
-            )}
+            <button
+              onClick={() => setShowWatchConnectModal(true)}
+              className="w-full px-4 py-3 rounded-2xl bg-[#18202E] hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-extrabold text-sm flex items-center justify-between transition-all cursor-pointer group shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
+                <span>Hubungkan Apple Watch</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
 
             <button
               onClick={async () => {
@@ -2126,16 +2126,14 @@ export default function Dashboard({
               </div>
 
               <div className="flex items-center gap-2">
-                {onOpenWatchMode && (
-                  <button
-                    onClick={onOpenWatchMode}
-                    className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    title="Buka Layar Pendamping Apple Watch & Smartwatch"
-                  >
-                    <Watch size={14} className="text-[#D4FF00]" />
-                    <span className="hidden sm:inline">Watch Mode</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowWatchConnectModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Hubungkan ke Apple Watch (Magic Link)"
+                >
+                  <Watch size={14} className="text-[#D4FF00]" />
+                  <span className="hidden sm:inline">Apple Watch</span>
+                </button>
 
                 <button
                   onClick={() => setShowExerciseExplorerModal(true)}
@@ -3342,6 +3340,107 @@ export default function Dashboard({
                   </div>
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* APPLE WATCH CONNECT & ZERO-TYPING PAIRING MODAL */}
+      <AnimatePresence>
+        {showWatchConnectModal && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 text-white"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                    <Watch size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-base text-white">Hubungkan ke Apple Watch</h3>
+                    <p className="text-xs text-neutral-400 font-medium">Buka di jam tanpa perlu ketik login</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowWatchConnectModal(false)}
+                  className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Instructions & Explanation */}
+              <div className="space-y-3 text-xs text-neutral-300">
+                <div className="bg-[#161C28] border border-[#D4FF00]/30 rounded-2xl p-3.5 space-y-2">
+                  <span className="font-black text-[#D4FF00] block text-xs">✨ Magic Link Instan:</span>
+                  <p className="text-[11px] text-neutral-300 leading-relaxed">
+                    Karena layar Apple Watch sangat kecil untuk mengetik, kirim Magic Link ini ke dirimu sendiri. Sekali tap di Apple Watch, akunmu langsung otomatis terhubung!
+                  </p>
+
+                  <div className="p-2.5 rounded-xl bg-black/70 border border-neutral-800 font-mono text-[10px] text-neutral-400 break-all select-all">
+                    {typeof window !== "undefined"
+                      ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
+                      : "/watch"}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`;
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(url);
+                          setWatchLinkCopied(true);
+                          setTimeout(() => setWatchLinkCopied(false), 3000);
+                        }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all border border-white/10"
+                    >
+                      <span>{watchLinkCopied ? "Disalin! ✓" : "Salin Link"}</span>
+                    </button>
+
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        "Buka GymBuddy di Apple Watch: " +
+                          (typeof window !== "undefined"
+                            ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
+                            : "/watch")
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                    >
+                      <Share2 size={13} />
+                      <span>Kirim ke WA</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3 space-y-1 text-[11px]">
+                  <span className="font-bold text-white block">Cara Pakai di Apple Watch:</span>
+                  <p>1. Kirim link di atas ke WhatsApp / iMessage / Apple Notes kamu.</p>
+                  <p>2. Di Apple Watch, buka chat / notes dan tap linknya.</p>
+                  <p>3. Watch Mode langsung terbuka lengkap dengan tombol set besar & live rest timer!</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    setShowWatchConnectModal(false);
+                    if (onOpenWatchMode) onOpenWatchMode();
+                  }}
+                  className="w-full py-3 rounded-2xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <Watch size={14} />
+                  <span>Buka Watch Mode di Browser Ini</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
