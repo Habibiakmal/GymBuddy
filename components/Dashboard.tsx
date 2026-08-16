@@ -550,6 +550,84 @@ function getPersonalizedWeeklySchedule(user: UserProfileData): DaySchedule[] {
   }
 }
 
+// Interactive Animated Movement Player Component (Auto-looping movement keyframes)
+const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
+  const frames = item.imageFrames && item.imageFrames.length > 0 ? item.imageFrames : [item.gifUrl];
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  useEffect(() => {
+    if (!isPlaying || frames.length <= 1) return;
+    const interval = setInterval(() => {
+      setFrameIdx((prev) => (prev + 1) % frames.length);
+    }, 950);
+    return () => clearInterval(interval);
+  }, [isPlaying, frames]);
+
+  return (
+    <div className="space-y-2">
+      <div className="relative rounded-2xl overflow-hidden bg-black/90 border border-neutral-800 aspect-video flex items-center justify-center group shadow-2xl">
+        <img
+          key={frameIdx}
+          src={frames[frameIdx]}
+          alt={`${item.name} - Fase ${frameIdx + 1}`}
+          className="w-full h-full object-contain transition-all duration-300"
+          loading="eager"
+        />
+
+        {/* Dynamic Movement Indicator */}
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+          <span className="px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black tracking-wider flex items-center gap-1.5 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-ping inline-block" />
+            ANIMASI GERAKAN
+          </span>
+          <span className="px-2 py-1 rounded-lg bg-black/80 backdrop-blur-md text-white text-[10px] font-extrabold border border-white/10">
+            {frameIdx === 0 ? "Fase 1: Posisi Awal" : "Fase 2: Eksekusi Puncak"}
+          </span>
+        </div>
+      </div>
+
+      {/* Frame Controls & Play/Pause */}
+      {frames.length > 1 && (
+        <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className={`px-3 py-1 rounded-lg text-[11px] font-black flex items-center gap-1.5 cursor-pointer transition-all border ${
+                isPlaying ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm" : "bg-[#18202E] text-neutral-300 border-white/10 hover:bg-neutral-800"
+              }`}
+            >
+              <Play size={11} fill="currentColor" /> {isPlaying ? "Loop Animasi Aktif" : "Putar Animasi"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsPlaying(false); setFrameIdx(0); }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer border transition-all ${
+                frameIdx === 0 && !isPlaying ? "bg-white text-black border-white font-black" : "bg-[#18202E] text-neutral-400 border-white/10 hover:text-white"
+              }`}
+            >
+              1. Awal
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsPlaying(false); setFrameIdx(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer border transition-all ${
+                frameIdx === 1 && !isPlaying ? "bg-white text-black border-white font-black" : "bg-[#18202E] text-neutral-400 border-white/10 hover:text-white"
+              }`}
+            >
+              2. Puncak
+            </button>
+          </div>
+          <span className="text-[10px] font-semibold text-neutral-400 hidden sm:inline">
+            Fase Gerak: Otomatis Bergantian
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Dashboard({
   user: initialUser,
   language: initialLang = "ID",
@@ -2845,21 +2923,9 @@ export default function Dashboard({
                   </button>
                 </div>
 
-                {/* Animated GIF / Visual Card */}
+                {/* Animated Movement Visual Player Card */}
                 {matchedDb && (
-                  <div className="relative rounded-2xl overflow-hidden bg-black/60 border border-neutral-800 aspect-video flex items-center justify-center group">
-                    <img
-                      src={matchedDb.gifUrl}
-                      alt={matchedDb.name}
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                    />
-                    <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                      <span className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black tracking-wider flex items-center gap-1">
-                        <Play size={10} fill="currentColor" /> VISUAL TUTORIAL
-                      </span>
-                    </div>
-                  </div>
+                  <ExerciseVisualPlayer item={matchedDb} />
                 )}
 
                 {/* Target Muscles & Equipment Tags */}

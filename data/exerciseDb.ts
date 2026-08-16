@@ -20,6 +20,7 @@ export interface ExerciseItem {
   };
   recommendedSetsReps: string;
   gifUrl: string;
+  imageFrames: string[];
   thumbnailUrl?: string;
 }
 
@@ -27,7 +28,7 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
   {
     id: "lat-pulldown",
     name: "Lat Pulldown Machine",
-    indonesianName: "Mesin Lat Pulldown (Tarik Sayap)",
+    indonesianName: "Mesin Lat Pulldown (Tarik Sayap Punggung)",
     aliases: ["lat pulldown", "lat pull down", "pulldown", "mesin sayap", "tarik punggung", "lat pull down machine", "cable pulldown", "alat tarik punggung"],
     equipmentCategory: "machine",
     equipmentName: "Seated Lat Pulldown Machine",
@@ -64,7 +65,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Tarik perlahan ke arah dada atas ya, rasakan kontraksi lembut di punggung dan jaga napas tetap teratur. Semangat! ✨"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 60-90s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/1.jpg"
+    ]
   },
   {
     id: "barbell-bench-press",
@@ -106,12 +111,16 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Jaga stabilitas dan kontrol bebannya ya. Fokus pada kontraksi otot dada di setiap dorongan. ✨"
     },
     recommendedSetsReps: "4 Set x 8-10 Repetisi (Rest 90-120s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/1.jpg"
+    ]
   },
   {
     id: "incline-dumbbell-press",
     name: "Incline Dumbbell Press",
-    indonesianName: "Incline Dumbbell Press (Dada Atas)",
+    indonesianName: "Incline Dumbbell Press (Dada Bagian Atas)",
     aliases: ["incline dumbbell press", "incline press", "dumbbell incline", "press dada atas", "incline bench dumbbell", "incline db press"],
     equipmentCategory: "dumbbell",
     equipmentName: "Adjustable Incline Bench & Dumbbells",
@@ -145,7 +154,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Dorong perlahan dan rasakan aktivasi otot dada bagian atas. Jaga punggung tetap stabil di sandaran ya! ✨"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 60-90s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/1.jpg"
+    ]
   },
   {
     id: "leg-press-machine",
@@ -186,7 +199,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Pastikan punggung dan pinggul selalu menempel nyaman di sandaran ya. Rasakan kekuatan di paha dan bokongmu! 💪"
     },
     recommendedSetsReps: "4 Set x 10-12 Repetisi (Rest 90-120s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/1.jpg"
+    ]
   },
   {
     id: "seated-cable-row",
@@ -225,7 +242,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Jaga punggung tetap tegap dan rasakan kontraksi mantap di tengah punggung. Kontrol gerakannya perlahan ya. ✨"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/1.jpg"
+    ]
   },
   {
     id: "smith-machine-squat",
@@ -264,7 +285,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Turun perlahan dan dorong kuat dari tumit. Mesin Smith sangat aman untuk melatih form squat yang rapi! ✨"
     },
     recommendedSetsReps: "4 Set x 10-12 Repetisi (Rest 90s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Smith_Machine_Squat/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Smith_Machine_Squat/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Smith_Machine_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Smith_Machine_Squat/1.jpg"
+    ]
   },
   {
     id: "pec-deck-fly",
@@ -304,7 +329,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Buka dada lebar-lebar dan rasakan kontraksi penuh saat menutup ke depan. Bagus banget untuk postur tegap! ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Butterfly/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Butterfly/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Butterfly/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Butterfly/1.jpg"
+    ]
   },
   {
     id: "cable-tricep-pushdown",
@@ -344,7 +373,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Pertahankan siku tetap diam di sisi tubuh ya. Rasakan lengan belakang kencang di setiap dorongan. ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 45-60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown_-_Rope_Attachment/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown_-_Rope_Attachment/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown_-_Rope_Attachment/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown_-_Rope_Attachment/1.jpg"
+    ]
   },
   {
     id: "barbell-bicep-curl",
@@ -382,7 +415,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Lakukan perlahan dan rasakan aktivasi otot lengan depan. Jaga postur tetap tegap dan rileks ya. ✨"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Curl/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Curl/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Curl/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Curl/1.jpg"
+    ]
   },
   {
     id: "push-up",
@@ -419,7 +456,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Jaga tubuh tetap sejajar dan anggun. Jika terasa berat, boleh coba versi bertumpu di lutut dulu ya! ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/1.jpg"
+    ]
   },
   {
     id: "dumbbell-shoulder-press",
@@ -457,7 +498,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Dorong ke atas dengan ritme yang tenang, jaga bahu tetap rileks dan jangan tegang di leher ya. ✨"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 75s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Shoulder_Press/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Shoulder_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Shoulder_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Shoulder_Press/1.jpg"
+    ]
   },
   {
     id: "seated-leg-extension",
@@ -495,7 +540,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Luruskan kaki perlahan dan rasakan otot paha depan bekerja optimal. Bagus sekali untuk kekuatan lutut! ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Extensions/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Extensions/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Extensions/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Extensions/1.jpg"
+    ]
   },
   {
     id: "lying-leg-curl",
@@ -531,7 +580,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Tarik tumit ke arah bokong dengan terkontrol dan rasakan paha belakangmu mengencang sempurna. ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Leg_Curls/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Leg_Curls/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Leg_Curls/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Leg_Curls/1.jpg"
+    ]
   },
   {
     id: "lateral-raise",
@@ -568,7 +621,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Angkat tangan anggun ke samping setinggi bahu. Gerakan ini kunci tampilan bahu jenjang dan estetik! ✨"
     },
     recommendedSetsReps: "4 Set x 12-15 Repetisi (Rest 45-60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/1.jpg"
+    ]
   },
   {
     id: "cable-crossover-fly",
@@ -605,7 +662,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Rasakan tarikan lembut tapi kuat dari kabel. Jaga tubuh tetap seimbang dan dada tegap ya! ✨"
     },
     recommendedSetsReps: "3-4 Set x 12-15 Repetisi (Rest 60s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/0.jpg"
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/1.jpg"
+    ]
   },
   {
     id: "treadmill",
@@ -641,7 +702,11 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
       mia: "Jalan santai dengan kemiringan sangat nyaman untuk membakar kalori dan menjaga mood tetap segar sepanjang hari! ✨"
     },
     recommendedSetsReps: "20 - 45 Menit Incline Walk (Zona 2 Cardio)",
-    gifUrl: "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80"
+    gifUrl: "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80",
+    imageFrames: [
+      "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80"
+    ]
   }
 ];
 
