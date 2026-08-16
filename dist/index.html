@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <title>GymBuddy AI | AI Personal Trainer & Nutrition Coach</title>
-    <meta name="description" content="GymBuddy AI adalah Personal Trainer & Nutrition Coach berbasis AI 24/7 di WhatsApp. Dapatkan program latihan terpersonalisasi, lacak kalori makanan dari foto, dan capai body goal kamu tanpa ribet!" />
+    <title>GymBuddy AI | AI Personal Trainer &amp; Nutrition Coach</title>
+    <meta name="description" content="GymBuddy AI adalah Personal Trainer &amp; Nutrition Coach berbasis AI 24/7 di WhatsApp. Dapatkan program latihan terpersonalisasi, lacak kalori makanan dari foto, dan capai body goal kamu tanpa ribet!" />
     <meta name="keywords" content="GymBuddy AI, AI personal trainer, coach nutrisi whatsapp, hitung kalori AI, program latihan gym, diet sehat, coach mia, coach max" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://gymbuddygroup.com" />
@@ -12,15 +12,15 @@
     <!-- Open Graph / Facebook / WhatsApp -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://gymbuddygroup.com" />
-    <meta property="og:title" content="GymBuddy AI | AI Personal Trainer & Nutrition Coach" />
-    <meta property="og:description" content="Personal Trainer & Nutrition Coach berbasis AI 24/7 langsung di WhatsApp. Dapatkan rencana latihan & rekomendasi nutrisi presisi!" />
+    <meta property="og:title" content="GymBuddy AI | AI Personal Trainer &amp; Nutrition Coach" />
+    <meta property="og:description" content="Personal Trainer &amp; Nutrition Coach berbasis AI 24/7 langsung di WhatsApp. Dapatkan rencana latihan &amp; rekomendasi nutrisi presisi!" />
     <meta property="og:image" content="https://gymbuddygroup.com/hero.png" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://gymbuddygroup.com" />
-    <meta name="twitter:title" content="GymBuddy AI | AI Personal Trainer & Nutrition Coach" />
-    <meta name="twitter:description" content="Personal Trainer & Nutrition Coach berbasis AI 24/7 langsung di WhatsApp." />
+    <meta name="twitter:title" content="GymBuddy AI | AI Personal Trainer &amp; Nutrition Coach" />
+    <meta name="twitter:description" content="Personal Trainer &amp; Nutrition Coach berbasis AI 24/7 langsung di WhatsApp." />
     <meta name="twitter:image" content="https://gymbuddygroup.com/hero.png" />
 
     <!-- PWA & Mobile Web App Meta Tags -->
@@ -32,6 +32,30 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="GymBuddy" />
 
+    <!-- EMERGENCY: Force-clear all stale Service Worker caches immediately -->
+    <script>
+      (function() {
+        if ('serviceWorker' in navigator) {
+          // Unregister all old service workers
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(reg) {
+              reg.unregister();
+              console.log('[GymBuddy] Unregistered old SW:', reg.scope);
+            });
+          });
+          // Clear all caches
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(key) {
+                caches.delete(key);
+                console.log('[GymBuddy] Deleted cache:', key);
+              });
+            });
+          }
+        }
+      })();
+    </script>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,20 +65,5 @@
   </head>
   <body>
     <div id="root"></div>
-
-    <!-- PWA Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((registration) => {
-              console.log('GymBuddy PWA Service Worker registered with scope:', registration.scope);
-            })
-            .catch((error) => {
-              console.warn('GymBuddy PWA Service Worker registration failed:', error);
-            });
-        });
-      }
-    </script>
   </body>
 </html>
