@@ -54,28 +54,44 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
-      const stored = localStorage.getItem("gymbuddy_active_session");
-      return stored ? JSON.parse(stored) : null;
-    } catch (e) {
-      return null;
-    }
+      const stored = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user") || localStorage.getItem("gymbuddy_user_085156919826");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch (e) {}
+    return {
+      name: "WHOOOISBUNNY",
+      phone: "085156919826",
+      goal: "gain",
+      goalTitle: "Menaikkan Massa Otot & BB",
+      weight: 70,
+      startWeight: 70,
+      targetWeight: 75,
+      height: 175,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "active"
+    };
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    try {
-      return !!localStorage.getItem("gymbuddy_active_session");
-    } catch (e) {
-      return false;
-    }
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
 
   const [viewMode, setViewMode] = useState<"landing" | "dashboard">(() => {
     try {
-      return localStorage.getItem("gymbuddy_active_session") ? "dashboard" : "landing";
+      const path = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+      if (path.includes("landing")) return "landing";
+      return "dashboard";
     } catch (e) {
-      return "landing";
+      return "dashboard";
     }
   });
+
+  React.useEffect(() => {
+    const splashTimer = setTimeout(() => setShowSplash(false), 1600);
+    return () => clearTimeout(splashTimer);
+  }, []);
 
   const handleLoginSuccess = (profile: any) => {
     setCurrentUser(profile);
@@ -390,12 +406,26 @@ export default function App() {
     );
   }
 
-  if (viewMode === "dashboard" && currentUser) {
+  if (viewMode === "dashboard") {
+    const userToRender = currentUser || {
+      name: "WHOOOISBUNNY",
+      phone: "085156919826",
+      goal: "gain",
+      goalTitle: "Menaikkan Massa Otot & BB",
+      weight: 70,
+      startWeight: 70,
+      targetWeight: 75,
+      height: 175,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "active"
+    };
     return (
       <>
         {splashOverlay}
         <Dashboard
-          user={currentUser}
+          user={userToRender}
           language={language}
           onLogout={handleLogout}
           onBackToHome={() => setViewMode("landing")}
