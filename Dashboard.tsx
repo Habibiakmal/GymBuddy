@@ -3346,105 +3346,98 @@ export default function Dashboard({
       </AnimatePresence>
 
       {/* APPLE WATCH CONNECT & ZERO-TYPING PAIRING MODAL */}
-      <AnimatePresence>
-        {showWatchConnectModal && (
-          <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 text-white my-auto max-h-[90vh] overflow-y-auto"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
-                    <Watch size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-['Archivo_Black'] text-base text-white">Hubungkan ke Apple Watch</h3>
-                    <p className="text-xs text-neutral-400 font-medium">Buka di jam tanpa perlu ketik login</p>
-                  </div>
+      {showWatchConnectModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowWatchConnectModal(false); }}
+        >
+          <div
+            style={{ backgroundColor: "#111620", border: "1px solid #262d3d", borderRadius: "24px", padding: "20px", maxWidth: "440px", width: "100%", boxShadow: "0 25px 50px rgba(0,0,0,0.9)", color: "white", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1e2535", paddingBottom: "12px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "12px", backgroundColor: "rgba(212,255,0,0.12)", border: "1px solid rgba(212,255,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Watch size={20} color="#D4FF00" />
                 </div>
-                <button
-                  onClick={() => setShowWatchConnectModal(false)}
-                  className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Instructions & Explanation */}
-              <div className="space-y-3 text-xs text-neutral-300">
-                <div className="bg-[#161C28] border border-[#D4FF00]/30 rounded-2xl p-3.5 space-y-2">
-                  <span className="font-black text-[#D4FF00] block text-xs">✨ Magic Link Instan:</span>
-                  <p className="text-[11px] text-neutral-300 leading-relaxed">
-                    Karena layar Apple Watch sangat kecil untuk mengetik, kirim Magic Link ini ke dirimu sendiri. Sekali tap di Apple Watch, akunmu langsung otomatis terhubung!
-                  </p>
-
-                  <div className="p-2.5 rounded-xl bg-black/70 border border-neutral-800 font-mono text-[10px] text-neutral-400 break-all select-all">
-                    {typeof window !== "undefined"
-                      ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
-                      : "/watch"}
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`;
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(url);
-                          setWatchLinkCopied(true);
-                          setTimeout(() => setWatchLinkCopied(false), 3000);
-                        }
-                      }}
-                      className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all border border-white/10"
-                    >
-                      <span>{watchLinkCopied ? "Disalin! ✓" : "Salin Link"}</span>
-                    </button>
-
-                    <a
-                      href={`https://wa.me/?text=${encodeURIComponent(
-                        "Buka GymBuddy di Apple Watch: " +
-                          (typeof window !== "undefined"
-                            ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
-                            : "/watch")
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
-                    >
-                      <Share2 size={13} />
-                      <span>Kirim ke WA</span>
-                    </a>
-                  </div>
-                </div>
-
-                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3 space-y-1 text-[11px]">
-                  <span className="font-bold text-white block">Cara Pakai di Apple Watch:</span>
-                  <p>1. Kirim link di atas ke WhatsApp / iMessage / Apple Notes kamu.</p>
-                  <p>2. Di Apple Watch, buka chat / notes dan tap linknya.</p>
-                  <p>3. Watch Mode langsung terbuka lengkap dengan tombol set besar & live rest timer!</p>
+                <div>
+                  <h3 style={{ fontFamily: "Arial Black, sans-serif", fontSize: "15px", fontWeight: 900, color: "white", margin: 0 }}>Hubungkan ke Apple Watch</h3>
+                  <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0 0" }}>Buka di jam tanpa perlu ketik login</p>
                 </div>
               </div>
+              <button
+                onClick={() => setShowWatchConnectModal(false)}
+                style={{ background: "#1e2535", border: "none", borderRadius: "10px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-1">
+            {/* Magic Link Box */}
+            <div style={{ backgroundColor: "#161C28", border: "1px solid rgba(212,255,0,0.25)", borderRadius: "16px", padding: "14px", marginBottom: "12px" }}>
+              <span style={{ display: "block", fontWeight: 900, color: "#D4FF00", fontSize: "12px", marginBottom: "6px" }}>✨ Magic Link — Login Otomatis:</span>
+              <p style={{ fontSize: "11px", color: "#cbd5e1", lineHeight: 1.6, margin: "0 0 10px 0" }}>
+                Karena layar Apple Watch kecil untuk mengetik, kirim link ini ke dirimu sendiri. Sekali tap di jam, akun langsung terhubung otomatis!
+              </p>
+
+              {/* URL Display */}
+              <div style={{ backgroundColor: "rgba(0,0,0,0.6)", border: "1px solid #262d3d", borderRadius: "10px", padding: "8px 10px", fontFamily: "monospace", fontSize: "10px", color: "#64748b", wordBreak: "break-all", marginBottom: "10px", userSelect: "all" }}>
+                {typeof window !== "undefined"
+                  ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
+                  : "/watch"}
+              </div>
+
+              {/* Copy + WA buttons */}
+              <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   onClick={() => {
-                    setShowWatchConnectModal(false);
-                    if (onOpenWatchMode) onOpenWatchMode();
+                    const url = `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`;
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(url);
+                      setWatchLinkCopied(true);
+                      setTimeout(() => setWatchLinkCopied(false), 3000);
+                    }
                   }}
-                  className="w-full py-3 rounded-2xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                  style={{ flex: 1, padding: "10px", borderRadius: "10px", backgroundColor: watchLinkCopied ? "#16a34a" : "#1e2535", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontWeight: 800, fontSize: "12px", cursor: "pointer" }}
                 >
-                  <Watch size={14} />
-                  <span>Buka Watch Mode di Browser Ini</span>
+                  {watchLinkCopied ? "✓ Disalin!" : "📋 Salin Link"}
                 </button>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent("Buka GymBuddy di Apple Watch: " + (typeof window !== "undefined" ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}` : "/watch"))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ flex: 1, padding: "10px", borderRadius: "10px", backgroundColor: "#25D366", color: "black", fontWeight: 800, fontSize: "12px", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}
+                >
+                  📱 Kirim ke WA
+                </a>
               </div>
-            </motion.div>
+            </div>
+
+            {/* Step Guide */}
+            <div style={{ backgroundColor: "#161C28", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "12px", fontSize: "11px", color: "#cbd5e1", marginBottom: "14px" }}>
+              <span style={{ display: "block", fontWeight: 700, color: "white", marginBottom: "6px" }}>Cara Pakai di Apple Watch:</span>
+              <p style={{ margin: "2px 0" }}>1. Kirim link di atas ke WhatsApp / iMessage kamu.</p>
+              <p style={{ margin: "2px 0" }}>2. Di Apple Watch, buka pesan & tap linknya.</p>
+              <p style={{ margin: "2px 0" }}>3. Watch Mode langsung terbuka — tombol besar & rest timer aktif!</p>
+            </div>
+
+            {/* Open in browser CTA */}
+            <button
+              onClick={() => {
+                setShowWatchConnectModal(false);
+                if (onOpenWatchMode) onOpenWatchMode();
+              }}
+              style={{ width: "100%", padding: "13px", borderRadius: "14px", backgroundColor: "#D4FF00", border: "none", color: "black", fontWeight: 900, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+            >
+              <Watch size={15} color="black" />
+              Buka Watch Mode di Browser Ini
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+
 
       {/* ADD LOG MODAL (AI AUTO-DETECTION) */}
       <AnimatePresence>
