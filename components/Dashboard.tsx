@@ -698,10 +698,12 @@ export default function Dashboard({
 
   // Determine User Registration Date as Min Date Constraint
   const getUserRegisterDateStr = (): string => {
-    if (activeUser.createdAt) return activeUser.createdAt.substring(0, 10);
-    if (activeUser.registerDate) return activeUser.registerDate.substring(0, 10);
+    try {
+      if (activeUser?.createdAt) return String(activeUser.createdAt).substring(0, 10);
+      if (activeUser?.registerDate) return String(activeUser.registerDate).substring(0, 10);
+    } catch (e) {}
 
-    const phoneKey = activeUser.phone || "user";
+    const phoneKey = activeUser?.phone || "user";
     try {
       const stored = localStorage.getItem(`gymbuddy_user_registered_at_${phoneKey}`);
       if (stored) return stored;
@@ -881,7 +883,7 @@ export default function Dashboard({
       targetProtein: computedProtein,
     };
 
-    setActiveUser(updatedUser);
+    setLiveUser(updatedUser);
     try {
       const normP = normalizePhone(activeUser.phone || "user");
       localStorage.setItem(`gymbuddy_user_${normP}`, JSON.stringify(updatedUser));
