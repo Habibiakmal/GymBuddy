@@ -644,6 +644,21 @@ export default function Dashboard({
   onResetData,
   onOpenWatchMode
 }: DashboardProps) {
+  const safeUser: UserProfileData = initialUser || {
+    name: "WHOOOISBUNNY",
+    phone: "085156919826",
+    goal: "gain",
+    goalTitle: "Menaikkan Massa Otot & BB",
+    weight: 70,
+    startWeight: 70,
+    targetWeight: 75,
+    height: 175,
+    age: 25,
+    gender: "pria",
+    persona: "max",
+    activityLevel: "active"
+  };
+
   // Language Persistence
   const [lang, setLang] = useState<"ID" | "EN">(() => {
     try {
@@ -674,12 +689,12 @@ export default function Dashboard({
 
   const todayDateStr = formatDateKey(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
-  const [liveUser, setLiveUser] = useState<UserProfileData>(initialUser);
+  const [liveUser, setLiveUser] = useState<UserProfileData>(safeUser);
   const [allLogs, setAllLogs] = useState<MealItem[]>([]);
   const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
 
-  const activeUser = liveUser || initialUser;
+  const activeUser = liveUser || safeUser;
 
   // Determine User Registration Date as Min Date Constraint
   const getUserRegisterDateStr = (): string => {
@@ -710,7 +725,7 @@ export default function Dashboard({
   // Feel State per date
   const [feelState, setFeelState] = useState<FeelState>(() => {
     try {
-      const stored = localStorage.getItem(`gymbuddy_feel_${initialUser.phone || "user"}_${selectedDate}`);
+      const stored = localStorage.getItem(`gymbuddy_feel_${safeUser.phone || "user"}_${selectedDate}`);
       return (stored as FeelState) || "good";
     } catch (e) {
       return "good";
@@ -997,7 +1012,7 @@ export default function Dashboard({
   };
 
   // Weekly Schedule
-  const weeklySchedule = getPersonalizedWeeklySchedule(initialUser);
+  const weeklySchedule = getPersonalizedWeeklySchedule(safeUser);
 
   const getDayNameFromDateStr = (dateStr: string) => {
     const parts = dateStr.split("-");
@@ -1013,7 +1028,7 @@ export default function Dashboard({
   // Exercises State per date
   const [exercises, setExercises] = useState<WorkoutExercise[]>(() => {
     try {
-      const stored = localStorage.getItem(`gymbuddy_exercises_${initialUser.phone || "user"}_${selectedDate}`);
+      const stored = localStorage.getItem(`gymbuddy_exercises_${safeUser.phone || "user"}_${selectedDate}`);
       if (stored) return JSON.parse(stored);
     } catch (e) {}
     return todayScheduleObj.exercises;
@@ -1040,7 +1055,7 @@ export default function Dashboard({
   const [itemCarbsInput, setItemCarbsInput] = useState("");
   const [itemFatInput, setItemFatInput] = useState("");
   const [itemVolumeInput, setItemVolumeInput] = useState("250");
-  const [newWeightInput, setNewWeightInput] = useState(String(initialUser.weight || 70));
+  const [newWeightInput, setNewWeightInput] = useState(String(safeUser.weight || 70));
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
   const [showManualInputs, setShowManualInputs] = useState(false);
   const [aiPreview, setAiPreview] = useState<any>(null);
