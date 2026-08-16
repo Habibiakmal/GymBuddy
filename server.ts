@@ -9,6 +9,7 @@ import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { MongoClient } from "mongodb";
+import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, EXERCISE_DATABASE } from "./data/exerciseDb";
 
 // Twilio credentials (concatenated to avoid GitHub secret push block)
 const TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
@@ -1849,13 +1850,22 @@ _Makro: ~40g Protein, ~35g Karbo, ~12g Lemak_
 }
 
 function formatEquipmentCard(parsedAi: any, userData: ReturnType<typeof calculateUserData>): string {
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  const persona = (userData.persona === "mia" || userData.persona === "nikita") ? "mia" : "max";
+  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const equipmentName = parsedAi.equipmentName || "Alat Gym";
+
+  // Check if we have exact/fuzzy match in ExerciseDB
+  const matchedExercise = findExerciseOrEquipment(equipmentName) || findExerciseOrEquipment(parsedAi.query || "");
+  if (matchedExercise) {
+    const guide = formatWhatsAppExerciseGuide(matchedExercise, persona);
+    return guide.text;
+  }
+
   const isAligned = parsedAi.isAlignedWithGoal !== false;
 
   if (!isAligned) {
     const redirectionMsg = parsedAi.politeRedirection || 
-      (userData.persona === "max" 
+      (persona === "max" 
         ? `Kayaknya alat ${equipmentName} ini kurang cocok buat goal lo (${userData.goalTitle}) dulu ya bro. Kita fokus ke gerakan utama yang lebih efektif & aman!`
         : `Wah, sepertinya alat ${equipmentName} ini belum menjadi prioritas utama untuk goal ${userData.goalTitle} kamu ya ✨ Yuk fokus ke latihan dasar yang lebih sesuai dulu!`);
 
@@ -1873,23 +1883,19 @@ ${parsedAi.alignmentExplanation || "Gunakan latihan dasar yang lebih sesuai deng
 
   const exercises = Array.isArray(parsedAi.suggestedExercises) && parsedAi.suggestedExercises.length > 0
     ? parsedAi.suggestedExercises.map((e: any, idx: number) => 
-        `• *${e.name || `Variasi ${idx+1}`}*
-` +
-        `  💪 Otot: ${e.targetMuscle || "General"}
-` +
+        `• *${e.name || `Variasi ${idx+1}`}*\n` +
+        `  💪 Otot: ${e.targetMuscle || "General"}\n` +
         `  🔢 Target: ${e.setsReps || "3 Sets x 10-12 Reps"}\n` +
         `  💡 Tips: ${e.techniqueTip || "Jaga postur & pernafasan teratur."}`
       ).join("\n\n")
-    : `• *Custom Exercise*
-  🔢 Target: 3 Sets x 12 Reps
-  💡 Tips: Kontrol gerakan saat eccentric.`;
+    : `• *Custom Exercise*\n  🔢 Target: 3 Sets x 12 Reps\n  💡 Tips: Kontrol gerakan saat eccentric.`;
 
   const comment = parsedAi.coachComment || 
-    (userData.persona === "max" 
+    (persona === "max" 
       ? `Alat ini mantap banget buat goal lo! Sikat gerakan di atas & pastikan form lo bersih!`
       : `Alat ini sangat cocok untuk mendukung ${userData.goalTitle} kamu! Lakukan dengan perlahan dan nikmati prosesnya ya ✨`);
 
-  return `🏋️ *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*
+  return `🏋️ *PANDUAN ALAT GYM: ${equipmentName.toUpperCase()}*
 
 ✅ *Status Goal Alignment*:
 *SANGAT COCOK UNTUK GOAL ${userData.goalTitle.toUpperCase()}!*
@@ -2751,6 +2757,32 @@ VERIFIKASI WAJIB sebelum output: (protein×4) + (carbs×4) + (fat×9) = calories
     saveUserProfile(phone, user);
     const calculated = calculateUserData(user);
     res.json({ success: true, user, profile: user, userData: calculated, calculated });
+  });
+
+  // REST API: ExerciseDB Endpoints (Full Library & Query Search)
+  app.get("/api/exercises", (req, res) => {
+    res.json({ success: true, count: EXERCISE_DATABASE.length, exercises: EXERCISE_DATABASE });
+  });
+
+  app.get("/api/exercises/search", (req, res) => {
+    const q = (req.query.q as string) || "";
+    if (!q) {
+      return res.json({ success: true, count: EXERCISE_DATABASE.length, exercises: EXERCISE_DATABASE });
+    }
+    const matched = findExerciseOrEquipment(q);
+    if (matched) {
+      return res.json({ success: true, match: matched, exercises: [matched] });
+    }
+    const queryLower = q.toLowerCase();
+    const results = EXERCISE_DATABASE.filter(
+      (e) =>
+        e.name.toLowerCase().includes(queryLower) ||
+        e.indonesianName.toLowerCase().includes(queryLower) ||
+        e.aliases.some((a) => a.toLowerCase().includes(queryLower)) ||
+        e.targetMuscles.some((m) => m.toLowerCase().includes(queryLower)) ||
+        e.equipmentName.toLowerCase().includes(queryLower)
+    );
+    res.json({ success: true, count: results.length, exercises: results });
   });
 
   // Midtrans Payment Endpoint
