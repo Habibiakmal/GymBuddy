@@ -1,11 +1,13 @@
+import rawExercises from "./allExercises.json";
+
 export interface ExerciseItem {
   id: string;
   name: string;
   indonesianName: string;
   aliases: string[];
-  equipmentCategory: "machine" | "cable" | "barbell" | "dumbbell" | "bodyweight" | "smith_machine" | "kettlebell" | "cardio";
+  equipmentCategory: "machine" | "cable" | "barbell" | "dumbbell" | "bodyweight" | "smith_machine" | "kettlebell" | "cardio" | string;
   equipmentName: string;
-  bodyPart: "chest" | "back" | "legs" | "shoulders" | "arms" | "core" | "full_body" | "cardio";
+  bodyPart: string;
   targetMuscles: string[];
   secondaryMuscles?: string[];
   equipmentSetup: string[];
@@ -24,7 +26,7 @@ export interface ExerciseItem {
   thumbnailUrl?: string;
 }
 
-export const EXERCISE_DATABASE: ExerciseItem[] = [
+const CURATED_EXERCISES: ExerciseItem[] = [
   {
     id: "lat-pulldown",
     name: "Lat Pulldown Machine",
@@ -709,6 +711,18 @@ export const EXERCISE_DATABASE: ExerciseItem[] = [
     ]
   }
 ];
+
+// Merge curated exercises (high quality Indonesian guides) with full 870+ exercises dataset
+const curatedNames = new Set(CURATED_EXERCISES.map((e) => e.name.toLowerCase()));
+const fullList: ExerciseItem[] = [...CURATED_EXERCISES];
+
+for (const raw of (rawExercises as unknown as ExerciseItem[])) {
+  if (!curatedNames.has(raw.name.toLowerCase())) {
+    fullList.push(raw);
+  }
+}
+
+export const EXERCISE_DATABASE: ExerciseItem[] = fullList;
 
 // Helper to find exercise by query / alias
 export function findExerciseOrEquipment(query: string): ExerciseItem | null {

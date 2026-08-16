@@ -3147,8 +3147,13 @@ export default function Dashboard({
                         <BookOpen size={20} />
                       </div>
                       <div>
-                        <h3 className="font-['Archivo_Black'] text-lg text-white">Kamus Alat & Gerakan Gym</h3>
-                        <p className="text-xs text-neutral-400 font-medium">Pilih alat lalu klik "Lanjut" untuk melihat panduan detail & animasi</p>
+                        <h3 className="font-['Archivo_Black'] text-lg text-white flex items-center gap-2">
+                          <span>Kamus Alat & Gerakan Gym</span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black">
+                            {EXERCISE_DATABASE.length} Latihan
+                          </span>
+                        </h3>
+                        <p className="text-xs text-neutral-400 font-medium">Database lengkap 870+ latihan gym open source dengan animasi gerakan</p>
                       </div>
                     </div>
                     <button
@@ -3171,7 +3176,7 @@ export default function Dashboard({
                         type="text"
                         value={explorerSearch}
                         onChange={(e) => setExplorerSearch(e.target.value)}
-                        placeholder="Cari alat (misal: Lat Pulldown, Leg Press, Bench Press, Push Up)..."
+                        placeholder="Cari dari 870+ latihan (misal: Bicep, Squat, Bench Press, Lat Pulldown, Tricep)..."
                         className="w-full pl-10 pr-4 py-2.5 bg-[#161C28] border border-neutral-800 rounded-xl text-xs font-semibold text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00] transition-colors"
                       />
                       {explorerSearch && (
@@ -3187,12 +3192,13 @@ export default function Dashboard({
                     {/* Category Pill Filters */}
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
                       {[
-                        { id: "all", label: "Semua Alat" },
+                        { id: "all", label: `Semua (${EXERCISE_DATABASE.length})` },
                         { id: "machine", label: "Mesin / Machine" },
                         { id: "cable", label: "Kabel / Cable" },
                         { id: "barbell", label: "Barbel" },
                         { id: "dumbbell", label: "Dumbbell" },
                         { id: "bodyweight", label: "Bodyweight" },
+                        { id: "kettlebell", label: "Kettlebell" },
                         { id: "cardio", label: "Kardio" }
                       ].map((cat) => (
                         <button
@@ -3221,7 +3227,7 @@ export default function Dashboard({
                         item.aliases.some((a) => a.toLowerCase().includes(explorerSearch.toLowerCase())) ||
                         item.targetMuscles.some((m) => m.toLowerCase().includes(explorerSearch.toLowerCase()));
                       return matchCat && matchSearch;
-                    }).map((item) => {
+                    }).slice(0, 100).map((item) => {
                       const isSelected = selectedExplorerItem?.id === item.id;
 
                       return (
