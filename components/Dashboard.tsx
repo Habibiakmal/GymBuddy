@@ -670,6 +670,7 @@ export default function Dashboard({
   });
 
   const t = translations[lang];
+  const isEN = lang === "EN";
 
   const toggleLanguage = () => {
     const nextLang = lang === "ID" ? "EN" : "ID";
