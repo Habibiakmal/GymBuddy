@@ -932,7 +932,16 @@ export default function Dashboard({
           portion: "1 Porsi Sedang (~350g)"
         };
 
-        if (lowerName.includes("telur") || lowerName.includes("egg")) {
+        if (lowerName.includes("americano") || lowerName.includes("espresso") || lowerName.includes("kopi hitam") || lowerName.includes("black coffee")) {
+          recognizedFood = {
+            foodName: "Iced Americano (Kopi Hitam Tanpa Gula)",
+            calories: 5,
+            protein: 0,
+            carbs: 1,
+            fat: 0,
+            portion: "1 Cup Reguler (300ml)"
+          };
+        } else if (lowerName.includes("telur") || lowerName.includes("egg")) {
           recognizedFood = {
             foodName: "Omelet Telur 3 Butir & Roti Gandum",
             calories: 340,
@@ -941,14 +950,23 @@ export default function Dashboard({
             fat: 16,
             portion: "1 Porsi (~200g)"
           };
-        } else if (lowerName.includes("kopi") || lowerName.includes("coffee") || lowerName.includes("latte")) {
+        } else if (lowerName.includes("latte") || lowerName.includes("kopi susu") || lowerName.includes("cappuccino")) {
           recognizedFood = {
-            foodName: "Iced Oat Latte Tanpa Gula",
+            foodName: "Iced Cafe Latte",
             calories: 130,
-            protein: 4,
-            carbs: 18,
-            fat: 5,
+            protein: 5,
+            carbs: 12,
+            fat: 6,
             portion: "1 Cup Reguler (350ml)"
+          };
+        } else if (lowerName.includes("kopi") || lowerName.includes("coffee")) {
+          recognizedFood = {
+            foodName: "Iced Americano (Kopi Hitam)",
+            calories: 5,
+            protein: 0,
+            carbs: 1,
+            fat: 0,
+            portion: "1 Cup (300ml)"
           };
         } else if (lowerName.includes("salad") || lowerName.includes("sayur")) {
           recognizedFood = {
@@ -1481,16 +1499,103 @@ export default function Dashboard({
     if (!queryText) return null;
 
     setIsAnalyzingAi(true);
+
+    // Fast-path for common exact beverages & foods (Zero Latency & Accurate Macros)
+    const lower = queryText.toLowerCase();
+    if (lower.includes("americano") || lower.includes("espresso") || lower.includes("kopi hitam") || lower.includes("black coffee") || lower.includes("long black")) {
+      const fastResult = {
+        foodName: "Iced Americano (Kopi Hitam Tanpa Gula)",
+        calories: 5,
+        protein: 0,
+        carbs: 1,
+        fat: 0,
+        isHydration: true,
+        volumeMl: 250
+      };
+      setItemCalInput(String(fastResult.calories));
+      setItemProteinInput(String(fastResult.protein));
+      setItemCarbsInput(String(fastResult.carbs));
+      setItemFatInput(String(fastResult.fat));
+      setAiPreview(fastResult);
+      setIsAnalyzingAi(false);
+      return fastResult;
+    }
+
+    if (lower === "air" || lower.includes("air putih") || lower.includes("air mineral") || lower.includes("aqua") || lower.includes("le minerale")) {
+      const fastResult = {
+        foodName: "Air Mineral (Air Putih)",
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        isHydration: true,
+        volumeMl: 250
+      };
+      setItemCalInput("0");
+      setItemProteinInput("0");
+      setItemCarbsInput("0");
+      setItemFatInput("0");
+      setAiPreview(fastResult);
+      setIsAnalyzingAi(false);
+      return fastResult;
+    }
+
+    if (lower.includes("teh tawar") || lower.includes("green tea") || lower.includes("teh hijau")) {
+      const fastResult = {
+        foodName: "Teh Tawar / Green Tea",
+        calories: 2,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        isHydration: true,
+        volumeMl: 250
+      };
+      setItemCalInput("2");
+      setItemProteinInput("0");
+      setItemCarbsInput("0");
+      setItemFatInput("0");
+      setAiPreview(fastResult);
+      setIsAnalyzingAi(false);
+      return fastResult;
+    }
+
+    if (lower.includes("latte") || lower.includes("cappuccino")) {
+      const fastResult = {
+        foodName: "Cafe Latte",
+        calories: 120,
+        protein: 6,
+        carbs: 10,
+        fat: 4,
+        isHydration: true,
+        volumeMl: 250
+      };
+      setItemCalInput("120");
+      setItemProteinInput("6");
+      setItemCarbsInput("10");
+      setItemFatInput("4");
+      setAiPreview(fastResult);
+      setIsAnalyzingAi(false);
+      return fastResult;
+    }
+
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
+      let res = await fetch(`/api/ai/analyze-food`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: queryText })
-      });
+      }).catch(() => null);
 
-      if (res.ok) {
+      if (!res || !res.ok) {
+        res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: queryText })
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
         const data = await res.json();
         if (data.success) {
           setItemCalInput(String(data.calories || 0));
@@ -2433,6 +2538,18 @@ export default function Dashboard({
         {/* ========================================================================= */}
         {activeTab === "workouts" && (
           <div className="space-y-5">
+            {/* Top Navigation Back to Home Bar */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setActiveTab("home")}
+                className="px-3.5 py-2 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <ArrowLeft size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
+              </button>
+            </div>
+
             <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -2583,6 +2700,18 @@ export default function Dashboard({
         {/* ========================================================================= */}
         {activeTab === "progress" && (
           <div className="space-y-5">
+            {/* Top Navigation Back to Home Bar */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setActiveTab("home")}
+                className="px-3.5 py-2 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <ArrowLeft size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
+              </button>
+            </div>
+
             <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
