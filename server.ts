@@ -2511,6 +2511,112 @@ VERIFIKASI WAJIB sebelum output: (protein×4) + (carbs×4) + (fat×9) = calories
     }
   });
 
+  // REST API: AI Vision Meal Image Analysis
+  app.post("/api/ai/analyze-meal-image", express.json({ limit: "25mb" }), async (req, res) => {
+    try {
+      const { imageBase64, mimeType = "image/jpeg" } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ success: false, error: "Image base64 data is required" });
+      }
+
+      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z0-9+]+;base64,/i, "");
+      const imagePart = {
+        inlineData: {
+          mimeType,
+          data: cleanBase64
+        }
+      };
+
+      const prompt = `KAMU ADALAH SISTEM VISION AI PAKAR NUTRISI GYMBUDDY.
+TUGASMU: Analisis gambar yang dikirim pengguna dengan sangat teliti.
+
+1. PERIKSA APAKAH INI MAKANAN / MINUMAN ATAU BUKAN.
+- Jika gambar adalah benda mati, laptop, hp, manusia, selfie, ruangan, pemandangan, hewan, atau BUKAN MAKANAN/MINUMAN:
+  Keluarkan JSON:
+  {
+    "isFood": false,
+    "foodName": "Bukan Makanan / Minuman",
+    "message": "Gambar ini bukan makanan atau minuman. Silakan upload foto makanan yang ingin kamu catat.",
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fat": 0,
+    "portion": "-"
+  }
+
+2. JIKA GAMBAR ADALAH MAKANAN ATAU MINUMAN:
+- Kenali jenis makanan/minuman secara spesifik dan akurat.
+- Estimasi porsi standar orang Indonesia dewasa.
+- Hitung kalori & makronutrisi: (protein × 4) + (carbs × 4) + (fat × 9) = calories.
+- Tentukan jika minuman (Americano, Teh, Air, Kopi, Jus, Boba, dll.) dengan isHydration=true.
+  * Americano / Kopi Hitam: calories: 5, protein: 0, carbs: 1, fat: 0, isHydration: true, volumeMl: 250
+  * Cafe Latte / Kopi Susu: calories: 130, protein: 5, carbs: 12, fat: 6, isHydration: true, volumeMl: 250
+  * Air Putih / Mineral: calories: 0, protein: 0, carbs: 0, fat: 0, isHydration: true, volumeMl: 250
+
+Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
+{
+  "isFood": true,
+  "foodName": "Nama Makanan/Minuman Spesifik",
+  "calories": 520,
+  "protein": 35,
+  "carbs": 60,
+  "fat": 15,
+  "fiber": 3,
+  "isHydration": false,
+  "volumeMl": 0,
+  "portion": "1 Porsi Standar (~300g)",
+  "mealType": "lunch"
+}`;
+
+      try {
+        const rawText = await generateGeminiContent(prompt, imagePart);
+        const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
+        let parsed: any = extractAndParseJson(textOutput) || {};
+
+        if (parsed.isFood === false || String(parsed.isFood).toLowerCase() === "false") {
+          return res.json({
+            success: true,
+            isFood: false,
+            foodName: parsed.foodName || "Bukan Makanan",
+            message: parsed.message || "Objek ini bukan makanan atau minuman. Silakan upload foto makanan yang ingin kamu catat.",
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            portion: "-"
+          });
+        }
+
+        const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
+        const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+        const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+        const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
+        const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
+
+        return res.json({
+          success: true,
+          isFood: true,
+          foodName: parsed.foodName || "Makanan Terdeteksi",
+          calories,
+          protein,
+          carbs,
+          fat,
+          fiber: Number(parsed.fiber) || 0,
+          isHydration: Boolean(parsed.isHydration),
+          volumeMl: Number(parsed.volumeMl) || 0,
+          portion: parsed.portion || "1 Porsi Standar",
+          mealType: parsed.mealType || getMealTypeByHour()
+        });
+      } catch (aiErr: any) {
+        console.error("Gemini Vision AI error:", aiErr);
+        res.status(500).json({ success: false, error: "Gagal menganalisis gambar via AI Vision: " + (aiErr?.message || "Timeout") });
+      }
+    } catch (err: any) {
+      console.error("Vision API error:", err);
+      res.status(500).json({ success: false, error: err.message || "Failed to analyze image" });
+    }
+  });
+
 
   // REST API: Get meal logs for specific user and date
   app.get("/api/user/:phone/meals", (req, res) => {

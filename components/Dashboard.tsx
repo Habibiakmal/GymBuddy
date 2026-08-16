@@ -903,6 +903,7 @@ export default function Dashboard({
   const [scanImage, setScanImage] = useState<string | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanMealType, setScanMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
+  const [scanNonFoodMessage, setScanNonFoodMessage] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{
     foodName: string;
     calories: number;
@@ -912,85 +913,63 @@ export default function Dashboard({
     portion: string;
   } | null>(null);
 
-  const handlePhotoSelected = (file: File) => {
+  const [customDrinkName, setCustomDrinkName] = useState("Air Mineral");
+  const [customDrinkMl, setCustomDrinkMl] = useState("250");
+
+  const handlePhotoSelected = async (file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const base64 = e.target?.result as string;
       setScanImage(base64);
       setScanLoading(true);
       setScanResult(null);
+      setScanNonFoodMessage(null);
 
-      // AI Meal Vision Scanner
-      setTimeout(() => {
-        const lowerName = (file.name || "").toLowerCase();
-        let recognizedFood = {
-          foodName: "Nasi Ayam Bakar & Sayur Lalapan",
-          calories: 520,
-          protein: 38,
-          carbs: 58,
-          fat: 14,
-          portion: "1 Porsi Sedang (~350g)"
-        };
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
-        if (lowerName.includes("americano") || lowerName.includes("espresso") || lowerName.includes("kopi hitam") || lowerName.includes("black coffee")) {
-          recognizedFood = {
-            foodName: "Iced Americano (Kopi Hitam Tanpa Gula)",
-            calories: 5,
-            protein: 0,
-            carbs: 1,
-            fat: 0,
-            portion: "1 Cup Reguler (300ml)"
-          };
-        } else if (lowerName.includes("telur") || lowerName.includes("egg")) {
-          recognizedFood = {
-            foodName: "Omelet Telur 3 Butir & Roti Gandum",
-            calories: 340,
-            protein: 24,
-            carbs: 22,
-            fat: 16,
-            portion: "1 Porsi (~200g)"
-          };
-        } else if (lowerName.includes("latte") || lowerName.includes("kopi susu") || lowerName.includes("cappuccino")) {
-          recognizedFood = {
-            foodName: "Iced Cafe Latte",
-            calories: 130,
-            protein: 5,
-            carbs: 12,
-            fat: 6,
-            portion: "1 Cup Reguler (350ml)"
-          };
-        } else if (lowerName.includes("kopi") || lowerName.includes("coffee")) {
-          recognizedFood = {
-            foodName: "Iced Americano (Kopi Hitam)",
-            calories: 5,
-            protein: 0,
-            carbs: 1,
-            fat: 0,
-            portion: "1 Cup (300ml)"
-          };
-        } else if (lowerName.includes("salad") || lowerName.includes("sayur")) {
-          recognizedFood = {
-            foodName: "Salad Ayam Dada Panggang Dressing Olive",
-            calories: 310,
-            protein: 32,
-            carbs: 15,
-            fat: 12,
-            portion: "1 Bowl (~280g)"
-          };
-        } else if (lowerName.includes("steak") || lowerName.includes("daging") || lowerName.includes("beef")) {
-          recognizedFood = {
-            foodName: "Sirloin Steak 200g & Kentang Panggang",
-            calories: 580,
-            protein: 46,
-            carbs: 35,
-            fat: 26,
-            portion: "1 Porsi (200g meat + potato)"
-          };
+      try {
+        let res = await fetch("/api/ai/analyze-meal-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType: file.type || "image/jpeg" })
+        }).catch(() => null);
+
+        if (!res || !res.ok) {
+          res = await fetch(`${API_BASE_URL}/api/ai/analyze-meal-image`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: base64, mimeType: file.type || "image/jpeg" })
+          }).catch(() => null);
         }
 
-        setScanResult(recognizedFood);
-        setScanLoading(false);
-      }, 1400);
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            if (data.isFood === false) {
+              setScanNonFoodMessage(data.message || (isEN ? "This object is not recognized as food or drink. Please upload a photo of your meal." : "Objek ini bukan makanan atau minuman. Silakan upload foto makanan yang ingin kamu catat."));
+              setScanLoading(false);
+              return;
+            }
+
+            setScanResult({
+              foodName: data.foodName || (isEN ? "Detected Meal" : "Makanan Terdeteksi"),
+              calories: Number(data.calories) || 0,
+              protein: Number(data.protein) || 0,
+              carbs: Number(data.carbs) || 0,
+              fat: Number(data.fat) || 0,
+              portion: data.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar")
+            });
+            if (data.mealType) setScanMealType(data.mealType);
+            setScanLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Vision AI request error:", err);
+      }
+
+      setScanNonFoodMessage(isEN ? "Vision AI connection timeout. Please enter meal details manually." : "Gagal memproses via Vision AI. Silakan masukkan catatan makanan secara manual.");
+      setScanLoading(false);
     };
     reader.readAsDataURL(file);
   };
@@ -1775,6 +1754,57 @@ export default function Dashboard({
     } catch (e) {}
   };
 
+  const handleSaveCustomDrink = () => {
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const vol = Math.max(50, Number(customDrinkMl) || 250);
+    const dName = (customDrinkName || "Air Mineral").trim();
+    let cal = 0, prot = 0, carb = 0, fat = 0;
+    const lowerD = dName.toLowerCase();
+    if (lowerD.includes("americano") || lowerD.includes("kopi hitam") || lowerD.includes("espresso")) {
+      cal = 5; carb = 1;
+    } else if (lowerD.includes("latte") || lowerD.includes("kopi susu")) {
+      cal = 130; prot = 5; carb = 12; fat = 6;
+    } else if (lowerD.includes("teh manis")) {
+      cal = 80; carb = 20;
+    } else if (lowerD.includes("susu protein") || lowerD.includes("whey")) {
+      cal = 140; prot = 25; carb = 3; fat = 2;
+    } else if (lowerD.includes("jus jeruk")) {
+      cal = 110; prot = 2; carb = 26;
+    }
+
+    const newItem: MealItem = {
+      id: `m-drink-${Date.now()}`,
+      foodName: dName,
+      calories: cal,
+      protein: prot,
+      carbs: carb,
+      fat: fat,
+      isHydration: true,
+      volumeMl: vol,
+      mealType: getMealTypeByHour(),
+      time: new Date().toLocaleTimeString(lang === "EN" ? "en-US" : "id-ID", { hour: "2-digit", minute: "2-digit" })
+    };
+
+    const updated = [...allLogs, newItem];
+    setAllLogs(updated);
+    try {
+      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+    } catch (e) {}
+
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newItem, date: selectedDate })
+      });
+    } catch (e) {}
+
+    setShowAddDrinkModal(false);
+    setReminderNotificationMsg(lang === "EN" ? `Logged ${dName} (${vol} ml)! 💧` : `Berhasil mencatat ${dName} (${vol} ml)! 💧`);
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
   const handleDeleteLogItem = async (id: string) => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const updated = allLogs.filter((item) => item.id !== id);
@@ -2434,18 +2464,25 @@ export default function Dashboard({
                         <Droplets size={18} className="text-blue-400" />
                         <h2 className="text-base font-extrabold text-white">{t.waterHydration}</h2>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <button
                           onClick={() => handleQuickAddWater(250)}
-                          className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
+                          className="px-2.5 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
                         >
                           +250 ml
                         </button>
                         <button
                           onClick={() => handleQuickAddWater(500)}
-                          className="px-3 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
+                          className="px-2.5 py-1.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-extrabold text-xs hover:bg-blue-500/25 transition-all cursor-pointer shadow-xs"
                         >
                           +500 ml
+                        </button>
+                        <button
+                          onClick={() => setShowAddDrinkModal(true)}
+                          className="px-3 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
+                        >
+                          <Plus size={14} />
+                          <span>{isEN ? "Add Drink" : "+ Catat Minum"}</span>
                         </button>
                       </div>
                     </div>
@@ -3033,6 +3070,34 @@ export default function Dashboard({
                     )}
                   </div>
 
+                  {/* Non-Food Detected Notice */}
+                  {scanNonFoodMessage && !scanLoading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-2 text-center"
+                    >
+                      <span className="text-2xl block">⚠️</span>
+                      <h4 className="font-extrabold text-sm text-amber-300">
+                        {isEN ? "Not Recognized as Food / Drink" : "Bukan Makanan atau Minuman"}
+                      </h4>
+                      <p className="text-xs text-neutral-300 font-medium leading-relaxed">
+                        {scanNonFoodMessage}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScanImage(null);
+                          setScanNonFoodMessage(null);
+                          setScanResult(null);
+                        }}
+                        className="mt-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer inline-block"
+                      >
+                        {isEN ? "Take Another Photo" : "Ambil Foto Makanan Lain"}
+                      </button>
+                    </motion.div>
+                  )}
+
                   {/* AI Results */}
                   {scanResult && !scanLoading && (
                     <motion.div
@@ -3101,6 +3166,124 @@ export default function Dashboard({
                   )}
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DEDICATED ADD DRINK / WATER MODAL */}
+      <AnimatePresence>
+        {showAddDrinkModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-white"
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <Droplets size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-white text-base">
+                      {isEN ? "Log Drink & Hydration" : "Catat Minuman & Hidrasi"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {isEN ? "Water, Americano, Tea, Whey Protein" : "Air putih, Americano, Teh, Susu Protein"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddDrinkModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Quick Select Preset Buttons */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Pilihan Cepat:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { name: "Air Putih", ml: "250", desc: "0 kcal • 250ml" },
+                    { name: "Iced Americano", ml: "300", desc: "5 kcal • 300ml" },
+                    { name: "Teh Hijau / Tawar", ml: "250", desc: "2 kcal • 250ml" },
+                    { name: "Susu Whey Protein", ml: "350", desc: "140 kcal • 25g Prot" }
+                  ].map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => {
+                        setCustomDrinkName(preset.name);
+                        setCustomDrinkMl(preset.ml);
+                      }}
+                      className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                        customDrinkName === preset.name
+                          ? "bg-blue-500/20 border-blue-400 text-white shadow-xs"
+                          : "bg-[#161C28] border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                      }`}
+                    >
+                      <p className="font-extrabold text-xs text-white">{preset.name}</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">{preset.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Input */}
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">Nama Minuman:</label>
+                  <input
+                    type="text"
+                    value={customDrinkName}
+                    onChange={(e) => setCustomDrinkName(e.target.value)}
+                    placeholder="Contoh: Iced Americano, Air Putih, Jus..."
+                    className="w-full bg-[#161C28] border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">Volume (ml):</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={customDrinkMl}
+                      onChange={(e) => setCustomDrinkMl(e.target.value)}
+                      placeholder="250"
+                      className="w-full bg-[#161C28] border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                    />
+                    <div className="flex items-center gap-1 shrink-0">
+                      {["250", "350", "500", "600"].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setCustomDrinkMl(v)}
+                          className={`px-2 py-2 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                            customDrinkMl === v
+                              ? "bg-blue-500 text-white border-blue-500"
+                              : "bg-[#161C28] text-neutral-400 border-neutral-800 hover:text-white"
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveCustomDrink}
+                className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+              >
+                <Check size={16} strokeWidth={3} />
+                <span>Simpan Catatan Minuman 💧</span>
+              </button>
             </motion.div>
           </div>
         )}
