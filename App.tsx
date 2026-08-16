@@ -54,37 +54,31 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
-      const stored = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user") || localStorage.getItem("gymbuddy_user_085156919826");
+      const stored = localStorage.getItem("gymbuddy_active_session");
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && typeof parsed === "object") return parsed;
       }
     } catch (e) {}
-    return {
-      name: "WHOOOISBUNNY",
-      phone: "085156919826",
-      goal: "gain",
-      goalTitle: "Menaikkan Massa Otot & BB",
-      weight: 70,
-      startWeight: 70,
-      targetWeight: 75,
-      height: 175,
-      age: 25,
-      gender: "pria",
-      persona: "max",
-      activityLevel: "active"
-    };
+    return null;
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem("gymbuddy_active_session");
+    } catch (e) {
+      return false;
+    }
+  });
 
   const [viewMode, setViewMode] = useState<"landing" | "dashboard">(() => {
     try {
       const path = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
-      if (path.includes("landing")) return "landing";
-      return "dashboard";
+      if (path === "/dashboard") return "dashboard";
+      const stored = localStorage.getItem("gymbuddy_active_session");
+      return stored ? "dashboard" : "landing";
     } catch (e) {
-      return "dashboard";
+      return "landing";
     }
   });
 
@@ -406,33 +400,16 @@ export default function App() {
     );
   }
 
-  if (viewMode === "dashboard") {
-    const userToRender = currentUser || {
-      name: "WHOOOISBUNNY",
-      phone: "085156919826",
-      goal: "gain",
-      goalTitle: "Menaikkan Massa Otot & BB",
-      weight: 70,
-      startWeight: 70,
-      targetWeight: 75,
-      height: 175,
-      age: 25,
-      gender: "pria",
-      persona: "max",
-      activityLevel: "active"
-    };
+  if (viewMode === "dashboard" && currentUser) {
     return (
-      <>
-        {splashOverlay}
-        <Dashboard
-          user={userToRender}
-          language={language}
-          onLogout={handleLogout}
-          onBackToHome={() => setViewMode("landing")}
-          onResetData={handleResetAllData}
-          onOpenWatchMode={() => setViewMode("watch")}
-        />
-      </>
+      <Dashboard
+        user={currentUser}
+        language={language}
+        onLogout={handleLogout}
+        onBackToHome={() => setViewMode("landing")}
+        onResetData={handleResetAllData}
+        onOpenWatchMode={() => setViewMode("watch")}
+      />
     );
   }
 
