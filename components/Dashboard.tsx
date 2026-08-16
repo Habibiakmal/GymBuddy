@@ -862,7 +862,8 @@ export default function Dashboard({
   const [showExerciseExplorerModal, setShowExerciseExplorerModal] = useState(false);
   const [explorerSearch, setExplorerSearch] = useState("");
   const [explorerCategory, setExplorerCategory] = useState<string>("all");
-  const [selectedExerciseForModal, setSelectedExerciseForModal] = useState<ExerciseItem | null>(null);
+  const [selectedExplorerItem, setSelectedExplorerItem] = useState<ExerciseItem | null>(null);
+  const [viewingDetailExercise, setViewingDetailExercise] = useState<ExerciseItem | null>(null);
 
   // Modals
   const [showAddFoodModal, setShowAddFoodModal] = useState(false);
@@ -3014,7 +3015,7 @@ export default function Dashboard({
         })()}
       </AnimatePresence>
 
-      {/* EXERCISE EXPLORER & EQUIPMENT DICTIONARY MODAL */}
+      {/* EXERCISE EXPLORER & EQUIPMENT DICTIONARY MODAL (2-STEP INTUITIVE FLOW) */}
       <AnimatePresence>
         {showExerciseExplorerModal && (
           <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -3024,121 +3025,272 @@ export default function Dashboard({
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto text-white"
             >
-              {/* Explorer Header */}
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
-                    <BookOpen size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-['Archivo_Black'] text-lg text-white">Kamus Alat & Gerakan Gym</h3>
-                    <p className="text-xs text-neutral-400 font-medium">Database panduan cara setting alat & demonstrasi visual GIF</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowExerciseExplorerModal(false);
-                    setSelectedExerciseForModal(null);
-                  }}
-                  className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Search & Filter Bar */}
-              <div className="space-y-2.5">
-                <div className="relative">
-                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <input
-                    type="text"
-                    value={explorerSearch}
-                    onChange={(e) => setExplorerSearch(e.target.value)}
-                    placeholder="Cari alat (misal: Lat Pulldown, Leg Press, Bench Press, Push Up)..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#161C28] border border-neutral-800 rounded-xl text-xs font-semibold text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00] transition-colors"
-                  />
-                  {explorerSearch && (
+              {/* If an exercise detail is viewed inside explorer */}
+              {viewingDetailExercise ? (
+                <div className="space-y-4">
+                  {/* Top bar with Back button */}
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
                     <button
-                      onClick={() => setExplorerSearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400 hover:text-white"
+                      onClick={() => setViewingDetailExercise(null)}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#18202E] hover:bg-[#202c3f] border border-white/10 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                     >
-                      <X size={14} />
+                      <ArrowLeft size={15} className="text-[#D4FF00]" />
+                      <span>Kembali ke Daftar Alat</span>
                     </button>
-                  )}
-                </div>
-
-                {/* Category Pill Filters */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
-                  {[
-                    { id: "all", label: "Semua Alat" },
-                    { id: "machine", label: "Mesin / Machine" },
-                    { id: "cable", label: "Kabel / Cable" },
-                    { id: "barbell", label: "Barbel" },
-                    { id: "dumbbell", label: "Dumbbell" },
-                    { id: "bodyweight", label: "Bodyweight" },
-                    { id: "cardio", label: "Kardio" }
-                  ].map((cat) => (
                     <button
-                      key={cat.id}
-                      onClick={() => setExplorerCategory(cat.id)}
-                      className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all cursor-pointer border ${
-                        explorerCategory === cat.id
-                          ? "bg-[#D4FF00] text-black border-[#D4FF00]"
-                          : "bg-[#161C28] text-neutral-400 border-neutral-800 hover:text-white"
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Title & Badge */}
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-md bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-[10px] font-black uppercase tracking-wider">
+                      {viewingDetailExercise.equipmentName}
+                    </span>
+                    <h3 className="font-['Archivo_Black'] text-xl text-white mt-1">{viewingDetailExercise.name}</h3>
+                    <p className="text-xs text-neutral-400 font-semibold">{viewingDetailExercise.indonesianName}</p>
+                  </div>
+
+                  {/* Animated Movement Visual Player */}
+                  <ExerciseVisualPlayer item={viewingDetailExercise} />
+
+                  {/* Target Muscles */}
+                  <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 space-y-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-neutral-400">Target Otot:</span>
+                      {viewingDetailExercise.targetMuscles.map((m, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+                          🎯 {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Equipment Setup Guide */}
+                  {viewingDetailExercise.equipmentSetup.length > 0 && (
+                    <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
+                      <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
+                        <Sliders size={14} /> Cara Setting Alat
+                      </h4>
+                      <ul className="space-y-1 text-xs text-neutral-300 font-medium list-disc list-inside leading-relaxed">
+                        {viewingDetailExercise.equipmentSetup.map((stp, idx) => (
+                          <li key={idx}><span className="text-neutral-200">{stp}</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Execution Instructions */}
+                  {viewingDetailExercise.instructions.length > 0 && (
+                    <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
+                      <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
+                        <BookOpen size={14} /> Cara Eksekusi Step-by-Step
+                      </h4>
+                      <ol className="space-y-1.5 text-xs text-neutral-300 font-medium list-decimal list-inside leading-relaxed">
+                        {viewingDetailExercise.instructions.map((stp, idx) => (
+                          <li key={idx} className="pl-1"><span className="text-neutral-200">{stp}</span></li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {/* Do's and Dont's */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-[#161C28] border border-emerald-500/20 rounded-2xl p-3.5 space-y-1.5">
+                      <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">✔ Tips Kunci Form</span>
+                      {viewingDetailExercise.dosAndDonts.dos.map((d, i) => (
+                        <p key={i} className="text-xs text-neutral-300">• {d}</p>
+                      ))}
+                    </div>
+                    <div className="bg-[#161C28] border border-red-500/20 rounded-2xl p-3.5 space-y-1.5">
+                      <span className="text-[11px] font-black text-red-400 uppercase tracking-wider block">✖ Kesalahan Umum</span>
+                      {viewingDetailExercise.dosAndDonts.donts.map((d, i) => (
+                        <p key={i} className="text-xs text-neutral-300">• {d}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom Back Button */}
+                  <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
+                    <button
+                      onClick={() => setViewingDetailExercise(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-white cursor-pointer"
+                    >
+                      ← Kembali ke Daftar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black transition-all cursor-pointer shadow-md"
+                    >
+                      Tutup Kamus
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* List View of Equipment */
+                <div className="space-y-4">
+                  {/* Explorer Header */}
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                        <BookOpen size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-['Archivo_Black'] text-lg text-white">Kamus Alat & Gerakan Gym</h3>
+                        <p className="text-xs text-neutral-400 font-medium">Pilih alat lalu klik "Lanjut" untuk melihat panduan detail & animasi</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Search & Filter Bar */}
+                  <div className="space-y-2.5">
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={explorerSearch}
+                        onChange={(e) => setExplorerSearch(e.target.value)}
+                        placeholder="Cari alat (misal: Lat Pulldown, Leg Press, Bench Press, Push Up)..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-[#161C28] border border-neutral-800 rounded-xl text-xs font-semibold text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00] transition-colors"
+                      />
+                      {explorerSearch && (
+                        <button
+                          onClick={() => setExplorerSearch("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400 hover:text-white"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Pill Filters */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
+                      {[
+                        { id: "all", label: "Semua Alat" },
+                        { id: "machine", label: "Mesin / Machine" },
+                        { id: "cable", label: "Kabel / Cable" },
+                        { id: "barbell", label: "Barbel" },
+                        { id: "dumbbell", label: "Dumbbell" },
+                        { id: "bodyweight", label: "Bodyweight" },
+                        { id: "cardio", label: "Kardio" }
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setExplorerCategory(cat.id)}
+                          className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all cursor-pointer border ${
+                            explorerCategory === cat.id
+                              ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                              : "bg-[#161C28] text-neutral-400 border-neutral-800 hover:text-white"
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Grid of Exercises */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                    {EXERCISE_DATABASE.filter((item) => {
+                      const matchCat = explorerCategory === "all" || item.equipmentCategory === explorerCategory;
+                      const matchSearch =
+                        !explorerSearch ||
+                        item.name.toLowerCase().includes(explorerSearch.toLowerCase()) ||
+                        item.indonesianName.toLowerCase().includes(explorerSearch.toLowerCase()) ||
+                        item.aliases.some((a) => a.toLowerCase().includes(explorerSearch.toLowerCase())) ||
+                        item.targetMuscles.some((m) => m.toLowerCase().includes(explorerSearch.toLowerCase()));
+                      return matchCat && matchSearch;
+                    }).map((item) => {
+                      const isSelected = selectedExplorerItem?.id === item.id;
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedExplorerItem(item)}
+                          onDoubleClick={() => setViewingDetailExercise(item)}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 group relative ${
+                            isSelected
+                              ? "bg-[#1d273a] border-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)] ring-1 ring-[#D4FF00]"
+                              : "bg-[#161C28] border-neutral-800 hover:border-[#D4FF00]/50 hover:bg-[#1a2333]"
+                          }`}
+                        >
+                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/60 shrink-0 border border-neutral-800">
+                            <img src={item.imageFrames?.[0] || item.gifUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${isSelected ? "bg-[#D4FF00] text-black" : "bg-[#D4FF00]/15 text-[#D4FF00]"}`}>
+                                {item.equipmentCategory}
+                              </span>
+                              {isSelected && (
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-black">
+                                  ✓ TERPILIH
+                                </span>
+                              )}
+                            </div>
+                            <h4 className={`font-extrabold text-sm truncate mt-0.5 ${isSelected ? "text-[#D4FF00]" : "text-white group-hover:text-[#D4FF00]"}`}>
+                              {item.name}
+                            </h4>
+                            <p className="text-[11px] text-neutral-400 font-medium truncate">{item.targetMuscles.join(", ")}</p>
+                          </div>
+                          <ChevronRight size={16} className={`shrink-0 ${isSelected ? "text-[#D4FF00] translate-x-1" : "text-neutral-600 group-hover:text-[#D4FF00]"} transition-all`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Sticky Action Footer with "Lanjut" button */}
+                  <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+                    <div className="text-xs">
+                      {selectedExplorerItem ? (
+                        <span className="text-neutral-300">
+                          Alat Terpilih: <strong className="text-[#D4FF00]">{selectedExplorerItem.name}</strong>
+                        </span>
+                      ) : (
+                        <span className="text-neutral-500 font-medium">Klik salah satu alat di atas untuk memilih</span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (selectedExplorerItem) {
+                          setViewingDetailExercise(selectedExplorerItem);
+                        }
+                      }}
+                      disabled={!selectedExplorerItem}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+                        selectedExplorerItem
+                          ? "bg-[#D4FF00] hover:bg-[#c4ec00] text-black scale-100 ring-2 ring-[#D4FF00]/40"
+                          : "bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50"
                       }`}
                     >
-                      {cat.label}
+                      <span>Lanjut (Lihat Cara Pakai)</span>
+                      <ArrowRight size={15} />
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid of Exercises */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
-                {EXERCISE_DATABASE.filter((item) => {
-                  const matchCat = explorerCategory === "all" || item.equipmentCategory === explorerCategory;
-                  const matchSearch =
-                    !explorerSearch ||
-                    item.name.toLowerCase().includes(explorerSearch.toLowerCase()) ||
-                    item.indonesianName.toLowerCase().includes(explorerSearch.toLowerCase()) ||
-                    item.aliases.some((a) => a.toLowerCase().includes(explorerSearch.toLowerCase())) ||
-                    item.targetMuscles.some((m) => m.toLowerCase().includes(explorerSearch.toLowerCase()));
-                  return matchCat && matchSearch;
-                }).map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      const pseudoEx: WorkoutExercise = {
-                        id: item.id,
-                        name: item.name,
-                        targetSets: 4,
-                        completedSets: 0,
-                        setsState: [false, false, false, false],
-                        targetReps: item.recommendedSetsReps,
-                        status: "not_started"
-                      };
-                      setActiveWorkoutDetail(pseudoEx);
-                    }}
-                    className="p-3.5 rounded-2xl bg-[#161C28] border border-neutral-800 hover:border-[#D4FF00]/50 hover:bg-[#1a2333] transition-all cursor-pointer flex items-center gap-3.5 group"
-                  >
-                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/60 shrink-0 border border-neutral-800">
-                      <img src={item.gifUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.2 rounded bg-[#D4FF00]/15 text-[#D4FF00] text-[9px] font-black uppercase">
-                          {item.equipmentCategory}
-                        </span>
-                      </div>
-                      <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] truncate mt-0.5">
-                        {item.name}
-                      </h4>
-                      <p className="text-[11px] text-neutral-400 font-medium truncate">{item.targetMuscles.join(", ")}</p>
-                    </div>
-                    <ChevronRight size={16} className="text-neutral-600 group-hover:text-[#D4FF00] shrink-0" />
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
