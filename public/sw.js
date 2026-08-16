@@ -1,4 +1,4 @@
-const CACHE_NAME = "gymbuddy-pwa-v4";
+const CACHE_NAME = "gymbuddy-pwa-v5";
 const STATIC_ASSETS = [
   "/manifest.json",
   "/favicon.png",
