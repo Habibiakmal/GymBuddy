@@ -6,6 +6,7 @@ import TestimonialCarousel from "./components/TestimonialCarousel";
 import LoginModal from "./components/LoginModal";
 import GymBuddyLogo from "./components/Logo";
 import Dashboard from "./components/Dashboard";
+import WatchMode from "./components/WatchMode";
 import SplashScreen from "./components/SplashScreen";
 import {
   motion,
@@ -140,6 +141,11 @@ export default function App() {
         setIsPricingPage(true);
         setShowcaseVariant(null);
         setIsAppOnboarding(false);
+      } else if (path === "/watch" || window.location.hash === "#watch") {
+        setViewMode("watch");
+        setIsPricingPage(false);
+        setShowcaseVariant(null);
+        setIsAppOnboarding(false);
       } else if (path === "/dashboard") {
         setViewMode("dashboard");
         setIsPricingPage(false);
@@ -165,7 +171,10 @@ export default function App() {
     let pageTitle = "GymBuddy AI | AI Personal Trainer & Nutrition Coach";
     let currentPath = "/";
 
-    if (isAppOnboarding) {
+    if (viewMode === "watch") {
+      pageTitle = "Watch Companion Mode | GymBuddy AI";
+      currentPath = "/watch";
+    } else if (isAppOnboarding) {
       pageTitle = "Personalized Onboarding | GymBuddy AI";
       currentPath = "/onboarding";
     } else if (viewMode === "dashboard" && currentUser) {
@@ -372,6 +381,15 @@ export default function App() {
     );
   }
 
+  if (viewMode === "watch") {
+    return (
+      <WatchMode
+        user={currentUser}
+        onExit={() => setViewMode(currentUser ? "dashboard" : "landing")}
+      />
+    );
+  }
+
   if (viewMode === "dashboard" && currentUser) {
     return (
       <>
@@ -382,6 +400,7 @@ export default function App() {
           onLogout={handleLogout}
           onBackToHome={() => setViewMode("landing")}
           onResetData={handleResetAllData}
+          onOpenWatchMode={() => setViewMode("watch")}
         />
       </>
     );

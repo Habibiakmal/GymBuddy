@@ -90,3 +90,47 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+// Push & Notification Click Handlers (For Apple Watch, Wear OS, and Mobile PWA)
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Focus existing window if open
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (clients.openWindow) {
+        return clients.openWindow("/");
+      }
+    })
+  );
+});
+
+// Push Event from Server/WebPush
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  try {
+    const data = event.data.json();
+    const options = {
+      body: data.body || "Waktunya melanjutkan sesi latihanmu di GymBuddy!",
+      icon: data.icon || "/icon-192.png",
+      badge: "/favicon.png",
+      vibrate: [200, 100, 200, 100, 200],
+      data: { url: data.url || "/" }
+    };
+    event.waitUntil(self.registration.showNotification(data.title || "GymBuddy AI Coach", options));
+  } catch (e) {
+    event.waitUntil(
+      self.registration.showNotification("GymBuddy", {
+        body: event.data.text(),
+        icon: "/icon-192.png"
+      })
+    );
+  }
+});

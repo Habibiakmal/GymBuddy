@@ -37,15 +37,17 @@ import {
   RefreshCw,
   Home,
   Camera,
-  Upload,
-  Sliders,
   ShieldCheck,
   BookOpen,
   Play,
-  Info
+  Info,
+  Watch,
+  Bell,
+  Volume2
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem } from "../data/exerciseDb";
+import { notificationService } from "../services/notificationService";
 
 interface MealItem {
   id: string;
@@ -90,6 +92,7 @@ interface DashboardProps {
   onLogout: () => void;
   onBackToHome: () => void;
   onResetData?: () => void;
+  onOpenWatchMode?: () => void;
 }
 
 interface WorkoutExercise {
@@ -633,7 +636,8 @@ export default function Dashboard({
   language: initialLang = "ID",
   onLogout,
   onBackToHome,
-  onResetData
+  onResetData,
+  onOpenWatchMode
 }: DashboardProps) {
   // Language Persistence
   const [lang, setLang] = useState<"ID" | "EN">(() => {
@@ -1604,6 +1608,36 @@ export default function Dashboard({
               <ChevronRight size={16} />
             </button>
 
+            {onOpenWatchMode && (
+              <button
+                onClick={onOpenWatchMode}
+                className="w-full px-4 py-3 rounded-2xl bg-[#18202E] hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-extrabold text-sm flex items-center justify-between transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
+                  <span>Mode Apple Watch</span>
+                </div>
+                <ChevronRight size={16} />
+              </button>
+            )}
+
+            <button
+              onClick={async () => {
+                const granted = await notificationService.requestPermission();
+                if (granted) {
+                  notificationService.sendTestNotification();
+                  setReminderNotificationMsg("Notifikasi Apple Watch & PWA Aktif! 🔔");
+                  setTimeout(() => setReminderNotificationMsg(null), 4000);
+                } else {
+                  alert("Izin notifikasi belum diaktifkan di browsermu.");
+                }
+              }}
+              className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-slate-800 border border-white/[0.06] text-neutral-400 hover:text-white text-xs font-bold flex items-center gap-3 transition-all cursor-pointer"
+            >
+              <Bell size={16} className="text-[#D4FF00]" />
+              <span>Tes Notifikasi PWA</span>
+            </button>
+
             <button
               onClick={onBackToHome}
               className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#18202E] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
@@ -2092,6 +2126,17 @@ export default function Dashboard({
               </div>
 
               <div className="flex items-center gap-2">
+                {onOpenWatchMode && (
+                  <button
+                    onClick={onOpenWatchMode}
+                    className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title="Buka Layar Pendamping Apple Watch & Smartwatch"
+                  >
+                    <Watch size={14} className="text-[#D4FF00]" />
+                    <span className="hidden sm:inline">Watch Mode</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setShowExerciseExplorerModal(true)}
                   className="px-3 py-1.5 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/40 text-[#D4FF00] font-bold text-xs hover:bg-[#D4FF00]/25 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
