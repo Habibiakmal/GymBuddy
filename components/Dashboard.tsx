@@ -1804,6 +1804,17 @@ export default function Dashboard({
             </button>
 
             <button
+              onClick={() => setShowLayoutModal(true)}
+              className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-[#D4FF00] hover:text-black border border-white/[0.06] text-neutral-300 text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <LayoutGrid size={16} className="text-[#D4FF00] group-hover:text-black transition-colors" />
+                <span>{isEN ? "Customize Layout" : "Atur Tata Letak Card"}</span>
+              </div>
+              <Sliders size={14} className="text-neutral-500 group-hover:text-black transition-colors" />
+            </button>
+
+            <button
               onClick={onBackToHome}
               className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#18202E] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
             >
