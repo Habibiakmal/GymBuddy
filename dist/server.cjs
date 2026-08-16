@@ -76,10 +76,10 @@ var EXERCISE_DATABASE = [
       mia: "Tarik perlahan ke arah dada atas ya, rasakan kontraksi lembut di punggung dan jaga napas tetap teratur. Semangat! \u2728"
     },
     recommendedSetsReps: "3-4 Set x 10-12 Repetisi (Rest 60-90s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/0.jpg",
     imageFrames: [
-      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
-      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/1.jpg"
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/1.jpg"
     ]
   },
   {
@@ -122,10 +122,10 @@ var EXERCISE_DATABASE = [
       mia: "Jaga stabilitas dan kontrol bebannya ya. Fokus pada kontraksi otot dada di setiap dorongan. \u2728"
     },
     recommendedSetsReps: "4 Set x 8-10 Repetisi (Rest 90-120s)",
-    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/0.jpg",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg",
     imageFrames: [
-      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/0.jpg",
-      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press/1.jpg"
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press_-_Medium_Grip/1.jpg"
     ]
   },
   {
