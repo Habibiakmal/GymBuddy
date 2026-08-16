@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import GymBuddyLogo from "./components/Logo";
+import GymBuddyLogo from "./Logo";
 import {
   Flame,
   Dumbbell,
@@ -37,11 +37,17 @@ import {
   RefreshCw,
   Home,
   Camera,
-  Upload,
-  Sliders,
-  ShieldCheck
+  ShieldCheck,
+  BookOpen,
+  Play,
+  Info,
+  Watch,
+  Bell,
+  Volume2
 } from "lucide-react";
-import PWAInstallBanner from "./components/PWAInstallBanner";
+import PWAInstallBanner from "./PWAInstallBanner";
+import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem } from "../data/exerciseDb";
+import { notificationService } from "../services/notificationService";
 
 interface MealItem {
   id: string;
@@ -86,6 +92,7 @@ interface DashboardProps {
   onLogout: () => void;
   onBackToHome: () => void;
   onResetData?: () => void;
+  onOpenWatchMode?: () => void;
 }
 
 interface WorkoutExercise {
@@ -546,12 +553,91 @@ function getPersonalizedWeeklySchedule(user: UserProfileData): DaySchedule[] {
   }
 }
 
+// Interactive Animated Movement Player Component (Auto-looping movement keyframes)
+const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
+  const frames = item.imageFrames && item.imageFrames.length > 0 ? item.imageFrames : [item.gifUrl];
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  useEffect(() => {
+    if (!isPlaying || frames.length <= 1) return;
+    const interval = setInterval(() => {
+      setFrameIdx((prev) => (prev + 1) % frames.length);
+    }, 950);
+    return () => clearInterval(interval);
+  }, [isPlaying, frames]);
+
+  return (
+    <div className="space-y-2">
+      <div className="relative rounded-2xl overflow-hidden bg-black/90 border border-neutral-800 aspect-video flex items-center justify-center group shadow-2xl">
+        <img
+          key={frameIdx}
+          src={frames[frameIdx]}
+          alt={`${item.name} - Fase ${frameIdx + 1}`}
+          className="w-full h-full object-contain transition-all duration-300"
+          loading="eager"
+        />
+
+        {/* Dynamic Movement Indicator */}
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+          <span className="px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black tracking-wider flex items-center gap-1.5 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-ping inline-block" />
+            ANIMASI GERAKAN
+          </span>
+          <span className="px-2 py-1 rounded-lg bg-black/80 backdrop-blur-md text-white text-[10px] font-extrabold border border-white/10">
+            {frameIdx === 0 ? "Fase 1: Posisi Awal" : "Fase 2: Eksekusi Puncak"}
+          </span>
+        </div>
+      </div>
+
+      {/* Frame Controls & Play/Pause */}
+      {frames.length > 1 && (
+        <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className={`px-3 py-1 rounded-lg text-[11px] font-black flex items-center gap-1.5 cursor-pointer transition-all border ${
+                isPlaying ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm" : "bg-[#18202E] text-neutral-300 border-white/10 hover:bg-neutral-800"
+              }`}
+            >
+              <Play size={11} fill="currentColor" /> {isPlaying ? "Loop Animasi Aktif" : "Putar Animasi"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsPlaying(false); setFrameIdx(0); }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer border transition-all ${
+                frameIdx === 0 && !isPlaying ? "bg-white text-black border-white font-black" : "bg-[#18202E] text-neutral-400 border-white/10 hover:text-white"
+              }`}
+            >
+              1. Awal
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsPlaying(false); setFrameIdx(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer border transition-all ${
+                frameIdx === 1 && !isPlaying ? "bg-white text-black border-white font-black" : "bg-[#18202E] text-neutral-400 border-white/10 hover:text-white"
+              }`}
+            >
+              2. Puncak
+            </button>
+          </div>
+          <span className="text-[10px] font-semibold text-neutral-400 hidden sm:inline">
+            Fase Gerak: Otomatis Bergantian
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Dashboard({
   user: initialUser,
   language: initialLang = "ID",
   onLogout,
   onBackToHome,
-  onResetData
+  onResetData,
+  onOpenWatchMode
 }: DashboardProps) {
   // Language Persistence
   const [lang, setLang] = useState<"ID" | "EN">(() => {
@@ -777,6 +863,13 @@ export default function Dashboard({
   });
 
   const [activeWorkoutDetail, setActiveWorkoutDetail] = useState<WorkoutExercise | null>(null);
+  const [showExerciseExplorerModal, setShowExerciseExplorerModal] = useState(false);
+  const [explorerSearch, setExplorerSearch] = useState("");
+  const [explorerCategory, setExplorerCategory] = useState<string>("all");
+  const [selectedExplorerItem, setSelectedExplorerItem] = useState<ExerciseItem | null>(null);
+  const [viewingDetailExercise, setViewingDetailExercise] = useState<ExerciseItem | null>(null);
+  const [showWatchConnectModal, setShowWatchConnectModal] = useState(false);
+  const [watchLinkCopied, setWatchLinkCopied] = useState(false);
 
   // Modals
   const [showAddFoodModal, setShowAddFoodModal] = useState(false);
@@ -1518,6 +1611,34 @@ export default function Dashboard({
             </button>
 
             <button
+              onClick={() => setShowWatchConnectModal(true)}
+              className="w-full px-4 py-3 rounded-2xl bg-[#18202E] hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-extrabold text-sm flex items-center justify-between transition-all cursor-pointer group shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
+                <span>Hubungkan Apple Watch</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
+
+            <button
+              onClick={async () => {
+                const granted = await notificationService.requestPermission();
+                if (granted) {
+                  notificationService.sendTestNotification();
+                  setReminderNotificationMsg("Notifikasi Apple Watch & PWA Aktif! 🔔");
+                  setTimeout(() => setReminderNotificationMsg(null), 4000);
+                } else {
+                  alert("Izin notifikasi belum diaktifkan di browsermu.");
+                }
+              }}
+              className="w-full px-4 py-2.5 rounded-2xl bg-[#18202E] hover:bg-slate-800 border border-white/[0.06] text-neutral-400 hover:text-white text-xs font-bold flex items-center gap-3 transition-all cursor-pointer"
+            >
+              <Bell size={16} className="text-[#D4FF00]" />
+              <span>Tes Notifikasi PWA</span>
+            </button>
+
+            <button
               onClick={onBackToHome}
               className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#18202E] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
             >
@@ -2004,13 +2125,32 @@ export default function Dashboard({
                 </p>
               </div>
 
-              <button
-                onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
-                className="px-3 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Layers size={14} />
-                <span>{showFullWeeklyOverview ? "Lihat Hari Ini" : "Jadwal 7 Hari"}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowWatchConnectModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Hubungkan ke Apple Watch (Magic Link)"
+                >
+                  <Watch size={14} className="text-[#D4FF00]" />
+                  <span className="hidden sm:inline">Apple Watch</span>
+                </button>
+
+                <button
+                  onClick={() => setShowExerciseExplorerModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/40 text-[#D4FF00] font-bold text-xs hover:bg-[#D4FF00]/25 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <BookOpen size={14} />
+                  <span>Kamus Alat (GIF Guide)</span>
+                </button>
+
+                <button
+                  onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
+                  className="px-3 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Layers size={14} />
+                  <span>{showFullWeeklyOverview ? "Lihat Hari Ini" : "Jadwal 7 Hari"}</span>
+                </button>
+              </div>
             </div>
 
             {!showFullWeeklyOverview ? (
@@ -2018,23 +2158,31 @@ export default function Dashboard({
                 {exercises.map((ex) => {
                   const percent = ex.targetSets > 0 ? Math.round((ex.completedSets / ex.targetSets) * 100) : 0;
                   const isDone = percent === 100;
+                  const matchedDb = findExerciseOrEquipment(ex.name);
 
                   return (
                     <div
                       key={ex.id}
-                      className={`border rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 ${
+                      className={`border rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 cursor-pointer group ${
                         isDone
                           ? "bg-emerald-500/10 border-emerald-500/30 text-white"
                           : ex.completedSets > 0
                           ? "bg-amber-500/10 border-amber-500/30 text-white"
-                          : "bg-[#121722] border-white/[0.06] hover:border-white/[0.12]"
+                          : "bg-[#121722] border-white/[0.06] hover:border-[#D4FF00]/50 hover:bg-[#151C28]"
                       }`}
                       onClick={() => setActiveWorkoutDetail(ex)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-extrabold text-base text-white">{ex.name}</h3>
-                          <p className="text-xs text-neutral-400 font-semibold mt-0.5">{ex.targetReps} • {ex.targetSets} Sets</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-extrabold text-base text-white group-hover:text-[#D4FF00] transition-colors">{ex.name}</h3>
+                            {matchedDb && (
+                              <span className="px-2 py-0.5 rounded-md bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-[9px] font-black tracking-wider flex items-center gap-1">
+                                <Play size={8} fill="currentColor" /> GIF
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-400 font-semibold">{ex.targetReps} • {ex.targetSets} Sets</p>
                         </div>
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
@@ -2781,71 +2929,516 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* WORKOUT DETAIL MODAL */}
+      {/* WORKOUT DETAIL MODAL WITH VISUAL GIF & EXERCISEDB INSTRUCTIONS */}
       <AnimatePresence>
-        {activeWorkoutDetail && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        {activeWorkoutDetail && (() => {
+          const matchedDb = findExerciseOrEquipment(activeWorkoutDetail.name);
+          const percent = activeWorkoutDetail.targetSets > 0 ? Math.round((activeWorkoutDetail.completedSets / activeWorkoutDetail.targetSets) * 100) : 0;
+          const coachCue = isMaxPersona
+            ? (matchedDb ? matchedDb.coachCues.max : "Fokus pada kontrol gerakan dan kontraksi otot di setiap repetisi bro! Gas bantai set ini!")
+            : (matchedDb ? matchedDb.coachCues.mia : "Lakukan gerakan perlahan dan rasakan kenyamanan di setiap tarikan napas ya ✨");
+
+          return (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto text-white"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between border-b border-neutral-800 pb-3 gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-[10px] font-black uppercase tracking-wider">
+                        {matchedDb ? matchedDb.equipmentName : "Panduan Latihan"}
+                      </span>
+                    </div>
+                    <h3 className="font-['Archivo_Black'] text-lg sm:text-xl text-white mt-1">{activeWorkoutDetail.name}</h3>
+                    {matchedDb && (
+                      <p className="text-xs text-neutral-400 font-semibold">{matchedDb.indonesianName}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setActiveWorkoutDetail(null)}
+                    className="p-1.5 rounded-xl bg-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Animated Movement Visual Player Card */}
+                {matchedDb && (
+                  <ExerciseVisualPlayer item={matchedDb} />
+                )}
+
+                {/* Target Muscles & Equipment Tags */}
+                {matchedDb && (
+                  <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 space-y-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-neutral-400">Target Otot:</span>
+                      {matchedDb.targetMuscles.map((m, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+                          🎯 {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step-by-Step Instructions */}
+                {matchedDb && matchedDb.instructions.length > 0 && (
+                  <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2.5">
+                    <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
+                      <BookOpen size={14} /> Cara Eksekusi Step-by-Step
+                    </h4>
+                    <ol className="space-y-1.5 text-xs text-neutral-300 font-medium list-decimal list-inside leading-relaxed">
+                      {matchedDb.instructions.map((step, idx) => (
+                        <li key={idx} className="pl-1">
+                          <span className="text-neutral-200">{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {/* Coach Advice Cue */}
+                <div className="bg-[#0E131F] border border-[#D4FF00]/20 rounded-2xl p-3.5 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-sm shrink-0">
+                    {isMaxPersona ? "🏋️" : "✨"}
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-black text-[#D4FF00] uppercase tracking-wider">{coachName}</span>
+                    <p className="text-xs text-neutral-300 font-medium italic">"{coachCue}"</p>
+                  </div>
+                </div>
+
+                {/* Set Progress & Checklist */}
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-white tracking-wider">
+                      Checklist Tiap Set ({activeWorkoutDetail.targetReps}):
+                    </span>
+                    <span className="text-xs font-black text-[#D4FF00]">
+                      {activeWorkoutDetail.completedSets} / {activeWorkoutDetail.targetSets} Set ({percent}%)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {activeWorkoutDetail.setsState.map((isDone, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleToggleSet(activeWorkoutDetail.id, idx)}
+                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                          isDone
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-xs"
+                            : "bg-[#161C28] border-neutral-800 text-neutral-300 hover:bg-[#1c2433] hover:text-white"
+                        }`}
+                      >
+                        <span className="text-xs font-black">Set {idx + 1}</span>
+                        {isDone ? <Check size={14} strokeWidth={3} /> : <span className="text-[10px] text-neutral-500 font-bold">Belum</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Close button */}
+                <div className="flex justify-end pt-2 border-t border-neutral-800">
+                  <button
+                    onClick={() => setActiveWorkoutDetail(null)}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black transition-all cursor-pointer shadow-md"
+                  >
+                    Simpan & Tutup
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* EXERCISE EXPLORER & EQUIPMENT DICTIONARY MODAL (2-STEP INTUITIVE FLOW) */}
+      <AnimatePresence>
+        {showExerciseExplorerModal && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-5"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto text-white"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="font-black text-lg text-slate-900">{activeWorkoutDetail.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium">{t.workoutDetailTitle}</p>
+              {/* If an exercise detail is viewed inside explorer */}
+              {viewingDetailExercise ? (
+                <div className="space-y-4">
+                  {/* Top bar with Back button */}
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                    <button
+                      onClick={() => setViewingDetailExercise(null)}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#18202E] hover:bg-[#202c3f] border border-white/10 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ArrowLeft size={15} className="text-[#D4FF00]" />
+                      <span>Kembali ke Daftar Alat</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Title & Badge */}
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-md bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-[10px] font-black uppercase tracking-wider">
+                      {viewingDetailExercise.equipmentName}
+                    </span>
+                    <h3 className="font-['Archivo_Black'] text-xl text-white mt-1">{viewingDetailExercise.name}</h3>
+                    <p className="text-xs text-neutral-400 font-semibold">{viewingDetailExercise.indonesianName}</p>
+                  </div>
+
+                  {/* Animated Movement Visual Player */}
+                  <ExerciseVisualPlayer item={viewingDetailExercise} />
+
+                  {/* Target Muscles */}
+                  <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 space-y-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-neutral-400">Target Otot:</span>
+                      {viewingDetailExercise.targetMuscles.map((m, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+                          🎯 {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Equipment Setup Guide */}
+                  {viewingDetailExercise.equipmentSetup.length > 0 && (
+                    <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
+                      <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
+                        <Sliders size={14} /> Cara Setting Alat
+                      </h4>
+                      <ul className="space-y-1 text-xs text-neutral-300 font-medium list-disc list-inside leading-relaxed">
+                        {viewingDetailExercise.equipmentSetup.map((stp, idx) => (
+                          <li key={idx}><span className="text-neutral-200">{stp}</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Execution Instructions */}
+                  {viewingDetailExercise.instructions.length > 0 && (
+                    <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
+                      <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
+                        <BookOpen size={14} /> Cara Eksekusi Step-by-Step
+                      </h4>
+                      <ol className="space-y-1.5 text-xs text-neutral-300 font-medium list-decimal list-inside leading-relaxed">
+                        {viewingDetailExercise.instructions.map((stp, idx) => (
+                          <li key={idx} className="pl-1"><span className="text-neutral-200">{stp}</span></li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {/* Do's and Dont's */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-[#161C28] border border-emerald-500/20 rounded-2xl p-3.5 space-y-1.5">
+                      <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">✔ Tips Kunci Form</span>
+                      {viewingDetailExercise.dosAndDonts.dos.map((d, i) => (
+                        <p key={i} className="text-xs text-neutral-300">• {d}</p>
+                      ))}
+                    </div>
+                    <div className="bg-[#161C28] border border-red-500/20 rounded-2xl p-3.5 space-y-1.5">
+                      <span className="text-[11px] font-black text-red-400 uppercase tracking-wider block">✖ Kesalahan Umum</span>
+                      {viewingDetailExercise.dosAndDonts.donts.map((d, i) => (
+                        <p key={i} className="text-xs text-neutral-300">• {d}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom Back Button */}
+                  <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
+                    <button
+                      onClick={() => setViewingDetailExercise(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-white cursor-pointer"
+                    >
+                      ← Kembali ke Daftar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black transition-all cursor-pointer shadow-md"
+                    >
+                      Tutup Kamus
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => setActiveWorkoutDetail(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
-                  <X size={20} />
+              ) : (
+                /* List View of Equipment */
+                <div className="space-y-4">
+                  {/* Explorer Header */}
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                        <BookOpen size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-['Archivo_Black'] text-lg text-white flex items-center gap-2">
+                          <span>Kamus Alat & Gerakan Gym</span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black">
+                            {EXERCISE_DATABASE.length} Latihan
+                          </span>
+                        </h3>
+                        <p className="text-xs text-neutral-400 font-medium">Database lengkap 870+ latihan gym open source dengan animasi gerakan</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowExerciseExplorerModal(false);
+                        setViewingDetailExercise(null);
+                        setSelectedExplorerItem(null);
+                      }}
+                      className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Search & Filter Bar */}
+                  <div className="space-y-2.5">
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={explorerSearch}
+                        onChange={(e) => setExplorerSearch(e.target.value)}
+                        placeholder="Cari dari 870+ latihan (misal: Bicep, Squat, Bench Press, Lat Pulldown, Tricep)..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-[#161C28] border border-neutral-800 rounded-xl text-xs font-semibold text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00] transition-colors"
+                      />
+                      {explorerSearch && (
+                        <button
+                          onClick={() => setExplorerSearch("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400 hover:text-white"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Pill Filters */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
+                      {[
+                        { id: "all", label: `Semua (${EXERCISE_DATABASE.length})` },
+                        { id: "machine", label: "Mesin / Machine" },
+                        { id: "cable", label: "Kabel / Cable" },
+                        { id: "barbell", label: "Barbel" },
+                        { id: "dumbbell", label: "Dumbbell" },
+                        { id: "bodyweight", label: "Bodyweight" },
+                        { id: "kettlebell", label: "Kettlebell" },
+                        { id: "cardio", label: "Kardio" }
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setExplorerCategory(cat.id)}
+                          className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all cursor-pointer border ${
+                            explorerCategory === cat.id
+                              ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                              : "bg-[#161C28] text-neutral-400 border-neutral-800 hover:text-white"
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Grid of Exercises */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                    {EXERCISE_DATABASE.filter((item) => {
+                      const matchCat = explorerCategory === "all" || item.equipmentCategory === explorerCategory;
+                      const matchSearch =
+                        !explorerSearch ||
+                        item.name.toLowerCase().includes(explorerSearch.toLowerCase()) ||
+                        item.indonesianName.toLowerCase().includes(explorerSearch.toLowerCase()) ||
+                        item.aliases.some((a) => a.toLowerCase().includes(explorerSearch.toLowerCase())) ||
+                        item.targetMuscles.some((m) => m.toLowerCase().includes(explorerSearch.toLowerCase()));
+                      return matchCat && matchSearch;
+                    }).slice(0, 100).map((item) => {
+                      const isSelected = selectedExplorerItem?.id === item.id;
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedExplorerItem(item)}
+                          onDoubleClick={() => setViewingDetailExercise(item)}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 group relative ${
+                            isSelected
+                              ? "bg-[#1d273a] border-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)] ring-1 ring-[#D4FF00]"
+                              : "bg-[#161C28] border-neutral-800 hover:border-[#D4FF00]/50 hover:bg-[#1a2333]"
+                          }`}
+                        >
+                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/60 shrink-0 border border-neutral-800">
+                            <img src={item.imageFrames?.[0] || item.gifUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${isSelected ? "bg-[#D4FF00] text-black" : "bg-[#D4FF00]/15 text-[#D4FF00]"}`}>
+                                {item.equipmentCategory}
+                              </span>
+                              {isSelected && (
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-black">
+                                  ✓ TERPILIH
+                                </span>
+                              )}
+                            </div>
+                            <h4 className={`font-extrabold text-sm truncate mt-0.5 ${isSelected ? "text-[#D4FF00]" : "text-white group-hover:text-[#D4FF00]"}`}>
+                              {item.name}
+                            </h4>
+                            <p className="text-[11px] text-neutral-400 font-medium truncate">{item.targetMuscles.join(", ")}</p>
+                          </div>
+                          <ChevronRight size={16} className={`shrink-0 ${isSelected ? "text-[#D4FF00] translate-x-1" : "text-neutral-600 group-hover:text-[#D4FF00]"} transition-all`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Sticky Action Footer with "Lanjut" button */}
+                  <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+                    <div className="text-xs">
+                      {selectedExplorerItem ? (
+                        <span className="text-neutral-300">
+                          Alat Terpilih: <strong className="text-[#D4FF00]">{selectedExplorerItem.name}</strong>
+                        </span>
+                      ) : (
+                        <span className="text-neutral-500 font-medium">Klik salah satu alat di atas untuk memilih</span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (selectedExplorerItem) {
+                          setViewingDetailExercise(selectedExplorerItem);
+                        }
+                      }}
+                      disabled={!selectedExplorerItem}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+                        selectedExplorerItem
+                          ? "bg-[#D4FF00] hover:bg-[#c4ec00] text-black scale-100 ring-2 ring-[#D4FF00]/40"
+                          : "bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50"
+                      }`}
+                    >
+                      <span>Lanjut (Lihat Cara Pakai)</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* APPLE WATCH CONNECT & ZERO-TYPING PAIRING MODAL */}
+      <AnimatePresence>
+        {showWatchConnectModal && (
+          <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 text-white my-auto max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                    <Watch size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-base text-white">Hubungkan ke Apple Watch</h3>
+                    <p className="text-xs text-neutral-400 font-medium">Buka di jam tanpa perlu ketik login</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowWatchConnectModal(false)}
+                  className="p-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={18} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-3.5 text-center">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">{t.targetRepsLabel}</span>
-                  <p className="text-sm font-extrabold text-slate-900">{activeWorkoutDetail.targetReps}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Progress Set</span>
-                  <p className="text-sm font-extrabold text-slate-900">
-                    {activeWorkoutDetail.completedSets} / {activeWorkoutDetail.targetSets} (
-                    {Math.round((activeWorkoutDetail.completedSets / activeWorkoutDetail.targetSets) * 100)}%)
+              {/* Instructions & Explanation */}
+              <div className="space-y-3 text-xs text-neutral-300">
+                <div className="bg-[#161C28] border border-[#D4FF00]/30 rounded-2xl p-3.5 space-y-2">
+                  <span className="font-black text-[#D4FF00] block text-xs">✨ Magic Link Instan:</span>
+                  <p className="text-[11px] text-neutral-300 leading-relaxed">
+                    Karena layar Apple Watch sangat kecil untuk mengetik, kirim Magic Link ini ke dirimu sendiri. Sekali tap di Apple Watch, akunmu langsung otomatis terhubung!
                   </p>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <span className="text-xs font-black text-slate-700 uppercase">{t.setChecklistLabel}:</span>
-                <div className="space-y-2">
-                  {activeWorkoutDetail.setsState.map((isDone, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => handleToggleSet(activeWorkoutDetail.id, idx)}
-                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                        isDone
-                          ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
-                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                      }`}
+                  <div className="p-2.5 rounded-xl bg-black/70 border border-neutral-800 font-mono text-[10px] text-neutral-400 break-all select-all">
+                    {typeof window !== "undefined"
+                      ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
+                      : "/watch"}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`;
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(url);
+                          setWatchLinkCopied(true);
+                          setTimeout(() => setWatchLinkCopied(false), 3000);
+                        }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all border border-white/10"
                     >
-                      <div className="flex items-center gap-3 font-extrabold text-sm">
-                        <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${isDone ? "bg-[#181B26] border-[#181B26] text-[#C4F82A]" : "bg-white border-slate-300"}`}>
-                          {isDone && <Check size={14} strokeWidth={3} />}
-                        </div>
-                        <span>Set {idx + 1}</span>
-                      </div>
-                      <span className="text-xs font-bold">{isDone ? t.setDone : t.setNotDone}</span>
-                    </div>
-                  ))}
+                      <span>{watchLinkCopied ? "Disalin! ✓" : "Salin Link"}</span>
+                    </button>
+
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        "Buka GymBuddy di Apple Watch: " +
+                          (typeof window !== "undefined"
+                            ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}`
+                            : "/watch")
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all"
+                    >
+                      <Share2 size={13} />
+                      <span>Kirim ke WA</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3 space-y-1 text-[11px]">
+                  <span className="font-bold text-white block">Cara Pakai di Apple Watch:</span>
+                  <p>1. Kirim link di atas ke WhatsApp / iMessage / Apple Notes kamu.</p>
+                  <p>2. Di Apple Watch, buka chat / notes dan tap linknya.</p>
+                  <p>3. Watch Mode langsung terbuka lengkap dengan tombol set besar & live rest timer!</p>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => setActiveWorkoutDetail(null)}
-                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-white hover:bg-slate-800 cursor-pointer shadow-xs"
+                  onClick={() => {
+                    setShowWatchConnectModal(false);
+                    if (onOpenWatchMode) onOpenWatchMode();
+                  }}
+                  className="w-full py-3 rounded-2xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                 >
-                  {t.closeModal}
+                  <Watch size={14} />
+                  <span>Buka Watch Mode di Browser Ini</span>
                 </button>
               </div>
             </motion.div>
