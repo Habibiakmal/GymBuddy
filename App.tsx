@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [showSplash, setShowSplash] = useState<boolean>(false);
   const [language, setLanguage] = useState<"EN" | "ID">("EN");
   const [activePricing, setActivePricing] = useState("PREMIUM");
   const [specialization, setSpecialization] = useState<"nutrition" | "vision">(
