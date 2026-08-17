@@ -43033,14 +43033,10 @@ function initDb() {
   } else {
     saveDb();
   }
-  seedTestUserData("085156919826");
   purgeLegacyMockLogs();
   if (MONGODB_URI) {
     loadFromMongo().then((loaded) => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
-      if (!dbData.users["085156919826"]) {
-        seedTestUserData("085156919826");
-      }
       purgeLegacyMockLogs();
     });
   }

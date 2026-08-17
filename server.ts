@@ -554,17 +554,13 @@ function initDb() {
     saveDb();
   }
 
-  // Ensure default demo and requested accounts are seeded
-  seedTestUserData("085156919826");
+  // Purge any legacy mock logs
   purgeLegacyMockLogs();
 
   // Also load from MongoDB if configured (runs async, overrides file data)
   if (MONGODB_URI) {
     loadFromMongo().then(loaded => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
-      if (!dbData.users["085156919826"]) {
-        seedTestUserData("085156919826");
-      }
       purgeLegacyMockLogs();
     });
   }
