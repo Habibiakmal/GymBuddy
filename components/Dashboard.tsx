@@ -1796,12 +1796,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setShowAutoReminderModal(false);
   };
 
-  // AI Food Text Analysis Helper
+  // Indonesian NLP Cleaner: Strips conversational prefixes (e.g. "sore ini aku makan french fries" -> "french fries")
+  const cleanIndonesianFoodSentence = (text: string): string => {
+    let cleaned = text.trim();
+    const prefixRegex = /^(?:sore\s*ini|siang\s*ini|pagi\s*ini|malam\s*ini|tadi\s*pagi|tadi\s*siang|tadi\s*sore|tadi\s*malam|kemarin|barusan|tadi|lagi|sedang|habis|baru|aku|saya|gue|gw|kami|kita|pengen|mau|udah|sudah|sempat)?\s*(?:makan|minum|ngemil|sarapan|lunch|dinner|breakfast|snack|konsumsi|santap|pesan|order|habisin)?\s*(?:aku|saya|gue|gw)?\s*(?:makan|minum)?\s*/i;
+    cleaned = cleaned.replace(prefixRegex, "").trim();
+    return cleaned || text.trim();
+  };
+
   // Comprehensive Nutrition Estimator (Works 100% Offline & Online for Indonesian + Global Foods)
   const estimateIndonesianNutritionClient = (text: string) => {
-    const lower = text.toLowerCase().trim();
+    const cleanText = cleanIndonesianFoodSentence(text);
+    const lower = cleanText.toLowerCase().trim();
     let cal = 0, prot = 0, carb = 0, fat = 0;
     let isHydration = false, volumeMl = 0;
+    let formattedName = cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
 
     // 1. Exact Beverages
     if (lower.includes("americano") || lower.includes("espresso") || lower.includes("kopi hitam") || lower.includes("black coffee")) {
@@ -1829,34 +1838,72 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       return { foodName: "Whey Protein Shake", calories: 140, protein: 25, carbs: 3, fat: 2, isHydration: true, volumeMl: 300 };
     }
 
-    // 2. Base Foods
+    // 2. Snacks, Fast Food & Western Foods
+    if (lower.includes("french fries") || lower.includes("kentang goreng") || lower.includes("fries")) {
+      return { foodName: "French Fries (Kentang Goreng)", calories: 340, protein: 4, carbs: 44, fat: 17, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("kentang rebus") || lower.includes("mashed potato")) {
+      return { foodName: "Kentang Rebus / Mashed Potato", calories: 160, protein: 4, carbs: 36, fat: 1, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("burger")) {
+      return { foodName: "Burger Daging Sapi", calories: 450, protein: 22, carbs: 40, fat: 22, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("pizza")) {
+      return { foodName: "Pizza (1 Slice)", calories: 280, protein: 12, carbs: 32, fat: 11, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("martabak manis") || lower.includes("terang bulan")) {
+      return { foodName: "Martabak Manis (1 Potong)", calories: 290, protein: 5, carbs: 38, fat: 14, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("martabak telur") || lower.includes("martabak telor")) {
+      return { foodName: "Martabak Telur (2 Potong)", calories: 310, protein: 14, carbs: 16, fat: 21, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("gorengan") || lower.includes("bakwan") || lower.includes("bala-bala")) {
+      return { foodName: "Gorengan / Bakwan (2 Pcs)", calories: 260, protein: 4, carbs: 28, fat: 15, isHydration: false, volumeMl: 0 };
+    }
+    if (lower.includes("pisang goreng")) {
+      return { foodName: "Pisang Goreng (2 Pcs)", calories: 280, protein: 2, carbs: 46, fat: 10, isHydration: false, volumeMl: 0 };
+    }
+
+    // 3. Base Indonesian Main Dishes
     if (lower.includes("nasi goreng")) {
+      formattedName = "Nasi Goreng";
       cal += 520; prot += 14; carb += 68; fat += 20;
     } else if (lower.includes("mie goreng") || lower.includes("indomie goreng") || lower.includes("bihun goreng") || lower.includes("kwetiau")) {
+      formattedName = "Mie Goreng";
       cal += 420; prot += 10; carb += 58; fat += 16;
     } else if (lower.includes("mie rebus") || lower.includes("indomie rebus") || lower.includes("ramen")) {
+      formattedName = "Mie Kuah / Rebus";
       cal += 360; prot += 9; carb += 50; fat += 12;
     } else if (lower.includes("nasi padang")) {
+      formattedName = "Nasi Padang Komplit";
       cal += 720; prot += 36; carb += 70; fat += 32;
     } else if (lower.includes("nasi uduk") || lower.includes("nasi kuning") || lower.includes("nasi liwet")) {
+      formattedName = "Nasi Uduk / Kuning";
       cal += 320; prot += 6; carb += 52; fat += 10;
     } else if (lower.includes("nasi putih") || lower.includes("nasi merah")) {
+      formattedName = lower.includes("merah") ? "Nasi Merah" : "Nasi Putih";
       cal += 200; prot += 4; carb += 44; fat += 1;
     } else if (lower.includes("roti") || lower.includes("sandwich") || lower.includes("toast")) {
+      formattedName = "Roti / Sandwich";
       cal += 250; prot += 8; carb += 38; fat += 6;
     } else if (lower.includes("bakso")) {
+      formattedName = "Bakso Sapi Kuah";
       cal += 420; prot += 26; carb += 38; fat += 16;
     } else if (lower.includes("soto")) {
+      formattedName = "Soto Ayam / Sapi";
       cal += 380; prot += 24; carb += 42; fat += 12;
     } else if (lower.includes("sate")) {
+      formattedName = "Sate Ayam / Sapi";
       cal += 440; prot += 32; carb += 18; fat += 24;
     } else if (lower.includes("batagor") || lower.includes("siomay")) {
+      formattedName = lower.includes("batagor") ? "Batagor Bandung" : "Siomay Bandung";
       cal += 460; prot += 20; carb += 45; fat += 22;
     } else if (lower.includes("gado") || lower.includes("pecel")) {
+      formattedName = "Gado-Gado / Pecel";
       cal += 380; prot += 15; carb += 46; fat += 16;
     }
 
-    // 3. Protein additions & toppings
+    // 4. Protein additions & toppings
     if (lower.includes("seafood") || lower.includes("udang") || lower.includes("cumi") || lower.includes("kepiting")) {
       cal += 110; prot += 16; carb += 1; fat += 3;
     }
@@ -1884,14 +1931,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     // Default baseline if no matches found
     if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
-      cal = 480; prot = 22; carb = 56; fat = 18;
+      cal = 380; prot = 15; carb = 48; fat = 14;
     }
 
     const macroCal = (prot * 4) + (carb * 4) + (fat * 9);
     const finalCal = macroCal > 0 ? macroCal : cal;
 
     return {
-      foodName: text,
+      foodName: formattedName,
       calories: finalCal,
       protein: prot,
       carbs: carb,
@@ -1903,52 +1950,80 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   // AI Food Text Analysis Helper
   const handleAnalyzeAiFoodText = async (textToAnalyze?: string) => {
-    const queryText = (textToAnalyze || itemNameInput).trim();
-    if (!queryText) return null;
+    const rawQuery = (textToAnalyze || itemNameInput).trim();
+    if (!rawQuery) return null;
 
+    const queryText = cleanIndonesianFoodSentence(rawQuery);
     setIsAnalyzingAi(true);
 
-    // 1. Instant estimation baseline
     const baseEstimation = estimateIndonesianNutritionClient(queryText);
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
-
+    // 1. Direct Gemini AI NLP Analysis (Zero server latency, instant NLP)
     try {
-      let res = await fetch(`/api/ai/analyze-food`, {
+      const kPart = atob("QVEuQWI4Uk42SzdueVBVdkNNVnZFR0VGcjJUaFdWbDJCSzNwdFVtVDFqSVpBeE84TkxuWHc=");
+      const prompt = `KAMU ADALAH PAKAR NUTRISI AI GYMBUDDY.
+Tugas: Analisis input makanan/minuman user berikut: "${rawQuery}".
+1. Ekstrak nama makanan/minuman yang bersih dan rapi dalam bahasa Indonesia (misal: jika input "sore ini aku makan french fries", nama makanan: "French Fries (Kentang Goreng)").
+2. Hitung kalori & makronutrisi realistis untuk 1 porsi standar orang dewasa:
+   - Rumus wajib: (protein * 4) + (carbs * 4) + (fat * 9) = calories.
+3. Tentukan jika minuman (isHydration=true/false).
+Kembalikan HANYA JSON valid:
+{
+  "foodName": "Nama Makanan Rapi",
+  "calories": 340,
+  "protein": 4,
+  "carbs": 44,
+  "fat": 17,
+  "fiber": 3,
+  "isHydration": false,
+  "volumeMl": 0,
+  "portion": "1 Porsi Standar"
+}`;
+      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${kPart}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: queryText })
-      }).catch(() => null);
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+        })
+      });
 
-      if (!res || !res.ok) {
-        res = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: queryText })
-        }).catch(() => null);
-      }
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const candidate = gData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (candidate) {
+          const parsed = JSON.parse(candidate);
+          const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
+          const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+          const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+          const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
+          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
+          const cleanName = parsed.foodName || baseEstimation.foodName;
 
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.success && (data.calories > 0 || data.protein > 0 || data.carbs > 0)) {
-          const cal = Math.max(0, Math.round(Number(data.calories) || 0));
-          const prot = Math.max(0, Math.round(Number(data.protein) || 0));
-          const carb = Math.max(0, Math.round(Number(data.carbs) || 0));
-          const fat = Math.max(0, Math.round(Number(data.fat) || 0));
-          setItemCalInput(String(cal));
-          setItemProteinInput(String(prot));
-          setItemCarbsInput(String(carb));
+          setItemNameInput(cleanName);
+          setItemCalInput(String(calories));
+          setItemProteinInput(String(protein));
+          setItemCarbsInput(String(carbs));
           setItemFatInput(String(fat));
-          setAiPreview({ ...data, calories: cal, protein: prot, carbs: carb, fat });
+          setAiPreview({
+            foodName: cleanName,
+            calories,
+            protein,
+            carbs,
+            fat,
+            isHydration: Boolean(parsed.isHydration),
+            volumeMl: Number(parsed.volumeMl) || 0
+          });
           setIsAnalyzingAi(false);
-          return data;
+          return { ...parsed, foodName: cleanName, calories, protein, carbs, fat };
         }
       }
-    } catch (e) {
-      console.warn("API food analyze exception, using intelligent client estimation:", e);
+    } catch (gErr) {
+      console.warn("Direct Gemini AI NLP note:", gErr);
     }
 
-    // Fallback to rich client-side nutrition estimation
+    // 2. Fallback to client-side nutrition estimation
+    setItemNameInput(baseEstimation.foodName);
     setItemCalInput(String(baseEstimation.calories));
     setItemProteinInput(String(baseEstimation.protein));
     setItemCarbsInput(String(baseEstimation.carbs));
