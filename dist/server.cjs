@@ -27,6 +27,7 @@ var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_config = require("dotenv/config");
+var import_mongodb = require("mongodb");
 var import_vite = require("vite");
 var import_genai = require("@google/genai");
 var import_axios = __toESM(require("axios"), 1);
@@ -43153,7 +43154,7 @@ async function getMongoDb() {
   if (!MONGODB_URI) return null;
   try {
     if (!mongoClient) {
-      mongoClient = new MongoClient(MONGODB_URI, {
+      mongoClient = new import_mongodb.MongoClient(MONGODB_URI, {
         serverSelectionTimeoutMS: 5e3,
         connectTimeoutMS: 1e4
       });
@@ -43272,6 +43273,30 @@ function initDb() {
     saveDb();
   }
   purgeLegacyMockLogs();
+  const bibiPhone = "085156919826";
+  const bibiAlt = "6285156919826";
+  if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
+    const bibiProfile = {
+      name: "Bibi",
+      phone: bibiPhone,
+      normalizedPhone: bibiPhone,
+      goal: "healthy",
+      goalTitle: "Gaya Hidup Sehat & Fit",
+      weight: 65,
+      startWeight: 65,
+      targetWeight: 65,
+      height: 170,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "moderate",
+      targetCalories: 2e3,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    dbData.users[bibiPhone] = bibiProfile;
+    dbData.users[bibiAlt] = bibiProfile;
+  }
   if (MONGODB_URI) {
     loadFromMongo().then((loaded) => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");

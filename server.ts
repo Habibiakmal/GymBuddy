@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import cors from "cors";
 import "dotenv/config";
+import { MongoClient } from "mongodb";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
@@ -562,6 +563,32 @@ function initDb() {
 
   // Purge any legacy mock logs
   purgeLegacyMockLogs();
+
+  // Ensure default profile for primary user Bibi (085156919826) is always seeded if absent
+  const bibiPhone = "085156919826";
+  const bibiAlt = "6285156919826";
+  if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
+    const bibiProfile = {
+      name: "Bibi",
+      phone: bibiPhone,
+      normalizedPhone: bibiPhone,
+      goal: "healthy",
+      goalTitle: "Gaya Hidup Sehat & Fit",
+      weight: 65,
+      startWeight: 65,
+      targetWeight: 65,
+      height: 170,
+      age: 25,
+      gender: "pria",
+      persona: "max",
+      activityLevel: "moderate",
+      targetCalories: 2000,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    dbData.users[bibiPhone] = bibiProfile;
+    dbData.users[bibiAlt] = bibiProfile;
+  }
 
   // Also load from MongoDB if configured (runs async, overrides file data)
   if (MONGODB_URI) {
