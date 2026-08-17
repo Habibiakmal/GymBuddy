@@ -42923,6 +42923,16 @@ var NUTRITION_DATABASE = [
     source: "USDA"
   },
   {
+    keywords: ["oatmeal", "oats", "havermut", "quaker oats"],
+    normalizedName: "Oatmeal (Cooked)",
+    category: "grain",
+    defaultServingGrams: 200,
+    // 1 bowl cooked
+    servingUnit: "1 mangkuk",
+    per100g: { calories: 71, protein: 2.5, carbs: 12, fat: 1.5, fiber: 1.7, sugar: 0.3 },
+    source: "USDA"
+  },
+  {
     keywords: ["nasi putih", "nasi", "rice", "white rice", "nasi liwet"],
     normalizedName: "Nasi Putih (Cooked)",
     category: "grain",
@@ -42948,6 +42958,15 @@ var NUTRITION_DATABASE = [
     defaultServingGrams: 250,
     servingUnit: "1 piring komplit",
     per100g: { calories: 195, protein: 6.5, carbs: 25, fat: 7.8, fiber: 1.2, sugar: 1.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["nasi padang", "nasi ramas"],
+    normalizedName: "Nasi Padang Komplit",
+    category: "grain",
+    defaultServingGrams: 300,
+    servingUnit: "1 porsi bungkus/piring",
+    per100g: { calories: 235, protein: 11.5, carbs: 22, fat: 11.5, fiber: 1.5, sugar: 1 },
     source: "TKPI"
   },
   {
@@ -43007,6 +43026,15 @@ var NUTRITION_DATABASE = [
     source: "TKPI"
   },
   {
+    keywords: ["bebek goreng", "bebek bakar", "duck"],
+    normalizedName: "Bebek Goreng / Bakar",
+    category: "protein",
+    defaultServingGrams: 140,
+    servingUnit: "1 potong paha/dada",
+    per100g: { calories: 337, protein: 19, carbs: 0, fat: 28, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
     keywords: ["kulit ayam", "kulit", "chicken skin"],
     normalizedName: "Kulit Ayam Goreng Crispy",
     category: "fat",
@@ -43023,6 +43051,16 @@ var NUTRITION_DATABASE = [
     servingUnit: "1 tusuk / porsi",
     per100g: { calories: 310, protein: 22, carbs: 2, fat: 24, fiber: 0, sugar: 0 },
     source: "TKPI"
+  },
+  {
+    keywords: ["nugget", "chicken nugget", "nugget ayam"],
+    normalizedName: "Chicken Nugget (4 Pcs)",
+    category: "protein",
+    defaultServingGrams: 80,
+    // 4 pcs
+    servingUnit: "4 pcs",
+    per100g: { calories: 296, protein: 15, carbs: 14, fat: 20, fiber: 0.8, sugar: 0.5 },
+    source: "USDA"
   },
   {
     keywords: ["sosis", "sausage", "bratwurst", "hot dog"],
@@ -43072,6 +43110,15 @@ var NUTRITION_DATABASE = [
     source: "USDA"
   },
   {
+    keywords: ["cumi", "squid", "calamari", "cumi goreng"],
+    normalizedName: "Cumi-Cumi (Cooked)",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi",
+    per100g: { calories: 140, protein: 25, carbs: 3, fat: 3.5, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
     keywords: ["daging sapi", "beef", "sapi", "rendang", "steak"],
     normalizedName: "Daging Sapi / Rendang",
     category: "protein",
@@ -43081,7 +43128,16 @@ var NUTRITION_DATABASE = [
     source: "TKPI"
   },
   {
-    keywords: ["ikan", "fish", "salmon", "tuna", "ikan lele", "ikan bakar", "ikan goreng"],
+    keywords: ["kambing", "daging kambing", "gulai kambing"],
+    normalizedName: "Daging Kambing (Cooked)",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi",
+    per100g: { calories: 230, protein: 25, carbs: 0, fat: 14, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["ikan", "fish", "salmon", "tuna", "ikan lele", "ikan bakar", "ikan goreng", "ikan gurame", "ikan kembung"],
     normalizedName: "Ikan (Cooked / Bakar)",
     category: "protein",
     defaultServingGrams: 100,
@@ -43107,7 +43163,130 @@ var NUTRITION_DATABASE = [
     per100g: { calories: 195, protein: 18.5, carbs: 9, fat: 10.5, fiber: 3.5, sugar: 1 },
     source: "TKPI"
   },
-  // ── VEGETABLES & INDONESIAN SPECIALTIES ─────────────────────────
+  // ── INDONESIAN DISHES & STREET FOOD ───────────────────────────
+  {
+    keywords: ["sate ayam", "satay"],
+    normalizedName: "Sate Ayam + Bumbu Kacang (5 Tusuk)",
+    category: "protein",
+    defaultServingGrams: 150,
+    servingUnit: "5 tusuk + bumbu",
+    per100g: { calories: 230, protein: 18, carbs: 9.5, fat: 13.5, fiber: 1.2, sugar: 4.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["bakso", "bakso sapi", "mie bakso"],
+    normalizedName: "Bakso Sapi Kuah Komplit",
+    category: "protein",
+    defaultServingGrams: 350,
+    // 1 mangkuk
+    servingUnit: "1 mangkuk komplit",
+    per100g: { calories: 120, protein: 7.5, carbs: 11, fat: 4.5, fiber: 0.8, sugar: 1 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["soto", "soto ayam", "soto daging", "soto betawi"],
+    normalizedName: "Soto Ayam / Sapi (1 Mangkuk)",
+    category: "protein",
+    defaultServingGrams: 300,
+    servingUnit: "1 mangkuk",
+    per100g: { calories: 105, protein: 6.5, carbs: 8, fat: 4.5, fiber: 0.6, sugar: 1.2 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["batagor", "batagor bandung"],
+    normalizedName: "Batagor Bandung (1 Porsi)",
+    category: "snack",
+    defaultServingGrams: 180,
+    servingUnit: "1 porsi komplit",
+    per100g: { calories: 255, protein: 11, carbs: 25, fat: 12, fiber: 1.5, sugar: 3.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["siomay", "siomay bandung"],
+    normalizedName: "Siomay Bandung (1 Porsi)",
+    category: "snack",
+    defaultServingGrams: 180,
+    servingUnit: "1 porsi komplit",
+    per100g: { calories: 210, protein: 12, carbs: 22, fat: 8, fiber: 1.8, sugar: 3 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["pempek", "empek empek", "pempek kapal selam"],
+    normalizedName: "Pempek Palembang + Cuko",
+    category: "snack",
+    defaultServingGrams: 200,
+    servingUnit: "1 porsi",
+    per100g: { calories: 190, protein: 9.5, carbs: 28, fat: 4, fiber: 0.5, sugar: 5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["gado gado", "gado-gado", "pecel", "lotek"],
+    normalizedName: "Gado-Gado / Pecel Sayur",
+    category: "vegetable",
+    defaultServingGrams: 250,
+    servingUnit: "1 porsi komplit",
+    per100g: { calories: 135, protein: 5.5, carbs: 16, fat: 5.5, fiber: 3.2, sugar: 4 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["martabak manis", "terang bulan"],
+    normalizedName: "Martabak Manis (1 Potong)",
+    category: "snack",
+    defaultServingGrams: 75,
+    // 1 slice
+    servingUnit: "1 potong",
+    per100g: { calories: 360, protein: 6.5, carbs: 48, fat: 16, fiber: 1.2, sugar: 26 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["martabak telur", "martabak telor"],
+    normalizedName: "Martabak Telur (2 Potong)",
+    category: "snack",
+    defaultServingGrams: 120,
+    servingUnit: "2 potong",
+    per100g: { calories: 260, protein: 12, carbs: 14, fat: 17, fiber: 0.8, sugar: 1 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["pisang goreng"],
+    normalizedName: "Pisang Goreng (2 Pcs)",
+    category: "snack",
+    defaultServingGrams: 100,
+    // 2 pcs
+    servingUnit: "2 buah",
+    per100g: { calories: 252, protein: 2, carbs: 42, fat: 8.5, fiber: 2.5, sugar: 18 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["gorengan", "bakwan", "bala-bala", "tahu isi", "cireng"],
+    normalizedName: "Gorengan / Bakwan (2 Pcs)",
+    category: "snack",
+    defaultServingGrams: 90,
+    servingUnit: "2 buah",
+    per100g: { calories: 280, protein: 4.5, carbs: 30, fat: 16, fiber: 1.8, sugar: 1.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["burger", "cheeseburger", "beef burger"],
+    normalizedName: "Burger Daging Sapi",
+    category: "grain",
+    defaultServingGrams: 180,
+    // 1 burger
+    servingUnit: "1 buah burger",
+    per100g: { calories: 260, protein: 13, carbs: 24, fat: 12.5, fiber: 1.2, sugar: 4 },
+    source: "USDA"
+  },
+  {
+    keywords: ["pizza"],
+    normalizedName: "Pizza (1 Slice)",
+    category: "grain",
+    defaultServingGrams: 110,
+    // 1 slice regular
+    servingUnit: "1 potong (slice)",
+    per100g: { calories: 266, protein: 11.5, carbs: 32, fat: 10, fiber: 2.3, sugar: 3.5 },
+    source: "USDA"
+  },
+  // ── VEGETABLES & SPECIALTIES ──────────────────────────────────
   {
     keywords: ["jengkol", "semur jengkol", "jengkol goreng", "rendang jengkol"],
     normalizedName: "Jengkol (Cooked)",
@@ -43116,6 +43295,15 @@ var NUTRITION_DATABASE = [
     // ~4-5 keping
     servingUnit: "1 porsi (4-5 keping)",
     per100g: { calories: 192, protein: 5.4, carbs: 34, fat: 3.2, fiber: 5.8, sugar: 1.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["petai", "pete"],
+    normalizedName: "Petai / Pete (1 Papan)",
+    category: "vegetable",
+    defaultServingGrams: 50,
+    servingUnit: "1 papan",
+    per100g: { calories: 142, protein: 9, carbs: 22, fat: 1.5, fiber: 4.5, sugar: 2 },
     source: "TKPI"
   },
   {
@@ -43146,6 +43334,91 @@ var NUTRITION_DATABASE = [
     servingUnit: "1 sdm",
     per100g: { calories: 120, protein: 2, carbs: 12, fat: 7, fiber: 2.5, sugar: 5 },
     source: "TKPI"
+  },
+  {
+    keywords: ["kerupuk", "krupuk"],
+    normalizedName: "Kerupuk (2 Pcs)",
+    category: "snack",
+    defaultServingGrams: 30,
+    servingUnit: "2 keping",
+    per100g: { calories: 480, protein: 3.5, carbs: 68, fat: 21, fiber: 1, sugar: 1 },
+    source: "TKPI"
+  },
+  // ── FRUITS ────────────────────────────────────────────────────
+  {
+    keywords: ["pisang", "banana"],
+    normalizedName: "Pisang (1 Buah Sedang)",
+    category: "fruit",
+    defaultServingGrams: 118,
+    servingUnit: "1 buah sedang",
+    per100g: { calories: 89, protein: 1.1, carbs: 22.8, fat: 0.3, fiber: 2.6, sugar: 12.2 },
+    source: "USDA"
+  },
+  {
+    keywords: ["apel", "apple"],
+    normalizedName: "Apel (1 Buah Sedang)",
+    category: "fruit",
+    defaultServingGrams: 180,
+    servingUnit: "1 buah sedang",
+    per100g: { calories: 52, protein: 0.3, carbs: 13.8, fat: 0.2, fiber: 2.4, sugar: 10.4 },
+    source: "USDA"
+  },
+  {
+    keywords: ["alpukat", "avocado"],
+    normalizedName: "Alpukat (1/2 Buah)",
+    category: "fruit",
+    defaultServingGrams: 100,
+    servingUnit: "1/2 buah",
+    per100g: { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, sugar: 0.7 },
+    source: "USDA"
+  },
+  {
+    keywords: ["semangka", "watermelon"],
+    normalizedName: "Semangka (1 Potong)",
+    category: "fruit",
+    defaultServingGrams: 200,
+    servingUnit: "1 potong besar",
+    per100g: { calories: 30, protein: 0.6, carbs: 7.6, fat: 0.2, fiber: 0.4, sugar: 6.2 },
+    source: "USDA"
+  },
+  // ── DAIRY, NUTS & SPREADS ──────────────────────────────────────
+  {
+    keywords: ["susu", "milk", "susu uht", "fresh milk"],
+    normalizedName: "Susu Sapi / UHT (1 Gelas)",
+    category: "dairy",
+    defaultServingGrams: 250,
+    servingUnit: "1 gelas (250ml)",
+    per100g: { calories: 60, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 4.8 },
+    isHydration: true,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    keywords: ["keju", "cheese", "cheddar"],
+    normalizedName: "Keju (1 Slice)",
+    category: "dairy",
+    defaultServingGrams: 20,
+    servingUnit: "1 lembar (20g)",
+    per100g: { calories: 403, protein: 25, carbs: 1.3, fat: 33, fiber: 0, sugar: 0.5 },
+    source: "USDA"
+  },
+  {
+    keywords: ["almond", "kacang almond", "kacang tanah", "kacang"],
+    normalizedName: "Kacang-kacangan (1 Genggam)",
+    category: "snack",
+    defaultServingGrams: 30,
+    servingUnit: "1 genggam (30g)",
+    per100g: { calories: 579, protein: 21, carbs: 21.5, fat: 49.9, fiber: 12.5, sugar: 4.3 },
+    source: "USDA"
+  },
+  {
+    keywords: ["selai kacang", "peanut butter"],
+    normalizedName: "Selai Kacang (1 Sdm)",
+    category: "fat",
+    defaultServingGrams: 16,
+    servingUnit: "1 sendok makan",
+    per100g: { calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9 },
+    source: "USDA"
   },
   // ── BEVERAGES ──────────────────────────────────────────────────
   {
@@ -43182,6 +43455,17 @@ var NUTRITION_DATABASE = [
     source: "USDA"
   },
   {
+    keywords: ["boba", "boba milk tea", "bubble tea"],
+    normalizedName: "Boba Milk Tea (1 Cup)",
+    category: "beverage",
+    defaultServingGrams: 450,
+    servingUnit: "1 cup (450ml)",
+    per100g: { calories: 75, protein: 1, carbs: 16.5, fat: 1, fiber: 0.2, sugar: 14 },
+    isHydration: true,
+    defaultVolumeMl: 450,
+    source: "USDA"
+  },
+  {
     keywords: ["teh manis", "es teh manis", "teh kotak", "teh botol"],
     normalizedName: "Es Teh Manis",
     category: "beverage",
@@ -43202,6 +43486,17 @@ var NUTRITION_DATABASE = [
     isHydration: true,
     defaultVolumeMl: 250,
     source: "USDA"
+  },
+  {
+    keywords: ["jus buah", "jus alpukat", "jus mangga", "jus jeruk", "juice"],
+    normalizedName: "Jus Buah Segar",
+    category: "beverage",
+    defaultServingGrams: 300,
+    servingUnit: "1 gelas (300ml)",
+    per100g: { calories: 55, protein: 0.8, carbs: 13, fat: 0.5, fiber: 1.5, sugar: 11 },
+    isHydration: true,
+    defaultVolumeMl: 300,
+    source: "TKPI"
   },
   {
     keywords: ["whey", "protein shake", "susu protein"],
