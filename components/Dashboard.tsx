@@ -1331,6 +1331,78 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [profActivity, setProfActivity] = useState(activeUser.activityLevel || "moderate");
   const [profPersona, setProfPersona] = useState(activeUser.persona || "max");
 
+  // Meal Detail, Edit, and Delete States
+  const [selectedMealDetail, setSelectedMealDetail] = useState<MealItem | null>(null);
+  const [editingMeal, setEditingMeal] = useState<MealItem | null>(null);
+  const [mealToDelete, setMealToDelete] = useState<MealItem | null>(null);
+
+  // Edit Meal Form Inputs
+  const [editMealName, setEditMealName] = useState("");
+  const [editMealType, setEditMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
+  const [editMealCal, setEditMealCal] = useState("");
+  const [editMealProt, setEditMealProt] = useState("");
+  const [editMealCarb, setEditMealCarb] = useState("");
+  const [editMealFat, setEditMealFat] = useState("");
+  const [editMealFib, setEditMealFib] = useState("0");
+  const [editMealSug, setEditMealSug] = useState("0");
+
+  const handleOpenEditMeal = (meal: MealItem) => {
+    setEditingMeal(meal);
+    setEditMealName(meal.foodName);
+    setEditMealType((meal.mealType as any) || "lunch");
+    setEditMealCal(String(meal.calories || 0));
+    setEditMealProt(String(meal.protein || 0));
+    setEditMealCarb(String(meal.carbs || 0));
+    setEditMealFat(String(meal.fat || 0));
+    setEditMealFib(String(meal.fiber || 0));
+    setEditMealSug(String(meal.sugar || 0));
+  };
+
+  const handleSaveEditMeal = () => {
+    if (!editingMeal) return;
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const cal = Math.max(0, Number(editMealCal) || 0);
+    const prot = Math.max(0, Number(editMealProt) || 0);
+    const carb = Math.max(0, Number(editMealCarb) || 0);
+    const fat = Math.max(0, Number(editMealFat) || 0);
+    const fib = Math.max(0, Number(editMealFib) || 0);
+    const sug = Math.max(0, Number(editMealSug) || 0);
+
+    const updatedMeal: MealItem = {
+      ...editingMeal,
+      foodName: editMealName.trim() || editingMeal.foodName,
+      mealType: editMealType,
+      calories: cal,
+      protein: prot,
+      carbs: carb,
+      fat: fat,
+      fiber: fib,
+      sugar: sug
+    };
+
+    const updated = allLogs.map((item) => (item.id === editingMeal.id ? updatedMeal : item));
+    setAllLogs(updated);
+    try {
+      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+    } catch (e) {}
+
+    // Sync to backend
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meals: updated, date: selectedDate })
+    }).catch(() => {});
+
+    if (selectedMealDetail && selectedMealDetail.id === editingMeal.id) {
+      setSelectedMealDetail(updatedMeal);
+    }
+
+    setEditingMeal(null);
+    setReminderNotificationMsg(isEN ? "Meal updated successfully! 🥗" : "Makanan berhasil diperbarui! 🥗");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
   useEffect(() => {
     if (activeUser) {
       setProfName(activeUser.name || "");
@@ -2399,22 +2471,40 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             {cardOrder.map((cardId, cardIdx) => {
               // ── CARD 1: HERO ACTIVITY & GAUGE CARD ──
               if (cardId === "hero") {
+                const calDiff = targetCalories - totalCaloriesConsumed;
+                const isOverCal = totalCaloriesConsumed > targetCalories;
+                const isExactCal = totalCaloriesConsumed === targetCalories && totalCaloriesConsumed > 0;
+                
+                const protDiff = targetProtein - totalProteinConsumed;
+                const carbDiff = targetCarbs - totalCarbsConsumed;
+                const fatDiff = targetFat - totalFatConsumed;
+                const waterDiff = targetHydrationGoal - totalHydrationMl;
+
+                // Today's Meals calorie breakdown by category
+                const caloriesByMealType = {
+                  breakfast: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "breakfast").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
+                  lunch: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "lunch" || (!m.mealType && !["breakfast", "dinner", "snack"].includes((m.mealType || "").toLowerCase()))).reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
+                  dinner: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "dinner").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
+                  snack: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "snack").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
+                };
+
                 return (
-                  <div key="hero" className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+                  <div key="hero" className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden space-y-5">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/5 rounded-full blur-3xl pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00D2FF]/5 rounded-full blur-3xl pointer-events-none" />
 
-                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                      {/* Circular Activity Gauge */}
-                      <div className="flex items-center gap-5 w-full md:w-auto">
-                        <div className="relative w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center">
+                    <div className="relative z-10 flex flex-col lg:flex-row items-stretch justify-between gap-6">
+                      {/* Left: Circular Activity Gauge + Calorie Status */}
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 flex-1 min-w-0">
+                        {/* Gauge */}
+                        <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
                             <circle cx="60" cy="60" r="48" className="stroke-[#1C2638]" strokeWidth="10" fill="transparent" />
                             <circle
                               cx="60"
                               cy="60"
                               r="48"
-                              stroke="url(#calorieGlowGrad)"
+                              stroke={isOverCal ? "url(#calorieOverGrad)" : "url(#calorieGlowGrad)"}
                               strokeWidth="10"
                               strokeDasharray={2 * Math.PI * 48}
                               strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, totalCaloriesConsumed / (targetCalories || 2000)))}
@@ -2427,44 +2517,80 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                 <stop offset="0%" stopColor="#25D366" />
                                 <stop offset="100%" stopColor="#D4FF00" />
                               </linearGradient>
+                              <linearGradient id="calorieOverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#F59E0B" />
+                                <stop offset="100%" stopColor="#EF4444" />
+                              </linearGradient>
                             </defs>
                           </svg>
 
                           <div className="absolute flex flex-col items-center justify-center text-center">
-                            <Flame size={18} className="text-[#D4FF00] animate-pulse" />
-                            <span className="text-xl sm:text-2xl font-black text-white leading-none mt-1">
-                              {Math.max(0, targetCalories - totalCaloriesConsumed)}
+                            <Flame size={18} className={isOverCal ? "text-amber-400 animate-pulse" : "text-[#D4FF00] animate-pulse"} />
+                            <span className={`text-xl sm:text-2xl font-black leading-none mt-1 ${isOverCal ? "text-amber-400" : "text-white"}`}>
+                              {isOverCal 
+                                ? `+${(totalCaloriesConsumed - targetCalories).toLocaleString()}` 
+                                : Math.max(0, targetCalories - totalCaloriesConsumed).toLocaleString()}
                             </span>
                             <span className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
-                              {isEN ? "kcal left" : "kcal sisa"}
+                              {isOverCal ? (isEN ? "kcal over" : "kcal lebih") : (isEN ? "kcal left" : "kcal sisa")}
                             </span>
                           </div>
                         </div>
 
                         {/* Ring Summary Text */}
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
-                            {t.dailyTargetLabel}
-                          </span>
-                          <h3 className="text-lg font-black text-white">
-                            {totalCaloriesConsumed} <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories} kcal</span>
+                        <div className="space-y-1.5 text-center sm:text-left flex-1 min-w-0">
+                          <div className="flex items-center justify-center sm:justify-start gap-2">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
+                              {t.dailyTargetLabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomTargetsModal(true)}
+                              className="text-[10px] font-bold text-[#D4FF00] hover:underline flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Edit3 size={10} /> Edit Target
+                            </button>
+                          </div>
+
+                          <h3 className="text-xl sm:text-2xl font-black text-white">
+                            {totalCaloriesConsumed.toLocaleString()}{" "}
+                            <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories.toLocaleString()} kcal</span>
                           </h3>
-                          <p className="text-xs text-neutral-400 font-medium">
-                            {totalCaloriesConsumed >= targetCalories ? (isEN ? "🎯 Daily calorie target achieved!" : "🎯 Target kalori harian tercapai!") : (isEN ? "🔥 Energy ready for daily fitness & gym" : "🔥 Energi siap untuk aktivitas & gym")}
-                          </p>
+
+                          {/* Dynamic Calorie Status Messaging (Rule 1) */}
+                          <div className="pt-0.5">
+                            {isOverCal ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/20">
+                                ⚠️ {Math.abs(calDiff).toLocaleString()} kcal {isEN ? "over target" : "melebihi target"}
+                              </span>
+                            ) : isExactCal ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-black text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/20">
+                                🎯 {isEN ? "Daily calorie target achieved!" : "Target kalori harian tercapai!"}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-lg border border-emerald-400/20">
+                                ✨ {Math.max(0, calDiff).toLocaleString()} kcal {isEN ? "remaining" : "tersisa"}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Macro Progress Breakdown Bars */}
-                      <div className="w-full md:w-64 space-y-3.5 pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-white/[0.06] md:pl-6">
-                        {/* Protein */}
-                        <div className="space-y-1.5">
+                      {/* Right: Actionable Macro Progress & Goals (Rule 2, 3, 4, 5) */}
+                      <div className="w-full lg:w-80 space-y-3 pt-4 lg:pt-0 border-t lg:border-t-0 lg:border-l border-white/[0.08] lg:pl-6 shrink-0">
+                        {/* 1. Protein */}
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#D4FF00]" />
                               <span>{t.proteinLabel}</span>
                             </span>
-                            <span className="text-white font-mono">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${protDiff <= 0 ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-400"}`}>
+                                {protDiff <= 0 ? `+${Math.abs(protDiff)}g` : `${protDiff}g ${isEN ? "rem." : "sisa"}`}
+                              </span>
+                            </div>
                           </div>
                           <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
                             <div
@@ -2474,27 +2600,76 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </div>
                         </div>
 
-                        {/* Air Minum */}
-                        <div className="space-y-1.5">
+                        {/* 2. Carbs */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                              <span>{t.carbsLabel || "Karbo"}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono">{totalCarbsConsumed} <span className="text-neutral-500 font-normal">/ {targetCarbs}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${carbDiff <= 0 ? "bg-amber-400/20 text-amber-400" : "bg-white/5 text-neutral-400"}`}>
+                                {carbDiff <= 0 ? `+${Math.abs(carbDiff)}g` : `${carbDiff}g ${isEN ? "rem." : "sisa"}`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                            <div
+                              className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                              style={{ width: `${Math.min(100, Math.round((totalCarbsConsumed / (targetCarbs || 1)) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 3. Fat */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-rose-400" />
+                              <span>{t.fatLabel || "Lemak"}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono">{totalFatConsumed} <span className="text-neutral-500 font-normal">/ {targetFat}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${fatDiff <= 0 ? "bg-rose-400/20 text-rose-400" : "bg-white/5 text-neutral-400"}`}>
+                                {fatDiff <= 0 ? `+${Math.abs(fatDiff)}g` : `${fatDiff}g ${isEN ? "rem." : "sisa"}`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
+                            <div
+                              className="h-full bg-gradient-to-r from-pink-500 to-rose-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"
+                              style={{ width: `${Math.min(100, Math.round((totalFatConsumed / (targetFat || 1)) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 4. Water Intake (Rule 4) */}
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
                               <span>{isEN ? "Water Intake" : "Air Minum"}</span>
                             </span>
-                            <span className="text-white font-mono">{totalHydrationMl} <span className="text-neutral-500 font-normal">/ 2500ml</span></span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono">{totalHydrationMl.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetHydrationGoal.toLocaleString()}ml</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${waterDiff <= 0 ? "bg-[#00D2FF]/20 text-[#00D2FF]" : "bg-white/5 text-neutral-400"}`}>
+                                {waterDiff <= 0 ? (isEN ? "Goal reached ✓" : "Target tercapai ✓") : `${waterDiff.toLocaleString()}ml ${isEN ? "rem." : "sisa"}`}
+                              </span>
+                            </div>
                           </div>
                           <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
                             <div
                               className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500 shadow-[0_0_8px_#00D2FF]"
-                              style={{ width: `${Math.min(100, Math.round((totalHydrationMl / 2500) * 100))}%` }}
+                              style={{ width: `${Math.min(100, Math.round((totalHydrationMl / (targetHydrationGoal || 1)) * 100))}%` }}
                             />
                           </div>
                         </div>
 
-                        {/* Body Goal with clickable Edit */}
+                        {/* 5. Target Weight with clickable Edit (Rule 5) */}
                         <div
                           onClick={() => setShowGoalEditModal(true)}
-                          className="space-y-1.5 cursor-pointer group/goal hover:opacity-90 transition-opacity"
+                          className="space-y-1 cursor-pointer group/goal hover:opacity-90 transition-opacity"
                           title={isEN ? "Click to edit goal & target" : "Klik untuk ubah goal & target"}
                         >
                           <div className="flex items-center justify-between text-xs font-bold">
@@ -2503,7 +2678,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span className="group-hover/goal:text-[#D4FF00] transition-colors">{t.targetWeightLabel}</span>
                               <Edit3 size={11} className="text-neutral-500 group-hover/goal:text-[#D4FF00]" />
                             </span>
-                            <span className="text-[#D4FF00] font-mono">{weight} kg <span className="text-neutral-500 font-normal">➔ {targetWeight}kg</span></span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#D4FF00] font-mono">{weight} kg <span className="text-neutral-500 font-normal">➔ {targetWeight}kg</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${weight === targetWeight ? "bg-emerald-400/20 text-emerald-400" : "bg-amber-400/20 text-amber-300"}`}>
+                                {weight === targetWeight ? "Goal reached ✓" : `${Math.abs(Number((weight - targetWeight).toFixed(1)))} kg ${isEN ? "to goal" : "ke target"}`}
+                              </span>
+                            </div>
                           </div>
                           <div className="w-full h-2 bg-[#1A2333] rounded-full overflow-hidden p-0.5 border border-white/[0.04]">
                             <div
@@ -2511,6 +2691,55 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               style={{ width: `${progressPercent}%` }}
                             />
                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Today's Meals Compact Summary (Rule 6) */}
+                    <div className="pt-3 border-t border-white/[0.06]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-black text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Today's Meals</span>
+                          <span className="text-neutral-600">•</span>
+                          <span className="text-neutral-500 font-medium lowercase">{foodMeals.length} {isEN ? "logged" : "tercatat"}</span>
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-white">
+                          {totalCaloriesConsumed} kcal
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="p-2.5 bg-[#111620]/90 border border-white/5 rounded-xl flex flex-col justify-between">
+                          <span className="text-[10px] text-neutral-400 font-bold flex items-center gap-1">
+                            🌅 {isEN ? "Breakfast" : "Sarapan"}
+                          </span>
+                          <span className="text-sm font-black text-white mt-1">
+                            {caloriesByMealType.breakfast > 0 ? `${caloriesByMealType.breakfast} kcal` : "—"}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-[#111620]/90 border border-white/5 rounded-xl flex flex-col justify-between">
+                          <span className="text-[10px] text-neutral-400 font-bold flex items-center gap-1">
+                            ☀️ {isEN ? "Lunch" : "Makan Siang"}
+                          </span>
+                          <span className="text-sm font-black text-white mt-1">
+                            {caloriesByMealType.lunch > 0 ? `${caloriesByMealType.lunch} kcal` : "—"}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-[#111620]/90 border border-white/5 rounded-xl flex flex-col justify-between">
+                          <span className="text-[10px] text-neutral-400 font-bold flex items-center gap-1">
+                            🌙 {isEN ? "Dinner" : "Makan Malam"}
+                          </span>
+                          <span className="text-sm font-black text-white mt-1">
+                            {caloriesByMealType.dinner > 0 ? `${caloriesByMealType.dinner} kcal` : "—"}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-[#111620]/90 border border-white/5 rounded-xl flex flex-col justify-between">
+                          <span className="text-[10px] text-neutral-400 font-bold flex items-center gap-1">
+                            🍎 {isEN ? "Snacks" : "Camilan"}
+                          </span>
+                          <span className="text-sm font-black text-white mt-1">
+                            {caloriesByMealType.snack > 0 ? `${caloriesByMealType.snack} kcal` : "—"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2642,14 +2871,17 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 );
               }
 
-              // ── CARD 4: FOOD MEALS LIST ──
+              // ── CARD 4: FOOD MEALS LIST (Rule 8, 9, 13, 14, 15, 16, 17, 18) ──
               if (cardId === "food") {
                 return (
                   <div key="food" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <Flame size={18} className="text-amber-400" />
                         <h2 className="text-base font-extrabold text-white">{t.foodMeals}</h2>
+                        <span className="text-xs font-bold text-neutral-400 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+                          {foodMeals.length}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -2670,26 +2902,92 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     </div>
 
                     {foodMeals.length === 0 ? (
-                      <div className="text-center py-6 text-neutral-400 text-xs font-medium border border-dashed border-white/[0.08] rounded-xl bg-[#0E131F]">
-                        {t.noMealsLogged}
+                      <div className="text-center py-8 px-4 border border-dashed border-white/[0.08] rounded-2xl bg-[#0E131F] space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-[#161C28] text-2xl flex items-center justify-center mx-auto border border-white/5">
+                          🍽️
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-extrabold text-white">
+                            {isEN ? "No meals logged yet" : "Belum ada makanan tercatat"}
+                          </h4>
+                          <p className="text-xs text-neutral-400 font-medium max-w-sm mx-auto">
+                            {isEN ? "Start tracking your meals to see your daily nutrition here." : "Mulai catat makanan harianmu untuk memantau kalori dan makronutrisi di sini."}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddFoodModal(true)}
+                            className="px-4 py-2 bg-[#D4FF00] text-black font-black text-xs rounded-xl hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
+                          >
+                            + {isEN ? "Add Meal" : "Catat Makanan"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowScanModal(true)}
+                            className="px-4 py-2 bg-[#18202E] border border-white/10 text-neutral-300 font-bold text-xs rounded-xl hover:bg-white/10 transition-all cursor-pointer"
+                          >
+                            📸 {isEN ? "Scan Photo" : "Scan Foto"}
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <div className="divide-y divide-white/[0.06] border border-white/[0.06] rounded-xl overflow-hidden bg-[#0E131F]">
+                      <div className="space-y-2">
                         {foodMeals.map((item) => (
-                          <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-                            <div>
-                              <h4 className="font-extrabold text-sm text-white">{item.foodName}</h4>
-                              <p className="text-xs text-neutral-400 font-medium mt-0.5">
-                                {item.calories} kcal • P: {item.protein}g | C: {item.carbs}g | F: {item.fat}g
-                              </p>
+                          <div
+                            key={item.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedMealDetail(item)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedMealDetail(item);
+                              }
+                            }}
+                            className="w-full text-left p-3.5 bg-[#0E131F] hover:bg-[#161F2E] focus-visible:bg-[#161F2E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4FF00] border border-white/[0.06] hover:border-white/15 rounded-2xl transition-all cursor-pointer group flex items-center justify-between gap-3 shadow-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors truncate">
+                                  {item.foodName}
+                                </h4>
+                                {item.mealType && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#161C28] text-neutral-400 border border-white/5 capitalize shrink-0">
+                                    {item.mealType}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-neutral-400 font-medium mt-1 flex-wrap">
+                                <span className="text-white font-black">{item.calories} kcal</span>
+                                <span className="text-neutral-600">•</span>
+                                <span className="text-indigo-300 font-medium">P: {item.protein}g</span>
+                                <span className="text-emerald-300 font-medium">C: {item.carbs}g</span>
+                                <span className="text-rose-300 font-medium">F: {item.fat}g</span>
+                                {item.time && (
+                                  <>
+                                    <span className="text-neutral-600">•</span>
+                                    <span className="text-neutral-400 font-mono text-[11px]">{item.time}</span>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <button
-                              onClick={() => handleDeleteLogItem(item.id)}
-                              className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                              title={t.delete}
-                            >
-                              <Trash2 size={15} />
-                            </button>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMealToDelete(item);
+                                }}
+                                className="p-2 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                title={t.delete}
+                                aria-label={`Delete ${item.foodName}`}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                              <ChevronRight size={18} className="text-neutral-500 group-hover:text-[#D4FF00] group-hover:translate-x-0.5 transition-all" />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -6265,121 +6563,338 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* MODAL 3: AFFILIATE PROGRAM & REFERRAL DASHBOARD */}
+      {/* MODAL 4: MEAL DETAIL MODAL (Rule 10, 11, 12, 13) */}
       {/* ========================================================================= */}
       <AnimatePresence>
-        {showAffiliateModal && (
+        {selectedMealDetail && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 text-white max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-[#D4FF00] text-black flex items-center justify-center font-black">
-                    💰
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-neutral-800 pb-3 gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
+                      {selectedMealDetail.mealType || "Lunch"}
+                    </span>
+                    {selectedMealDetail.time && (
+                      <span className="text-xs text-neutral-400 font-mono flex items-center gap-1">
+                        <Clock size={12} className="text-neutral-500" />
+                        {selectedMealDetail.time}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <h3 className="font-['Archivo_Black'] text-white text-base">
-                      Program Afiliasi GymBuddy
-                    </h3>
-                    <p className="text-xs text-neutral-400 font-medium">
-                      Komisi Berulang 20% – 35% Seumur Hidup
-                    </p>
-                  </div>
+                  <h3 className="text-lg font-black text-white mt-1 leading-snug break-words">
+                    {selectedMealDetail.foodName}
+                  </h3>
                 </div>
                 <button
-                  onClick={() => setShowAffiliateModal(false)}
+                  type="button"
+                  onClick={() => setSelectedMealDetail(null)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer shrink-0"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Nutrition Summary Hero Box */}
+              <div className="p-4 bg-[#161C28] rounded-2xl border border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-[#D4FF00]" /> Total Nutrisi
+                  </span>
+                  <span className="text-sm font-black text-black bg-[#D4FF00] px-3 py-0.5 rounded-lg shadow-sm">
+                    ~{Number(selectedMealDetail.calories || 0).toLocaleString()} kcal
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold">
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-indigo-400 font-bold">Protein</span>
+                    <span className="text-white font-black">{selectedMealDetail.protein || 0}g</span>
+                  </div>
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-emerald-400 font-bold">Karbo</span>
+                    <span className="text-white font-black">{selectedMealDetail.carbs || 0}g</span>
+                  </div>
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-rose-400 font-bold">Lemak</span>
+                    <span className="text-white font-black">{selectedMealDetail.fat || 0}g</span>
+                  </div>
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-amber-400 font-bold">Serat</span>
+                    <span className="text-white font-black">{selectedMealDetail.fiber || 0}g</span>
+                  </div>
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-cyan-400 font-bold">Gula</span>
+                    <span className="text-white font-black">{selectedMealDetail.sugar || 0}g</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Food Item Breakdown (Rule 10) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-neutral-300 uppercase tracking-wider">
+                    Rincian Komponen Makanan
+                  </span>
+                  <span className="text-[10px] text-neutral-500 font-medium">
+                    {Array.isArray(selectedMealDetail.items) && selectedMealDetail.items.length > 0
+                      ? `${selectedMealDetail.items.length} item terdeteksi`
+                      : "Porsi tercatat"}
+                  </span>
+                </div>
+
+                {Array.isArray(selectedMealDetail.items) && selectedMealDetail.items.length > 0 ? (
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto no-scrollbar">
+                    {selectedMealDetail.items.map((it: any, idx: number) => (
+                      <div key={idx} className="p-2.5 bg-[#161C28]/90 rounded-xl border border-white/5 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-neutral-100 font-bold text-xs block leading-tight">
+                              • {it.normalized_food_name || it.food_name}
+                            </span>
+                            <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
+                              {it.estimated_weight_grams || 100}g · <span className="text-neutral-500">{it.data_source || "Estimated nutrition"}</span>
+                            </span>
+                          </div>
+                          <span className="text-xs font-black text-white whitespace-nowrap">
+                            {it.calories} kcal
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5">
+                          <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
+                          <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
+                          <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                          {it.fiber !== undefined && it.fiber > 0 && (
+                            <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#161C28]/60 rounded-xl border border-white/5 text-xs text-neutral-400 font-medium">
+                    Makanan dicatat sebagai satu menu komplit: <strong className="text-white">{selectedMealDetail.foodName}</strong> (~{selectedMealDetail.calories} kcal).
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons (Rule 11, 12) */}
+              <div className="flex items-center gap-2 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditMeal(selectedMealDetail)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/20 hover:bg-white/10 text-neutral-200 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Edit3 size={14} />
+                  <span>Edit Nutrisi</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMealToDelete(selectedMealDetail)}
+                  className="flex-1 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  <span>Hapus Makanan</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: EDIT MEAL NUTRITION (Rule 11) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {editingMeal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Edit3 size={16} className="text-[#D4FF00]" />
+                  <h3 className="font-['Archivo_Black'] text-base text-white">
+                    Edit Nutrisi Makanan
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingMeal(null)}
                   className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              {/* Commission Stats */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Total Klik</span>
-                  <p className="text-lg font-black text-white">18</p>
-                </div>
-                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Member Aktif</span>
-                  <p className="text-lg font-black text-[#D4FF00]">3</p>
-                </div>
-                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Saldo Komisi</span>
-                  <p className="text-lg font-black text-emerald-400">Rp 150.000</p>
-                </div>
-              </div>
-
-              {/* Commission Tier Badge */}
-              <div className="bg-gradient-to-r from-amber-500/15 via-[#D4FF00]/15 to-emerald-500/15 border border-[#D4FF00]/30 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">🥉</span>
-                    <span className="font-extrabold text-sm text-white">Tier Bronze (Komisi 20%)</span>
-                  </div>
-                  <span className="text-[10px] font-black text-[#D4FF00] bg-black/40 px-2.5 py-1 rounded-full border border-[#D4FF00]/30">
-                    Target: 10 Member ➔ Tier Silver 25%
-                  </span>
-                </div>
-                <div className="w-full bg-black/50 rounded-full h-2 overflow-hidden">
-                  <div className="bg-[#D4FF00] h-full w-[30%] rounded-full shadow-[0_0_8px_#D4FF00]" />
-                </div>
-              </div>
-
-              {/* Link & Coupon Box */}
               <div className="space-y-3">
-                <div className="bg-[#161C28] border border-white/[0.08] rounded-xl p-3.5 space-y-1.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Link Referral Eksklusif:</span>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono font-bold text-[#D4FF00] truncate">{referralLink}</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyReferral}
-                      className="px-3 py-1.5 bg-[#D4FF00] text-black font-extrabold text-xs rounded-lg flex items-center gap-1 shrink-0 cursor-pointer shadow-sm"
-                    >
-                      {referralCopied ? <Check size={13} /> : <Copy size={13} />}
-                      <span>{referralCopied ? "Tersalin" : "Salin"}</span>
-                    </button>
+                <div>
+                  <label className="text-xs font-bold text-neutral-300">Nama Makanan</label>
+                  <input
+                    type="text"
+                    value={editMealName}
+                    onChange={(e) => setEditMealName(e.target.value)}
+                    className="w-full mt-1 px-3.5 py-2.5 bg-[#161C28] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-300">Waktu Makan</label>
+                  <div className="grid grid-cols-4 gap-1.5 mt-1">
+                    {(["breakfast", "lunch", "dinner", "snack"] as const).map((mType) => (
+                      <button
+                        key={mType}
+                        type="button"
+                        onClick={() => setEditMealType(mType)}
+                        className={`py-2 rounded-xl text-xs font-bold capitalize transition-all cursor-pointer border ${
+                          editMealType === mType
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                            : "bg-[#161C28] text-neutral-400 border-white/10 hover:text-white"
+                        }`}
+                      >
+                        {mType}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="bg-[#161C28] border border-white/[0.08] rounded-xl p-3.5 flex items-center justify-between">
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <div>
-                    <span className="text-[10px] text-neutral-400 font-bold uppercase block">Kode Kupon Diskon Member:</span>
-                    <span className="text-sm font-mono font-black text-white tracking-wider">{couponCode}</span>
+                    <label className="text-xs font-bold text-white">Kalori (kcal)</label>
+                    <input
+                      type="number"
+                      value={editMealCal}
+                      onChange={(e) => setEditMealCal(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
                   </div>
-                  <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                    Diskon 10% Member
-                  </span>
+                  <div>
+                    <label className="text-xs font-bold text-indigo-400">Protein (g)</label>
+                    <input
+                      type="number"
+                      value={editMealProt}
+                      onChange={(e) => setEditMealProt(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-emerald-400">Karbo (g)</label>
+                    <input
+                      type="number"
+                      value={editMealCarb}
+                      onChange={(e) => setEditMealCarb(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-rose-400">Lemak (g)</label>
+                    <input
+                      type="number"
+                      value={editMealFat}
+                      onChange={(e) => setEditMealFat(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-amber-400">Serat (Fiber g)</label>
+                    <input
+                      type="number"
+                      value={editMealFib}
+                      onChange={(e) => setEditMealFib(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-cyan-400">Gula (Sugar g)</label>
+                    <input
+                      type="number"
+                      value={editMealSug}
+                      onChange={(e) => setEditMealSug(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-2 border-t border-neutral-800">
-                <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Yuk pakai GymBuddy AI buat catat kalori makanan Indonesia & latihan gym! Daftar lewat link ini: ${referralLink} pakai kode ${couponCode} buat dapat diskon!`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 rounded-xl bg-[#25D366] hover:bg-[#1ebd59] text-black font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              <div className="flex items-center gap-2 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingMeal(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs transition-all cursor-pointer"
                 >
-                  <Share2 size={15} />
-                  <span>Bagikan ke WhatsApp Teman / Grup Gym</span>
-                </a>
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditMeal}
+                  className="flex-1 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all cursor-pointer shadow-md"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
+      {/* ========================================================================= */}
+      {/* MODAL 6: DELETE MEAL CONFIRMATION (Rule 12) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {mealToDelete && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto">
+                <Trash2 size={22} />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="font-['Archivo_Black'] text-base text-white">
+                  Hapus Makanan Ini?
+                </h3>
+                <p className="text-xs font-bold text-[#D4FF00] px-2 py-1 bg-white/5 rounded-lg inline-block max-w-full truncate">
+                  "{mealToDelete.foodName}"
+                </p>
+                <p className="text-xs text-neutral-400 font-medium pt-1">
+                  Total kalori dan makronutrisi harian akan otomatis dikurangi setelah dihapus.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMealToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
                 <button
                   type="button"
                   onClick={() => {
-                    alert("Permintaan penarikan komisi Rp 150.000 telah dikirim! Tim finance akan memproses transfer dalam 1x24 jam.");
-                    setShowAffiliateModal(false);
+                    handleDeleteLogItem(mealToDelete.id);
+                    if (selectedMealDetail && selectedMealDetail.id === mealToDelete.id) {
+                      setSelectedMealDetail(null);
+                    }
+                    setMealToDelete(null);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs transition-all cursor-pointer shadow-md"
                 >
-                  <DollarSign size={14} className="text-emerald-400" />
-                  <span>Tarik Saldo Komisi (Withdraw)</span>
+                  Hapus Makanan
                 </button>
               </div>
             </motion.div>
