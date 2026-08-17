@@ -42989,6 +42989,31 @@ async function saveToMongo() {
     console.error("[MongoDB] Save error:", e);
   }
 }
+function isLegacyMockMeal(m) {
+  if (!m) return true;
+  const idStr = String(m.id || "");
+  const fnStr = String(m.foodName || "");
+  if (idStr === "m-1" || idStr === "m-2" || idStr === "m-3" || idStr.startsWith("m-y") || idStr.startsWith("m-2d")) return true;
+  if (fnStr.includes("Nasi Merah 150g & Dada Ayam") || fnStr.includes("Tumis Sapi Lada Hitam") || fnStr.includes("Whey Protein Shake & Pisang")) return true;
+  return false;
+}
+function purgeLegacyMockLogs() {
+  if (!dbData.dailyLogs) return;
+  let modified = false;
+  for (const [key, logs] of Object.entries(dbData.dailyLogs)) {
+    if (Array.isArray(logs)) {
+      const filtered = logs.filter((l) => !isLegacyMockMeal(l));
+      if (filtered.length !== logs.length) {
+        dbData.dailyLogs[key] = filtered;
+        modified = true;
+      }
+    }
+  }
+  if (modified) {
+    saveDb();
+    console.log("[Data Purge] Purged legacy mock meal logs from database \u2705");
+  }
+}
 function initDb() {
   if (!import_fs.default.existsSync(DATA_DIR)) {
     import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
@@ -43009,12 +43034,14 @@ function initDb() {
     saveDb();
   }
   seedTestUserData("085156919826");
+  purgeLegacyMockLogs();
   if (MONGODB_URI) {
     loadFromMongo().then((loaded) => {
       if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
       if (!dbData.users["085156919826"]) {
         seedTestUserData("085156919826");
       }
+      purgeLegacyMockLogs();
     });
   }
 }
@@ -44975,9 +45002,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const altKey = `${altPhone}_${targetDate}`;
     let logs = [];
     if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key])) {
-      logs = [...dbData.dailyLogs[key]];
+      logs = dbData.dailyLogs[key].filter((m) => !isLegacyMockMeal(m));
     } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey])) {
-      logs = [...dbData.dailyLogs[altKey]];
+      logs = dbData.dailyLogs[altKey].filter((m) => !isLegacyMockMeal(m));
     }
     res.json({ success: true, phone, date: targetDate, logs });
   });

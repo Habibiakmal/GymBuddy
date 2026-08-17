@@ -1541,14 +1541,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
+        const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
         let currentLocal: MealItem[] = [];
         try {
           const lData = localStorage.getItem(localKey);
-          if (lData) currentLocal = JSON.parse(lData);
+          if (lData) currentLocal = (JSON.parse(lData) || []).filter((m: any) => !isLegacyMockMeal(m));
         } catch (e) {}
 
-        // Intelligent merge: combine server logs with any unsynced local logs
-        const merged: MealItem[] = [...serverLogs];
+        // Intelligent merge: combine clean server logs with any unsynced local logs
+        const merged: MealItem[] = [...cleanServerLogs];
         if (Array.isArray(currentLocal) && currentLocal.length > 0) {
           for (const loc of currentLocal) {
             const alreadyExists = merged.some((m) => m.id === loc.id || (m.foodName === loc.foodName && m.calories === loc.calories && (m.timestamp === loc.timestamp || m.time === loc.time)));
@@ -1569,7 +1570,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         const sanitized = sanitizeAndSplitComboLogs(merged);
         setAllLogs(sanitized);
         try {
-          localStorage.setItem(localKey, JSON.stringify(merged));
+          localStorage.setItem(localKey, JSON.stringify(sanitized));
         } catch (e) {}
       }
 
