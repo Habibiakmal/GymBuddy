@@ -101,7 +101,7 @@ export default function App() {
     } catch (e) {}
   }, [language]);
 
-  // Session verification: directly query Render backend database
+  // Session verification: keep user logged in and sync profile in background
   React.useEffect(() => {
     const verifySession = async () => {
       const stored = localStorage.getItem("gymbuddy_active_session");
@@ -115,38 +115,30 @@ export default function App() {
       try {
         const parsed = JSON.parse(stored);
         if (parsed?.phone) {
-          const norm = String(parsed.phone).replace(/\D/g, '').replace(/^62/, '0');
-          const cleanPhone = norm.startsWith('8') ? '0' + norm : norm;
+          // Immediately keep session active (no logout on refresh)
+          setCurrentUser(parsed);
+          setIsLoggedIn(true);
+          setViewMode("dashboard");
+
+          // Background sync with server database
+          const norm = String(parsed.phone).replace(/\D/g, "").replace(/^62/, "0");
+          const cleanPhone = norm.startsWith("8") ? "0" + norm : norm;
           const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
 
-          let isFound = false;
           try {
             const res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`, {
               headers: { "Accept": "application/json" }
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.success && data.user) {
-                isFound = true;
-                setCurrentUser(data.user);
+            }).catch(() => null);
+
+            if (res && res.ok) {
+              const data = await res.json().catch(() => null);
+              if (data && (data.user || data.profile)) {
+                const liveProfile = data.user || data.profile;
+                setCurrentUser(liveProfile);
+                localStorage.setItem("gymbuddy_active_session", JSON.stringify(liveProfile));
               }
             }
           } catch (e) {}
-
-          if (!isFound) {
-            console.log("[Auth] User profile not found in database. Resetting local session.");
-            Object.keys(localStorage).forEach((key) => {
-              if (key.startsWith("gymbuddy")) {
-                localStorage.removeItem(key);
-              }
-            });
-            setCurrentUser(null);
-            setIsLoggedIn(false);
-            setViewMode("landing");
-            if (window.location.pathname.toLowerCase() === "/dashboard") {
-              window.history.replaceState({}, "", "/");
-            }
-          }
         }
       } catch (e) {}
     };

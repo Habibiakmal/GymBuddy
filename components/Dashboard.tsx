@@ -1554,32 +1554,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
         const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
-        let currentLocal: MealItem[] = [];
-        try {
-          const lData = localStorage.getItem(localKey);
-          if (lData) currentLocal = (JSON.parse(lData) || []).filter((m: any) => !isLegacyMockMeal(m));
-        } catch (e) {}
-
-        // Intelligent merge: combine clean server logs with any unsynced local logs
-        const merged: MealItem[] = [...cleanServerLogs];
-        if (Array.isArray(currentLocal) && currentLocal.length > 0) {
-          for (const loc of currentLocal) {
-            const alreadyExists = merged.some((m) => m.id === loc.id || (m.foodName === loc.foodName && m.calories === loc.calories && (m.timestamp === loc.timestamp || m.time === loc.time)));
-            if (!alreadyExists) {
-              merged.push(loc);
-              // Push unsynced local meal to server
-              try {
-                fetch(`${primaryUrl}/api/user/${normPhone}/meals`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ ...loc, date: dateStr })
-                }).catch(() => {});
-              } catch (e) {}
-            }
-          }
-        }
-
-        const sanitized = sanitizeAndSplitComboLogs(merged);
+        const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
         setAllLogs(sanitized);
         try {
           localStorage.setItem(localKey, JSON.stringify(sanitized));
@@ -2252,39 +2227,41 @@ Kembalikan HANYA JSON valid:
   };
 
   const handleDeleteLogItem = async (id: string) => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || "");
     const updated = allLogs.filter((item) => item.id !== id);
     setAllLogs(updated);
 
-    // Immediately persist deletion to localStorage — this is the source of truth.
+    // Immediately persist deletion to localStorage
     const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
       localStorage.setItem(localKey, JSON.stringify(updated));
     } catch (e) {}
 
-    // Sync deletion to both local and remote servers
-    const deleteFromServer = async (baseUrl: string) => {
-      try {
-        // 1. Delete the specific meal by ID
-        await fetch(`${baseUrl}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, {
-          method: "DELETE"
-        });
-        // 2. Full synchronization: update the entire day's log list on server
-        await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${selectedDate}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meals: updated, date: selectedDate })
-        });
-        // 3. If all items were removed, explicitly call bulk DELETE endpoint as well
-        if (updated.length === 0) {
-          await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${selectedDate}`, {
-            method: "DELETE"
-          });
-        }
-      } catch (e) {}
-    };
-    deleteFromServer(""); // local server
-    deleteFromServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com"); // remote server
+    // Sync deletion to local and Render backend immediately
+    const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+    try {
+      // 1. Delete the specific meal by ID
+      fetch(`/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+
+      // 2. Full synchronization PUT: overwrite day's meal list on server
+      fetch(`/api/user/${normPhone}/meals?date=${selectedDate}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meals: updated, date: selectedDate })
+      }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meals: updated, date: selectedDate })
+      }).catch(() => {});
+
+      // 3. If all items removed, bulk DELETE
+      if (updated.length === 0) {
+        fetch(`/api/user/${normPhone}/meals?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+        fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+      }
+    } catch (e) {}
   };
 
   const handleDeleteAccount = async () => {
