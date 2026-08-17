@@ -426,26 +426,6 @@ function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
   }
 }
 
-function seedTestUserData(phone: string) {
-  const norm = normalizePhone(phone);
-  if (dbData.users[norm]) return;
-
-  saveUserProfile(norm, {
-    name: norm === "085156919826" ? "WHOOOISBUNNY" : "Member",
-    phone: norm,
-    goal: "gain",
-    goalTitle: "Menaikkan Massa Otot & BB",
-    weight: 70.0,
-    startWeight: 70.0,
-    targetWeight: 75.0,
-    height: 175,
-    age: 25,
-    gender: "pria",
-    persona: "max",
-    activityLevel: "active"
-  });
-}
-
 // ─── MongoDB Persistent Storage ──────────────────────────────────────────────
 const MONGODB_URI = process.env.MONGODB_URI || "";
 let mongoClient: MongoClient | null = null;

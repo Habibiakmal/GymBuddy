@@ -126,13 +126,13 @@ export default function LoginModal({
     // 4. Auto-generate starter profile for ANY phone number if DB is offline or user is new
     if (!foundProfile) {
       foundProfile = {
-        name: normPhone === "085156919826" ? "WHOOOISBUNNY" : `Member ${normPhone.slice(-4)}`,
+        name: `Member ${normPhone.slice(-4)}`,
         phone: normPhone,
-        goal: normPhone === "085156919826" ? "gain" : "healthy",
-        goalTitle: normPhone === "085156919826" ? "Menaikkan Massa Otot & BB" : (isEN ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Bugar"),
-        weight: normPhone === "085156919826" ? 70 : 65,
-        startWeight: normPhone === "085156919826" ? 70 : 65,
-        targetWeight: normPhone === "085156919826" ? 75 : 65,
+        goal: "healthy",
+        goalTitle: isEN ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Bugar",
+        weight: 65,
+        startWeight: 65,
+        targetWeight: 65,
         height: 170,
         age: 25,
         gender: "pria",

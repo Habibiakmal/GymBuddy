@@ -42914,24 +42914,6 @@ function getMealTypeByHour() {
     return "dinner";
   }
 }
-function seedTestUserData(phone) {
-  const norm = normalizePhone(phone);
-  if (dbData.users[norm]) return;
-  saveUserProfile(norm, {
-    name: norm === "085156919826" ? "WHOOOISBUNNY" : "Member",
-    phone: norm,
-    goal: "gain",
-    goalTitle: "Menaikkan Massa Otot & BB",
-    weight: 70,
-    startWeight: 70,
-    targetWeight: 75,
-    height: 175,
-    age: 25,
-    gender: "pria",
-    persona: "max",
-    activityLevel: "active"
-  });
-}
 var MONGODB_URI = process.env.MONGODB_URI || "";
 var mongoClient = null;
 var mongoConnected = false;
