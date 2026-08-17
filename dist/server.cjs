@@ -43190,6 +43190,30 @@ async function loadFromMongo() {
     return false;
   }
 }
+async function getUserProfileFromMongo(rawPhone) {
+  try {
+    const db = await getMongoDb();
+    if (!db) return null;
+    const phone = normalizePhone(rawPhone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const doc = await db.collection("appdata").findOne({ _id: "main" });
+    if (!doc || !doc.users) return null;
+    const users = doc.users;
+    const found = users[phone] || users[altPhone] || null;
+    if (found) {
+      dbData.users[phone] = found;
+      dbData.users[altPhone] = found;
+      if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
+      if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+      if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+      console.log(`[MongoDB] Restored profile for ${phone} from Atlas \u2705`);
+    }
+    return found;
+  } catch (e) {
+    console.error("[MongoDB] getUserProfileFromMongo error:", e);
+    return null;
+  }
+}
 async function saveToMongo() {
   try {
     const db = await getMongoDb();
@@ -43457,14 +43481,14 @@ function getTodayDateStr() {
 function getUserProfile(rawPhone) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
-  if (dbData.users[phone]) return dbData.users[phone];
+  if (dbData.users[phone] && dbData.users[phone].weight) return dbData.users[phone];
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  if (dbData.users[altPhone] && dbData.users[altPhone].weight) return dbData.users[altPhone];
   for (const [key, value] of Object.entries(dbData.users)) {
-    if (normalizePhone(key) === phone) {
+    if (normalizePhone(key) === phone && value?.weight) {
       return value;
     }
   }
-  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-  if (dbData.users[altPhone]) return dbData.users[altPhone];
   return null;
 }
 function getOrCreateUserProfile(rawPhone, userText) {
@@ -43497,24 +43521,6 @@ function getOrCreateUserProfile(rawPhone, userText) {
       saveDb();
       return user;
     }
-  }
-  if (!user) {
-    const profileName = extractedName || `Member ${phone.slice(-4)}`;
-    user = saveUserProfile(phone, {
-      name: profileName,
-      phone,
-      goal: "maintain",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 65,
-      startWeight: 65,
-      targetWeight: 65,
-      height: 170,
-      age: 25,
-      gender: "pria",
-      persona: "max",
-      activityLevel: "moderate"
-    });
-    saveDb();
   }
   return user;
 }
@@ -45574,8 +45580,21 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const lowerText = userText.toLowerCase();
           const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
           if (!userProfile) {
-            userProfile = getOrCreateUserProfile(from, userText);
+            userProfile = await getUserProfileFromMongo(from);
           }
+          if (!userProfile && !isWelcomeMessage) {
+            await sendMetaWhatsappMessage(
+              from,
+              `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
+-----------------------------
+Halo! Nomor WhatsApp kamu belum terdaftar.
+
+Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
+https://gymbuddygroup.com`
+            );
+            return res.sendStatus(200);
+          }
+          if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
           const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
           const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
@@ -45876,8 +45895,21 @@ Keluarkan output JSON valid:
       const lowerText = userText.toLowerCase();
       const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
       if (!userProfile) {
-        userProfile = getOrCreateUserProfile(From, userText);
+        userProfile = await getUserProfileFromMongo(From);
       }
+      if (!userProfile && !isWelcomeMessage) {
+        const twiml2 = new import_twilio.default.twiml.MessagingResponse();
+        twiml2.message(
+          `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
+-----------------------------
+Halo! Nomor WhatsApp kamu belum terdaftar.
+
+Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
+https://gymbuddygroup.com`
+        );
+        return res.type("text/xml").send(twiml2.toString());
+      }
+      if (!userProfile) userProfile = getOrCreateUserProfile(From, userText);
       const userData = calculateUserData(userProfile);
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
@@ -46532,6 +46564,34 @@ ${mistakes}
         if (latestOB && latestOB.weight) {
           userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
         }
+      }
+      if (!userProfile) {
+        userProfile = await getUserProfileFromMongo(from);
+      }
+      if (!userProfile && !isWelcomeMessage) {
+        const reply = `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
+-----------------------------
+Halo! Nomor WhatsApp kamu belum terdaftar.
+
+Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
+https://gymbuddygroup.com`;
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
+        res.type("text/xml").send(twiml);
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({
+              body: reply,
+              from: fromNum,
+              to: toNum
+            });
+          } catch (twErr) {
+            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
+          }
+        }
+        return;
       }
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(from, userText);

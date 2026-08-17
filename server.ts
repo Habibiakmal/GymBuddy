@@ -473,6 +473,33 @@ async function loadFromMongo(): Promise<boolean> {
   }
 }
 
+// Directly fetch a specific user from MongoDB by phone (bypasses in-memory cache)
+async function getUserProfileFromMongo(rawPhone: string): Promise<any | null> {
+  try {
+    const db = await getMongoDb();
+    if (!db) return null;
+    const phone = normalizePhone(rawPhone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const doc = await db.collection("appdata").findOne({ _id: "main" as any });
+    if (!doc || !doc.users) return null;
+    const users = doc.users as Record<string, any>;
+    const found = users[phone] || users[altPhone] || null;
+    if (found) {
+      // Sync back to in-memory so future calls are instant
+      dbData.users[phone] = found;
+      dbData.users[altPhone] = found;
+      if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
+      if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+      if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+      console.log(`[MongoDB] Restored profile for ${phone} from Atlas ✅`);
+    }
+    return found;
+  } catch (e) {
+    console.error("[MongoDB] getUserProfileFromMongo error:", e);
+    return null;
+  }
+}
+
 async function saveToMongo(): Promise<void> {
   try {
     const db = await getMongoDb();
@@ -764,14 +791,14 @@ function getTodayDateStr(): string {
 function getUserProfile(rawPhone: string) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
-  if (dbData.users[phone]) return dbData.users[phone];
+  if (dbData.users[phone] && dbData.users[phone].weight) return dbData.users[phone];
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  if (dbData.users[altPhone] && dbData.users[altPhone].weight) return dbData.users[altPhone];
   for (const [key, value] of Object.entries(dbData.users)) {
-    if (normalizePhone(key) === phone) {
+    if (normalizePhone(key) === phone && (value as any)?.weight) {
       return value;
     }
   }
-  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
-  if (dbData.users[altPhone]) return dbData.users[altPhone];
   return null;
 }
 
@@ -815,30 +842,8 @@ function getOrCreateUserProfile(rawPhone: string, userText?: string) {
     }
   }
 
-  // 5. BugH Fix: Only use latest_onboarding if phone explicitly matches — never blindly assign to a stranger
-  // (latest_onboarding is only safe to use from the onboarding POST where the phone is provided)
-  // Do NOT auto-assign latest_onboarding data to any random WA user who messages first
-
-  // 6. Fallback if no profile exists anywhere — create a bare-minimum placeholder
-  if (!user) {
-    const profileName = extractedName || `Member ${phone.slice(-4)}`;
-    user = saveUserProfile(phone, {
-      name: profileName,
-      phone,
-      goal: "maintain",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 65,
-      startWeight: 65,
-      targetWeight: 65,
-      height: 170,
-      age: 25,
-      gender: "pria",
-      persona: "max",
-      activityLevel: "moderate"
-    });
-    saveDb();
-  }
-
+  // NOTE: This function is sync — MongoDB fallback is handled separately in async webhook handlers
+  // Do NOT create placeholder profiles here — return null so webhooks can check MongoDB first
   return user;
 }
 
@@ -2908,9 +2913,24 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                    (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
+          // If not in memory, check MongoDB directly (handles Render restart race condition)
           if (!userProfile) {
-            userProfile = getOrCreateUserProfile(from, userText);
+            userProfile = await getUserProfileFromMongo(from);
           }
+
+          // Still null = truly unregistered
+          if (!userProfile && !isWelcomeMessage) {
+            await sendMetaWhatsappMessage(
+              from,
+              `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
+              `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
+              `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
+              `https://gymbuddygroup.com`
+            );
+            return res.sendStatus(200);
+          }
+
+          if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
 
           const isRecommendationMessage = lowerText.includes("rekomendasi makanan") ||
@@ -3257,9 +3277,24 @@ Keluarkan output JSON valid:
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
+      // If not in memory, check MongoDB directly (handles Render restart race condition)
       if (!userProfile) {
-        userProfile = getOrCreateUserProfile(From, userText);
+        userProfile = await getUserProfileFromMongo(From);
       }
+
+      // Still null = truly unregistered
+      if (!userProfile && !isWelcomeMessage) {
+        const twiml = new TwilioPackage.twiml.MessagingResponse();
+        twiml.message(
+          `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
+          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
+          `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
+          `https://gymbuddygroup.com`
+        );
+        return res.type('text/xml').send(twiml.toString());
+      }
+
+      if (!userProfile) userProfile = getOrCreateUserProfile(From, userText);
       const userData = calculateUserData(userProfile);
 
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") ||
@@ -4051,12 +4086,45 @@ Keluarkan output JSON valid:
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
-      // Check if user has onboarding data in latest_onboarding
+      // 1. Check if user has onboarding data in latest_onboarding
       if (!userProfile) {
         const latestOB = dbData.users["latest_onboarding"] as any;
         if (latestOB && latestOB.weight) {
           userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
         }
+      }
+
+      // 2. If not in memory, check MongoDB directly (handles Render restart race condition)
+      if (!userProfile) {
+        userProfile = await getUserProfileFromMongo(from);
+      }
+
+      // 3. If STILL null (truly unregistered number) & not an onboarding welcome message
+      if (!userProfile && !isWelcomeMessage) {
+        const reply = `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
+          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
+          `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
+          `https://gymbuddygroup.com`;
+        
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
+        res.type("text/xml").send(twiml);
+
+        // Also send direct via Twilio API if configured
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({
+              body: reply,
+              from: fromNum,
+              to: toNum
+            });
+          } catch (twErr: any) {
+            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
+          }
+        }
+        return;
       }
 
       if (!userProfile) {
