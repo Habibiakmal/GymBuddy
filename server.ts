@@ -860,6 +860,8 @@ function saveUserProfile(rawPhone: string, profile: any) {
   };
 
   dbData.users[phone] = updated;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  dbData.users[altPhone] = updated;
 
   // Initialize Week 0 baseline if no progress history exists yet
   if (!dbData.weeklyProgress[phone] || dbData.weeklyProgress[phone].length === 0) {
@@ -2906,17 +2908,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                    (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
-          // Strict Onboarding Requirement: If profile is deleted / unregistered and message is not onboarding welcome
-          if (!userProfile && !isWelcomeMessage) {
-            await sendMetaWhatsappMessage(
-              from,
-              `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-              `Halo! Nomor WhatsApp kamu belum terdaftar atau telah dihapus dari database GymBuddy AI.\n\n` +
-              `Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website GymBuddy AI agar Coach kami bisa menyesuaikan kebutuhan kalori & latihanmu secara personal! 🎯✨`
-            );
-            return res.sendStatus(200);
-          }
-
           if (!userProfile) {
             userProfile = getOrCreateUserProfile(from, userText);
           }
@@ -3265,17 +3256,6 @@ Keluarkan output JSON valid:
 
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
-
-      // Strict Onboarding Requirement: If profile is deleted / unregistered and message is not onboarding welcome
-      if (!userProfile && !isWelcomeMessage) {
-        const twiml = new TwilioPackage.twiml.MessagingResponse();
-        twiml.message(
-          `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-          `Halo! Nomor WhatsApp kamu belum terdaftar atau telah dihapus dari database GymBuddy AI.\n\n` +
-          `Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website GymBuddy AI agar Coach kami bisa menyesuaikan kebutuhan kalori & latihanmu secara personal! 🎯✨`
-        );
-        return res.type('text/xml').send(twiml.toString());
-      }
 
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(From, userText);
@@ -4079,33 +4059,9 @@ Keluarkan output JSON valid:
         }
       }
 
-      // If user has NOT completed onboarding on Web UI, require onboarding first!
-      if (!userProfile && !isWelcomeMessage && !mediaUrl) {
-        const reply = `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\nSilakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨`;
-        
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
-        res.type("text/xml").send(twiml);
-
-        // Send direct to WhatsApp via Twilio API so user gets the notification
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({
-              body: reply,
-              from: fromNum,
-              to: toNum
-            });
-          } catch (twErr: any) {
-            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
-          }
-        }
-        return;
+      if (!userProfile) {
+        userProfile = getOrCreateUserProfile(from, userText);
       }
-
-      if (!userProfile) userProfile = getOrCreateUserProfile(from);
       const userData = calculateUserData(userProfile);
 
       // Handle RESET command (user wants to wipe data & re-register)

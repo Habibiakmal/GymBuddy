@@ -43534,6 +43534,8 @@ function saveUserProfile(rawPhone, profile) {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   dbData.users[phone] = updated;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  dbData.users[altPhone] = updated;
   if (!dbData.weeklyProgress[phone] || dbData.weeklyProgress[phone].length === 0) {
     dbData.weeklyProgress[phone] = [{
       week: 0,
@@ -45571,17 +45573,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           }
           const lowerText = userText.toLowerCase();
           const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
-          if (!userProfile && !isWelcomeMessage) {
-            await sendMetaWhatsappMessage(
-              from,
-              `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar atau telah dihapus dari database GymBuddy AI.
-
-Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website GymBuddy AI agar Coach kami bisa menyesuaikan kebutuhan kalori & latihanmu secara personal! \u{1F3AF}\u2728`
-            );
-            return res.sendStatus(200);
-          }
           if (!userProfile) {
             userProfile = getOrCreateUserProfile(from, userText);
           }
@@ -45884,17 +45875,6 @@ Keluarkan output JSON valid:
       }
       const lowerText = userText.toLowerCase();
       const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
-      if (!userProfile && !isWelcomeMessage) {
-        const twiml2 = new import_twilio.default.twiml.MessagingResponse();
-        twiml2.message(
-          `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar atau telah dihapus dari database GymBuddy AI.
-
-Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website GymBuddy AI agar Coach kami bisa menyesuaikan kebutuhan kalori & latihanmu secara personal! \u{1F3AF}\u2728`
-        );
-        return res.type("text/xml").send(twiml2.toString());
-      }
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(From, userText);
       }
@@ -46553,31 +46533,9 @@ ${mistakes}
           userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
         }
       }
-      if (!userProfile && !isWelcomeMessage && !mediaUrl) {
-        const reply = `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar.
-
-Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728`;
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
-        res.type("text/xml").send(twiml);
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({
-              body: reply,
-              from: fromNum,
-              to: toNum
-            });
-          } catch (twErr) {
-            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
-          }
-        }
-        return;
+      if (!userProfile) {
+        userProfile = getOrCreateUserProfile(from, userText);
       }
-      if (!userProfile) userProfile = getOrCreateUserProfile(from);
       const userData = calculateUserData(userProfile);
       const isResetQuery = /^(reset|reset\s*data|hapus\s*data|ulang\s*dari\s*awal|registrasi\s*ulang|hapus\s*akun)/i.test(userText.trim());
       if (isResetQuery) {
