@@ -5152,34 +5152,53 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 {/* AI Preview Result */}
                 {aiPreview && !isAnalyzingAi && (
-                  <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-xl space-y-2.5">
+                  <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-white flex items-center gap-1.5">
-                        <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
-                      </span>
+                      <div>
+                        <span className="text-xs font-black text-white flex items-center gap-1.5">
+                          <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
+                        </span>
+                        {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
+                          <span className="text-[10px] text-neutral-400 font-medium">
+                            {aiPreview.items.length} detected food items
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
-                        ~{itemCalInput} kcal
+                        ~{Number(itemCalInput || 0).toLocaleString()} kcal
                       </span>
                     </div>
 
-                    {/* Per-item breakdown pill list */}
+                    {/* Per-item breakdown list */}
                     {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
-                      <div className="p-2 bg-[#111620]/80 rounded-xl border border-white/5 space-y-1.5">
+                      <div className="p-2.5 bg-[#111620]/90 rounded-xl border border-white/5 space-y-2">
                         <div className="text-[10px] font-black text-neutral-400 uppercase tracking-wider flex items-center justify-between">
-                          <span>Daftar Komponen ({aiPreview.items.length} Item)</span>
-                          <span className="text-neutral-500 font-normal">USDA / TKPI</span>
+                          <span>Food Item Breakdown</span>
+                          <span className="text-neutral-500 font-normal">Standard Servings</span>
                         </div>
-                        <div className="space-y-1 max-h-32 overflow-y-auto no-scrollbar">
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
                           {aiPreview.items.map((it: FoodItemNutrition, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0">
-                              <span className="text-neutral-200 font-bold truncate max-w-[55%]">
-                                • {it.normalized_food_name || it.food_name} <span className="text-[10px] text-neutral-400 font-normal">({it.estimated_weight_grams}g)</span>
-                              </span>
-                              <div className="flex items-center gap-2 text-[10px] text-neutral-300 font-medium">
-                                <span className="text-white font-bold">{it.calories} kcal</span>
-                                <span className="text-indigo-400">P:{it.protein}g</span>
-                                <span className="text-emerald-400">C:{it.carbs}g</span>
-                                <span className="text-rose-400">F:{it.fat}g</span>
+                            <div key={idx} className="p-2 bg-[#161C28]/80 rounded-lg border border-white/5 flex flex-col gap-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-neutral-100 font-bold text-xs block leading-tight">
+                                    • {it.normalized_food_name || it.food_name}
+                                  </span>
+                                  <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
+                                    {it.estimated_weight_grams}g · <span className="text-neutral-500">{it.data_source || "Estimated nutrition"}</span>
+                                  </span>
+                                </div>
+                                <span className="text-xs font-black text-white whitespace-nowrap">
+                                  {it.calories} kcal
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5">
+                                <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
+                                <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
+                                <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                                {it.fiber !== undefined && it.fiber > 0 && (
+                                  <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -5187,6 +5206,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </div>
                     )}
 
+                    {/* 5-Metric Total Macro Grid */}
                     <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
                       <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
                         <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
@@ -5292,49 +5312,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   )}
                 </div>
 
-                {/* ── Feature 1: Confirmation Panel ─────────────────────── */}
+                {/* ── Compact Confirmation Section (Non-Redundant) ──────── */}
                 {aiConfirmStep && !isAnalyzingAi && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-1 p-4 bg-[#161C28] rounded-2xl space-y-3 border border-[#D4FF00]/40"
+                    className="mt-2 p-3.5 bg-[#161C28] rounded-2xl space-y-3 border border-[#D4FF00]/40"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-[#D4FF00] flex items-center gap-1.5">
-                        <Sparkles size={13} /> Estimated Nutrition AI
+                      <span className="text-xs font-bold text-neutral-300">
+                        Ready to save
                       </span>
-                      <span className="text-[11px] font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-sm">
-                        ~{itemCalInput || "480"} kcal
+                      <span className="text-[11px] font-black text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/20">
+                        ~{Number(itemCalInput || 0).toLocaleString()} kcal · {itemProteinInput || "0"}P · {itemCarbsInput || "0"}C · {itemFatInput || "0"}F
                       </span>
                     </div>
-
-                    {/* Macro & Micro summary row */}
-                    <div className="grid grid-cols-5 gap-1 text-center text-[10px] sm:text-[11px] font-bold">
-                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[9px] text-indigo-400 font-bold">Protein</span>
-                        <span className="text-white font-black">{itemProteinInput || "22"}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[9px] text-emerald-400 font-bold">Karbo</span>
-                        <span className="text-white font-black">{itemCarbsInput || "56"}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[9px] text-rose-400 font-bold">Lemak</span>
-                        <span className="text-white font-black">{itemFatInput || "18"}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[9px] text-amber-400 font-bold">Serat</span>
-                        <span className="text-white font-black">{itemFiberInput || "0"}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[9px] text-cyan-400 font-bold">Gula</span>
-                        <span className="text-white font-black">{itemSugarInput || "0"}g</span>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-neutral-400 text-center">
-                      Hasil adalah estimasi porsi standar. Gunakan <em>"Edit Nutrisi Manual"</em> jika ingin menyesuaikan.
-                    </p>
 
                     {/* Action buttons */}
                     <div className="flex gap-2">
@@ -5366,7 +5358,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         setItemFiberInput("0");
                         setItemSugarInput("0");
                       }}
-                      className="w-full py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
+                      className="w-full py-1.5 rounded-xl text-[11px] font-bold text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors text-center"
                     >
                       ❌ Batal
                     </button>

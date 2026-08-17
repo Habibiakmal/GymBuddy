@@ -42910,10 +42910,12 @@ var NUTRITION_DATABASE = [
   },
   {
     keywords: ["roti", "roti tawar", "white bread", "bread", "toast", "roti gandum"],
-    normalizedName: "Roti Tawar (2 Lembar)",
+    normalizedName: "Roti Tawar",
     category: "grain",
     defaultServingGrams: 60,
     // 2 slices ~60g
+    perPieceGrams: 30,
+    // 1 slice ~30g
     servingUnit: "2 lembar",
     per100g: { calories: 265, protein: 9, carbs: 49, fat: 3.2, fiber: 2.7, sugar: 5 },
     cookingVariants: {
@@ -42999,19 +43001,21 @@ var NUTRITION_DATABASE = [
   // ── PROTEINS & MEATS ──────────────────────────────────────────
   {
     keywords: ["ayam goreng", "fried chicken", "ayam kfc", "ayam crispy"],
-    normalizedName: "Ayam Goreng (Dada / Paha + Kulit)",
+    normalizedName: "Ayam Goreng (Dada/Paha + Kulit)",
     category: "protein",
     defaultServingGrams: 120,
     // 1 piece cooked
+    perPieceGrams: 120,
     servingUnit: "1 potong sedang",
     per100g: { calories: 246, protein: 24.5, carbs: 3.5, fat: 14.8, fiber: 0, sugar: 0 },
     source: "USDA"
   },
   {
     keywords: ["dada ayam", "ayam rebus", "chicken breast", "ayam panggang", "ayam grill", "ayam kukus"],
-    normalizedName: "Dada Ayam (Cooked / Grilled)",
+    normalizedName: "Dada Ayam (Cooked/Grilled)",
     category: "protein",
     defaultServingGrams: 120,
+    perPieceGrams: 120,
     servingUnit: "1 potong dada",
     per100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 },
     source: "USDA"
@@ -43021,6 +43025,7 @@ var NUTRITION_DATABASE = [
     normalizedName: "Ayam Geprek Crispy + Sambal",
     category: "protein",
     defaultServingGrams: 140,
+    perPieceGrams: 140,
     servingUnit: "1 potong geprek",
     per100g: { calories: 265, protein: 22, carbs: 8.5, fat: 16, fiber: 0.8, sugar: 0.5 },
     source: "TKPI"
@@ -43030,6 +43035,7 @@ var NUTRITION_DATABASE = [
     normalizedName: "Bebek Goreng / Bakar",
     category: "protein",
     defaultServingGrams: 140,
+    perPieceGrams: 140,
     servingUnit: "1 potong paha/dada",
     per100g: { calories: 337, protein: 19, carbs: 0, fat: 28, fiber: 0, sugar: 0 },
     source: "TKPI"
@@ -43054,10 +43060,11 @@ var NUTRITION_DATABASE = [
   },
   {
     keywords: ["nugget", "chicken nugget", "nugget ayam"],
-    normalizedName: "Chicken Nugget (4 Pcs)",
+    normalizedName: "Chicken Nugget",
     category: "protein",
     defaultServingGrams: 80,
     // 4 pcs
+    perPieceGrams: 20,
     servingUnit: "4 pcs",
     per100g: { calories: 296, protein: 15, carbs: 14, fat: 20, fiber: 0.8, sugar: 0.5 },
     source: "USDA"
@@ -43068,6 +43075,7 @@ var NUTRITION_DATABASE = [
     category: "protein",
     defaultServingGrams: 50,
     // 1 standard sausage
+    perPieceGrams: 50,
     servingUnit: "1 buah sedang",
     per100g: { calories: 301, protein: 12, carbs: 3, fat: 27, fiber: 0, sugar: 1.2 },
     source: "USDA"
@@ -43078,6 +43086,7 @@ var NUTRITION_DATABASE = [
     category: "protein",
     defaultServingGrams: 50,
     // 1 large egg
+    perPieceGrams: 50,
     servingUnit: "1 butir",
     per100g: { calories: 155, protein: 12.6, carbs: 1.1, fat: 10.6, fiber: 0, sugar: 1.1 },
     cookingVariants: {
@@ -43092,6 +43101,7 @@ var NUTRITION_DATABASE = [
     normalizedName: "Telur Goreng / Ceplok / Dadar",
     category: "protein",
     defaultServingGrams: 55,
+    perPieceGrams: 55,
     servingUnit: "1 butir",
     per100g: { calories: 196, protein: 13.6, carbs: 0.8, fat: 15.3, fiber: 0, sugar: 0.8 },
     source: "USDA"
@@ -43102,7 +43112,9 @@ var NUTRITION_DATABASE = [
     category: "protein",
     defaultServingGrams: 60,
     // ~4-5 pieces
-    servingUnit: "1 porsi / 4 buah",
+    perPieceGrams: 15,
+    // 1 piece ~15g
+    servingUnit: "4 buah (60g)",
     per100g: { calories: 99, protein: 24, carbs: 0.2, fat: 0.3, fiber: 0, sugar: 0 },
     cookingVariants: {
       goreng: { calories: 180, protein: 20, carbs: 6, fat: 8.5, fiber: 0, sugar: 0 }
@@ -43123,6 +43135,7 @@ var NUTRITION_DATABASE = [
     normalizedName: "Daging Sapi / Rendang",
     category: "protein",
     defaultServingGrams: 80,
+    perPieceGrams: 80,
     servingUnit: "1 potong sedang",
     per100g: { calories: 250, protein: 26, carbs: 2, fat: 15, fiber: 0, sugar: 0.5 },
     source: "TKPI"
@@ -43138,27 +43151,30 @@ var NUTRITION_DATABASE = [
   },
   {
     keywords: ["ikan", "fish", "salmon", "tuna", "ikan lele", "ikan bakar", "ikan goreng", "ikan gurame", "ikan kembung"],
-    normalizedName: "Ikan (Cooked / Bakar)",
+    normalizedName: "Ikan (Cooked/Bakar)",
     category: "protein",
     defaultServingGrams: 100,
+    perPieceGrams: 100,
     servingUnit: "1 ekor / potong",
     per100g: { calories: 160, protein: 22, carbs: 1, fat: 7.5, fiber: 0, sugar: 0 },
     source: "TKPI"
   },
   {
     keywords: ["tahu", "tofu", "tahu goreng", "tahu kukus"],
-    normalizedName: "Tahu (2 Potong)",
+    normalizedName: "Tahu",
     category: "protein",
     defaultServingGrams: 80,
+    perPieceGrams: 40,
     servingUnit: "2 potong",
     per100g: { calories: 110, protein: 9.5, carbs: 3.5, fat: 6.5, fiber: 1.2, sugar: 0.5 },
     source: "TKPI"
   },
   {
     keywords: ["tempe", "tempeh", "tempe goreng", "tempe bacem"],
-    normalizedName: "Tempe (2 Potong)",
+    normalizedName: "Tempe",
     category: "protein",
     defaultServingGrams: 70,
+    perPieceGrams: 35,
     servingUnit: "2 potong",
     per100g: { calories: 195, protein: 18.5, carbs: 9, fat: 10.5, fiber: 3.5, sugar: 1 },
     source: "TKPI"
@@ -43593,8 +43609,10 @@ function calculateSingleItemNutrition(rawItemText) {
     let targetGrams = 0;
     if (explicitGrams !== void 0 && explicitGrams > 0) {
       targetGrams = explicitGrams;
+    } else if (matchedRef.perPieceGrams && quantity > 1) {
+      targetGrams = matchedRef.perPieceGrams * quantity * multiplier;
     } else {
-      targetGrams = matchedRef.defaultServingGrams * quantity * multiplier;
+      targetGrams = matchedRef.defaultServingGrams * (matchedRef.perPieceGrams ? 1 : quantity) * multiplier;
     }
     let per100g = matchedRef.per100g;
     if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
@@ -43608,8 +43626,8 @@ function calculateSingleItemNutrition(rawItemText) {
     const fat2 = Math.round(per100g.fat * factor * 10) / 10;
     const fiber = Math.round(per100g.fiber * factor * 10) / 10;
     const sugar = Math.round(per100g.sugar * factor * 10) / 10;
-    const rawCal = Math.round(per100g.calories * factor);
     const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
+    const rawCal = Math.round(per100g.calories * factor);
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
     return {
       food_name: rawItemText.trim(),
@@ -43617,7 +43635,7 @@ function calculateSingleItemNutrition(rawItemText) {
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams),
-      serving_unit: explicitGrams ? `${explicitGrams}g` : `${quantity}x ${matchedRef.servingUnit}`,
+      serving_unit: explicitGrams ? `${explicitGrams}g` : `${Math.round(targetGrams)}g`,
       calories,
       protein,
       carbs,
@@ -43628,14 +43646,14 @@ function calculateSingleItemNutrition(rawItemText) {
       volume_ml: matchedRef.defaultVolumeMl ? Math.round(matchedRef.defaultVolumeMl * quantity * multiplier) : void 0,
       data_source: matchedRef.source,
       confidence: explicitGrams ? "high" : "medium",
-      notes: `Basis: ${targetGrams}g (${matchedRef.source})`
+      notes: `${targetGrams}g (${matchedRef.source})`
     };
   }
-  const estimatedGrams = explicitGrams || 100;
-  const cal = Math.round(150 * multiplier * quantity);
-  const prot = Math.round(6 * multiplier * quantity);
-  const carb = Math.round(20 * multiplier * quantity);
-  const fat = Math.round(5 * multiplier * quantity);
+  const estimatedGrams = explicitGrams || Math.round(100 * multiplier * quantity);
+  const prot = Math.round(5 * (estimatedGrams / 100) * 10) / 10;
+  const carb = Math.round(18 * (estimatedGrams / 100) * 10) / 10;
+  const fat = Math.round(4 * (estimatedGrams / 100) * 10) / 10;
+  const cal = Math.round(prot * 4 + carb * 4 + fat * 9);
   return {
     food_name: rawItemText.trim(),
     normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
@@ -43643,13 +43661,13 @@ function calculateSingleItemNutrition(rawItemText) {
     estimated_quantity: quantity,
     estimated_weight_grams: estimatedGrams,
     serving_unit: `${estimatedGrams}g (est)`,
-    calories: prot * 4 + carb * 4 + fat * 9,
+    calories: cal,
     protein: prot,
     carbs: carb,
     fat,
     fiber: 1,
     sugar: 1,
-    data_source: "ai_estimation",
+    data_source: "Estimated nutrition",
     confidence: "low",
     notes: "Estimasi generik"
   };
@@ -43660,45 +43678,44 @@ function estimateMealNutritionDeterministic(input) {
   const rawItems = splitFoodItems(input);
   debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
   const items = [];
-  let totalCalories = 0;
-  let totalProtein = 0;
-  let totalCarbs = 0;
-  let totalFat = 0;
-  let totalFiber = 0;
-  let totalSugar = 0;
+  let sumCalories = 0;
+  let sumProtein = 0;
+  let sumCarbs = 0;
+  let sumFat = 0;
+  let sumFiber = 0;
+  let sumSugar = 0;
   let totalVolumeMl = 0;
   let isHydration = false;
   for (const rawItem of rawItems) {
     const itemNutr = calculateSingleItemNutrition(rawItem);
     items.push(itemNutr);
-    totalCalories += itemNutr.calories;
-    totalProtein += itemNutr.protein;
-    totalCarbs += itemNutr.carbs;
-    totalFat += itemNutr.fat;
-    totalFiber += itemNutr.fiber;
-    totalSugar += itemNutr.sugar;
+    sumCalories += itemNutr.calories;
+    sumProtein += itemNutr.protein;
+    sumCarbs += itemNutr.carbs;
+    sumFat += itemNutr.fat;
+    sumFiber += itemNutr.fiber;
+    sumSugar += itemNutr.sugar;
     if (itemNutr.is_hydration) {
       isHydration = true;
       totalVolumeMl += itemNutr.volume_ml || 0;
     }
     debugLogs.push(
-      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.estimated_weight_grams}g (${itemNutr.serving_unit}) | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
+      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.estimated_weight_grams}g | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
     );
   }
-  totalProtein = Math.round(totalProtein);
-  totalCarbs = Math.round(totalCarbs);
-  totalFat = Math.round(totalFat);
-  totalFiber = Math.round(totalFiber);
-  totalSugar = Math.round(totalSugar);
-  const atwaterSum = totalProtein * 4 + totalCarbs * 4 + totalFat * 9;
-  const finalCalories = Math.max(totalCalories, atwaterSum);
+  const totalProtein = Math.round(sumProtein);
+  const totalCarbs = Math.round(sumCarbs);
+  const totalFat = Math.round(sumFat);
+  const totalFiber = Math.round(sumFiber);
+  const totalSugar = Math.round(sumSugar);
+  const totalCalories = Math.round(sumCalories);
   debugLogs.push(
-    `[NutritionEngine] TOTAL: ${finalCalories} kcal | Protein: ${totalProtein}g | Carbs: ${totalCarbs}g | Fat: ${totalFat}g | Fiber: ${totalFiber}g | Sugar: ${totalSugar}g`
+    `[NutritionEngine] EXACT SUM TOTAL: ${totalCalories} kcal | Protein: ${totalProtein}g | Carbs: ${totalCarbs}g | Fat: ${totalFat}g | Fiber: ${totalFiber}g | Sugar: ${totalSugar}g`
   );
   const cleanTitle = items.length === 1 ? items[0].normalized_food_name : items.map((i) => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
   return {
     foodName: cleanTitle,
-    calories: finalCalories,
+    calories: totalCalories,
     protein: totalProtein,
     carbs: totalCarbs,
     fat: totalFat,
@@ -43707,7 +43724,7 @@ function estimateMealNutritionDeterministic(input) {
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
-    portionNote: `Estimasi porsi standar (${items.length} item)`,
+    portionNote: `${items.length} detected food items`,
     items,
     calculatedFromItems: true,
     debugLog: debugLogs
@@ -45801,20 +45818,23 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed = extractAndParseJson(textOutput) || {};
         parsed.foodName = parsed.foodName || deterministicResult.foodName;
-        let protein = Math.max(0, Math.round(Number(parsed.protein) || deterministicResult.protein));
-        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || deterministicResult.carbs));
-        let fat = Math.max(0, Math.round(Number(parsed.fat) || deterministicResult.fat));
-        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || deterministicResult.fiber));
-        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || deterministicResult.sugar));
-        if (deterministicResult.items.length >= 2) {
-          if (carbs < deterministicResult.carbs * 0.65) carbs = deterministicResult.carbs;
-          if (protein < deterministicResult.protein * 0.65) protein = deterministicResult.protein;
-          if (fat < deterministicResult.fat * 0.65) fat = deterministicResult.fat;
-        }
-        const macroCalories = protein * 4 + carbs * 4 + fat * 9;
-        const calories = macroCalories > 0 ? macroCalories : Math.max(0, Math.round(Number(parsed.calories) || 0));
-        parsed.mealType = parsed.mealType || getMealTypeByHour();
         const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+        let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
+        for (const it of items) {
+          sumCal += Number(it.calories) || 0;
+          sumProt += Number(it.protein) || 0;
+          sumCarb += Number(it.carbs) || 0;
+          sumFat += Number(it.fat) || 0;
+          sumFib += Number(it.fiber) || 0;
+          sumSug += Number(it.sugar) || 0;
+        }
+        const protein = Math.round(sumProt);
+        const carbs = Math.round(sumCarb);
+        const fat = Math.round(sumFat);
+        const fiber = Math.round(sumFib);
+        const sugar = Math.round(sumSug);
+        const calories = Math.round(sumCal);
+        parsed.mealType = parsed.mealType || getMealTypeByHour();
         res.json({
           success: true,
           foodName: parsed.foodName,
@@ -45827,7 +45847,7 @@ ${cleanedAdvice}` : buildFallbackAdvice();
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: parsed.portionNote || deterministicResult.portionNote,
+          portionNote: `${items.length} detected food items`,
           items,
           debugLog: deterministicResult.debugLog
         });

@@ -2242,24 +2242,27 @@ PENTING:
         let parsed: any = extractAndParseJson(textOutput) || {};
         
         parsed.foodName = parsed.foodName || deterministicResult.foodName;
-        let protein = Math.max(0, Math.round(Number(parsed.protein) || deterministicResult.protein));
-        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || deterministicResult.carbs));
-        let fat = Math.max(0, Math.round(Number(parsed.fat) || deterministicResult.fat));
-        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || deterministicResult.fiber));
-        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || deterministicResult.sugar));
-        
-        // Sanity Check: If AI returns unrealistically low macros (< 65% of deterministic bottom-up sum), use the bottom-up USDA/TKPI values
-        if (deterministicResult.items.length >= 2) {
-          if (carbs < deterministicResult.carbs * 0.65) carbs = deterministicResult.carbs;
-          if (protein < deterministicResult.protein * 0.65) protein = deterministicResult.protein;
-          if (fat < deterministicResult.fat * 0.65) fat = deterministicResult.fat;
+        const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+
+        // Strict Requirement: Total Calories & Macros MUST ALWAYS BE SUM(items)
+        let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
+        for (const it of items) {
+          sumCal += Number(it.calories) || 0;
+          sumProt += Number(it.protein) || 0;
+          sumCarb += Number(it.carbs) || 0;
+          sumFat += Number(it.fat) || 0;
+          sumFib += Number(it.fiber) || 0;
+          sumSug += Number(it.sugar) || 0;
         }
 
-        const macroCalories = (protein * 4) + (carbs * 4) + (fat * 9);
-        const calories = macroCalories > 0 ? macroCalories : Math.max(0, Math.round(Number(parsed.calories) || 0));
-        
+        const protein = Math.round(sumProt);
+        const carbs = Math.round(sumCarb);
+        const fat = Math.round(sumFat);
+        const fiber = Math.round(sumFib);
+        const sugar = Math.round(sumSug);
+        const calories = Math.round(sumCal);
+
         parsed.mealType = parsed.mealType || getMealTypeByHour();
-        const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
 
         res.json({
           success: true,
@@ -2273,7 +2276,7 @@ PENTING:
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: parsed.portionNote || deterministicResult.portionNote,
+          portionNote: `${items.length} detected food items`,
           items,
           debugLog: deterministicResult.debugLog
         });
