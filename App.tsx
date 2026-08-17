@@ -79,10 +79,12 @@ export default function App() {
 
   const [viewMode, setViewMode] = useState<"landing" | "dashboard">(() => {
     try {
-      const path = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
-      if (path === "/dashboard") return "dashboard";
       const stored = localStorage.getItem("gymbuddy_active_session");
-      return stored ? "dashboard" : "landing";
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === "object" && parsed.phone) return "dashboard";
+      }
+      return "landing";
     } catch (e) {
       return "landing";
     }
@@ -99,30 +101,51 @@ export default function App() {
     } catch (e) {}
   }, [language]);
 
-  // Session verification: if database on server was cleared, synchronize and clear local session
+  // Session verification: directly query Render backend database
   React.useEffect(() => {
     const verifySession = async () => {
       const stored = localStorage.getItem("gymbuddy_active_session");
-      if (!stored) return;
+      if (!stored) {
+        if (window.location.pathname.toLowerCase() === "/dashboard") {
+          window.history.replaceState({}, "", "/");
+          setViewMode("landing");
+        }
+        return;
+      }
       try {
         const parsed = JSON.parse(stored);
         if (parsed?.phone) {
           const norm = String(parsed.phone).replace(/\D/g, '').replace(/^62/, '0');
           const cleanPhone = norm.startsWith('8') ? '0' + norm : norm;
-          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+          const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
 
-          let res = await fetch(`/api/user/${cleanPhone}`).catch(() => null);
-          if (!res || !res.ok) {
-            res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`).catch(() => null);
-          }
+          let isFound = false;
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`, {
+              headers: { "Accept": "application/json" }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success && data.user) {
+                isFound = true;
+                setCurrentUser(data.user);
+              }
+            }
+          } catch (e) {}
 
-          if (res && res.status === 404) {
+          if (!isFound) {
             console.log("[Auth] User profile not found in database. Resetting local session.");
-            localStorage.removeItem("gymbuddy_active_session");
-            localStorage.removeItem("gymbuddy_last_user");
+            Object.keys(localStorage).forEach((key) => {
+              if (key.startsWith("gymbuddy")) {
+                localStorage.removeItem(key);
+              }
+            });
             setCurrentUser(null);
             setIsLoggedIn(false);
             setViewMode("landing");
+            if (window.location.pathname.toLowerCase() === "/dashboard") {
+              window.history.replaceState({}, "", "/");
+            }
           }
         }
       } catch (e) {}

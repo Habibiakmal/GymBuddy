@@ -673,18 +673,18 @@ export default function Dashboard({
   onOpenWatchMode
 }: DashboardProps) {
   const safeUser: UserProfileData = initialUser || {
-    name: "WHOOOISBUNNY",
-    phone: "085156919826",
-    goal: "gain",
-    goalTitle: "Menaikkan Massa Otot & BB",
+    name: "Pengguna",
+    phone: "",
+    goal: "maintain",
+    goalTitle: "Menjaga Kebugaran",
     weight: 70,
     startWeight: 70,
-    targetWeight: 75,
-    height: 175,
+    targetWeight: 70,
+    height: 170,
     age: 25,
     gender: "pria",
     persona: "max",
-    activityLevel: "active"
+    activityLevel: "moderate"
   };
 
   // Language Persistence
