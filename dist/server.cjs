@@ -32,7 +32,6 @@ var import_genai = require("@google/genai");
 var import_axios = __toESM(require("axios"), 1);
 var import_midtrans_client = __toESM(require("midtrans-client"), 1);
 var import_twilio = __toESM(require("twilio"), 1);
-var import_mongodb = require("mongodb");
 
 // data/allExercises.json
 var allExercises_default = [
@@ -42148,6 +42147,133 @@ var CURATED_EXERCISES = [
     ]
   },
   {
+    id: "goblet-squat",
+    name: "Goblet Squat (Dumbbell / Kettlebell)",
+    indonesianName: "Goblet Squat (Squat Dumbbell Depan Dada)",
+    aliases: ["goblet squat", "goblet", "cara goblet squat", "squat dumbbell", "dumbbell goblet squat", "kettlebell goblet squat", "squat depan"],
+    equipmentCategory: "dumbbell",
+    equipmentName: "Dumbbell / Kettlebell",
+    bodyPart: "legs",
+    targetMuscles: ["Quadriceps (Paha Depan)", "Gluteus Maximus (Bokong)"],
+    secondaryMuscles: ["Core (Otot Inti)", "Hamstrings", "Calves", "Upper Back"],
+    equipmentSetup: [
+      "Pilih 1 buah dumbbell atau kettlebell dengan berat yang nyaman (misal 5-15 kg).",
+      "Posisikan tubuh berdiri di lantai yang rata dengan ruang gerak yang leluasa."
+    ],
+    instructions: [
+      "Berdiri tegak dengan kaki dibuka sedikit lebih lebar dari bahu, jari-jari kaki sedikit mengarah ke luar (sekitar 15-30 derajat).",
+      "Pegang 1 dumbbell secara vertikal di depan dada dengan kedua telapak tangan menopang kepala dumbbell bagian atas (seperti memegang piala / goblet).",
+      "Jaga siku tetap mengarah ke bawah dan dekat dengan tubuh, dada dibusungkan, serta pandangan lurus ke depan.",
+      "Tarik napas, kencangkan otot perut (core), lalu dorong pinggul ke belakang dan tekuk lutut untuk turun ke posisi jongkok/squat.",
+      "Turunlah hingga paha minimal sejajar dengan lantai (atau siku menyentuh bagian dalam lutut) tanpa membungkukkan punggung.",
+      "Buang napas dan dorong kuat lantai menggunakan tumpuan seluruh telapak kaki & tumit untuk kembali berdiri tegak."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga dumbbell tetap menempel/dekat di dada sepanjang seluruh rentang gerakan.",
+        "Pastikan lutut bergerak sejajar dengan arah jari kaki (dorong lutut sedikit ke luar).",
+        "Pertahankan dada tetap tegak dan punggung lurus alami."
+      ],
+      donts: [
+        "Jangan biarkan punggung melengkung atau membungkuk ke depan saat turun.",
+        "Jangan mengangkat tumit dari lantai saat jongkok.",
+        "Jangan biarkan lutut terlipat ke dalam (knee valgus)."
+      ]
+    },
+    coachCues: {
+      max: "Pegang dumbbell kayak piala di dada lo bro! Buka kaki, turun dalem sampe paha sejajar, dorong dari tumit! Rasain paha & pantat lo kebakar. 3-4 set x 12 reps!",
+      mia: "Peluk dumbbell-nya di depan dada ya Kak. Turun perlahan dengan dada tegap, jaga napas tetap teratur, lalu dorong dari tumit. Semangat! \u2728"
+    },
+    recommendedSetsReps: "3-4 Set x 10-15 Repetisi (Rest 60s)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Goblet_Squat/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Goblet_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Goblet_Squat/1.jpg"
+    ]
+  },
+  {
+    id: "bodyweight-push-up",
+    name: "Standard Push-Up",
+    indonesianName: "Push-Up Standar (Dada, Bahu & Core)",
+    aliases: ["push up", "push-up", "pushup", "cara push up", "latihan push up", "push up dada"],
+    equipmentCategory: "bodyweight",
+    equipmentName: "Matras / Lantai",
+    bodyPart: "chest",
+    targetMuscles: ["Pectoralis Major (Dada)", "Triceps Brachii"],
+    secondaryMuscles: ["Anterior Deltoids (Bahu Depan)", "Core / Abdominals"],
+    equipmentSetup: [
+      "Gunakan matras yoga atau permukaan lantai yang tidak licin."
+    ],
+    instructions: [
+      "Posisikan tubuh tengkurap dengan tangan diletakkan di lantai sedikit lebih lebar dari bahu.",
+      "Luruskan kaki ke belakang dengan ujung jari kaki menopang di lantai.",
+      "Kencangkan otot perut dan bokong sehingga tubuh membentuk satu garis lurus dari kepala hingga tumit (plank position).",
+      "Tarik napas dan turunkan tubuh secara terkontrol dengan menekuk siku hingga dada hampir menyentuh lantai (sudut siku ~45 derajat).",
+      "Buang napas dan dorong lantai sekuat tenaga hingga lengan lurus kembali ke posisi awal."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Pertahankan garis lurus tubuh, jangan biarkan pinggul melorot ke bawah atau mencuat ke atas.",
+        "Arahkan siku membentuk sudut panah (~45 derajat), bukan melebar 90 derajat ke samping."
+      ],
+      donts: [
+        "Jangan menundukkan kepala atau mendongak berlebihan (jaga leher netral).",
+        "Jangan melakukan half-rep (lakukan rentang gerak penuh)."
+      ]
+    },
+    coachCues: {
+      max: "Kunci perut lo bro, jangan loyo! Turun sampe dada nyentuh lantai tipis-tipis, dorong ledakin ke atas! Bantai 3 set x 15 reps!",
+      mia: "Jaga postur tubuh tetap lurus seperti papan ya. Lakukan dengan tempo terkontrol dan rasakan kontraksi di dada. \u2728"
+    },
+    recommendedSetsReps: "3 Set x 10-15 Repetisi (Rest 45-60s)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Push-Up/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Push-Up/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Push-Up/1.jpg"
+    ]
+  },
+  {
+    id: "plank-hold",
+    name: "Standard Forearm Plank",
+    indonesianName: "Plank Lengan Bawah (Penguatan Otot Inti & Perut)",
+    aliases: ["plank", "plank hold", "forearm plank", "latihan plank", "cara plank", "tahan plank"],
+    equipmentCategory: "bodyweight",
+    equipmentName: "Matras / Lantai",
+    bodyPart: "core",
+    targetMuscles: ["Rectus Abdominis (Otot Perut)", "Transverse Abdominis"],
+    secondaryMuscles: ["Obliques", "Shoulders", "Gluteus", "Lower Back"],
+    equipmentSetup: [
+      "Gunakan matras empuk untuk menyangga siku dan lengan bawah."
+    ],
+    instructions: [
+      "Letakkan kedua lengan bawah di matras dengan siku tepat di bawah bahu.",
+      "Luruskan kedua kaki ke belakang dan bertumpu pada ujung jari kaki.",
+      "Kencangkan otot perut, bokong, dan paha agar tubuh membentuk satu garis horizontal lurus sempurna.",
+      "Jaga leher tetap netral dengan memandang lantai sekitar 1 jengkal di depan tangan.",
+      "Tahan posisi ini selama durasi yang ditentukan sambil tetap bernapas teratur dan stabil."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Tarik pusar ke arah tulang belakang untuk mengunci otot core secara maksimal.",
+        "Bernapaslah secara teratur, jangan menahan napas."
+      ],
+      donts: [
+        "Jangan biarkan pinggul melorot ke bawah (bisa menekan punggung bawah).",
+        "Jangan mengangkat bokong terlalu tinggi seperti posisi piramida."
+      ]
+    },
+    coachCues: {
+      max: "Kunci perut lo sekeras batu bro! Tahan getarannya, jangan nyerah sebelum 45 detik selesai! Let's go!",
+      mia: "Fokus pada pernapasan yang tenang dan kencangkan perut dengan lembut. Bertahan sedikit lagi, kamu pasti bisa! \u2728"
+    },
+    recommendedSetsReps: "3 Set x 30-60 Detik Tahan (Rest 45s)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/1.jpg"
+    ]
+  },
+  {
     id: "pec-deck-fly",
     name: "Pec Deck / Butterfly Machine",
     indonesianName: "Mesin Pec Deck / Butterfly (Isolasi Dada)",
@@ -42602,15 +42728,23 @@ function findExerciseOrEquipment(query) {
   }
   return maxScore >= 2 ? bestItem : null;
 }
-function formatWhatsAppExerciseGuide(exercise, persona = "max") {
+function formatWhatsAppExerciseGuide(exercise, persona = "max", userGoal = "healthy") {
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const coachCue = persona === "max" ? exercise.coachCues.max : exercise.coachCues.mia;
+  let goalRecommendation = exercise.recommendedSetsReps;
+  if (userGoal === "gain") {
+    goalRecommendation = "4 Set x 8-10 Repetisi (Fokus Beban Progresif & Hipertrofi Otot)";
+  } else if (userGoal === "lose") {
+    goalRecommendation = "3-4 Set x 12-15 Repetisi (Fokus Tempo Terkontrol & Pembakaran Kalori)";
+  } else {
+    goalRecommendation = "3 Set x 10-12 Repetisi (Fokus Ketahanan & Kebugaran Optimal)";
+  }
   const text = `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *PANDUAN ALAT & LATIHAN: ${exercise.name.toUpperCase()}*
 \u{1F1EE}\u{1F1E9} *${exercise.indonesianName}*
 --------------------------------------------------
 \u{1F3AF} *Target Otot*: ${exercise.targetMuscles.join(", ")}
 \u2699\uFE0F *Kategori Alat*: ${exercise.equipmentName}
-\u23F1\uFE0F *Rekomendasi*: ${exercise.recommendedSetsReps}
+\u23F1\uFE0F *Rekomendasi Goal Kamu*: ${goalRecommendation}
 
 \u{1F527} *CARA SETTING ALAT*:
 ` + exercise.equipmentSetup.map((step, idx) => `${idx + 1}. ${step}`).join("\n") + `
@@ -42629,6 +42763,103 @@ function formatWhatsAppExerciseGuide(exercise, persona = "max") {
     text,
     mediaUrl: exercise.gifUrl
   };
+}
+function getDefaultWeeklySchedule(goal = "healthy") {
+  if (goal === "gain") {
+    return [
+      { day: "Senin", focus: "Dada & Tricep (Push Day)", exercises: [
+        { id: "w-mon-1", name: "Barbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8-10 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Incline Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Tricep Dips / Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ] },
+      { day: "Selasa", focus: "Punggung & Bicep (Pull Day)", exercises: [
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Seated Cable Row", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-tue-3", name: "Barbell Bicep Curls", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ] },
+      { day: "Rabu", focus: "Leg Mass & Core (Leg Day)", exercises: [
+        { id: "w-wed-1", name: "Barbell Back Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Leg Press & Romanian Deadlift", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 15 Reps", status: "not_started" }
+      ] },
+      { day: "Kamis", focus: "Active Recovery & Mobility", exercises: [
+        { id: "w-thu-1", name: "Full Body Dynamic Stretching", targetSets: 2, completedSets: 0, setsState: [false, false], targetReps: "15 Menit Mobilitas", status: "not_started" },
+        { id: "w-thu-2", name: "Foam Rolling & Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "20 Menit Jalan Santai", status: "not_started" }
+      ] },
+      { day: "Jumat", focus: "Chest & Arms Hypertrophy", exercises: [
+        { id: "w-fri-1", name: "Flat Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Preacher Bicep Curls", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ] },
+      { day: "Sabtu", focus: "Delts 3D & Core Focus", exercises: [
+        { id: "w-sat-1", name: "Lateral Raise & Reverse Fly", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Ab Wheel Rollout", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      ] },
+      { day: "Minggu", focus: "Rest & Recovery", exercises: [
+        { id: "w-sun-1", name: "Istirahat Total & Tidur Berkualitas", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery 8 Jam Tidur", status: "not_started" }
+      ] }
+    ];
+  } else if (goal === "lose") {
+    return [
+      { day: "Senin", focus: "Fat Loss HIIT & Push Day", exercises: [
+        { id: "w-mon-1", name: "Push Up (Chest & Core)", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12-15 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Jumping Jacks & Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      ] },
+      { day: "Selasa", focus: "Upper Body & Core Deficit", exercises: [
+        { id: "w-tue-1", name: "Lat Pulldown / Bodyweight Row", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank & Core Hold", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" },
+        { id: "w-tue-3", name: "Treadmill Incline Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit Speed 4.5", status: "not_started" }
+      ] },
+      { day: "Rabu", focus: "Lower Body Fat Crusher", exercises: [
+        { id: "w-wed-1", name: "Goblet Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Walking Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Kettlebell Swing", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ] },
+      { day: "Kamis", focus: "Zone 2 Cardio Fat Burn", exercises: [
+        { id: "w-thu-1", name: "Stationary Bike / Incline Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "45 Menit Zona 2", status: "not_started" },
+        { id: "w-thu-2", name: "Full Body Mobility Stretch", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "15 Menit Stretching", status: "not_started" }
+      ] },
+      { day: "Jumat", focus: "Full Body Calorie Burner", exercises: [
+        { id: "w-fri-1", name: "Burpees & Squat Jumps", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Dumbbell Thruster", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Bicycle Crunches", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ] },
+      { day: "Sabtu", focus: "Core & Incline Walking", exercises: [
+        { id: "w-sat-1", name: "Incline Treadmill Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "40 Menit Speed 4.5", status: "not_started" },
+        { id: "w-sat-2", name: "Russian Twists & Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      ] },
+      { day: "Minggu", focus: "Rest & Active Recovery", exercises: [
+        { id: "w-sun-1", name: "Jalan Santai & Hydration Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery & Hidrasi", status: "not_started" }
+      ] }
+    ];
+  } else {
+    return [
+      { day: "Senin", focus: "Stamina & Mobilitas", exercises: [
+        { id: "w-mon-1", name: "Jogging & Dynamic Stretching", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "25 Menit", status: "not_started" },
+        { id: "w-mon-2", name: "Bodyweight Push Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10 Reps", status: "not_started" }
+      ] },
+      { day: "Selasa", focus: "Latihan Otot Dasar", exercises: [
+        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank Hold", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      ] },
+      { day: "Rabu", focus: "Pemulihan Aktif", exercises: [
+        { id: "w-wed-1", name: "Jalan Santai 5,000 Langkah", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "5,000 Langkah", status: "not_started" }
+      ] },
+      { day: "Kamis", focus: "Yoga & Postur", exercises: [
+        { id: "w-thu-1", name: "Yoga & Core Balance", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit", status: "not_started" }
+      ] },
+      { day: "Jumat", focus: "Full Body Conditioning", exercises: [
+        { id: "w-fri-1", name: "Bodyweight Circuit", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set Circuit", status: "not_started" }
+      ] },
+      { day: "Sabtu", focus: "Kardio Bebas", exercises: [
+        { id: "w-sat-1", name: "Berenang / Sepeda Santai", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "40 Menit", status: "not_started" }
+      ] },
+      { day: "Minggu", focus: "Istirahat Total", exercises: [
+        { id: "w-sun-1", name: "Full Body Mobility & Rest", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery", status: "not_started" }
+      ] }
+    ];
+  }
 }
 
 // server.ts
@@ -42921,7 +43152,7 @@ async function getMongoDb() {
   if (!MONGODB_URI) return null;
   try {
     if (!mongoClient) {
-      mongoClient = new import_mongodb.MongoClient(MONGODB_URI, {
+      mongoClient = new MongoClient(MONGODB_URI, {
         serverSelectionTimeoutMS: 5e3,
         connectTimeoutMS: 1e4
       });
@@ -44482,69 +44713,26 @@ async function generateEquipmentInfographicPNG(parsedAi, userData) {
   }
 }
 function generateWorkoutRecommendations(userData) {
-  const { name, goal, goalTitle, persona } = userData;
-  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
-  if (persona === "max") {
-    if (goal === "lose") {
-      return `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F\u{1F525} *MENU JADWAL WORKOUT FAT LOSS FOR ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (High Metabolic Burn)
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
+  const todayDayName = dayNames[currentDayIdx];
+  const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  return `Halo ${userData.name || "Kak"}! Sesuai dengan target *${userData.goalTitle || "Kebugaran"}* dan jadwal kamu di dashboard:
 
-\u{1F525} *CIRCUIT A (Metabolic Conditioning)*:
-1. \u{1F3CB}\uFE0F Goblet Squat (Dumbbell): 4 Sets x 12-15 Reps (Rest: 45s)
-2. \u{1F9D8} Push-Up (Standard/Knee): 4 Sets x 12-15 Reps (Rest: 45s)
-3. \u{1F3C3} Dumbbell Romanian Deadlift: 3 Sets x 12 Reps (Rest: 60s)
-4. \u26A1 Mountain Climbers: 4 Sets x 30 Detik
+\u{1F4C5} *LATIHAN HARI INI (${todayRoutine.day}): ${todayRoutine.focus.toUpperCase()}*
+--------------------------------------------------
+Berikut daftar gerakan yang terjadwal untukmu hari ini:
 
-\u{1F3C3} *CARDIO FINISHER*:
-\u2022 15 Menit Incline Treadmill Walk (Speed 5.0, Incline 10.0) / Jump Rope
+` + todayRoutine.exercises.map((ex, idx) => `${idx + 1}. *${ex.name}*: ${ex.targetReps}`).join("\n") + `
 
------------------------------
-\u{1F4AC} *${coachName}*:
-"No excuse bro! Selesai sirkuit ini pastikan baju lo basah kuyup. Bantai pembakaran lemak lo hari ini! \u{1F525}"`;
-    } else if (goal === "gain") {
-      return `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F\u{1F4AA} *MENU JADWAL WORKOUT MUSCLE HYPERTROPHY FOR ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (Progressive Overload)
+\u{1F4A1} *Tips ${coachName}*:
+\u2022 Buka menu latihan di dashboard untuk mencatat checklist set kamu secara real-time!
+\u2022 Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${todayRoutine.exercises[0]?.name || "squat"}").
 
-\u{1F4AA} *UPPER BODY HYPERTROPHY*:
-1. \u{1F3CB}\uFE0F Dumbbell/Barbell Bench Press: 4 Sets x 8-10 Reps (Rest: 90s)
-2. \u{1F6A3} Lat Pulldown / Bent-Over Row: 4 Sets x 10-12 Reps (Rest: 90s)
-3. \u{1F9BE} Dumbbell Shoulder Press: 3 Sets x 10 Reps (Rest: 75s)
-4. \u{1F9B5} Dumbbell Bicep Curl + Tricep Pushdown: 3 Sets x 12 Reps (Superset)
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"Main berat tapi tetep kontrol form! Tambah beban bertahap tiap minggu biar otot lo tumbuh maksimal. Gas! \u{1F4A5}"`;
-    } else {
-      return `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F\u26A1 *MENU JADWAL WORKOUT FUNCTIONAL FITNESS FOR ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (Strength & Mobility)
-
-\u{1F525} *FULL BODY STRENGTH*:
-1. \u{1F3CB}\uFE0F Bodyweight/Dumbbell Squats: 3 Sets x 12 Reps
-2. \u{1F9D8} Dumbbell Overhead Press: 3 Sets x 12 Reps
-3. \u{1F3C3} Plank Hold: 3 Sets x 45 Detik
-4. \u{1F6B4} 20 Menit Cardio Moderate Pace (Sepeda / Rowing)
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"Konsistensi itu kunci! Latihan rutin bakal jaga kebugaran & energi lo sepanjang hari!"`;
-    }
-  } else {
-    return `\u{1F331}\u2728 *REKOMENDASI JADWAL LATIHAN SEHAT UNTUK ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle}
-
-\u{1F9D8}\u200D\u2640\uFE0F *RANGKAIAN LATIHAN HARI INI*:
-1. \u{1F6B6} *Pemanasan & Mobilitas (5-10 Menit)*: Arm circles, leg swings, & cat-cow stretch
-2. \u{1F3CB}\uFE0F *Latihan Utama*:
-   \u2022 Goblet Squat / Chair Squat: 3 Sets x 10-12 Reps
-   \u2022 Wall / Knee Push-Up: 3 Sets x 10 Reps
-   \u2022 Dumbbell Row (Beban Ringan/Sedang): 3 Sets x 12 Reps
-   \u2022 Core Bird-Dog & Plank: 3 Sets x 30 Detik
-3. \u{1F9D8} *Pendinginan (5 Menit)*: Deep breathing & hamstring stretch
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"Lakukan dengan nyaman dan dengarkan sinyal tubuhmu ya ${name}. Setiap gerakan kecil sangat berarti! \u2728\u{1F338}"`;
-  }
+Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
 }
 async function startServer() {
   const app = (0, import_express.default)();
@@ -45825,6 +46013,11 @@ Silakan lakukan registrasi & isi kuesioner onboarding terlebih dahulu di website
       const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
       const isResetMessage = lowerText.includes("reset akun") || lowerText.includes("hapus akun") || lowerText.includes("reset data") || lowerText.includes("hapus data saya");
       let responseMessages = [];
+      let mediaUrlToSend = void 0;
+      const matchedEx = findExerciseOrEquipment(userText);
+      const isExerciseInquiry = Boolean(
+        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || userText.includes("?") || lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("cara") || lowerText.includes("teknik") || lowerText.includes("postur") || lowerText.includes("gerakan") || lowerText.includes("squat") || lowerText.includes("press") || lowerText.includes("pulldown") || lowerText.includes("push up") || lowerText.includes("plank") || lowerText.includes("row") || lowerText.includes("curl"))
+      );
       if (isResetMessage) {
         const normPhone = normalizePhone(From);
         if (dbData.users[normPhone]) {
@@ -45845,6 +46038,16 @@ Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.
 
 Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! \u2728`
         ];
+      } else if (isExerciseInquiry && matchedEx) {
+        const guide = formatWhatsAppExerciseGuide(
+          matchedEx,
+          userData.persona || "mia",
+          userData.goal || "healthy"
+        );
+        responseMessages = [guide.text];
+        if (guide.mediaUrl) {
+          mediaUrlToSend = guide.mediaUrl;
+        }
       } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
@@ -46105,7 +46308,11 @@ Berikut infografis resmi dari GymBuddy AI untuk panduan bagian alat, cara pakai 
       const twiml = new import_twilio.default.twiml.MessagingResponse();
       if (responseMessages.length > 0) {
         const combinedMessage = responseMessages.join("\n\n---\n\n");
-        twiml.message(combinedMessage);
+        const msgNode = twiml.message();
+        msgNode.body(combinedMessage);
+        if (mediaUrlToSend) {
+          msgNode.media(mediaUrlToSend);
+        }
       }
       if (getTwilio() && responseMessages.length > 0) {
         (async () => {
@@ -46114,11 +46321,15 @@ Berikut infografis resmi dari GymBuddy AI untuk panduan bagian alat, cara pakai 
             const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
             const toNum = From.startsWith("whatsapp:") ? From : `whatsapp:${From}`;
             for (const msgText of responseMessages) {
-              await getTwilio().messages.create({
+              const payload = {
                 body: msgText,
                 from: fromNum,
                 to: toNum
-              });
+              };
+              if (mediaUrlToSend) {
+                payload.mediaUrl = [mediaUrlToSend];
+              }
+              await getTwilio().messages.create(payload);
               await new Promise((r) => setTimeout(r, 600));
             }
             console.log("Successfully delivered message via Twilio REST API to:", toNum);
@@ -47162,7 +47373,24 @@ Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untu
       }
       let responseMessages = [];
       let mediaUrlToSend = null;
-      if (isWelcomeMessage) {
+      const matchedEx = findExerciseOrEquipment(userText);
+      const isExerciseInquiry = Boolean(
+        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || userText.includes("?") || lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("cara") || lowerText.includes("teknik") || lowerText.includes("postur") || lowerText.includes("gerakan") || lowerText.includes("squat") || lowerText.includes("press") || lowerText.includes("pulldown") || lowerText.includes("push up") || lowerText.includes("plank") || lowerText.includes("row") || lowerText.includes("curl"))
+      );
+      const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
+      if (isExerciseInquiry && matchedEx) {
+        const guide = formatWhatsAppExerciseGuide(
+          matchedEx,
+          userData.persona || "mia",
+          userData.goal || "healthy"
+        );
+        responseMessages = [guide.text];
+        if (guide.mediaUrl) {
+          mediaUrlToSend = guide.mediaUrl;
+        }
+      } else if (isWorkoutReqMessage && (lowerText.includes("rekomendasi") || lowerText.includes("jadwal") || lowerText.includes("hari ini") || lowerText.includes("apa"))) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
+      } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
         const extractedName = nameMatch ? nameMatch[1].trim().toLowerCase() : "";

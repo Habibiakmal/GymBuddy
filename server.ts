@@ -8,8 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
-import { MongoClient } from "mongodb";
-import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, EXERCISE_DATABASE } from "./data/exerciseDb";
+import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
 
 // Twilio credentials (concatenated to avoid GitHub secret push block)
 const TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
@@ -1397,6 +1396,8 @@ ${rowsStr}
 💡 *Tips*: Ketik *"update bb 75"* untuk mencatat berat badan terbarumu minggu ini!`;
 }
 
+
+
 // Send quick message via Meta Cloud API
 async function sendMetaWhatsappMessage(to: string, bodyText: string) {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
@@ -2030,70 +2031,25 @@ async function generateEquipmentInfographicPNG(parsedAi: any, userData: any): Pr
 
 
 function generateWorkoutRecommendations(userData: ReturnType<typeof calculateUserData>): string {
-  const { name, goal, goalTitle, persona } = userData;
-  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const currentDayIdx = new Date().getDay();
+  const todayDayName = dayNames[currentDayIdx];
+  const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
-  if (persona === "max") {
-    if (goal === "lose") {
-      return `🏋️‍♂️🔥 *MENU JADWAL WORKOUT FAT LOSS FOR ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle} (High Metabolic Burn)
-
-🔥 *CIRCUIT A (Metabolic Conditioning)*:
-1. 🏋️ Goblet Squat (Dumbbell): 4 Sets x 12-15 Reps (Rest: 45s)
-2. 🧘 Push-Up (Standard/Knee): 4 Sets x 12-15 Reps (Rest: 45s)
-3. 🏃 Dumbbell Romanian Deadlift: 3 Sets x 12 Reps (Rest: 60s)
-4. ⚡ Mountain Climbers: 4 Sets x 30 Detik
-
-🏃 *CARDIO FINISHER*:
-• 15 Menit Incline Treadmill Walk (Speed 5.0, Incline 10.0) / Jump Rope
-
------------------------------
-💬 *${coachName}*:
-"No excuse bro! Selesai sirkuit ini pastikan baju lo basah kuyup. Bantai pembakaran lemak lo hari ini! 🔥"`;
-    } else if (goal === "gain") {
-      return `🏋️‍♂️💪 *MENU JADWAL WORKOUT MUSCLE HYPERTROPHY FOR ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle} (Progressive Overload)
-
-💪 *UPPER BODY HYPERTROPHY*:
-1. 🏋️ Dumbbell/Barbell Bench Press: 4 Sets x 8-10 Reps (Rest: 90s)
-2. 🚣 Lat Pulldown / Bent-Over Row: 4 Sets x 10-12 Reps (Rest: 90s)
-3. 🦾 Dumbbell Shoulder Press: 3 Sets x 10 Reps (Rest: 75s)
-4. 🦵 Dumbbell Bicep Curl + Tricep Pushdown: 3 Sets x 12 Reps (Superset)
-
------------------------------
-💬 *${coachName}*:
-"Main berat tapi tetep kontrol form! Tambah beban bertahap tiap minggu biar otot lo tumbuh maksimal. Gas! 💥"`;
-    } else {
-      return `🏋️‍♂️⚡ *MENU JADWAL WORKOUT FUNCTIONAL FITNESS FOR ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle} (Strength & Mobility)
-
-🔥 *FULL BODY STRENGTH*:
-1. 🏋️ Bodyweight/Dumbbell Squats: 3 Sets x 12 Reps
-2. 🧘 Dumbbell Overhead Press: 3 Sets x 12 Reps
-3. 🏃 Plank Hold: 3 Sets x 45 Detik
-4. 🚴 20 Menit Cardio Moderate Pace (Sepeda / Rowing)
-
------------------------------
-💬 *${coachName}*:
-"Konsistensi itu kunci! Latihan rutin bakal jaga kebugaran & energi lo sepanjang hari!"`;
-    }
-  } else {
-    return `🌱✨ *REKOMENDASI JADWAL LATIHAN SEHAT UNTUK ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle}
-
-🧘‍♀️ *RANGKAIAN LATIHAN HARI INI*:
-1. 🚶 *Pemanasan & Mobilitas (5-10 Menit)*: Arm circles, leg swings, & cat-cow stretch
-2. 🏋️ *Latihan Utama*:
-   • Goblet Squat / Chair Squat: 3 Sets x 10-12 Reps
-   • Wall / Knee Push-Up: 3 Sets x 10 Reps
-   • Dumbbell Row (Beban Ringan/Sedang): 3 Sets x 12 Reps
-   • Core Bird-Dog & Plank: 3 Sets x 30 Detik
-3. 🧘 *Pendinginan (5 Menit)*: Deep breathing & hamstring stretch
-
------------------------------
-💬 *${coachName}*:
-"Lakukan dengan nyaman dan dengarkan sinyal tubuhmu ya ${name}. Setiap gerakan kecil sangat berarti! ✨🌸"`;
-  }
+  return (
+    `Halo ${userData.name || "Kak"}! Sesuai dengan target *${userData.goalTitle || "Kebugaran"}* dan jadwal kamu di dashboard:\n\n` +
+    `📅 *LATIHAN HARI INI (${todayRoutine.day}): ${todayRoutine.focus.toUpperCase()}*\n` +
+    `--------------------------------------------------\n` +
+    `Berikut daftar gerakan yang terjadwal untukmu hari ini:\n\n` +
+    todayRoutine.exercises.map((ex, idx) => `${idx + 1}. *${ex.name}*: ${ex.targetReps}`).join("\n") +
+    `\n\n💡 *Tips ${coachName}*:\n` +
+    `• Buka menu latihan di dashboard untuk mencatat checklist set kamu secara real-time!\n` +
+    `• Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${todayRoutine.exercises[0]?.name || "squat"}").\n\n` +
+    `Selamat berlatih, tetap konsisten! 💪🔥`
+  );
 }
 
 async function startServer() {
@@ -3475,6 +3431,28 @@ Keluarkan output JSON valid:
                              lowerText.includes("hapus data saya");
 
       let responseMessages: string[] = [];
+      let mediaUrlToSend: string | undefined = undefined;
+
+      const matchedEx = findExerciseOrEquipment(userText);
+      const isExerciseInquiry = Boolean(
+        matchedEx && (
+          userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
+          userText.includes("?") ||
+          lowerText.includes("alat") ||
+          lowerText.includes("mesin") ||
+          lowerText.includes("cara") ||
+          lowerText.includes("teknik") ||
+          lowerText.includes("postur") ||
+          lowerText.includes("gerakan") ||
+          lowerText.includes("squat") ||
+          lowerText.includes("press") ||
+          lowerText.includes("pulldown") ||
+          lowerText.includes("push up") ||
+          lowerText.includes("plank") ||
+          lowerText.includes("row") ||
+          lowerText.includes("curl")
+        )
+      );
 
       if (isResetMessage) {
         const normPhone = normalizePhone(From);
@@ -3494,6 +3472,16 @@ Keluarkan output JSON valid:
           `Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.\n\n` +
           `Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! ✨`
         ];
+      } else if (isExerciseInquiry && matchedEx) {
+        const guide = formatWhatsAppExerciseGuide(
+          matchedEx,
+          userData.persona || "mia",
+          userData.goal || "healthy"
+        );
+        responseMessages = [guide.text];
+        if (guide.mediaUrl) {
+          mediaUrlToSend = guide.mediaUrl;
+        }
       } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
@@ -3777,7 +3765,11 @@ Keluarkan output JSON valid:
       const twiml = new TwilioPackage.twiml.MessagingResponse();
       if (responseMessages.length > 0) {
         const combinedMessage = responseMessages.join("\n\n---\n\n");
-        twiml.message(combinedMessage);
+        const msgNode = twiml.message();
+        msgNode.body(combinedMessage);
+        if (mediaUrlToSend) {
+          msgNode.media(mediaUrlToSend);
+        }
       }
 
       // If Twilio REST API client is configured, also push via REST API for 100% guaranteed delivery
@@ -3788,12 +3780,16 @@ Keluarkan output JSON valid:
             const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
             const toNum = From.startsWith("whatsapp:") ? From : `whatsapp:${From}`;
             for (const msgText of responseMessages) {
-              await getTwilio().messages.create({
+              const payload: any = {
                 body: msgText,
                 from: fromNum,
                 to: toNum
-              });
-              await new Promise(r => setTimeout(r, 600));
+              };
+              if (mediaUrlToSend) {
+                payload.mediaUrl = [mediaUrlToSend];
+              }
+              await getTwilio().messages.create(payload);
+              await new Promise((r) => setTimeout(r, 600));
             }
             console.log("Successfully delivered message via Twilio REST API to:", toNum);
           } catch (restErr: any) {
@@ -4972,7 +4968,47 @@ ${mistakes}
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | null = null;
 
-      if (isWelcomeMessage) {
+      const matchedEx = findExerciseOrEquipment(userText);
+      const isExerciseInquiry = Boolean(
+        matchedEx && (
+          userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
+          userText.includes("?") ||
+          lowerText.includes("alat") ||
+          lowerText.includes("mesin") ||
+          lowerText.includes("cara") ||
+          lowerText.includes("teknik") ||
+          lowerText.includes("postur") ||
+          lowerText.includes("gerakan") ||
+          lowerText.includes("squat") ||
+          lowerText.includes("press") ||
+          lowerText.includes("pulldown") ||
+          lowerText.includes("push up") ||
+          lowerText.includes("plank") ||
+          lowerText.includes("row") ||
+          lowerText.includes("curl")
+        )
+      );
+
+      const isWorkoutReqMessage = lowerText.includes("workout") ||
+                                  lowerText.includes("latihan") ||
+                                  lowerText.includes("jadwal gym") ||
+                                  lowerText.includes("rekomendasi workout") ||
+                                  lowerText.includes("menu latihan") ||
+                                  lowerText.includes("olahraga");
+
+      if (isExerciseInquiry && matchedEx) {
+        const guide = formatWhatsAppExerciseGuide(
+          matchedEx,
+          userData.persona || "mia",
+          userData.goal || "healthy"
+        );
+        responseMessages = [guide.text];
+        if (guide.mediaUrl) {
+          mediaUrlToSend = guide.mediaUrl;
+        }
+      } else if (isWorkoutReqMessage && (lowerText.includes("rekomendasi") || lowerText.includes("jadwal") || lowerText.includes("hari ini") || lowerText.includes("apa"))) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
+      } else if (isWelcomeMessage) {
         const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
         const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
 
