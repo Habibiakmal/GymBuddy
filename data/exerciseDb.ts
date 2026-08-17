@@ -924,8 +924,9 @@ export function formatWhatsAppExerciseGuide(
     `\n\n💡 *TIPS & FORM KUNCI*:\n` +
     exercise.dosAndDonts.dos.map((d) => `✔ ${d}`).join("\n") +
     (exercise.dosAndDonts.donts.length > 0 ? "\n" + exercise.dosAndDonts.donts.map((d) => `✖ ${d}`).join("\n") : "") +
-    `\n\n💬 *${coachName}*:\n"${coachCue}"\n` +
-    `\n🎬 *Animasi Visual Gerakan*: ${exercise.gifUrl}`;
+    `\n\n💬 *${coachName}*:\n"${coachCue}"\n\n` +
+    `📱 *Kamus Alat & Animasi Gerakan di Web/PWA*:\n` +
+    `🔗 https://gymbuddygroup.com?tab=workout&exercise=${exercise.id}`;
 
   return {
     text,
