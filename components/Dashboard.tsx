@@ -496,9 +496,21 @@ function getPersonalizedWeeklySchedule(user: UserProfileData): DaySchedule[] {
 
 // Interactive Animated Movement Player Component (Auto-looping movement keyframes)
 const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
-  const frames = item.imageFrames && item.imageFrames.length > 0 ? item.imageFrames : [item.gifUrl];
+  // Convert any GitHub raw URLs to high-speed jsDelivr CDN
+  const getCdnUrl = (url: string) => {
+    if (!url) return "";
+    return url.replace(
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/",
+      "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/"
+    );
+  };
+
+  const rawFrames = item.imageFrames && item.imageFrames.length > 0 ? item.imageFrames : [item.gifUrl || ""];
+  const frames = rawFrames.map(getCdnUrl).filter(Boolean);
+
   const [frameIdx, setFrameIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [imgError, setImgError] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return;
@@ -508,22 +520,54 @@ const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
     return () => clearInterval(interval);
   }, [isPlaying, frames]);
 
+  const currentFrameUrl = frames[frameIdx];
+  const hasError = !currentFrameUrl || imgError[frameIdx];
+
   return (
     <div className="space-y-2">
-      <div className="relative rounded-2xl overflow-hidden bg-black/90 border border-neutral-800 aspect-video flex items-center justify-center group shadow-2xl">
-        <img
-          key={frameIdx}
-          src={frames[frameIdx]}
-          alt={`${item.name} - Fase ${frameIdx + 1}`}
-          className="w-full h-full object-contain transition-all duration-300"
-          loading="eager"
-        />
+      <div className="relative rounded-2xl overflow-hidden bg-[#0A0D14] border border-neutral-800 aspect-video flex items-center justify-center group shadow-2xl">
+        {!hasError ? (
+          <img
+            key={frameIdx}
+            src={currentFrameUrl}
+            alt={`${item.name} - Fase ${frameIdx + 1}`}
+            className="w-full h-full object-contain transition-all duration-300"
+            loading="eager"
+            onError={() => {
+              setImgError((prev) => ({ ...prev, [frameIdx]: true }));
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-[#101622] via-[#0B0F17] to-[#141C2B] relative overflow-hidden">
+            <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#D4FF00_1px,transparent_1px)] [background-size:16px_16px]" />
+            <div className="relative z-10 space-y-3">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.2)]">
+                <span className="text-2xl animate-pulse">🏋️</span>
+              </div>
+              <div>
+                <h4 className="font-['Archivo_Black'] text-white text-sm sm:text-base tracking-wide">
+                  {item.name}
+                </h4>
+                <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                  {item.indonesianName || item.equipmentName}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                {item.targetMuscles?.slice(0, 2).map((m, idx) => (
+                  <span key={idx} className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                    🎯 {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Movement Indicator */}
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-20">
           <span className="px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black tracking-wider flex items-center gap-1.5 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-ping inline-block" />
-            ANIMASI GERAKAN
+            PANDUAN VISUAL
           </span>
           <span className="px-2 py-1 rounded-lg bg-black/80 backdrop-blur-md text-white text-[10px] font-extrabold border border-white/10">
             {frameIdx === 0 ? "Fase 1: Posisi Awal" : "Fase 2: Eksekusi Puncak"}
@@ -4464,12 +4508,12 @@ Kembalikan HANYA JSON valid:
             : (matchedDb ? matchedDb.coachCues.mia : "Lakukan gerakan perlahan dan rasakan kenyamanan di setiap tarikan napas ya ✨");
 
           return (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto no-scrollbar">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto text-white"
+                className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto no-scrollbar text-white"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between border-b border-neutral-800 pb-3 gap-2">
@@ -4586,12 +4630,12 @@ Kembalikan HANYA JSON valid:
       {/* EXERCISE EXPLORER & EQUIPMENT DICTIONARY MODAL (2-STEP INTUITIVE FLOW) */}
       <AnimatePresence>
         {showExerciseExplorerModal && (
-          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto no-scrollbar">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto text-white"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto no-scrollbar text-white"
             >
               {/* If an exercise detail is viewed inside explorer */}
               {viewingDetailExercise ? (

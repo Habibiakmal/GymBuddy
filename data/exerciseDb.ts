@@ -836,6 +836,48 @@ const CURATED_EXERCISES: ExerciseItem[] = [
       "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&auto=format&fit=crop&q=80"
     ]
+  },
+  {
+    id: "jogging-stretching",
+    name: "Jogging & Dynamic Stretching",
+    indonesianName: "Jogging Ringan & Pemanasan Dinamis",
+    aliases: ["jogging & dynamic stretching", "jogging", "dynamic stretching", "pemanasan", "stretching", "jogging ringan", "lari santai", "jogging & dynamic", "stretching dinamis"],
+    equipmentCategory: "cardio",
+    equipmentName: "Pemanasan & Kardio Ringan",
+    bodyPart: "full_body",
+    targetMuscles: ["Kebugaran Jantung (Kardio)", "Mobilitas Sendi & Otot Tubuh"],
+    secondaryMuscles: ["Kaki", "Betis", "Punggung", "Bahu"],
+    equipmentSetup: [
+      "Gunakan sepatu olahraga yang nyaman dan pakaian lentur.",
+      "Siapkan area lantai/ruang terbuka yang leluasa untuk peregangan."
+    ],
+    instructions: [
+      "Mulai dengan jogging ringan / jalan santai selama 5 - 10 menit untuk menaikkan suhu tubuh dan detak jantung.",
+      "Lanjutkan dengan Dynamic Arm Circles (putar lengan ke depan dan ke belakang 10x).",
+      "Lakukan Leg Swings (ayunkan kaki ke depan & belakang untuk mobilitas pinggul 10x per sisi).",
+      "Lakukan Torso Twists & Side Reaches untuk meregangkan otot pinggang dan punggung.",
+      "Selesaikan dengan Deep Squat to Reach untuk membuka sendi lutut, panggul, dan pergelangan kaki."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Lakukan gerakan secara dinamis (bergerak aktif), bukan menahan posisi secara statis sebelum latihan.",
+        "Bernapas rileks dan rasakan sendi menjadi lebih leluasa."
+      ],
+      donts: [
+        "Jangan memaksakan gerakan menghentak yang membuat sendi sakit.",
+        "Jangan melewatkan pemanasan sebelum masuk ke menu latihan utama."
+      ]
+    },
+    coachCues: {
+      max: "Pemanasan dinamis itu wajib bro! Naikkan suhu tubuh lo, buka fleksibilitas sendi, biar performa lo maksimal & bebas cedera! 🔥",
+      mia: "Mulai dengan gerakan lembut dan nikmati setiap tarikan napas ya. Tubuh yang lentur adalah kunci kebugaran optimal! ✨"
+    },
+    recommendedSetsReps: "1 Sesi x 20-25 Menit (Pemanasan & Mobilitas)",
+    gifUrl: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&auto=format&fit=crop&q=80",
+    imageFrames: [
+      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&auto=format&fit=crop&q=80"
+    ]
   }
 ];
 
