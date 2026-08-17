@@ -99,6 +99,37 @@ export default function App() {
     } catch (e) {}
   }, [language]);
 
+  // Session verification: if database on server was cleared, synchronize and clear local session
+  React.useEffect(() => {
+    const verifySession = async () => {
+      const stored = localStorage.getItem("gymbuddy_active_session");
+      if (!stored) return;
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.phone) {
+          const norm = String(parsed.phone).replace(/\D/g, '').replace(/^62/, '0');
+          const cleanPhone = norm.startsWith('8') ? '0' + norm : norm;
+          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+
+          let res = await fetch(`/api/user/${cleanPhone}`).catch(() => null);
+          if (!res || !res.ok) {
+            res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`).catch(() => null);
+          }
+
+          if (res && res.status === 404) {
+            console.log("[Auth] User profile not found in database. Resetting local session.");
+            localStorage.removeItem("gymbuddy_active_session");
+            localStorage.removeItem("gymbuddy_last_user");
+            setCurrentUser(null);
+            setIsLoggedIn(false);
+            setViewMode("landing");
+          }
+        }
+      } catch (e) {}
+    };
+    verifySession();
+  }, []);
+
   const handleLoginSuccess = (profile: any) => {
     setCurrentUser(profile);
     setIsLoggedIn(true);

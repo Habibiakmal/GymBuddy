@@ -2724,6 +2724,23 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, phone, date: targetDate, cups: updatedCups, liters: Number((updatedCups * 0.25).toFixed(1)) });
   });
 
+  // REST API: Get user profile by phone
+  app.get("/api/user/:phone", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const user = getUserProfile(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found in database" });
+    }
+    const calculated = calculateUserData(user);
+    return res.json({
+      success: true,
+      user,
+      profile: user,
+      userData: calculated,
+      calculated
+    });
+  });
+
   // Delete user profile endpoint
   app.delete("/api/user/:phone", (req, res) => {
     const phone = normalizePhone(req.params.phone);
