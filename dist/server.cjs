@@ -43457,9 +43457,6 @@ function getTodayDateStr() {
 function getUserProfile(rawPhone) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
-  if (phone === "085156919826" && !dbData.users[phone]) {
-    seedTestUserData(phone);
-  }
   if (dbData.users[phone]) return dbData.users[phone];
   for (const [key, value] of Object.entries(dbData.users)) {
     if (normalizePhone(key) === phone) {
