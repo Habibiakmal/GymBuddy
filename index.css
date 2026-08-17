@@ -6,4 +6,12 @@
     color: #f9fafb;
     font-family: 'Inter', sans-serif;
   }
+
+  input, select, textarea {
+    color: #ffffff;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #64748b;
+  }
 }
