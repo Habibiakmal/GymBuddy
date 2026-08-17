@@ -40,7 +40,13 @@ import {
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(false);
-  const [language, setLanguage] = useState<"EN" | "ID">("EN");
+  const [language, setLanguage] = useState<"EN" | "ID">(() => {
+    try {
+      const saved = localStorage.getItem("gymbuddy_lang");
+      if (saved === "EN" || saved === "ID") return saved;
+    } catch (e) {}
+    return "ID";
+  });
   const [activePricing, setActivePricing] = useState("PREMIUM");
   const [specialization, setSpecialization] = useState<"nutrition" | "vision">(
     "nutrition",
@@ -86,6 +92,12 @@ export default function App() {
     const splashTimer = setTimeout(() => setShowSplash(false), 1600);
     return () => clearTimeout(splashTimer);
   }, []);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("gymbuddy_lang", language);
+    } catch (e) {}
+  }, [language]);
 
   const handleLoginSuccess = (profile: any) => {
     setCurrentUser(profile);

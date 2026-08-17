@@ -2292,10 +2292,39 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
+                        const cleaned = phone.replace(/\D/g, "");
+                        const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : (cleaned.startsWith("8") ? "0" + cleaned : cleaned);
+                        
+                        const finalUserObj = {
+                          name: name || "Member",
+                          goal,
+                          goalEvent,
+                          goalSecondary,
+                          emotionalVision,
+                          gender,
+                          weight: Number(weight) || 70,
+                          startWeight: Number(weight) || 70,
+                          targetWeight: goal === "gain" ? (Number(weight) || 70) + 5 : (goal === "lose" ? Math.max(40, (Number(weight) || 70) - 5) : (Number(weight) || 70)),
+                          height: Number(height) || 170,
+                          age: Number(age) || 25,
+                          activityLevel,
+                          experience,
+                          satisfaction,
+                          challenges,
+                          persona,
+                          selectedPlan,
+                          selectedFeature,
+                          phone: norm || phone,
+                          activeService: "both"
+                        };
+
                         try {
-                          const cleaned = phone.replace(/\D/g, "");
-                          const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : (cleaned.startsWith("8") ? "0" + cleaned : cleaned);
-                          
+                          localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(finalUserObj));
+                          localStorage.setItem("gymbuddy_last_user", JSON.stringify(finalUserObj));
+                          localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
+                        } catch (e) {}
+
+                        try {
                           // Launch WhatsApp to Twilio Sandbox (+14155238886) with initial greeting
                           const welcomeMsg = `Halo GymBuddy AI! Nama saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya! 🎯`;
                           const waUrl = `https://wa.me/14155238886?text=${encodeURIComponent(welcomeMsg)}`;

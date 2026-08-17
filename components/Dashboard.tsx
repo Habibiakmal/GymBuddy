@@ -257,6 +257,15 @@ const splitAndCategorizeComboText = (
   return { foods, drinks };
 };
 
+// Global Phone Normalizer Helper
+const normalizePhone = (phone: string): string => {
+  if (!phone) return "";
+  let cleaned = String(phone).replace(/[^\d]/g, "");
+  if (cleaned.startsWith("62")) cleaned = "0" + cleaned.substring(2);
+  else if (cleaned.startsWith("8")) cleaned = "0" + cleaned;
+  return cleaned;
+};
+
 // Automatic Sanitizer to split any stored combo logs & purge any mock seed data
 const isLegacyMockMeal = (item: MealItem): boolean => {
   if (item.id === "m-1" || item.id === "m-2" || item.id === "m-3" || item.id?.startsWith("m-y") || item.id?.startsWith("m-2d")) return true;
@@ -1164,20 +1173,31 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     const updated = [newMeal, ...allLogs];
     setAllLogs(updated);
-    const normPhone = (activeUser.phone || "user").replace(/\D/g, "");
+    const normPhone = normalizePhone(activeUser.phone || "085156919826");
     const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
       localStorage.setItem(localKey, JSON.stringify(updated));
     } catch (e) {}
 
-    // Async server sync
+    // Async server sync to both local and remote backends
     const syncToServer = async () => {
+      const payload = JSON.stringify({ ...newMeal, date: selectedDate });
       try {
         await fetch(`/api/user/${normPhone}/meals`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...newMeal, date: selectedDate })
+          body: payload
         });
+      } catch (e) {}
+      try {
+        const remoteUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+        if (remoteUrl) {
+          await fetch(`${remoteUrl}/api/user/${normPhone}/meals`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload
+          });
+        }
       } catch (e) {}
     };
     syncToServer();
@@ -1238,14 +1258,6 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [aiConfirmStep, setAiConfirmStep] = useState(false); // Feature 1: two-step confirm
   const [coachTip, setCoachTip] = useState<string | null>(null); // Coach next-step bubble
   const [showCoachTip, setShowCoachTip] = useState(false);
-
-  const normalizePhone = (phone: string): string => {
-    if (!phone) return "";
-    let cleaned = String(phone).replace(/[^\d]/g, "");
-    if (cleaned.startsWith("62")) cleaned = "0" + cleaned.substring(2);
-    else if (cleaned.startsWith("8")) cleaned = "0" + cleaned;
-    return cleaned;
-  };
 
   const normPhone = normalizePhone(activeUser.phone || "085156919826");
 
@@ -4130,7 +4142,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       {/* ========================================================================= */}
       {/* CLEAN DOCKED 5-TAB MOBILE NAVIGATION BAR (MOBILE ONLY) */}
       {/* ========================================================================= */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#0C101A]/95 backdrop-blur-2xl border-t border-white/[0.08] px-4 py-2 flex items-center justify-around shadow-[0_-8px_30px_rgba(0,0,0,0.7)] lg:hidden">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#0C101A]/95 backdrop-blur-2xl border-t border-white/[0.08] px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.75rem)] flex items-center justify-around shadow-[0_-8px_30px_rgba(0,0,0,0.7)] lg:hidden">
         {/* Tab 1: Home */}
         <button
           onClick={() => setActiveTab("home")}
@@ -4139,7 +4151,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           }`}
         >
           <Home size={20} className={activeTab === "home" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">Home</span>
+          <span className="text-[10px] font-extrabold tracking-tight">{isEN ? "Home" : "Beranda"}</span>
         </button>
 
         {/* Tab 2: Workouts */}
@@ -4150,7 +4162,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           }`}
         >
           <Dumbbell size={20} className={activeTab === "workouts" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">Latihan</span>
+          <span className="text-[10px] font-extrabold tracking-tight">{isEN ? "Workouts" : "Latihan"}</span>
         </button>
 
         {/* Center Elevate Button: Scan */}
@@ -4160,7 +4172,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             whileTap={{ scale: 0.92 }}
             onClick={() => setShowScanModal(true)}
             className="w-13 h-13 rounded-full bg-[#D4FF00] text-black flex flex-col items-center justify-center shadow-[0_4px_20px_rgba(212,255,0,0.4)] border-3 border-[#0C101A] cursor-pointer"
-            title="Scan Foto Makanan AI"
+            title={isEN ? "Scan Food Photo (AI)" : "Scan Foto Makanan AI"}
           >
             <Camera size={20} className="stroke-[2.5]" />
           </motion.button>
@@ -4174,7 +4186,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           }`}
         >
           <TrendingUp size={20} className={activeTab === "progress" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">Progres</span>
+          <span className="text-[10px] font-extrabold tracking-tight">{isEN ? "Progress" : "Progres"}</span>
         </button>
 
         {/* Tab 5: Profile */}
@@ -4185,7 +4197,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           }`}
         >
           <User size={20} className={activeTab === "profile" ? "stroke-[2.5]" : ""} />
-          <span className="text-[10px] font-extrabold tracking-tight">Profil</span>
+          <span className="text-[10px] font-extrabold tracking-tight">{isEN ? "Profile" : "Profil"}</span>
         </button>
       </nav>
 
@@ -4264,35 +4276,35 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       }}
                       className={`h-10 rounded-xl font-extrabold text-xs transition-all flex flex-col items-center justify-center cursor-pointer border ${
                         isSelected
-                          ? "bg-[#181B26] text-[#C4F82A] border-[#181B26] shadow-md scale-105 font-black"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-md scale-105 font-black"
                           : isToday
-                          ? "bg-[#C4F82A]/20 text-slate-900 border-[#99C700] font-black"
+                          ? "bg-[#D4FF00]/15 text-[#D4FF00] border-[#D4FF00]/40 font-black"
                           : isDisabled
-                          ? "bg-slate-50 text-slate-300 border-transparent cursor-not-allowed"
-                          : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-200/70"
+                          ? "bg-[#10141D]/40 text-neutral-600 border-transparent cursor-not-allowed"
+                          : "bg-[#10141D] text-neutral-200 border-neutral-800 hover:border-[#D4FF00]/40 hover:bg-[#1D2332]"
                       }`}
                     >
                       <span>{dayNum}</span>
-                      {isToday && <span className="w-1 h-1 rounded-full bg-slate-900 mt-0.5"></span>}
+                      {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#D4FF00] mt-0.5" />}
                     </button>
                   );
                 })}
               </div>
 
               {/* Modal Footer Shortcuts */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
                 <button
                   onClick={() => {
                     setSelectedDate(todayDateStr);
                     setShowCalendarModal(false);
                   }}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#C4F82A] text-black hover:bg-[#b2e61a] cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-[#D4FF00] text-black hover:bg-[#c4ec00] cursor-pointer shadow-sm transition-all"
                 >
                   {t.todayBtn}
                 </button>
                 <button
                   onClick={() => setShowCalendarModal(false)}
-                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
                 >
                   {t.closeModal}
                 </button>
@@ -4367,38 +4379,40 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         )}
 
         {showAutoReminderModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 text-slate-900 font-black text-base">
-                  <Bell size={18} className="text-emerald-600" />
-                  <h3>{t.autoReminderTitle}</h3>
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-black border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00]">
+                    <Bell size={18} />
+                  </div>
+                  <h3 className="font-['Archivo_Black'] text-base text-white">{t.autoReminderTitle}</h3>
                 </div>
-                <button onClick={handleDismissReminder} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <button onClick={handleDismissReminder} className="text-neutral-400 hover:text-white cursor-pointer p-1">
                   <X size={18} />
                 </button>
               </div>
 
-              <p className="text-sm font-semibold text-slate-800 leading-relaxed">
+              <p className="text-sm font-semibold text-neutral-300 leading-relaxed">
                 {t.autoReminderPrompt}
               </p>
 
               <div className="space-y-2">
-                <label className="text-xs font-extrabold text-slate-600 uppercase">{t.selectReminderTime}</label>
+                <label className="text-xs font-black text-neutral-400 uppercase">{t.selectReminderTime}</label>
                 <div className="grid grid-cols-4 gap-2">
                   {["16:00", "17:00", "19:00", "20:00"].map((timeStr) => (
                     <button
                       key={timeStr}
                       onClick={() => setSelectedReminderTime(timeStr)}
-                      className={`py-2 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                      className={`py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
                         selectedReminderTime === timeStr
-                          ? "bg-[#181B26] text-[#C4F82A] border-[#181B26]"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm"
+                          : "bg-[#161C28] text-neutral-300 border-white/10 hover:border-white/20"
                       }`}
                     >
                       {timeStr}
@@ -5143,26 +5157,26 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       {/* ADD LOG MODAL (AI AUTO-DETECTION) */}
       <AnimatePresence>
         {(showAddFoodModal || showAddDrinkModal) && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#181B26] to-slate-800 flex items-center justify-center text-[#C4F82A]">
-                    <Sparkles size={16} />
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-black border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00]">
+                    <Sparkles size={18} />
                   </div>
                   <div>
-                    <h3 className="font-black text-base text-slate-900">
+                    <h3 className="font-['Archivo_Black'] text-base text-white">
                       {showAddDrinkModal
-                        ? (lang === "EN" ? "Log Drink / Hydration" : "Tambah Log Minuman")
-                        : (lang === "EN" ? "AI Smart Food Log" : "Tambah Makanan AI")}
+                        ? (lang === "EN" ? "Log Drink / Hydration" : "Catat Minuman & Hidrasi")
+                        : (lang === "EN" ? "AI Smart Food Log" : "Catat Makanan (AI)")}
                     </h3>
-                    <p className="text-[11px] text-slate-500">
-                      {lang === "EN" ? "AI auto-detects calories & macros" : "AI otomatis menghitung kalori & nutrisi"}
+                    <p className="text-[11px] text-neutral-400 font-medium">
+                      {lang === "EN" ? "AI auto-calculates calories & macros" : "AI otomatis menghitung kalori & makronutrisi"}
                     </p>
                   </div>
                 </div>
@@ -5173,21 +5187,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     setAiPreview(null);
                     setShowManualInputs(false);
                   }}
-                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <label className="text-xs font-bold text-neutral-300 flex items-center justify-between">
                     <span>{t.foodNameLabel}</span>
-                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <span className="text-[10px] text-[#D4FF00] font-black bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-2 py-0.5 rounded-full flex items-center gap-1">
                       <Sparkles size={10} /> Auto AI Detection
                     </span>
                   </label>
-                  <div className="relative mt-1">
+                  <div className="relative mt-1.5">
                     <input
                       type="text"
                       value={itemNameInput}
@@ -5197,11 +5211,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           handleSaveLogItem();
                         }
                       }}
-                      placeholder={showAddDrinkModal ? "misal: Air Putih 500ml, Kopi Susu, Jus Alpukat" : "misal: Nasi Padang Rendang + Teh Obeng"}
-                      className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all shadow-xs"
+                      placeholder={showAddDrinkModal ? "misal: Air Putih 500ml, Kopi Kenangan Mantan, Jus Alpukat" : "misal: Nasi Padang Rendang + Es Teh Manis"}
+                      className="w-full px-3.5 py-3 bg-[#161C28] border border-white/10 rounded-xl text-sm font-semibold text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4FF00] focus:ring-1 focus:ring-[#D4FF00] transition-all shadow-xs"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1.5 flex items-start gap-1">
+                  <p className="text-[11px] text-neutral-400 mt-1.5 flex items-start gap-1">
                     <span>💡</span>
                     <span>{t.comboHelpText}</span>
                   </p>
@@ -5209,36 +5223,36 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 {/* AI Loading State */}
                 {isAnalyzingAi && (
-                  <div className="p-3.5 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 animate-pulse">
-                    <Sparkles className="animate-spin text-[#C4F82A]" size={18} />
-                    <span className="text-xs font-bold text-slate-100">
-                      {lang === "EN" ? "AI is calculating calories & macros..." : "🤖 AI sedang mendeteksi kalori & nutrisi..."}
+                  <div className="p-4 bg-[#161C28] border border-[#D4FF00]/30 text-white rounded-xl flex items-center justify-center gap-3 animate-pulse">
+                    <Sparkles className="animate-spin text-[#D4FF00]" size={18} />
+                    <span className="text-xs font-bold text-neutral-200">
+                      {lang === "EN" ? "AI is calculating calories & macros..." : "🤖 AI sedang menghitung kalori & makronutrisi..."}
                     </span>
                   </div>
                 )}
 
                 {/* AI Preview Result */}
                 {aiPreview && !isAnalyzingAi && (
-                  <div className="p-3.5 bg-[#C4F82A]/15 border border-[#C4F82A]/40 rounded-xl space-y-1.5">
+                  <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-slate-900 flex items-center gap-1">
-                        <Sparkles size={12} className="text-slate-800" /> Output Nutrisi AI:
+                      <span className="text-xs font-black text-white flex items-center gap-1">
+                        <Sparkles size={12} className="text-[#D4FF00]" /> Output Nutrisi AI:
                       </span>
-                      <span className="text-xs font-black text-[#181B26] bg-[#C4F82A] px-2 py-0.5 rounded-md">
+                      <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
                         {itemCalInput} kcal
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-700 pt-1">
-                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
-                        <span className="block text-[10px] text-slate-400 font-semibold">Protein</span>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-neutral-200 pt-1">
+                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                        <span className="block text-[10px] text-indigo-400 font-bold">Protein</span>
                         <span>{itemProteinInput}g</span>
                       </div>
-                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
-                        <span className="block text-[10px] text-slate-400 font-semibold">Karbo</span>
+                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                        <span className="block text-[10px] text-emerald-400 font-bold">Karbo</span>
                         <span>{itemCarbsInput}g</span>
                       </div>
-                      <div className="bg-white/80 rounded-lg p-1 border border-slate-200/50">
-                        <span className="block text-[10px] text-slate-400 font-semibold">Lemak</span>
+                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                        <span className="block text-[10px] text-rose-400 font-bold">Lemak</span>
                         <span>{itemFatInput}g</span>
                       </div>
                     </div>
@@ -5250,7 +5264,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <button
                     type="button"
                     onClick={() => setShowManualInputs(!showManualInputs)}
-                    className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-neutral-400 hover:text-[#D4FF00] flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <span>{showManualInputs ? "▲ Sembunyikan Input Manual" : "▼ Edit Nutrisi Manual (Opsional)"}</span>
                   </button>
@@ -5259,46 +5273,46 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 mt-2"
+                      className="grid grid-cols-2 gap-2.5 pt-3 border-t border-neutral-800 mt-2"
                     >
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700">{t.caloriesInputLabel}</label>
+                        <label className="text-[11px] font-bold text-neutral-300">{t.caloriesInputLabel}</label>
                         <input
                           type="number"
                           value={itemCalInput}
                           onChange={(e) => setItemCalInput(e.target.value)}
                           placeholder="450"
-                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-[#D4FF00]"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700">{t.proteinInputLabel}</label>
+                        <label className="text-[11px] font-bold text-indigo-400">{t.proteinInputLabel}</label>
                         <input
                           type="number"
                           value={itemProteinInput}
                           onChange={(e) => setItemProteinInput(e.target.value)}
                           placeholder="25"
-                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-indigo-400"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700">{t.carbsInputLabel}</label>
+                        <label className="text-[11px] font-bold text-emerald-400">{t.carbsInputLabel}</label>
                         <input
                           type="number"
                           value={itemCarbsInput}
                           onChange={(e) => setItemCarbsInput(e.target.value)}
                           placeholder="40"
-                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-emerald-400"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700">{t.fatInputLabel}</label>
+                        <label className="text-[11px] font-bold text-rose-400">{t.fatInputLabel}</label>
                         <input
                           type="number"
                           value={itemFatInput}
                           onChange={(e) => setItemFatInput(e.target.value)}
                           placeholder="12"
-                          className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-slate-900"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-rose-400"
                         />
                       </div>
                     </motion.div>
@@ -5310,34 +5324,34 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-1 p-4 bg-[#181B26] rounded-2xl space-y-3 border border-[#C4F82A]/30"
+                    className="mt-1 p-4 bg-[#161C28] rounded-2xl space-y-3 border border-[#D4FF00]/40"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-[#C4F82A] flex items-center gap-1.5">
+                      <span className="text-xs font-black text-[#D4FF00] flex items-center gap-1.5">
                         <Sparkles size={12} /> Hasil Deteksi AI — Konfirmasi?
                       </span>
-                      <span className="text-[11px] font-black text-white bg-[#C4F82A]/20 border border-[#C4F82A]/30 px-2 py-0.5 rounded-lg">
+                      <span className="text-[11px] font-black text-black bg-[#D4FF00] px-2 py-0.5 rounded-lg">
                         {itemCalInput} kcal
                       </span>
                     </div>
 
                     {/* Macro summary row */}
                     <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
-                      <div className="bg-white/10 rounded-xl py-2">
-                        <span className="block text-[10px] text-white/50 font-semibold">Protein</span>
+                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
+                        <span className="block text-[10px] text-indigo-400 font-bold">Protein</span>
                         <span className="text-white">{itemProteinInput}g</span>
                       </div>
-                      <div className="bg-white/10 rounded-xl py-2">
-                        <span className="block text-[10px] text-white/50 font-semibold">Karbo</span>
+                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
+                        <span className="block text-[10px] text-emerald-400 font-bold">Karbo</span>
                         <span className="text-white">{itemCarbsInput}g</span>
                       </div>
-                      <div className="bg-white/10 rounded-xl py-2">
-                        <span className="block text-[10px] text-white/50 font-semibold">Lemak</span>
+                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
+                        <span className="block text-[10px] text-rose-400 font-bold">Lemak</span>
                         <span className="text-white">{itemFatInput}g</span>
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-white/50 text-center">
+                    <p className="text-[11px] text-neutral-400 text-center">
                       Nutrisi salah? Gunakan <em>"Edit Nutrisi Manual"</em> di atas lalu simpan.
                     </p>
 
@@ -5348,13 +5362,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           setAiConfirmStep(false);
                           setShowManualInputs(true);
                         }}
-                        className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-white/70 hover:bg-white/10 cursor-pointer transition-colors"
+                        className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-neutral-300 hover:bg-white/10 cursor-pointer transition-colors"
                       >
                         ✏️ Edit Nutrisi
                       </button>
                       <button
                         onClick={handleConfirmSave}
-                        className="flex-1 py-2.5 rounded-xl text-xs font-black bg-[#C4F82A] text-[#181B26] hover:bg-[#d8ff45] cursor-pointer transition-colors shadow-sm"
+                        className="flex-1 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] text-black hover:bg-[#c4ec00] cursor-pointer transition-colors shadow-sm"
                       >
                         ✅ Simpan ke Log
                       </button>
@@ -5378,7 +5392,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 {/* ── End Feature 1 ─────────────────────────────────────── */}
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
                 <button
                   onClick={() => {
                     setShowAddFoodModal(false);
@@ -5387,7 +5401,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     setAiConfirmStep(false);
                     setShowManualInputs(false);
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
                 >
                   {t.closeModal}
                 </button>
@@ -5395,16 +5409,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <button
                     onClick={handleAnalyzeAndPreview}
                     disabled={isAnalyzingAi || !itemNameInput.trim()}
-                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5 transition-all"
                   >
                     {isAnalyzingAi ? (
                       <>
-                        <Sparkles size={14} className="animate-spin" />
+                        <Sparkles size={14} className="animate-spin text-black" />
                         <span>Mendeteksi...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={14} />
+                        <Sparkles size={14} className="text-black" />
                         <span>{lang === "EN" ? "AI Detect Nutrition" : "Deteksi Nutrisi AI"}</span>
                       </>
                     )}
@@ -5416,50 +5430,91 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         )}
       </AnimatePresence>
 
-      {/* UPDATE WEIGHT MODAL */}
+      {/* UPDATE WEIGHT MODAL (PERSISTENT & OBSIDIAN DARK) */}
       <AnimatePresence>
         {showUpdateWeightModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4"
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-black text-base text-slate-900">{t.updateWeightTitle}</h3>
-                <button onClick={() => setShowUpdateWeightModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-black border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00]">
+                    <Scale size={16} />
+                  </div>
+                  <h3 className="font-['Archivo_Black'] text-base text-white">{t.updateWeightTitle}</h3>
+                </div>
+                <button onClick={() => setShowUpdateWeightModal(false)} className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer">
                   <X size={18} />
                 </button>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700">{t.weightInputLabel}</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={newWeightInput}
-                  onChange={(e) => setNewWeightInput(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-black focus:outline-none focus:border-slate-900"
-                />
+                <label className="text-xs font-bold text-neutral-300">{t.weightInputLabel}</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={newWeightInput}
+                    onChange={(e) => setNewWeightInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#161C28] border border-white/10 rounded-xl text-base font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-neutral-400">kg</span>
+                </div>
+                <p className="text-[11px] text-neutral-400 font-medium">
+                  {isEN ? "Updates your transformation curve & calorie targets" : "Otomatis memperbarui kurva transformasi & target kalori kamu"}
+                </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
                 <button
                   onClick={() => setShowUpdateWeightModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
                 >
                   {t.closeModal}
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const w = Number(newWeightInput);
                     if (w > 30 && w < 300) {
-                      setLiveUser((prev) => ({ ...prev, weight: w }));
+                      const updatedUser = { ...activeUser, weight: w };
+                      setLiveUser(updatedUser);
+                      try {
+                        localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(updatedUser));
+                        localStorage.setItem("gymbuddy_active_session", JSON.stringify(updatedUser));
+                        const histKey = `gymbuddy_weight_history_${normPhone}`;
+                        const prevHistRaw = localStorage.getItem(histKey);
+                        const prevHist = prevHistRaw ? JSON.parse(prevHistRaw) : [];
+                        localStorage.setItem(histKey, JSON.stringify([...prevHist, { date: selectedDate, weight: w, timestamp: new Date().toISOString() }]));
+                      } catch (e) {}
+
+                      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+                      try {
+                        await fetch(`/api/user/${normPhone}/weight`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ weight: w, date: selectedDate })
+                        });
+                      } catch (e) {}
+                      try {
+                        if (API_BASE_URL) {
+                          await fetch(`${API_BASE_URL}/api/user/${normPhone}/weight`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ weight: w, date: selectedDate })
+                          });
+                        }
+                      } catch (e) {}
+
+                      setReminderNotificationMsg(isEN ? `Weight updated to ${w} kg! 🎯` : `Berat badan diperbarui menjadi ${w} kg! 🎯`);
+                      setTimeout(() => setReminderNotificationMsg(null), 3500);
                     }
                     setShowUpdateWeightModal(false);
                   }}
-                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#181B26] text-[#C4F82A] hover:bg-slate-800 cursor-pointer shadow-xs"
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black cursor-pointer shadow-xs transition-all"
                 >
                   {t.saveWeight}
                 </button>
