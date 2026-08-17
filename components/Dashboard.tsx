@@ -136,11 +136,16 @@ const isLiquidName = (name: string): boolean => {
   if (!name) return false;
   const lower = name.toLowerCase().trim();
 
+  // Solid foods MUST NEVER be classified as hydration / drinks
   const solidExceptions = [
-    "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
+    "french fries", "fries", "kentang", "sosis", "sausage", "nugget",
+    "ayam", "chicken", "daging", "sapi", "ikan", "tahu", "tempe",
+    "nasi", "mie", "bihun", "kwetiau", "burger", "pizza", "dimsum",
+    "bakso", "siomay", "batagor", "telur", "telor", "seafood", "udang",
+    "cumi", "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
     "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
     "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
-    "selai", "topping", "crepe", "churros", "pisang"
+    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak"
   ];
 
   if (solidExceptions.some((se) => lower.includes(se))) {
@@ -162,16 +167,14 @@ const isLiquidName = (name: string): boolean => {
     "wedang", "jamu", "hydro", "isoplus", "you1000", "c1000", "milku",
     "milo", "ovaltine", "nutrisari", "beer", "bir", "wine", "whiskey",
     "vodka", "soju", "rum", "cocktail", "mocktail", "whey", "creatine",
-    // Popular Indonesian/cafe coffee drinks
-    "montblanc", "mont blanc", "vietnam", "robusta", "liberica", "arabica",
-    "v60", "drip", "pour over", "aeropress", "chemex", "cold drip",
-    "brown sugar", "caramel", "hazelnut", "vanilla latte", "pistachio",
-    "aren", "gula aren", "kopi aren", "kopi tubruk", "kopi susu",
-    "es jeruk", "es lemon", "lemonade", "lemon tea", "fruit tea",
-    "minuman dingin", "minuman panas", "hot drink", "iced", "es ",
-    "wedang jahe", "jahe", "bandrek", "bajigur", "sekoteng",
-    "cincau", "es cincau", "dawet", "es dawet", "cendol",
-    "infused water", "detox", "green tea", "ocha", "hojicha",
+    "montblanc", "mont blanc", "vietnam drip", "robusta", "liberica", "arabica",
+    "v60", "pour over", "aeropress", "chemex", "cold drip",
+    "brown sugar boba", "vanilla latte", "caramel macchiato",
+    "kopi aren", "kopi tubruk", "kopi susu", "es jeruk", "es lemon",
+    "lemonade", "lemon tea", "fruit tea", "minuman dingin", "minuman panas",
+    "wedang jahe", "bandrek", "bajigur", "sekoteng", "cincau", "es cincau",
+    "es dawet", "es cendol", "es kelapa", "es teler", "es campur",
+    "infused water", "detox water", "green tea", "ocha", "hojicha",
     "protein shake", "mass gainer", "pre-workout", "bcaa",
     "electrolyte", "energy drink", "red bull", "monster", "kratingdaeng"
   ];

@@ -1091,10 +1091,14 @@ function isLiquidName(name: string): boolean {
   const lower = name.toLowerCase();
 
   const solidExceptions = [
-    "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
+    "french fries", "fries", "kentang", "sosis", "sausage", "nugget",
+    "ayam", "chicken", "daging", "sapi", "ikan", "tahu", "tempe",
+    "nasi", "mie", "bihun", "kwetiau", "burger", "pizza", "dimsum",
+    "bakso", "siomay", "batagor", "telur", "telor", "seafood", "udang",
+    "cumi", "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
     "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
     "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
-    "selai", "topping", "crepe", "churros", "pisang"
+    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak"
   ];
 
   if (solidExceptions.some((se) => lower.includes(se))) {
@@ -1107,7 +1111,25 @@ function isLiquidName(name: string): boolean {
     "smoothie", "beverage", "soda", "cola", "boba", "latte",
     "espresso", "cappuccino", "syrup", "sirup", "infused",
     "hydrat", "pocari", "gatorade", "le minerale", "aqua", "es teh",
-    "es kopi", "yakult", "matcha"
+    "es kopi", "yakult", "matcha", "americano", "macchiato",
+    "mocha", "affogato", "flat white", "long black", "ristretto", "cold brew",
+    "thai tea", "teh pucuk", "teh botol", "teh kotak", "oat milk",
+    "almond milk", "soya", "soy milk", "dancow", "ultra milk", "indomilk",
+    "cleo", "vit", "ades", "coke", "pepsi", "sprite", "fanta", "7up",
+    "root beer", "big cola", "dr pepper", "minuman", "cairan", "liquid",
+    "wedang", "jamu", "hydro", "isoplus", "you1000", "c1000", "milku",
+    "milo", "ovaltine", "nutrisari", "beer", "bir", "wine", "whiskey",
+    "vodka", "soju", "rum", "cocktail", "mocktail", "whey", "creatine",
+    "montblanc", "mont blanc", "vietnam drip", "robusta", "liberica", "arabica",
+    "v60", "pour over", "aeropress", "chemex", "cold drip",
+    "brown sugar boba", "vanilla latte", "caramel macchiato",
+    "kopi aren", "kopi tubruk", "kopi susu", "es jeruk", "es lemon",
+    "lemonade", "lemon tea", "fruit tea", "minuman dingin", "minuman panas",
+    "wedang jahe", "bandrek", "bajigur", "sekoteng", "cincau", "es cincau",
+    "es dawet", "es cendol", "es kelapa", "es teler", "es campur",
+    "infused water", "detox water", "green tea", "ocha", "hojicha",
+    "protein shake", "mass gainer", "pre-workout", "bcaa",
+    "electrolyte", "energy drink", "red bull", "monster", "kratingdaeng"
   ];
   return liquidKeywords.some((kw) => lower.includes(kw));
 }
@@ -3577,22 +3599,15 @@ Keluarkan output JSON valid:
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
       } else if (handleReminderCommand(userText, userProfile, From, userData)) {
         responseMessages = handleReminderCommand(userText, userProfile, From, userData)!;
-      } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
+      } else if (
+        !userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) &&
+        !userText.includes("?") &&
+        userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)
+      ) {
         const todayStr = getLocalDateStr();
         const workoutKey = `gymbuddy_exercises_${From}_${todayStr}`;
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
-        const workoutLogEntry: MealLog = {
-          id: `wa-workout-${Date.now()}`,
-          foodName: `🏋️ Log Latihan: ${userText.trim()}`,
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          timestamp: new Date().toISOString(),
-          mealType: "snack"
-        };
-        addMealLog(From, workoutLogEntry);
         dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: new Date().toISOString() }];
         saveDb();
 
@@ -5049,22 +5064,15 @@ ${mistakes}
         ];
       } else if (handleReminderCommand(userText, userProfile, from, userData)) {
         responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
-      } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
+      } else if (
+        !userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) &&
+        !userText.includes("?") &&
+        userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)
+      ) {
         const todayStr = getLocalDateStr();
         const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
-        const workoutLogEntry: MealLog = {
-          id: `wa-workout-${Date.now()}`,
-          foodName: `🏋️ Log Latihan: ${userText.trim()}`,
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          timestamp: new Date().toISOString(),
-          mealType: "snack"
-        };
-        addMealLog(from, workoutLogEntry);
         dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: new Date().toISOString() }];
         saveDb();
 
