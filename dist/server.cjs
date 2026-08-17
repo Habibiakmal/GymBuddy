@@ -42866,6 +42866,650 @@ function getDefaultWeeklySchedule(goal = "healthy") {
   }
 }
 
+// services/nutritionEngine.ts
+var NUTRITION_DATABASE = [
+  // ── GRAINS & STARCHES ──────────────────────────────────────────
+  {
+    keywords: ["pasta", "spaghetti", "macaroni", "fettuccine", "penne", "mie pasta"],
+    normalizedName: "Pasta (Cooked)",
+    category: "grain",
+    defaultServingGrams: 180,
+    // Standard adult cooked portion
+    servingUnit: "porsi sedang (cooked)",
+    per100g: { calories: 158, protein: 5.8, carbs: 30.9, fat: 0.9, fiber: 1.8, sugar: 0.6 },
+    cookingVariants: {
+      creamy: { calories: 220, protein: 7, carbs: 28, fat: 9.5, fiber: 1.5, sugar: 1.2 },
+      carbonara: { calories: 240, protein: 8.5, carbs: 27, fat: 11, fiber: 1.4, sugar: 1 },
+      bolognese: { calories: 175, protein: 8, carbs: 26, fat: 4.5, fiber: 2, sugar: 2.5 },
+      aglio: { calories: 180, protein: 5.8, carbs: 30, fat: 4.5, fiber: 1.8, sugar: 0.5 }
+    },
+    source: "USDA"
+  },
+  {
+    keywords: ["kentang goreng", "french fries", "fries", "pommes frites"],
+    normalizedName: "Kentang Goreng (French Fries)",
+    category: "snack",
+    defaultServingGrams: 100,
+    // Regular serving
+    servingUnit: "porsi regular",
+    per100g: { calories: 312, protein: 3.4, carbs: 41.4, fat: 15, fiber: 3.8, sugar: 0.3 },
+    cookingVariants: {
+      rebus: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9 },
+      panggang: { calories: 93, protein: 2.5, carbs: 21, fat: 0.2, fiber: 2.2, sugar: 1.2 }
+    },
+    source: "USDA"
+  },
+  {
+    keywords: ["kentang", "potato", "kentang rebus", "mashed potato"],
+    normalizedName: "Kentang Rebus / Mashed",
+    category: "grain",
+    defaultServingGrams: 150,
+    servingUnit: "1 butir sedang",
+    per100g: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9 },
+    source: "USDA"
+  },
+  {
+    keywords: ["roti", "roti tawar", "white bread", "bread", "toast", "roti gandum"],
+    normalizedName: "Roti Tawar (2 Lembar)",
+    category: "grain",
+    defaultServingGrams: 60,
+    // 2 slices ~60g
+    servingUnit: "2 lembar",
+    per100g: { calories: 265, protein: 9, carbs: 49, fat: 3.2, fiber: 2.7, sugar: 5 },
+    cookingVariants: {
+      butter: { calories: 340, protein: 8, carbs: 46, fat: 14, fiber: 2.5, sugar: 5.5 },
+      gandum: { calories: 247, protein: 13, carbs: 41, fat: 3.4, fiber: 6, sugar: 4.3 }
+    },
+    source: "USDA"
+  },
+  {
+    keywords: ["nasi putih", "nasi", "rice", "white rice", "nasi liwet"],
+    normalizedName: "Nasi Putih (Cooked)",
+    category: "grain",
+    defaultServingGrams: 180,
+    // 1 piring / 1.5 centong
+    servingUnit: "1 porsi / centong",
+    per100g: { calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3, fiber: 0.4, sugar: 0.1 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["nasi merah", "brown rice", "red rice"],
+    normalizedName: "Nasi Merah (Cooked)",
+    category: "grain",
+    defaultServingGrams: 180,
+    servingUnit: "1 porsi",
+    per100g: { calories: 111, protein: 2.6, carbs: 23, fat: 0.9, fiber: 1.8, sugar: 0.2 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["nasi goreng", "fried rice"],
+    normalizedName: "Nasi Goreng Komplit",
+    category: "grain",
+    defaultServingGrams: 250,
+    servingUnit: "1 piring komplit",
+    per100g: { calories: 195, protein: 6.5, carbs: 25, fat: 7.8, fiber: 1.2, sugar: 1.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["nasi uduk", "nasi kuning"],
+    normalizedName: "Nasi Uduk / Kuning",
+    category: "grain",
+    defaultServingGrams: 180,
+    servingUnit: "1 porsi",
+    per100g: { calories: 165, protein: 3.2, carbs: 28.5, fat: 4.5, fiber: 0.6, sugar: 0.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["mie goreng", "indomie goreng", "bihun goreng", "kwetiau goreng"],
+    normalizedName: "Mie Goreng (1 Porsi)",
+    category: "grain",
+    defaultServingGrams: 180,
+    servingUnit: "1 porsi",
+    per100g: { calories: 215, protein: 5.5, carbs: 29.5, fat: 8.5, fiber: 1.5, sugar: 2.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["mie kuah", "mie rebus", "indomie rebus", "ramen"],
+    normalizedName: "Mie Kuah / Rebus",
+    category: "grain",
+    defaultServingGrams: 220,
+    servingUnit: "1 mangkuk",
+    per100g: { calories: 145, protein: 4, carbs: 22, fat: 4.5, fiber: 1, sugar: 1.2 },
+    source: "TKPI"
+  },
+  // ── PROTEINS & MEATS ──────────────────────────────────────────
+  {
+    keywords: ["ayam goreng", "fried chicken", "ayam kfc", "ayam crispy"],
+    normalizedName: "Ayam Goreng (Dada / Paha + Kulit)",
+    category: "protein",
+    defaultServingGrams: 120,
+    // 1 piece cooked
+    servingUnit: "1 potong sedang",
+    per100g: { calories: 246, protein: 24.5, carbs: 3.5, fat: 14.8, fiber: 0, sugar: 0 },
+    source: "USDA"
+  },
+  {
+    keywords: ["dada ayam", "ayam rebus", "chicken breast", "ayam panggang", "ayam grill", "ayam kukus"],
+    normalizedName: "Dada Ayam (Cooked / Grilled)",
+    category: "protein",
+    defaultServingGrams: 120,
+    servingUnit: "1 potong dada",
+    per100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 },
+    source: "USDA"
+  },
+  {
+    keywords: ["ayam geprek"],
+    normalizedName: "Ayam Geprek Crispy + Sambal",
+    category: "protein",
+    defaultServingGrams: 140,
+    servingUnit: "1 potong geprek",
+    per100g: { calories: 265, protein: 22, carbs: 8.5, fat: 16, fiber: 0.8, sugar: 0.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["kulit ayam", "kulit", "chicken skin"],
+    normalizedName: "Kulit Ayam Goreng Crispy",
+    category: "fat",
+    defaultServingGrams: 40,
+    servingUnit: "1 porsi kecil",
+    per100g: { calories: 450, protein: 15, carbs: 4, fat: 42, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["usus", "usus goreng", "jeroan"],
+    normalizedName: "Usus Goreng",
+    category: "protein",
+    defaultServingGrams: 40,
+    servingUnit: "1 tusuk / porsi",
+    per100g: { calories: 310, protein: 22, carbs: 2, fat: 24, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["sosis", "sausage", "bratwurst", "hot dog"],
+    normalizedName: "Sosis (Cooked)",
+    category: "protein",
+    defaultServingGrams: 50,
+    // 1 standard sausage
+    servingUnit: "1 buah sedang",
+    per100g: { calories: 301, protein: 12, carbs: 3, fat: 27, fiber: 0, sugar: 1.2 },
+    source: "USDA"
+  },
+  {
+    keywords: ["telur", "telur rebus", "egg", "boiled egg", "telor"],
+    normalizedName: "Telur Ayam Rebus",
+    category: "protein",
+    defaultServingGrams: 50,
+    // 1 large egg
+    servingUnit: "1 butir",
+    per100g: { calories: 155, protein: 12.6, carbs: 1.1, fat: 10.6, fiber: 0, sugar: 1.1 },
+    cookingVariants: {
+      goreng: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1 },
+      ceplok: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1 },
+      dadar: { calories: 200, protein: 13, carbs: 1.5, fat: 15.5, fiber: 0, sugar: 1 }
+    },
+    source: "USDA"
+  },
+  {
+    keywords: ["telur goreng", "telur ceplok", "telur dadar", "omelet", "fried egg"],
+    normalizedName: "Telur Goreng / Ceplok / Dadar",
+    category: "protein",
+    defaultServingGrams: 55,
+    servingUnit: "1 butir",
+    per100g: { calories: 196, protein: 13.6, carbs: 0.8, fat: 15.3, fiber: 0, sugar: 0.8 },
+    source: "USDA"
+  },
+  {
+    keywords: ["udang", "shrimp", "prawn"],
+    normalizedName: "Udang (Cooked)",
+    category: "protein",
+    defaultServingGrams: 60,
+    // ~4-5 pieces
+    servingUnit: "1 porsi / 4 buah",
+    per100g: { calories: 99, protein: 24, carbs: 0.2, fat: 0.3, fiber: 0, sugar: 0 },
+    cookingVariants: {
+      goreng: { calories: 180, protein: 20, carbs: 6, fat: 8.5, fiber: 0, sugar: 0 }
+    },
+    source: "USDA"
+  },
+  {
+    keywords: ["daging sapi", "beef", "sapi", "rendang", "steak"],
+    normalizedName: "Daging Sapi / Rendang",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 potong sedang",
+    per100g: { calories: 250, protein: 26, carbs: 2, fat: 15, fiber: 0, sugar: 0.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["ikan", "fish", "salmon", "tuna", "ikan lele", "ikan bakar", "ikan goreng"],
+    normalizedName: "Ikan (Cooked / Bakar)",
+    category: "protein",
+    defaultServingGrams: 100,
+    servingUnit: "1 ekor / potong",
+    per100g: { calories: 160, protein: 22, carbs: 1, fat: 7.5, fiber: 0, sugar: 0 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["tahu", "tofu", "tahu goreng", "tahu kukus"],
+    normalizedName: "Tahu (2 Potong)",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "2 potong",
+    per100g: { calories: 110, protein: 9.5, carbs: 3.5, fat: 6.5, fiber: 1.2, sugar: 0.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["tempe", "tempeh", "tempe goreng", "tempe bacem"],
+    normalizedName: "Tempe (2 Potong)",
+    category: "protein",
+    defaultServingGrams: 70,
+    servingUnit: "2 potong",
+    per100g: { calories: 195, protein: 18.5, carbs: 9, fat: 10.5, fiber: 3.5, sugar: 1 },
+    source: "TKPI"
+  },
+  // ── VEGETABLES & INDONESIAN SPECIALTIES ─────────────────────────
+  {
+    keywords: ["jengkol", "semur jengkol", "jengkol goreng", "rendang jengkol"],
+    normalizedName: "Jengkol (Cooked)",
+    category: "vegetable",
+    defaultServingGrams: 60,
+    // ~4-5 keping
+    servingUnit: "1 porsi (4-5 keping)",
+    per100g: { calories: 192, protein: 5.4, carbs: 34, fat: 3.2, fiber: 5.8, sugar: 1.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["sayur asem", "sayur asam"],
+    normalizedName: "Sayur Asem",
+    category: "vegetable",
+    defaultServingGrams: 150,
+    // 1 mangkuk sedang
+    servingUnit: "1 mangkuk",
+    per100g: { calories: 43, protein: 1.5, carbs: 8, fat: 0.6, fiber: 2, sugar: 2.5 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["sayur", "sop sayur", "tumis kangkung", "capcay", "bayam", "kangkung"],
+    normalizedName: "Sayuran / Tumis / Sop",
+    category: "vegetable",
+    defaultServingGrams: 120,
+    servingUnit: "1 mangkuk / porsi",
+    per100g: { calories: 50, protein: 2.2, carbs: 6.5, fat: 1.8, fiber: 2.5, sugar: 2 },
+    source: "TKPI"
+  },
+  {
+    keywords: ["sambal", "sambel", "sambal terasi", "sambal bawang"],
+    normalizedName: "Sambal",
+    category: "snack",
+    defaultServingGrams: 20,
+    // 1 sendok makan
+    servingUnit: "1 sdm",
+    per100g: { calories: 120, protein: 2, carbs: 12, fat: 7, fiber: 2.5, sugar: 5 },
+    source: "TKPI"
+  },
+  // ── BEVERAGES ──────────────────────────────────────────────────
+  {
+    keywords: ["air putih", "air mineral", "mineral water", "plain water", "air"],
+    normalizedName: "Air Mineral (Hydration)",
+    category: "beverage",
+    defaultServingGrams: 500,
+    servingUnit: "500 ml",
+    per100g: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 },
+    isHydration: true,
+    defaultVolumeMl: 500,
+    source: "USDA"
+  },
+  {
+    keywords: ["americano", "espresso", "kopi hitam", "black coffee"],
+    normalizedName: "Americano / Kopi Hitam",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "250 ml",
+    per100g: { calories: 2, protein: 0.1, carbs: 0.4, fat: 0, fiber: 0, sugar: 0 },
+    isHydration: true,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    keywords: ["kopi susu", "latte", "cappuccino", "flat white"],
+    normalizedName: "Kopi Susu / Latte",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "1 cup (250ml)",
+    per100g: { calories: 60, protein: 2, carbs: 7.2, fat: 2.5, fiber: 0, sugar: 5.6 },
+    isHydration: true,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    keywords: ["teh manis", "es teh manis", "teh kotak", "teh botol"],
+    normalizedName: "Es Teh Manis",
+    category: "beverage",
+    defaultServingGrams: 300,
+    servingUnit: "1 gelas (300ml)",
+    per100g: { calories: 32, protein: 0, carbs: 8, fat: 0, fiber: 0, sugar: 7.5 },
+    isHydration: true,
+    defaultVolumeMl: 300,
+    source: "TKPI"
+  },
+  {
+    keywords: ["teh tawar", "green tea", "teh hijau", "ocha"],
+    normalizedName: "Teh Tawar / Green Tea",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "250 ml",
+    per100g: { calories: 1, protein: 0, carbs: 0.2, fat: 0, fiber: 0, sugar: 0 },
+    isHydration: true,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    keywords: ["whey", "protein shake", "susu protein"],
+    normalizedName: "Whey Protein Shake (1 Scoop)",
+    category: "beverage",
+    defaultServingGrams: 300,
+    servingUnit: "1 scoop + air",
+    per100g: { calories: 45, protein: 8, carbs: 1, fat: 0.6, fiber: 0.2, sugar: 0.5 },
+    isHydration: true,
+    defaultVolumeMl: 300,
+    source: "USDA"
+  }
+];
+function parseQuantityAndUnit(text) {
+  let cleaned = text.trim();
+  let quantity = 1;
+  let explicitGrams = void 0;
+  let multiplier = 1;
+  let cookingMethod = "standard";
+  const gramMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+  if (gramMatch) {
+    explicitGrams = parseFloat(gramMatch[1]);
+    cleaned = cleaned.replace(gramMatch[0], "").trim();
+  }
+  const qtyMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|gelas|cup|scoop)?\b/i);
+  if (qtyMatch) {
+    quantity = parseFloat(qtyMatch[1]);
+    cleaned = cleaned.replace(qtyMatch[0], "").trim();
+  }
+  const suffixQtyMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|gelas|cup|scoop)\b/i);
+  if (suffixQtyMatch) {
+    quantity = parseFloat(suffixQtyMatch[1]);
+    cleaned = cleaned.replace(suffixQtyMatch[0], "").trim();
+  }
+  if (cleaned.match(/\bsetengah|1\/2|half\b/i)) {
+    multiplier *= 0.5;
+    cleaned = cleaned.replace(/\bsetengah|1\/2|half\b/i, "").trim();
+  }
+  if (cleaned.match(/\bseperempat|1\/4|quarter\b/i)) {
+    multiplier *= 0.25;
+    cleaned = cleaned.replace(/\bseperempat|1\/4|quarter\b/i, "").trim();
+  }
+  if (cleaned.match(/\b(sedikit|porsi kecil|small)\b/i)) {
+    multiplier *= 0.65;
+  }
+  if (cleaned.match(/\b(banyak|porsi besar|large|double|jumbo)\b/i)) {
+    multiplier *= 1.5;
+  }
+  if (cleaned.match(/\bgoreng|crispy|fried\b/i)) cookingMethod = "fried";
+  else if (cleaned.match(/\brebus|kukus|boiled|steamed\b/i)) cookingMethod = "boiled";
+  else if (cleaned.match(/\bbakar|panggang|grilled|roasted\b/i)) cookingMethod = "grilled";
+  else if (cleaned.match(/\bcreamy|carbonara|keju\b/i)) cookingMethod = "creamy";
+  else if (cleaned.match(/\bmentah|raw\b/i)) cookingMethod = "raw";
+  return { quantity, explicitGrams, multiplier, cookingMethod, cleanedText: cleaned };
+}
+function splitFoodItems(rawInput) {
+  if (!rawInput) return [];
+  const prefixRegex = /^(?:sore\s*ini|siang\s*ini|pagi\s*ini|malam\s*ini|tadi\s*pagi|tadi\s*siang|tadi\s*sore|tadi\s*malam|kemarin|barusan|tadi|lagi|sedang|habis|baru|aku|saya|gue|gw|kami|kita|pengen|mau|udah|sudah|sempat)?\s*(?:makan|minum|ngemil|sarapan|lunch|dinner|breakfast|snack|konsumsi|santap|pesan|order|habisin)?\s*(?:aku|saya|gue|gw)?\s*(?:makan|minum)?\s*/i;
+  let cleaned = rawInput.trim().replace(prefixRegex, "").trim();
+  const rawParts = cleaned.split(/[,+&;\n]|\s+dan\s+|\s+plus\s+/i).map((p) => p.trim()).filter((p) => p.length > 0);
+  const finalItems = [];
+  for (const part of rawParts) {
+    const lowerPart = part.toLowerCase();
+    const isUnifiedRiceDish = /^(nasi\s+goreng|nasi\s+uduk|nasi\s+kuning|nasi\s+liwet|nasi\s+padang|nasi\s+merah|nasi\s+putih)\b/i.test(lowerPart);
+    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish) {
+      const lauk = part.replace(/^nasi\s+/i, "").trim();
+      finalItems.push("Nasi putih");
+      if (lauk.length > 0) {
+        finalItems.push(lauk);
+      }
+    } else {
+      finalItems.push(part);
+    }
+  }
+  return finalItems.length > 0 ? finalItems : [cleaned];
+}
+function calculateSingleItemNutrition(rawItemText) {
+  const { quantity, explicitGrams, multiplier, cookingMethod, cleanedText } = parseQuantityAndUnit(rawItemText);
+  const lower = cleanedText.toLowerCase();
+  let matchedRef = null;
+  let bestScore = 0;
+  for (const ref of NUTRITION_DATABASE) {
+    for (const kw of ref.keywords) {
+      if (lower.includes(kw)) {
+        const score = kw.length;
+        if (score > bestScore) {
+          bestScore = score;
+          matchedRef = ref;
+        }
+      }
+    }
+  }
+  if (matchedRef) {
+    let targetGrams = 0;
+    if (explicitGrams !== void 0 && explicitGrams > 0) {
+      targetGrams = explicitGrams;
+    } else {
+      targetGrams = matchedRef.defaultServingGrams * quantity * multiplier;
+    }
+    let per100g = matchedRef.per100g;
+    if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
+      per100g = matchedRef.cookingVariants[cookingMethod];
+    } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
+      per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
+    }
+    const factor = targetGrams / 100;
+    const protein = Math.round(per100g.protein * factor * 10) / 10;
+    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
+    const fat2 = Math.round(per100g.fat * factor * 10) / 10;
+    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
+    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    const rawCal = Math.round(per100g.calories * factor);
+    const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
+    const calories = atwaterCal > 0 ? atwaterCal : rawCal;
+    return {
+      food_name: rawItemText.trim(),
+      normalized_food_name: matchedRef.normalizedName,
+      cooking_method: cookingMethod,
+      estimated_quantity: quantity,
+      estimated_weight_grams: Math.round(targetGrams),
+      serving_unit: explicitGrams ? `${explicitGrams}g` : `${quantity}x ${matchedRef.servingUnit}`,
+      calories,
+      protein,
+      carbs,
+      fat: fat2,
+      fiber,
+      sugar,
+      is_hydration: matchedRef.isHydration,
+      volume_ml: matchedRef.defaultVolumeMl ? Math.round(matchedRef.defaultVolumeMl * quantity * multiplier) : void 0,
+      data_source: matchedRef.source,
+      confidence: explicitGrams ? "high" : "medium",
+      notes: `Basis: ${targetGrams}g (${matchedRef.source})`
+    };
+  }
+  const estimatedGrams = explicitGrams || 100;
+  const cal = Math.round(150 * multiplier * quantity);
+  const prot = Math.round(6 * multiplier * quantity);
+  const carb = Math.round(20 * multiplier * quantity);
+  const fat = Math.round(5 * multiplier * quantity);
+  return {
+    food_name: rawItemText.trim(),
+    normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    cooking_method: cookingMethod,
+    estimated_quantity: quantity,
+    estimated_weight_grams: estimatedGrams,
+    serving_unit: `${estimatedGrams}g (est)`,
+    calories: prot * 4 + carb * 4 + fat * 9,
+    protein: prot,
+    carbs: carb,
+    fat,
+    fiber: 1,
+    sugar: 1,
+    data_source: "ai_estimation",
+    confidence: "low",
+    notes: "Estimasi generik"
+  };
+}
+function estimateMealNutritionDeterministic(input) {
+  const debugLogs = [];
+  debugLogs.push(`[NutritionEngine] Raw input: "${input}"`);
+  const rawItems = splitFoodItems(input);
+  debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
+  const items = [];
+  let totalCalories = 0;
+  let totalProtein = 0;
+  let totalCarbs = 0;
+  let totalFat = 0;
+  let totalFiber = 0;
+  let totalSugar = 0;
+  let totalVolumeMl = 0;
+  let isHydration = false;
+  for (const rawItem of rawItems) {
+    const itemNutr = calculateSingleItemNutrition(rawItem);
+    items.push(itemNutr);
+    totalCalories += itemNutr.calories;
+    totalProtein += itemNutr.protein;
+    totalCarbs += itemNutr.carbs;
+    totalFat += itemNutr.fat;
+    totalFiber += itemNutr.fiber;
+    totalSugar += itemNutr.sugar;
+    if (itemNutr.is_hydration) {
+      isHydration = true;
+      totalVolumeMl += itemNutr.volume_ml || 0;
+    }
+    debugLogs.push(
+      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.estimated_weight_grams}g (${itemNutr.serving_unit}) | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
+    );
+  }
+  totalProtein = Math.round(totalProtein);
+  totalCarbs = Math.round(totalCarbs);
+  totalFat = Math.round(totalFat);
+  totalFiber = Math.round(totalFiber);
+  totalSugar = Math.round(totalSugar);
+  const atwaterSum = totalProtein * 4 + totalCarbs * 4 + totalFat * 9;
+  const finalCalories = Math.max(totalCalories, atwaterSum);
+  debugLogs.push(
+    `[NutritionEngine] TOTAL: ${finalCalories} kcal | Protein: ${totalProtein}g | Carbs: ${totalCarbs}g | Fat: ${totalFat}g | Fiber: ${totalFiber}g | Sugar: ${totalSugar}g`
+  );
+  const cleanTitle = items.length === 1 ? items[0].normalized_food_name : items.map((i) => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
+  return {
+    foodName: cleanTitle,
+    calories: finalCalories,
+    protein: totalProtein,
+    carbs: totalCarbs,
+    fat: totalFat,
+    fiber: totalFiber,
+    sugar: totalSugar,
+    isHydration,
+    volumeMl: totalVolumeMl,
+    mealType: "lunch",
+    portionNote: `Estimasi porsi standar (${items.length} item)`,
+    items,
+    calculatedFromItems: true,
+    debugLog: debugLogs
+  };
+}
+function buildGeminiNutritionPrompt(cleanText) {
+  return `Kamu adalah Senior Clinical Nutritionist AI GymBuddy.
+TUGAS WAJIB: Lakukan analisis Bottom-Up Nutrition Estimation untuk input makanan/minuman berikut:
+"${cleanText}"
+
+IKUTI 6 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
+   Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
+2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
+3. ESTIMASI PORSI REALISTIS (JANGAN MINIATURISASI PORSI):
+   - Pasta: ~180g porsi matang / cooked (bukan pasta mentah).
+   - Kentang goreng: ~100g porsi saji sedang.
+   - Roti: ~60g (2 lembar roti tawar standar).
+   - Telur: ~50g per 1 butir besar.
+   - Sosis: ~50g per 1 buah sosis masak.
+   - Nasi putih: ~180g (1 piring / 1.5 centong).
+   - Ayam goreng: ~120g (1 potong paha/dada).
+   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "udang 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
+4. HITUNG NUTRISI PER-ITEM berdasarkan standar USDA / TKPI:
+   - Hitung gram berat, calories, protein, carbs, fat, fiber, sugar per-item.
+5. AKUMULASIKAN TOTAL: Jumlahkan seluruh nutrisi dari tiap-tiap item.
+   - Total Calories = Sum(Calories tiap item)
+   - Total Protein = Sum(Protein tiap item)
+   - Total Carbs = Sum(Carbs tiap item)
+   - Total Fat = Sum(Fat tiap item)
+   - Total Fiber = Sum(Fiber tiap item)
+   - Total Sugar = Sum(Sugar tiap item)
+6. VERIFIKASI KALORI: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+
+KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
+{
+  "foodName": "Nama Lengkap Makanan / Kombo",
+  "calories": 755,
+  "protein": 19,
+  "carbs": 126,
+  "fat": 19,
+  "fiber": 9,
+  "sugar": 5,
+  "isHydration": false,
+  "volumeMl": 0,
+  "mealType": "lunch",
+  "portionNote": "Porsi standar komplit",
+  "items": [
+    {
+      "food_name": "Pasta",
+      "normalized_food_name": "Pasta (Cooked)",
+      "estimated_quantity": 1,
+      "estimated_weight_grams": 180,
+      "serving_unit": "porsi sedang (cooked)",
+      "calories": 284,
+      "protein": 10,
+      "carbs": 56,
+      "fat": 2,
+      "fiber": 3,
+      "sugar": 1,
+      "data_source": "USDA",
+      "confidence": "high"
+    },
+    {
+      "food_name": "Kentang goreng",
+      "normalized_food_name": "Kentang Goreng (French Fries)",
+      "estimated_quantity": 1,
+      "estimated_weight_grams": 100,
+      "serving_unit": "porsi regular",
+      "calories": 312,
+      "protein": 3,
+      "carbs": 41,
+      "fat": 15,
+      "fiber": 4,
+      "sugar": 0,
+      "data_source": "USDA",
+      "confidence": "high"
+    },
+    {
+      "food_name": "Roti",
+      "normalized_food_name": "Roti Tawar (2 Lembar)",
+      "estimated_quantity": 2,
+      "estimated_weight_grams": 60,
+      "serving_unit": "2 lembar",
+      "calories": 159,
+      "protein": 5,
+      "carbs": 29,
+      "fat": 2,
+      "fiber": 2,
+      "sugar": 3,
+      "data_source": "USDA",
+      "confidence": "high"
+    }
+  ]
+}`;
+}
+
 // server.ts
 var TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
 var TW_TOKEN = ["db733da9b83409669", "ddcc0f0a55b9dcb"].join("");
@@ -44846,294 +45490,36 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         return res.status(400).json({ success: false, error: "Text description is required" });
       }
       const cleanText = String(text).trim();
-      const lower = cleanText.toLowerCase();
-      const getFallback = () => {
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0, totalSugar = 0;
-        let isHydration = false, volumeMl = 0;
-        const parts = lower.split(/[,+&]| dan /).map((p) => p.trim()).filter(Boolean);
-        for (const item of parts) {
-          let cal = 0, prot = 0, carb = 0, fat = 0, fib = 0, sug = 0;
-          if (item.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
-            isHydration = true;
-            volumeMl += 500;
-          } else if (item.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
-            cal += 10;
-            carb += 2;
-            isHydration = true;
-            volumeMl += 250;
-          } else if (item.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
-            cal += 150;
-            prot += 5;
-            carb += 18;
-            fat += 6;
-            sug += 14;
-            isHydration = true;
-            volumeMl += 250;
-          } else if (item.match(/teh\s*manis|teh\s*kotak|teh\s*pucuk/)) {
-            cal += 90;
-            carb += 22;
-            sug += 20;
-            isHydration = true;
-            volumeMl += 300;
-          } else if (item.match(/teh\s*tawar|green\s*tea|ocha/)) {
-            cal += 5;
-            carb += 1;
-            isHydration = true;
-            volumeMl += 250;
-          } else if (item.match(/jus|juice/)) {
-            cal += 120;
-            prot += 2;
-            carb += 28;
-            fib += 2;
-            sug += 22;
-            isHydration = true;
-            volumeMl += 250;
-          } else if (item.match(/susu|milk/)) {
-            cal += 150;
-            prot += 8;
-            carb += 12;
-            fat += 8;
-            sug += 11;
-            isHydration = true;
-            volumeMl += 250;
-          } else if (item.match(/nasi\s*padang/)) {
-            cal += 750;
-            prot += 38;
-            carb += 70;
-            fat += 34;
-            fib += 4;
-            sug += 3;
-          } else if (item.match(/nasi\s*goreng/)) {
-            cal += 550;
-            prot += 18;
-            carb += 65;
-            fat += 22;
-            fib += 2;
-            sug += 3;
-          } else if (item.match(/nasi\s*putih|nasi\s*uduk|nasi\s*kuning|nasi\s*liwet|nasi/)) {
-            cal += 200;
-            prot += 4;
-            carb += 45;
-            fat += 1;
-            fib += 1;
-            sug += 0;
-          } else if (item.match(/mie\s*goreng|indomie\s*goreng/)) {
-            cal += 390;
-            prot += 9;
-            carb += 55;
-            fat += 14;
-            fib += 2;
-            sug += 4;
-          } else if (item.match(/mie\s*rebus|indomie\s*rebus|mie|ramen/)) {
-            cal += 340;
-            prot += 8;
-            carb += 50;
-            fat += 11;
-            fib += 1;
-            sug += 2;
-          } else if (item.match(/roti|bread|sandwich|toast/)) {
-            cal += 240;
-            prot += 8;
-            carb += 42;
-            fat += 4;
-            fib += 2;
-            sug += 5;
-          }
-          if (item.match(/ayam\s*geprek/)) {
-            cal += 380;
-            prot += 28;
-            carb += 16;
-            fat += 22;
-            fib += 1;
-          } else if (item.match(/ayam\s*goreng|fried\s*chicken/)) {
-            cal += 280;
-            prot += 26;
-            carb += 6;
-            fat += 16;
-          } else if (item.match(/ayam|chicken/)) {
-            cal += 200;
-            prot += 28;
-            carb += 0;
-            fat += 8;
-          }
-          if (item.match(/kulit\s*ayam|kulit/)) {
-            cal += 160;
-            prot += 6;
-            carb += 2;
-            fat += 15;
-          }
-          if (item.match(/usus|ati\s*ampela|jeroan/)) {
-            cal += 130;
-            prot += 10;
-            carb += 1;
-            fat += 9;
-          }
-          if (item.match(/udang|shrimp|prawn/)) {
-            cal += 110;
-            prot += 22;
-            carb += 1;
-            fat += 2;
-          }
-          if (item.match(/cumi|squid|seafood/)) {
-            cal += 120;
-            prot += 20;
-            carb += 2;
-            fat += 3;
-          }
-          if (item.match(/sapi|daging|rendang|beef|steak/)) {
-            cal += 260;
-            prot += 26;
-            carb += 4;
-            fat += 16;
-          }
-          if (item.match(/ikan|fish|lele|gurame|salmon|tuna/)) {
-            cal += 210;
-            prot += 24;
-            carb += 2;
-            fat += 11;
-          }
-          if (item.match(/telur\s*rebus/)) {
-            cal += 78;
-            prot += 6;
-            carb += 1;
-            fat += 5;
-          } else if (item.match(/telur|telor|ceplok|dadar|egg/)) {
-            cal += 110;
-            prot += 7;
-            carb += 1;
-            fat += 8;
-          }
-          if (item.match(/tempe/)) {
-            cal += 120;
-            prot += 9;
-            carb += 8;
-            fat += 6;
-            fib += 2;
-          }
-          if (item.match(/tahu/)) {
-            cal += 80;
-            prot += 8;
-            carb += 3;
-            fat += 4;
-            fib += 1;
-          }
-          if (item.match(/sayur\s*asem/)) {
-            cal += 65;
-            prot += 2;
-            carb += 12;
-            fat += 1;
-            fib += 3;
-            sug += 4;
-          } else if (item.match(/sayur|sop|kangkung|bayam|tumis/)) {
-            cal += 60;
-            prot += 2;
-            carb += 8;
-            fat += 2;
-            fib += 3;
-            sug += 2;
-          }
-          if (item.match(/jengkol|petai|pete/)) {
-            cal += 120;
-            prot += 4;
-            carb += 22;
-            fat += 2;
-            fib += 4;
-            sug += 2;
-          }
-          if (item.match(/sambal|sambel/)) {
-            cal += 45;
-            prot += 1;
-            carb += 4;
-            fat += 3;
-            fib += 1;
-            sug += 2;
-          }
-          if (item.match(/kerupuk|krupuk/)) {
-            cal += 80;
-            prot += 1;
-            carb += 12;
-            fat += 3;
-          }
-          totalCalories += cal;
-          totalProtein += prot;
-          totalCarbs += carb;
-          totalFat += fat;
-          totalFiber += fib;
-          totalSugar += sug;
-        }
-        if (totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFat === 0) {
-          totalCalories = 450;
-          totalProtein = 20;
-          totalCarbs = 50;
-          totalFat = 16;
-          totalFiber = 3;
-          totalSugar = 4;
-        }
-        const macroCal = totalProtein * 4 + totalCarbs * 4 + totalFat * 9;
-        const finalCalories = macroCal > 0 ? macroCal : totalCalories;
-        return {
-          foodName: cleanText,
-          calories: finalCalories,
-          protein: totalProtein,
-          carbs: totalCarbs,
-          fat: totalFat,
-          fiber: totalFiber,
-          sugar: totalSugar,
-          isHydration,
-          volumeMl,
-          mealType: getMealTypeByHour()
-        };
-      };
+      console.log(`[analyze-food] Incoming request: "${cleanText}"`);
+      const deterministicResult = estimateMealNutritionDeterministic(cleanText);
+      console.log(`[analyze-food] Deterministic base: ${deterministicResult.calories} kcal (P:${deterministicResult.protein}g, C:${deterministicResult.carbs}g, F:${deterministicResult.fat}g, Fib:${deterministicResult.fiber}g, Sug:${deterministicResult.sugar}g) [${deterministicResult.items.length} items]`);
       if (!getAi()) {
-        const fallback = getFallback();
-        return res.json({ success: true, ...fallback, note: "Estimated using offline database" });
+        return res.json({
+          success: true,
+          ...deterministicResult,
+          note: "Estimated using USDA & TKPI verified database"
+        });
       }
-      const prompt = `Kamu adalah Nutritionist AI GymBuddy Indonesia yang SANGAT DETAIL & AKURAT.
-Tugas: Analisis makanan/minuman user berikut:
-"${cleanText}"
-
-PERHATIKAN DENGAN SANGAT TELITI:
-1. Jika user menulis banyak lauk / combo (contoh: "Nasi ayam goreng, usus, kulit, udang, sayur asem, jengkol"):
-   - Hitung AKUMULASI DARI SEMUA ITEM YANG DISEBUTKAN:
-     * Nasi putih 1 porsi: ~200 kcal | P:4g, Karbo:45g, Lemak:1g
-     * Ayam goreng: ~260 kcal | P:26g, Karbo:4g, Lemak:16g
-     * Usus goreng: ~120 kcal | P:8g, Karbo:1g, Lemak:9g
-     * Kulit ayam crispy: ~150 kcal | P:6g, Karbo:2g, Lemak:14g
-     * Udang: ~100 kcal | P:20g, Karbo:1g, Lemak:2g
-     * Sayur asem: ~65 kcal | P:2g, Karbo:12g, Lemak:1g, Serat:3g, Gula:4g
-     * Jengkol: ~120 kcal | P:3g, Karbo:22g, Lemak:2g, Serat:4g
-   - Jumlahkan seluruh komponen menjadi total makro & mikro yang lengkap!
-2. RUMUS WAJIB KALORI: calories = (protein * 4) + (carbs * 4) + (fat * 9).
-3. Hitung juga "fiber" (serat dalam gram) dan "sugar" (gula dalam gram).
-4. Jika minuman, set isHydration=true dan volumeMl yang sesuai.
-
-Outputkan HANYA format JSON valid berikut (tanpa markdown, tanpa teks lain):
-{
-  "foodName": "Nama Makanan Lengkap yang Rapi",
-  "calories": 950,
-  "protein": 68,
-  "carbs": 85,
-  "fat": 42,
-  "fiber": 7,
-  "sugar": 6,
-  "isHydration": false,
-  "volumeMl": 0,
-  "mealType": "lunch",
-  "portionNote": "Kombinasi lengkap nasi + lauk komplit"
-}`;
+      const prompt = buildGeminiNutritionPrompt(cleanText);
       try {
         const rawText = await generateGeminiContent(prompt);
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed = extractAndParseJson(textOutput) || {};
-        parsed.foodName = parsed.foodName || cleanText;
-        let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-        let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
-        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
-        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || 0));
+        parsed.foodName = parsed.foodName || deterministicResult.foodName;
+        let protein = Math.max(0, Math.round(Number(parsed.protein) || deterministicResult.protein));
+        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || deterministicResult.carbs));
+        let fat = Math.max(0, Math.round(Number(parsed.fat) || deterministicResult.fat));
+        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || deterministicResult.fiber));
+        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || deterministicResult.sugar));
+        if (deterministicResult.items.length >= 2) {
+          if (carbs < deterministicResult.carbs * 0.65) carbs = deterministicResult.carbs;
+          if (protein < deterministicResult.protein * 0.65) protein = deterministicResult.protein;
+          if (fat < deterministicResult.fat * 0.65) fat = deterministicResult.fat;
+        }
         const macroCalories = protein * 4 + carbs * 4 + fat * 9;
         const calories = macroCalories > 0 ? macroCalories : Math.max(0, Math.round(Number(parsed.calories) || 0));
         parsed.mealType = parsed.mealType || getMealTypeByHour();
+        const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
         res.json({
           success: true,
           foodName: parsed.foodName,
@@ -45143,15 +45529,20 @@ Outputkan HANYA format JSON valid berikut (tanpa markdown, tanpa teks lain):
           fat,
           fiber,
           sugar,
-          isHydration: Boolean(parsed.isHydration),
-          volumeMl: Number(parsed.volumeMl) || 0,
+          isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
+          volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: parsed.portionNote || ""
+          portionNote: parsed.portionNote || deterministicResult.portionNote,
+          items,
+          debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {
-        console.warn("Gemini AI analyze-food error, using fallback:", aiErr);
-        const fallback = getFallback();
-        res.json({ success: true, ...fallback, note: "Fallback estimation" });
+        console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
+        res.json({
+          success: true,
+          ...deterministicResult,
+          note: "Estimated using USDA & TKPI verified database"
+        });
       }
     } catch (err) {
       console.error("Error analyzing food text:", err);

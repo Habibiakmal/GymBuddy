@@ -10,6 +10,7 @@ import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
+import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt } from "./services/nutritionEngine";
 
 // Twilio credentials (concatenated to avoid GitHub secret push block)
 const TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
@@ -2219,190 +2220,46 @@ PENTING:
       }
 
       const cleanText = String(text).trim();
-      const lower = cleanText.toLowerCase();
+      console.log(`[analyze-food] Incoming request: "${cleanText}"`);
 
-      // Precise heuristic fallback with multi-item compound accumulation
-      const getFallback = () => {
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0, totalSugar = 0;
-        let isHydration = false, volumeMl = 0;
-
-        // Split multiple items by comma, plus, 'dan', '&'
-        const parts = lower.split(/[,+&]| dan /).map(p => p.trim()).filter(Boolean);
-
-        for (const item of parts) {
-          let cal = 0, prot = 0, carb = 0, fat = 0, fib = 0, sug = 0;
-
-          // Beverage check
-          if (item.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
-            isHydration = true; volumeMl += 500;
-          } else if (item.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
-            cal += 10; carb += 2; isHydration = true; volumeMl += 250;
-          } else if (item.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
-            cal += 150; prot += 5; carb += 18; fat += 6; sug += 14; isHydration = true; volumeMl += 250;
-          } else if (item.match(/teh\s*manis|teh\s*kotak|teh\s*pucuk/)) {
-            cal += 90; carb += 22; sug += 20; isHydration = true; volumeMl += 300;
-          } else if (item.match(/teh\s*tawar|green\s*tea|ocha/)) {
-            cal += 5; carb += 1; isHydration = true; volumeMl += 250;
-          } else if (item.match(/jus|juice/)) {
-            cal += 120; prot += 2; carb += 28; fib += 2; sug += 22; isHydration = true; volumeMl += 250;
-          } else if (item.match(/susu|milk/)) {
-            cal += 150; prot += 8; carb += 12; fat += 8; sug += 11; isHydration = true; volumeMl += 250;
-          }
-          // Main Carbs
-          else if (item.match(/nasi\s*padang/)) {
-            cal += 750; prot += 38; carb += 70; fat += 34; fib += 4; sug += 3;
-          } else if (item.match(/nasi\s*goreng/)) {
-            cal += 550; prot += 18; carb += 65; fat += 22; fib += 2; sug += 3;
-          } else if (item.match(/nasi\s*putih|nasi\s*uduk|nasi\s*kuning|nasi\s*liwet|nasi/)) {
-            cal += 200; prot += 4; carb += 45; fat += 1; fib += 1; sug += 0;
-          } else if (item.match(/mie\s*goreng|indomie\s*goreng/)) {
-            cal += 390; prot += 9; carb += 55; fat += 14; fib += 2; sug += 4;
-          } else if (item.match(/mie\s*rebus|indomie\s*rebus|mie|ramen/)) {
-            cal += 340; prot += 8; carb += 50; fat += 11; fib += 1; sug += 2;
-          } else if (item.match(/roti|bread|sandwich|toast/)) {
-            cal += 240; prot += 8; carb += 42; fat += 4; fib += 2; sug += 5;
-          }
-          // Proteins & Meats
-          if (item.match(/ayam\s*geprek/)) {
-            cal += 380; prot += 28; carb += 16; fat += 22; fib += 1;
-          } else if (item.match(/ayam\s*goreng|fried\s*chicken/)) {
-            cal += 280; prot += 26; carb += 6; fat += 16;
-          } else if (item.match(/ayam|chicken/)) {
-            cal += 200; prot += 28; carb += 0; fat += 8;
-          }
-          if (item.match(/kulit\s*ayam|kulit/)) {
-            cal += 160; prot += 6; carb += 2; fat += 15;
-          }
-          if (item.match(/usus|ati\s*ampela|jeroan/)) {
-            cal += 130; prot += 10; carb += 1; fat += 9;
-          }
-          if (item.match(/udang|shrimp|prawn/)) {
-            cal += 110; prot += 22; carb += 1; fat += 2;
-          }
-          if (item.match(/cumi|squid|seafood/)) {
-            cal += 120; prot += 20; carb += 2; fat += 3;
-          }
-          if (item.match(/sapi|daging|rendang|beef|steak/)) {
-            cal += 260; prot += 26; carb += 4; fat += 16;
-          }
-          if (item.match(/ikan|fish|lele|gurame|salmon|tuna/)) {
-            cal += 210; prot += 24; carb += 2; fat += 11;
-          }
-          if (item.match(/telur\s*rebus/)) {
-            cal += 78; prot += 6; carb += 1; fat += 5;
-          } else if (item.match(/telur|telor|ceplok|dadar|egg/)) {
-            cal += 110; prot += 7; carb += 1; fat += 8;
-          }
-          if (item.match(/tempe/)) {
-            cal += 120; prot += 9; carb += 8; fat += 6; fib += 2;
-          }
-          if (item.match(/tahu/)) {
-            cal += 80; prot += 8; carb += 3; fat += 4; fib += 1;
-          }
-          // Vegetables & Extras
-          if (item.match(/sayur\s*asem/)) {
-            cal += 65; prot += 2; carb += 12; fat += 1; fib += 3; sug += 4;
-          } else if (item.match(/sayur|sop|kangkung|bayam|tumis/)) {
-            cal += 60; prot += 2; carb += 8; fat += 2; fib += 3; sug += 2;
-          }
-          if (item.match(/jengkol|petai|pete/)) {
-            cal += 120; prot += 4; carb += 22; fat += 2; fib += 4; sug += 2;
-          }
-          if (item.match(/sambal|sambel/)) {
-            cal += 45; prot += 1; carb += 4; fat += 3; fib += 1; sug += 2;
-          }
-          if (item.match(/kerupuk|krupuk/)) {
-            cal += 80; prot += 1; carb += 12; fat += 3;
-          }
-
-          // Accumulate
-          totalCalories += cal;
-          totalProtein += prot;
-          totalCarbs += carb;
-          totalFat += fat;
-          totalFiber += fib;
-          totalSugar += sug;
-        }
-
-        // If no match found, baseline estimate
-        if (totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFat === 0) {
-          totalCalories = 450; totalProtein = 20; totalCarbs = 50; totalFat = 16; totalFiber = 3; totalSugar = 4;
-        }
-
-        // Atwater formula exact verification
-        const macroCal = (totalProtein * 4) + (totalCarbs * 4) + (totalFat * 9);
-        const finalCalories = macroCal > 0 ? macroCal : totalCalories;
-
-        return {
-          foodName: cleanText,
-          calories: finalCalories,
-          protein: totalProtein,
-          carbs: totalCarbs,
-          fat: totalFat,
-          fiber: totalFiber,
-          sugar: totalSugar,
-          isHydration,
-          volumeMl,
-          mealType: getMealTypeByHour()
-        };
-      };
+      // 1. Calculate deterministic bottom-up estimate as verified baseline & fallback
+      const deterministicResult = estimateMealNutritionDeterministic(cleanText);
+      console.log(`[analyze-food] Deterministic base: ${deterministicResult.calories} kcal (P:${deterministicResult.protein}g, C:${deterministicResult.carbs}g, F:${deterministicResult.fat}g, Fib:${deterministicResult.fiber}g, Sug:${deterministicResult.sugar}g) [${deterministicResult.items.length} items]`);
 
       if (!getAi()) {
-        const fallback = getFallback();
-        return res.json({ success: true, ...fallback, note: "Estimated using offline database" });
+        return res.json({
+          success: true,
+          ...deterministicResult,
+          note: "Estimated using USDA & TKPI verified database"
+        });
       }
 
-      const prompt = `Kamu adalah Nutritionist AI GymBuddy Indonesia yang SANGAT DETAIL & AKURAT.
-Tugas: Analisis makanan/minuman user berikut:
-"${cleanText}"
-
-PERHATIKAN DENGAN SANGAT TELITI:
-1. Jika user menulis banyak lauk / combo (contoh: "Nasi ayam goreng, usus, kulit, udang, sayur asem, jengkol"):
-   - Hitung AKUMULASI DARI SEMUA ITEM YANG DISEBUTKAN:
-     * Nasi putih 1 porsi: ~200 kcal | P:4g, Karbo:45g, Lemak:1g
-     * Ayam goreng: ~260 kcal | P:26g, Karbo:4g, Lemak:16g
-     * Usus goreng: ~120 kcal | P:8g, Karbo:1g, Lemak:9g
-     * Kulit ayam crispy: ~150 kcal | P:6g, Karbo:2g, Lemak:14g
-     * Udang: ~100 kcal | P:20g, Karbo:1g, Lemak:2g
-     * Sayur asem: ~65 kcal | P:2g, Karbo:12g, Lemak:1g, Serat:3g, Gula:4g
-     * Jengkol: ~120 kcal | P:3g, Karbo:22g, Lemak:2g, Serat:4g
-   - Jumlahkan seluruh komponen menjadi total makro & mikro yang lengkap!
-2. RUMUS WAJIB KALORI: calories = (protein * 4) + (carbs * 4) + (fat * 9).
-3. Hitung juga "fiber" (serat dalam gram) dan "sugar" (gula dalam gram).
-4. Jika minuman, set isHydration=true dan volumeMl yang sesuai.
-
-Outputkan HANYA format JSON valid berikut (tanpa markdown, tanpa teks lain):
-{
-  "foodName": "Nama Makanan Lengkap yang Rapi",
-  "calories": 950,
-  "protein": 68,
-  "carbs": 85,
-  "fat": 42,
-  "fiber": 7,
-  "sugar": 6,
-  "isHydration": false,
-  "volumeMl": 0,
-  "mealType": "lunch",
-  "portionNote": "Kombinasi lengkap nasi + lauk komplit"
-}`;
+      const prompt = buildGeminiNutritionPrompt(cleanText);
 
       try {
         const rawText = await generateGeminiContent(prompt);
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed: any = extractAndParseJson(textOutput) || {};
         
-        parsed.foodName = parsed.foodName || cleanText;
-        let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-        let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
-        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
-        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || 0));
+        parsed.foodName = parsed.foodName || deterministicResult.foodName;
+        let protein = Math.max(0, Math.round(Number(parsed.protein) || deterministicResult.protein));
+        let carbs = Math.max(0, Math.round(Number(parsed.carbs) || deterministicResult.carbs));
+        let fat = Math.max(0, Math.round(Number(parsed.fat) || deterministicResult.fat));
+        let fiber = Math.max(0, Math.round(Number(parsed.fiber) || deterministicResult.fiber));
+        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || deterministicResult.sugar));
         
-        // ENFORCE Atwater formula: calories must match macros exactly
+        // Sanity Check: If AI returns unrealistically low macros (< 65% of deterministic bottom-up sum), use the bottom-up USDA/TKPI values
+        if (deterministicResult.items.length >= 2) {
+          if (carbs < deterministicResult.carbs * 0.65) carbs = deterministicResult.carbs;
+          if (protein < deterministicResult.protein * 0.65) protein = deterministicResult.protein;
+          if (fat < deterministicResult.fat * 0.65) fat = deterministicResult.fat;
+        }
+
         const macroCalories = (protein * 4) + (carbs * 4) + (fat * 9);
         const calories = macroCalories > 0 ? macroCalories : Math.max(0, Math.round(Number(parsed.calories) || 0));
         
         parsed.mealType = parsed.mealType || getMealTypeByHour();
+        const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
 
         res.json({
           success: true,
@@ -2413,15 +2270,20 @@ Outputkan HANYA format JSON valid berikut (tanpa markdown, tanpa teks lain):
           fat,
           fiber,
           sugar,
-          isHydration: Boolean(parsed.isHydration),
-          volumeMl: Number(parsed.volumeMl) || 0,
+          isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
+          volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: parsed.portionNote || ""
+          portionNote: parsed.portionNote || deterministicResult.portionNote,
+          items,
+          debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {
-        console.warn("Gemini AI analyze-food error, using fallback:", aiErr);
-        const fallback = getFallback();
-        res.json({ success: true, ...fallback, note: "Fallback estimation" });
+        console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
+        res.json({
+          success: true,
+          ...deterministicResult,
+          note: "Estimated using USDA & TKPI verified database"
+        });
       }
     } catch (err: any) {
       console.error("Error analyzing food text:", err);

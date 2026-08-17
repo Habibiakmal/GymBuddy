@@ -66,6 +66,7 @@ import {
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
 import { notificationService } from "../services/notificationService";
+import { estimateMealNutritionDeterministic, FoodItemNutrition, MealNutritionResult } from "../services/nutritionEngine";
 
 interface MealItem {
   id: string;
@@ -1733,129 +1734,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     return cleaned || text.trim();
   };
 
-  // Comprehensive Nutrition Estimator (Works 100% Offline & Online for Indonesian + Global Foods)
+  // Comprehensive Nutrition Estimator (USDA & TKPI Verified)
   const estimateIndonesianNutritionClient = (text: string) => {
     const cleanText = cleanIndonesianFoodSentence(text);
-    const lower = cleanText.toLowerCase().trim();
-    const parts = lower.split(/[,+&]| dan /).map(p => p.trim()).filter(Boolean);
-
-    let totalCal = 0, totalProt = 0, totalCarb = 0, totalFat = 0, totalFiber = 0, totalSugar = 0;
-    let isHydration = false, volumeMl = 0;
-
-    for (const item of parts) {
-      let cal = 0, prot = 0, carb = 0, fat = 0, fib = 0, sug = 0;
-
-      // Beverages
-      if (item.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
-        isHydration = true; volumeMl += 500;
-      } else if (item.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
-        cal += 10; carb += 2; isHydration = true; volumeMl += 250;
-      } else if (item.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
-        cal += 150; prot += 5; carb += 18; fat += 6; sug += 14; isHydration = true; volumeMl += 250;
-      } else if (item.match(/teh\s*manis|es\s*teh\s*manis|teh\s*kotak/)) {
-        cal += 90; carb += 22; sug += 20; isHydration = true; volumeMl += 300;
-      } else if (item.match(/teh\s*tawar|green\s*tea|ocha/)) {
-        cal += 5; carb += 1; isHydration = true; volumeMl += 250;
-      } else if (item.match(/jus|juice/)) {
-        cal += 120; prot += 2; carb += 28; fib += 2; sug += 22; isHydration = true; volumeMl += 250;
-      } else if (item.match(/susu|milk/)) {
-        cal += 150; prot += 8; carb += 12; fat += 8; sug += 11; isHydration = true; volumeMl += 250;
-      }
-      // Carbs & Grains
-      else if (item.match(/nasi\s*padang/)) {
-        cal += 750; prot += 38; carb += 70; fat += 34; fib += 4; sug += 3;
-      } else if (item.match(/nasi\s*goreng/)) {
-        cal += 550; prot += 18; carb += 65; fat += 22; fib += 2; sug += 3;
-      } else if (item.match(/nasi\s*putih|nasi\s*uduk|nasi\s*kuning|nasi\s*liwet|nasi/)) {
-        cal += 200; prot += 4; carb += 45; fat += 1; fib += 1; sug += 0;
-      } else if (item.match(/mie\s*goreng|indomie\s*goreng/)) {
-        cal += 390; prot += 9; carb += 55; fat += 14; fib += 2; sug += 4;
-      } else if (item.match(/mie\s*rebus|indomie\s*rebus|mie|ramen/)) {
-        cal += 340; prot += 8; carb += 50; fat += 11; fib += 1; sug += 2;
-      } else if (item.match(/roti|bread|sandwich|toast/)) {
-        cal += 240; prot += 8; carb += 42; fat += 4; fib += 2; sug += 5;
-      }
-
-      // Proteins & Meats
-      if (item.match(/ayam\s*geprek/)) {
-        cal += 380; prot += 28; carb += 16; fat += 22; fib += 1;
-      } else if (item.match(/ayam\s*goreng|fried\s*chicken/)) {
-        cal += 280; prot += 26; carb += 6; fat += 16;
-      } else if (item.match(/ayam|chicken/)) {
-        cal += 200; prot += 28; carb += 0; fat += 8;
-      }
-      if (item.match(/kulit\s*ayam|kulit/)) {
-        cal += 160; prot += 6; carb += 2; fat += 15;
-      }
-      if (item.match(/usus|ati\s*ampela|jeroan/)) {
-        cal += 130; prot += 10; carb += 1; fat += 9;
-      }
-      if (item.match(/udang|shrimp|prawn/)) {
-        cal += 110; prot += 22; carb += 1; fat += 2;
-      }
-      if (item.match(/cumi|squid|seafood/)) {
-        cal += 120; prot += 20; carb += 2; fat += 3;
-      }
-      if (item.match(/sapi|daging|rendang|beef|steak/)) {
-        cal += 260; prot += 26; carb += 4; fat += 16;
-      }
-      if (item.match(/ikan|fish|lele|gurame|salmon|tuna/)) {
-        cal += 210; prot += 24; carb += 2; fat += 11;
-      }
-      if (item.match(/telur\s*rebus/)) {
-        cal += 78; prot += 6; carb += 1; fat += 5;
-      } else if (item.match(/telur|telor|ceplok|dadar|egg/)) {
-        cal += 110; prot += 7; carb += 1; fat += 8;
-      }
-      if (item.match(/tempe/)) {
-        cal += 120; prot += 9; carb += 8; fat += 6; fib += 2;
-      }
-      if (item.match(/tahu/)) {
-        cal += 80; prot += 8; carb += 3; fat += 4; fib += 1;
-      }
-
-      // Vegetables & Extras
-      if (item.match(/sayur\s*asem/)) {
-        cal += 65; prot += 2; carb += 12; fat += 1; fib += 3; sug += 4;
-      } else if (item.match(/sayur|sop|kangkung|bayam|tumis/)) {
-        cal += 60; prot += 2; carb += 8; fat += 2; fib += 3; sug += 2;
-      }
-      if (item.match(/jengkol|petai|pete/)) {
-        cal += 120; prot += 4; carb += 22; fat += 2; fib += 4; sug += 2;
-      }
-      if (item.match(/sambal|sambel/)) {
-        cal += 45; prot += 1; carb += 4; fat += 3; fib += 1; sug += 2;
-      }
-      if (item.match(/kerupuk|krupuk/)) {
-        cal += 80; prot += 1; carb += 12; fat += 3;
-      }
-
-      totalCal += cal;
-      totalProt += prot;
-      totalCarb += carb;
-      totalFat += fat;
-      totalFiber += fib;
-      totalSugar += sug;
-    }
-
-    if (totalCal === 0 && totalProt === 0 && totalCarb === 0 && totalFat === 0) {
-      totalCal = 450; totalProt = 20; totalCarb = 50; totalFat = 16; totalFiber = 3; totalSugar = 4;
-    }
-
-    const macroCal = (totalProt * 4) + (totalCarb * 4) + (totalFat * 9);
-    const finalCal = macroCal > 0 ? macroCal : totalCal;
-
-    return {
-      foodName: cleanText.charAt(0).toUpperCase() + cleanText.slice(1),
-      calories: finalCal,
-      protein: totalProt,
-      carbs: totalCarb,
-      fat: totalFat,
-      fiber: totalFiber,
-      sugar: totalSugar,
-      isHydration,
-      volumeMl
-    };
+    return estimateMealNutritionDeterministic(cleanText);
   };
 
   // AI Food Text Analysis Helper
@@ -1866,7 +1748,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const queryText = cleanIndonesianFoodSentence(rawQuery);
     setIsAnalyzingAi(true);
 
-    const baseEstimation = estimateIndonesianNutritionClient(queryText);
+    const baseEstimation = estimateMealNutritionDeterministic(queryText);
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
     // 1. Call Backend AI /api/ai/analyze-food
@@ -1888,13 +1770,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       if (bRes && bRes.ok) {
         const bData = await bRes.json();
         if (bData.success) {
-          const protein = Math.max(0, Math.round(Number(bData.protein) || 0));
-          const carbs = Math.max(0, Math.round(Number(bData.carbs) || 0));
-          const fat = Math.max(0, Math.round(Number(bData.fat) || 0));
-          const fiber = Math.max(0, Math.round(Number(bData.fiber) || 0));
-          const sugar = Math.max(0, Math.round(Number(bData.sugar) || 0));
+          const protein = Math.max(0, Math.round(Number(bData.protein) || baseEstimation.protein));
+          const carbs = Math.max(0, Math.round(Number(bData.carbs) || baseEstimation.carbs));
+          const fat = Math.max(0, Math.round(Number(bData.fat) || baseEstimation.fat));
+          const fiber = Math.max(0, Math.round(Number(bData.fiber) || baseEstimation.fiber));
+          const sugar = Math.max(0, Math.round(Number(bData.sugar) || baseEstimation.sugar));
           const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
-          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(bData.calories) || 0));
+          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(bData.calories) || baseEstimation.calories));
           const cleanName = bData.foodName || baseEstimation.foodName;
 
           setItemNameInput(cleanName);
@@ -1913,18 +1795,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             fat,
             fiber,
             sugar,
-            isHydration: Boolean(bData.isHydration),
-            volumeMl: Number(bData.volumeMl) || 0
+            items: bData.items || baseEstimation.items,
+            portionNote: bData.portionNote || baseEstimation.portionNote,
+            isHydration: Boolean(bData.isHydration || baseEstimation.isHydration),
+            volumeMl: Number(bData.volumeMl) || baseEstimation.volumeMl || 0
           });
           setIsAnalyzingAi(false);
-          return { ...bData, foodName: cleanName, calories, protein, carbs, fat, fiber, sugar };
+          return { ...bData, foodName: cleanName, calories, protein, carbs, fat, fiber, sugar, items: bData.items || baseEstimation.items };
         }
       }
     } catch (bErr) {
       console.warn("Backend AI Food analysis error:", bErr);
     }
 
-    // 2. Fallback to multi-item client-side estimation
+    // 2. Verified Deterministic fallback (USDA & TKPI)
     setItemNameInput(baseEstimation.foodName);
     setItemCalInput(String(baseEstimation.calories));
     setItemProteinInput(String(baseEstimation.protein));
@@ -5270,13 +5154,39 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 {aiPreview && !isAnalyzingAi && (
                   <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-white flex items-center gap-1">
-                        <Sparkles size={12} className="text-[#D4FF00]" /> Output Nutrisi AI:
+                      <span className="text-xs font-black text-white flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
                       </span>
                       <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
-                        {itemCalInput} kcal
+                        ~{itemCalInput} kcal
                       </span>
                     </div>
+
+                    {/* Per-item breakdown pill list */}
+                    {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
+                      <div className="p-2 bg-[#111620]/80 rounded-xl border border-white/5 space-y-1.5">
+                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-wider flex items-center justify-between">
+                          <span>Daftar Komponen ({aiPreview.items.length} Item)</span>
+                          <span className="text-neutral-500 font-normal">USDA / TKPI</span>
+                        </div>
+                        <div className="space-y-1 max-h-32 overflow-y-auto no-scrollbar">
+                          {aiPreview.items.map((it: FoodItemNutrition, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0">
+                              <span className="text-neutral-200 font-bold truncate max-w-[55%]">
+                                • {it.normalized_food_name || it.food_name} <span className="text-[10px] text-neutral-400 font-normal">({it.estimated_weight_grams}g)</span>
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] text-neutral-300 font-medium">
+                                <span className="text-white font-bold">{it.calories} kcal</span>
+                                <span className="text-indigo-400">P:{it.protein}g</span>
+                                <span className="text-emerald-400">C:{it.carbs}g</span>
+                                <span className="text-rose-400">F:{it.fat}g</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
                       <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
                         <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
@@ -5391,10 +5301,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black text-[#D4FF00] flex items-center gap-1.5">
-                        <Sparkles size={12} /> Hasil Deteksi AI — Konfirmasi?
+                        <Sparkles size={13} /> Estimated Nutrition AI
                       </span>
                       <span className="text-[11px] font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-sm">
-                        {itemCalInput || "480"} kcal
+                        ~{itemCalInput || "480"} kcal
                       </span>
                     </div>
 
@@ -5423,7 +5333,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     </div>
 
                     <p className="text-[11px] text-neutral-400 text-center">
-                      Nutrisi salah? Gunakan <em>"Edit Nutrisi Manual"</em> di atas lalu simpan.
+                      Hasil adalah estimasi porsi standar. Gunakan <em>"Edit Nutrisi Manual"</em> jika ingin menyesuaikan.
                     </p>
 
                     {/* Action buttons */}
