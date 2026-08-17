@@ -257,13 +257,19 @@ const splitAndCategorizeComboText = (
   return { foods, drinks };
 };
 
-// Automatic Sanitizer to split any stored combo logs
+// Automatic Sanitizer to split any stored combo logs & purge any mock seed data
+const isLegacyMockMeal = (item: MealItem): boolean => {
+  if (item.id === "m-1" || item.id === "m-2" || item.id === "m-3" || item.id?.startsWith("m-y") || item.id?.startsWith("m-2d")) return true;
+  if (item.foodName?.includes("Nasi Merah 150g & Dada Ayam") || item.foodName?.includes("Tumis Sapi Lada Hitam") || item.foodName?.includes("Whey Protein Shake & Pisang")) return true;
+  return false;
+};
+
 const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   if (!Array.isArray(rawLogs)) return [];
   const result: MealItem[] = [];
 
   for (const item of rawLogs) {
-    if (!item.foodName) continue;
+    if (!item.foodName || isLegacyMockMeal(item)) continue;
     const { foods, drinks } = splitAndCategorizeComboText(
       item.foodName,
       item.calories,

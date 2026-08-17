@@ -42931,28 +42931,6 @@ function seedTestUserData(phone) {
     persona: "max",
     activityLevel: "active"
   });
-  const dToday = /* @__PURE__ */ new Date();
-  const dYesterday = new Date(Date.now() - 864e5);
-  const d2DaysAgo = new Date(Date.now() - 864e5 * 2);
-  const formatD = (d) => getLocalDateStr(d);
-  const todayKey = `${norm}_${formatD(dToday)}`;
-  const yesterdayKey = `${norm}_${formatD(dYesterday)}`;
-  const twoDaysKey = `${norm}_${formatD(d2DaysAgo)}`;
-  dbData.dailyLogs[todayKey] = [
-    { id: "m-1", foodName: "Nasi Merah 150g & Dada Ayam Panggang", calories: 420, protein: 42, carbs: 40, fat: 8, timestamp: `${formatD(dToday)}T07:30:00.000Z`, mealType: "breakfast" },
-    { id: "m-2", foodName: "Whey Protein Shake & Pisang", calories: 260, protein: 30, carbs: 28, fat: 3, timestamp: `${formatD(dToday)}T10:15:00.000Z`, mealType: "snack" },
-    { id: "m-3", foodName: "Tumis Sapi Lada Hitam & Broccoli", calories: 510, protein: 38, carbs: 35, fat: 18, timestamp: `${formatD(dToday)}T13:00:00.000Z`, mealType: "lunch" }
-  ];
-  dbData.dailyLogs[yesterdayKey] = [
-    { id: "m-y1", foodName: "Oatmeal Proteina & Buah Beri", calories: 350, protein: 22, carbs: 48, fat: 7, timestamp: `${formatD(dYesterday)}T08:00:00.000Z`, mealType: "breakfast" },
-    { id: "m-y2", foodName: "Ikan Salmon Panggang & Kentang Rebus", calories: 580, protein: 45, carbs: 42, fat: 22, timestamp: `${formatD(dYesterday)}T12:30:00.000Z`, mealType: "lunch" },
-    { id: "m-y3", foodName: "Salad Ayam Caesar (Low Fat)", calories: 390, protein: 36, carbs: 15, fat: 16, timestamp: `${formatD(dYesterday)}T19:00:00.000Z`, mealType: "dinner" }
-  ];
-  dbData.dailyLogs[twoDaysKey] = [
-    { id: "m-2d1", foodName: "Telur Rebus 3 Butir & Roti Gandum", calories: 340, protein: 26, carbs: 24, fat: 14, timestamp: `${formatD(d2DaysAgo)}T07:45:00.000Z`, mealType: "breakfast" },
-    { id: "m-2d2", foodName: "Nasi Uduk & Ayam Goreng (Refeed)", calories: 720, protein: 35, carbs: 75, fat: 28, timestamp: `${formatD(d2DaysAgo)}T13:00:00.000Z`, mealType: "lunch" },
-    { id: "m-2d3", foodName: "Greek Yogurt & Madu", calories: 180, protein: 18, carbs: 20, fat: 2, timestamp: `${formatD(d2DaysAgo)}T20:30:00.000Z`, mealType: "snack" }
-  ];
 }
 var MONGODB_URI = process.env.MONGODB_URI || "";
 var mongoClient = null;
