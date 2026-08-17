@@ -168,7 +168,11 @@ export default function App() {
     setViewMode("landing");
     try {
       localStorage.removeItem("gymbuddy_active_session");
+      localStorage.removeItem("gymbuddy_last_user");
     } catch (e) {}
+    if (typeof window !== "undefined" && window.location.pathname.toLowerCase() === "/dashboard") {
+      window.history.replaceState({}, "", "/");
+    }
   };
 
   const handleResetAllData = async () => {

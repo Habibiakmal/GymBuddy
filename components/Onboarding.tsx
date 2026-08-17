@@ -2324,6 +2324,21 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
                         } catch (e) {}
 
+                        // Sync to backend database immediately
+                        const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+                        try {
+                          fetch("/api/onboarding", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ phone: norm, profile: finalUserObj })
+                          }).catch(() => {});
+                          fetch(`${API_BASE_URL}/api/onboarding`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ phone: norm, profile: finalUserObj })
+                          }).catch(() => {});
+                        } catch (e) {}
+
                         try {
                           // Launch WhatsApp to Twilio Sandbox (+14155238886) with initial greeting
                           const welcomeMsg = `Halo GymBuddy AI! Nama saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya! 🎯`;
