@@ -490,9 +490,9 @@ const translations = {
 };
 
 // 7-Day Weekly Workout Schedule Personalizer (Single Shared Source of Truth)
-function getPersonalizedWeeklySchedule(user: UserProfileData): DaySchedule[] {
+function getPersonalizedWeeklySchedule(user: UserProfileData, lang: "ID" | "EN" = "ID"): DaySchedule[] {
   const goal = user?.goal || "healthy";
-  return getDefaultWeeklySchedule(goal) as DaySchedule[];
+  return getDefaultWeeklySchedule(goal, lang) as DaySchedule[];
 }
 
 // Interactive Animated Movement Player Component (Auto-looping movement keyframes)
@@ -1160,19 +1160,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setScanResult(null);
   };
 
-  // Weekly Schedule
-  const weeklySchedule = getPersonalizedWeeklySchedule(safeUser);
+  // Weekly Schedule (Multilingual by active user language)
+  const weeklySchedule = getPersonalizedWeeklySchedule(safeUser, lang);
 
-  const getDayNameFromDateStr = (dateStr: string) => {
+  const getDayIndexFromDateStr = (dateStr: string) => {
     const parts = dateStr.split("-");
     const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    const dayIdx = d.getDay();
-    const idDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    return idDays[dayIdx];
+    return isNaN(d.getDay()) ? 1 : d.getDay(); // 0 is Sunday, 1 is Monday...
   };
 
-  const selectedDayName = getDayNameFromDateStr(selectedDate);
-  const todayScheduleObj = weeklySchedule.find((s) => s.day === selectedDayName) || weeklySchedule[0];
+  const dayIndex = getDayIndexFromDateStr(selectedDate);
+  // In weeklySchedule: index 0 is Monday, 1 is Tuesday, 2 is Wednesday, 3 is Thursday, 4 is Friday, 5 is Saturday, 6 is Sunday
+  const scheduleIndex = (dayIndex + 6) % 7;
+  const todayScheduleObj = weeklySchedule[scheduleIndex] || weeklySchedule[0];
+  const selectedDayName = todayScheduleObj.day;
 
   // Exercises State per date
   const [exercises, setExercises] = useState<WorkoutExercise[]>(() => {
@@ -3301,10 +3302,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
                   <Dumbbell size={22} className="text-[#D4FF00]" />
-                  <span>Jadwal & Latihan Gym</span>
+                  <span>{isEN ? "Gym Schedule & Workouts" : "Jadwal & Latihan Gym"}</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% Selesai)
+                  {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% {isEN ? "Completed" : "Selesai"})
                 </p>
               </div>
 
@@ -3312,7 +3313,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <button
                   onClick={() => setShowWatchConnectModal(true)}
                   className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/10 text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="Hubungkan ke Apple Watch (Magic Link)"
+                  title={isEN ? "Connect Apple Watch (Magic Link)" : "Hubungkan ke Apple Watch (Magic Link)"}
                 >
                   <Watch size={14} className="text-[#D4FF00]" />
                   <span className="hidden sm:inline">Apple Watch</span>
@@ -3323,7 +3324,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="px-3 py-1.5 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/40 text-[#D4FF00] font-bold text-xs hover:bg-[#D4FF00]/25 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <BookOpen size={14} />
-                  <span>Kamus Alat (GIF Guide)</span>
+                  <span>{isEN ? "Exercise Library (GIFs)" : "Kamus Alat (GIF Guide)"}</span>
                 </button>
 
                 <button
@@ -3331,7 +3332,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="px-3 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Layers size={14} />
-                  <span>{showFullWeeklyOverview ? "Lihat Hari Ini" : "Jadwal 7 Hari"}</span>
+                  <span>{showFullWeeklyOverview ? (isEN ? "View Today" : "Lihat Hari Ini") : (isEN ? "7-Day Schedule" : "Jadwal 7 Hari")}</span>
                 </button>
               </div>
             </div>
@@ -3423,7 +3424,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </span>
                           <h4 className="font-extrabold text-base text-white">{daySch.focus}</h4>
                         </div>
-                        <span className="text-xs font-semibold text-neutral-400">{daySch.exercises.length} Menu Gerakan</span>
+                        <span className="text-xs font-semibold text-neutral-400">
+                          {daySch.exercises.length} {isEN ? "Exercises" : "Menu Gerakan"}
+                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">

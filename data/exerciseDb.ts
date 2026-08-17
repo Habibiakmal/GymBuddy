@@ -954,97 +954,99 @@ export interface DailyWorkoutRoutine {
   }[];
 }
 
-export function getDefaultWeeklySchedule(goal: string = "healthy"): DailyWorkoutRoutine[] {
+export function getDefaultWeeklySchedule(goal: string = "healthy", lang: "ID" | "EN" = "ID"): DailyWorkoutRoutine[] {
+  const isEN = lang === "EN";
+
   if (goal === "gain") {
     return [
-      { day: "Senin", focus: "Dada & Tricep (Push Day)", exercises: [
-        { id: "w-mon-1", name: "Barbell Bench Press - Medium Grip", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8-10 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Incline Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-mon-3", name: "Triceps Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      { day: isEN ? "Monday" : "Senin", focus: isEN ? "Chest & Triceps (Push Day)" : "Dada & Tricep (Push Day)", exercises: [
+        { id: "w-mon-1", name: "Barbell Bench Press - Medium Grip", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 8-10 Reps" : "4 Set x 8-10 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Incline Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10-12 Reps" : "4 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Triceps Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
       ]},
-      { day: "Selasa", focus: "Punggung & Bicep (Pull Day)", exercises: [
-        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Seated Cable Rows", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-tue-3", name: "Dumbbell Bicep Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Back & Biceps (Pull Day)" : "Punggung & Bicep (Pull Day)", exercises: [
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10-12 Reps" : "4 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Seated Cable Rows", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-tue-3", name: "Dumbbell Bicep Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
       ]},
-      { day: "Rabu", focus: "Leg Mass & Core (Leg Day)", exercises: [
-        { id: "w-wed-1", name: "Barbell Full Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 8 Reps", status: "not_started" },
-        { id: "w-wed-2", name: "Leg Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 15 Reps", status: "not_started" }
+      { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Leg Mass & Core (Leg Day)" : "Leg Mass & Core (Leg Day)", exercises: [
+        { id: "w-wed-1", name: "Barbell Full Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 8 Reps" : "4 Set x 8 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Leg Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 15 Reps" : "3 Set x 15 Reps", status: "not_started" }
       ]},
-      { day: "Kamis", focus: "Active Recovery & Mobility", exercises: [
-        { id: "w-thu-1", name: "Dynamic Back Stretch", targetSets: 2, completedSets: 0, setsState: [false, false], targetReps: "15 Menit Mobilitas", status: "not_started" },
-        { id: "w-thu-2", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "20 Menit Jalan Santai", status: "not_started" }
+      { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Active Recovery & Mobility" : "Pemulihan Aktif & Mobilitas", exercises: [
+        { id: "w-thu-1", name: "Dynamic Back Stretch", targetSets: 2, completedSets: 0, setsState: [false, false], targetReps: isEN ? "15 Mins Mobility" : "15 Menit Mobilitas", status: "not_started" },
+        { id: "w-thu-2", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "20 Mins Light Walk" : "20 Menit Jalan Santai", status: "not_started" }
       ]},
-      { day: "Jumat", focus: "Chest & Arms Hypertrophy", exercises: [
-        { id: "w-fri-1", name: "Dumbbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-fri-3", name: "Preacher Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Chest & Arms Hypertrophy" : "Chest & Arms Hypertrophy", exercises: [
+        { id: "w-fri-1", name: "Dumbbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Preacher Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
       ]},
-      { day: "Sabtu", focus: "Delts 3D & Core Focus", exercises: [
-        { id: "w-sat-1", name: "Side Lateral Raise", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
-        { id: "w-sat-2", name: "Ab Roller", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Delts 3D & Core Focus" : "Delts 3D & Core Focus", exercises: [
+        { id: "w-sat-1", name: "Side Lateral Raise", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 15 Reps" : "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Ab Roller", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
       ]},
-      { day: "Minggu", focus: "Rest & Recovery", exercises: [
-        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery 8 Jam Tidur", status: "not_started" }
+      { day: isEN ? "Sunday" : "Minggu", focus: isEN ? "Rest & Recovery" : "Istirahat & Pemulihan", exercises: [
+        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "8 Hours Sleep Recovery" : "Recovery 8 Jam Tidur", status: "not_started" }
       ]}
     ];
   } else if (goal === "lose") {
     return [
-      { day: "Senin", focus: "Fat Loss HIIT & Push Day", exercises: [
-        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12-15 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-mon-3", name: "Jumping Rope", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 1 Menit", status: "not_started" }
+      { day: isEN ? "Monday" : "Senin", focus: isEN ? "Fat Loss HIIT & Push Day" : "Fat Loss HIIT & Push Day", exercises: [
+        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12-15 Reps" : "3 Set x 12-15 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Jumping Rope", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 1 Min" : "3 Set x 1 Menit", status: "not_started" }
       ]},
-      { day: "Selasa", focus: "Upper Body & Core Deficit", exercises: [
-        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Upper Body & Core Deficit" : "Upper Body & Core Deficit", exercises: [
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
       ]},
-      { day: "Rabu", focus: "Lower Body Fat Crusher", exercises: [
-        { id: "w-wed-1", name: "Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: "4 Set x 15 Reps", status: "not_started" },
-        { id: "w-wed-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" }
+      { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Lower Body Fat Crusher" : "Lower Body Fat Crusher", exercises: [
+        { id: "w-wed-1", name: "Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 15 Reps" : "4 Set x 15 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
       ]},
-      { day: "Kamis", focus: "Zone 2 Cardio Fat Burn", exercises: [
-        { id: "w-thu-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit Zona 2", status: "not_started" }
+      { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Zone 2 Cardio Fat Burn" : "Kardio Zona 2 Pembakar Lemak", exercises: [
+        { id: "w-thu-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins Zone 2" : "30 Menit Zona 2", status: "not_started" }
       ]},
-      { day: "Jumat", focus: "Full Body Calorie Burner", exercises: [
-        { id: "w-fri-1", name: "Burpee", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" }
+      { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Full Body Calorie Burner" : "Full Body Calorie Burner", exercises: [
+        { id: "w-fri-1", name: "Burpee", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10-12 Reps" : "3 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 20 Reps" : "3 Set x 20 Reps", status: "not_started" }
       ]},
-      { day: "Sabtu", focus: "Core & Incline Walking", exercises: [
-        { id: "w-sat-1", name: "Russian Twist", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 20 Reps", status: "not_started" },
-        { id: "w-sat-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Core & Incline Walking" : "Core & Incline Walking", exercises: [
+        { id: "w-sat-1", name: "Russian Twist", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 20 Reps" : "3 Set x 20 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
       ]},
-      { day: "Minggu", focus: "Rest & Active Recovery", exercises: [
-        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery & Hidrasi", status: "not_started" }
+      { day: isEN ? "Sunday" : "Minggu", focus: isEN ? "Rest & Active Recovery" : "Pemulihan Aktif & Hidrasi", exercises: [
+        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "Active Recovery & Hydration" : "Recovery & Hidrasi", status: "not_started" }
       ]}
     ];
   } else {
     return [
-      { day: "Senin", focus: "Push & Core (Stamina & Mobilitas)", exercises: [
-        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 45 Detik", status: "not_started" }
+      { day: isEN ? "Monday" : "Senin", focus: isEN ? "Push & Core (Stamina & Mobility)" : "Push & Core (Stamina & Mobilitas)", exercises: [
+        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10-12 Reps" : "3 Set x 10-12 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
       ]},
-      { day: "Selasa", focus: "Lower Body (Kaki & Kebugaran)", exercises: [
-        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12-15 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10 Reps/kaki", status: "not_started" }
+      { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Lower Body (Legs & Fitness)" : "Lower Body (Kaki & Kebugaran)", exercises: [
+        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12-15 Reps" : "3 Set x 12-15 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10 Reps/leg" : "3 Set x 10 Reps/kaki", status: "not_started" }
       ]},
-      { day: "Rabu", focus: "Pemulihan Aktif & Kardio", exercises: [
-        { id: "w-wed-1", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit Jalan Santai", status: "not_started" }
+      { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Active Recovery & Cardio" : "Pemulihan Aktif & Kardio", exercises: [
+        { id: "w-wed-1", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins Light Walk" : "30 Menit Jalan Santai", status: "not_started" }
       ]},
-      { day: "Kamis", focus: "Upper Body & Postur", exercises: [
-        { id: "w-thu-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-thu-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 10 Reps", status: "not_started" }
+      { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Upper Body & Posture" : "Upper Body & Postur", exercises: [
+        { id: "w-thu-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
+        { id: "w-thu-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10 Reps" : "3 Set x 10 Reps", status: "not_started" }
       ]},
-      { day: "Jumat", focus: "Full Body Conditioning", exercises: [
-        { id: "w-fri-1", name: "Jumping Jacks", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 1 Menit", status: "not_started" },
-        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: "3 Set x 15 Reps", status: "not_started" }
+      { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Full Body Conditioning" : "Full Body Conditioning", exercises: [
+        { id: "w-fri-1", name: "Jumping Jacks", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 1 Min" : "3 Set x 1 Menit", status: "not_started" },
+        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 15 Reps" : "3 Set x 15 Reps", status: "not_started" }
       ]},
-      { day: "Sabtu", focus: "Kardio & Stamina", exercises: [
-        { id: "w-sat-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "30 Menit", status: "not_started" }
+      { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Cardio & Stamina" : "Kardio & Stamina", exercises: [
+        { id: "w-sat-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins" : "30 Menit", status: "not_started" }
       ]},
-      { day: "Minggu", focus: "Istirahat Total", exercises: [
-        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: "Recovery", status: "not_started" }
+      { day: isEN ? "Sunday" : "Minggu", focus: isEN ? "Full Rest & Recovery" : "Istirahat Total", exercises: [
+        { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "Recovery" : "Recovery", status: "not_started" }
       ]}
     ];
   }
