@@ -2274,7 +2274,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             >
               <div className="flex items-center gap-3">
                 <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
-                <span>Hubungkan Apple Watch</span>
+                <span>{isEN ? "Connect Apple Watch" : "Hubungkan Apple Watch"}</span>
               </div>
               <ChevronRight size={16} />
             </button>
@@ -2285,14 +2285,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             >
               <div className="flex items-center gap-3">
                 <Bell size={16} className="text-[#D4FF00]" />
-                <span>Notifikasi & Scheduler</span>
+                <span>{isEN ? "Notifications & Scheduler" : "Notifikasi & Scheduler"}</span>
               </div>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                 notifSettings.permissionGranted
                   ? "bg-[#D4FF00]/20 text-[#D4FF00]"
                   : "bg-neutral-800 text-neutral-500"
               }`}>
-                {notifSettings.permissionGranted ? "AKTIF" : "OFF"}
+                {notifSettings.permissionGranted ? (isEN ? "ACTIVE" : "AKTIF") : "OFF"}
               </span>
             </button>
 
@@ -3468,7 +3468,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       : "text-neutral-400 hover:text-white"
                   }`}
                 >
-                  7 Hari
+                  {isEN ? "7 Days" : "7 Hari"}
                 </button>
                 <button
                   type="button"
@@ -3479,7 +3479,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       : "text-neutral-400 hover:text-white"
                   }`}
                 >
-                  30 Hari
+                  {isEN ? "30 Days" : "30 Hari"}
                 </button>
               </div>
             </div>
@@ -3523,8 +3523,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between text-xs text-neutral-400 font-bold border-b border-white/[0.06] pb-2">
-                  <span>Awal: {startWeight || weight} kg</span>
-                  <span className="text-neutral-300">Estimasi: ~{chartTimeframe === "30d" ? "4-8" : "8-12"} Minggu</span>
+                  <span>{isEN ? "Start" : "Awal"}: {startWeight || weight} kg</span>
+                  <span className="text-neutral-300">
+                    {isEN ? `Est: ~${chartTimeframe === "30d" ? "4-8" : "8-12"} Weeks` : `Estimasi: ~${chartTimeframe === "30d" ? "4-8" : "8-12"} Minggu`}
+                  </span>
                   <span className="text-[#D4FF00]">Target: {targetWeight} kg</span>
                 </div>
 
@@ -3621,11 +3623,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                    <span className="text-neutral-400">Karbo</span>
+                    <span className="text-neutral-400">{isEN ? "Carbs" : "Karbo"}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-                    <span className="text-neutral-400">Lemak</span>
+                    <span className="text-neutral-400">{isEN ? "Fat" : "Lemak"}</span>
                   </div>
                 </div>
               </div>
@@ -3633,13 +3635,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               {/* Bar Chart Container */}
               <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between text-xs text-neutral-400 font-bold">
-                  <span>Target: {targetCalories} kcal / hari</span>
+                  <span>{isEN ? `Target: ${targetCalories} kcal / day` : `Target: ${targetCalories} kcal / hari`}</span>
                   <button 
                     onClick={() => setShowCustomTargetsModal(true)}
                     className="text-[#D4FF00] hover:underline cursor-pointer flex items-center gap-1"
                   >
                     <Sliders size={12} />
-                    <span>Ubah Target</span>
+                    <span>{isEN ? "Change Target" : "Ubah Target"}</span>
                   </button>
                 </div>
 
@@ -3712,7 +3714,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Droplets size={18} className="text-blue-400" />
-                    <h3 className="font-extrabold text-sm text-white">Konsistensi Hidrasi (7 Hari)</h3>
+                    <h3 className="font-extrabold text-sm text-white">
+                      {isEN ? "Hydration Consistency (7 Days)" : "Konsistensi Hidrasi (7 Hari)"}
+                    </h3>
                   </div>
                   <span className="text-xs font-bold text-blue-300">Goal: {targetHydrationGoal} ml</span>
                 </div>
@@ -3752,24 +3756,32 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Dumbbell size={18} className="text-[#D4FF00]" />
-                    <h3 className="font-extrabold text-sm text-white">Volume Latihan Mingguan</h3>
+                    <h3 className="font-extrabold text-sm text-white">
+                      {isEN ? "Weekly Workout Volume" : "Volume Latihan Mingguan"}
+                    </h3>
                   </div>
-                  <span className="text-xs font-bold text-[#D4FF00]">🔥 {currentStreak} Hari Beruntun</span>
+                  <span className="text-xs font-bold text-[#D4FF00]">
+                    🔥 {currentStreak} {isEN ? "Consecutive Days" : "Hari Beruntun"}
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-1">
-                    <span className="text-[10px] text-neutral-400 font-bold uppercase">Total Set Hari Ini</span>
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase">
+                      {isEN ? "Today's Total Sets" : "Total Set Hari Ini"}
+                    </span>
                     <p className="text-xl font-black text-white">{totalCompletedSetsOverall} <span className="text-xs text-neutral-400 font-medium">/ {totalTargetSetsOverall} Sets</span></p>
                   </div>
                   <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-1">
-                    <span className="text-[10px] text-neutral-400 font-bold uppercase">Skor Konsistensi</span>
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase">
+                      {isEN ? "Consistency Score" : "Skor Konsistensi"}
+                    </span>
                     <p className="text-xl font-black text-emerald-400">{Math.min(100, Math.round((currentStreak / 7) * 100))}%</p>
                   </div>
                 </div>
 
                 <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 flex items-center justify-between text-xs text-neutral-300">
-                  <span className="font-semibold">Fokus Menu Hari Ini:</span>
+                  <span className="font-semibold">{isEN ? "Today's Focus:" : "Fokus Menu Hari Ini:"}</span>
                   <span className="font-black text-[#D4FF00]">{todayScheduleObj.focus}</span>
                 </div>
               </div>
@@ -4192,33 +4204,38 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <span className="text-indigo-400 font-black">{scanResult.protein}g</span>
                         </div>
                         <div className="bg-white/5 rounded-xl p-2">
-                          <span className="block text-[10px] text-neutral-400 font-semibold">Karbo</span>
+                          <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Carbs" : "Karbo"}</span>
                           <span className="text-emerald-400 font-black">{scanResult.carbs}g</span>
                         </div>
                         <div className="bg-white/5 rounded-xl p-2">
-                          <span className="block text-[10px] text-neutral-400 font-semibold">Lemak</span>
+                          <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Fat" : "Lemak"}</span>
                           <span className="text-rose-400 font-black">{scanResult.fat}g</span>
                         </div>
                       </div>
 
                       {/* Meal Type Selection */}
                       <div className="pt-2">
-                        <label className="text-[11px] font-bold text-neutral-400 block mb-1.5">Waktu Makan:</label>
+                        <label className="text-[11px] font-bold text-neutral-400 block mb-1.5">{isEN ? "Meal Type:" : "Waktu Makan:"}</label>
                         <div className="grid grid-cols-4 gap-1.5">
-                          {(["breakfast", "lunch", "dinner", "snack"] as const).map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => setScanMealType(m)}
-                              className={`py-1.5 rounded-xl text-[11px] font-bold capitalize transition-all cursor-pointer border ${
-                                scanMealType === m
-                                  ? "bg-[#D4FF00] text-black border-[#D4FF00]"
-                                  : "bg-[#10141D] text-neutral-400 border-neutral-800 hover:text-white"
-                              }`}
-                            >
-                              {m}
-                            </button>
-                          ))}
+                          {(["breakfast", "lunch", "dinner", "snack"] as const).map((m) => {
+                            const mLabel = isEN
+                              ? (m === "breakfast" ? "Breakfast" : m === "lunch" ? "Lunch" : m === "dinner" ? "Dinner" : "Snack")
+                              : (m === "breakfast" ? "Sarapan" : m === "lunch" ? "Siang" : m === "dinner" ? "Malam" : "Camilan");
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setScanMealType(m)}
+                                className={`py-1.5 rounded-xl text-[11px] font-bold capitalize transition-all cursor-pointer border ${
+                                  scanMealType === m
+                                    ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                                    : "bg-[#10141D] text-neutral-400 border-neutral-800 hover:text-white"
+                                }`}
+                              >
+                                {mLabel}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -4227,7 +4244,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
                       >
                         <Check size={16} strokeWidth={3} />
-                        <span>Simpan ke Jurnal Makan Hari Ini</span>
+                        <span>{isEN ? "Save to Today's Food Journal" : "Simpan ke Jurnal Makan Hari Ini"}</span>
                       </button>
                     </motion.div>
                   )}
@@ -4272,13 +4289,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               {/* Quick Select Preset Buttons */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Pilihan Cepat:</label>
+                <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                  {isEN ? "Quick Presets:" : "Pilihan Cepat:"}
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { name: "Air Putih", ml: "250", desc: "0 kcal • 250ml" },
-                    { name: "Iced Americano", ml: "300", desc: "5 kcal • 300ml" },
-                    { name: "Teh Hijau / Tawar", ml: "250", desc: "2 kcal • 250ml" },
-                    { name: "Susu Whey Protein", ml: "350", desc: "140 kcal • 25g Prot" }
+                    { name: isEN ? "Mineral Water" : "Air Putih", ml: "250", desc: isEN ? "1 Glass (250ml)" : "1 Gelas (250ml)" },
+                    { name: isEN ? "Large Water Bottle" : "Air Botol Sedang", ml: "600", desc: isEN ? "1 Bottle (600ml)" : "1 Botol (600ml)" },
+                    { name: "Iced Americano", ml: "350", desc: isEN ? "0 kcal (350ml)" : "0 Kalori (350ml)" },
+                    { name: isEN ? "Whey Protein Shake" : "Whey Protein Shake", ml: "350", desc: "24g Protein (350ml)" }
                   ].map((preset) => (
                     <button
                       key={preset.name}
@@ -4303,18 +4322,22 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               {/* Custom Input */}
               <div className="space-y-3 pt-1">
                 <div>
-                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">Nama Minuman:</label>
+                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">
+                    {isEN ? "Drink Name:" : "Nama Minuman:"}
+                  </label>
                   <input
                     type="text"
                     value={customDrinkName}
                     onChange={(e) => setCustomDrinkName(e.target.value)}
-                    placeholder="Contoh: Iced Americano, Air Putih, Jus..."
+                    placeholder={isEN ? "E.g. Iced Americano, Water, Juice..." : "Contoh: Iced Americano, Air Putih, Jus..."}
                     className="w-full bg-[#161C28] border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">Volume (ml):</label>
+                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">
+                    {isEN ? "Volume (ml):" : "Volume (ml):"}
+                  </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -4349,7 +4372,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
               >
                 <Check size={16} strokeWidth={3} />
-                <span>Simpan Catatan Minuman 💧</span>
+                <span>{isEN ? "Save Drink Log 💧" : "Simpan Catatan Minuman 💧"}</span>
               </button>
             </motion.div>
           </div>
@@ -4586,10 +4609,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               {/* CTA Button */}
               <button
                 onClick={() => setShowCoachMoodPopup(false)}
-                className="w-full py-3 rounded-2xl font-extrabold text-sm transition-all active:scale-95"
+                className="w-full py-3 rounded-2xl font-extrabold text-sm transition-all active:scale-95 cursor-pointer"
                 style={{ background: coachMoodData.color, color: "#0d0f14" }}
               >
-                Siap, Coach! 💪
+                {isEN ? "Got it, Coach! 💪" : "Siap, Coach! 💪"}
               </button>
             </div>
           </div>
@@ -4663,8 +4686,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           const matchedDb = findExerciseOrEquipment(activeWorkoutDetail.name);
           const percent = activeWorkoutDetail.targetSets > 0 ? Math.round((activeWorkoutDetail.completedSets / activeWorkoutDetail.targetSets) * 100) : 0;
           const coachCue = isMaxPersona
-            ? (matchedDb ? matchedDb.coachCues.max : "Fokus pada kontrol gerakan dan kontraksi otot di setiap repetisi bro! Gas bantai set ini!")
-            : (matchedDb ? matchedDb.coachCues.mia : "Lakukan gerakan perlahan dan rasakan kenyamanan di setiap tarikan napas ya ✨");
+            ? (matchedDb ? matchedDb.coachCues.max : (isEN ? "Focus on movement control and muscle contraction on every rep! Let's crush this set!" : "Fokus pada kontrol gerakan dan kontraksi otot di setiap repetisi bro! Gas bantai set ini!"))
+            : (matchedDb ? matchedDb.coachCues.mia : (isEN ? "Perform movements smoothly and connect with your breathing on every rep ✨" : "Lakukan gerakan perlahan dan rasakan kenyamanan di setiap tarikan napas ya ✨"));
 
           return (
             <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto no-scrollbar">
@@ -4679,12 +4702,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded-md bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/30 text-[10px] font-black uppercase tracking-wider">
-                        {matchedDb ? matchedDb.equipmentName : "Panduan Latihan"}
+                        {matchedDb ? matchedDb.equipmentName : (isEN ? "Exercise Guide" : "Panduan Latihan")}
                       </span>
                     </div>
                     <h3 className="font-['Archivo_Black'] text-lg sm:text-xl text-white mt-1">{activeWorkoutDetail.name}</h3>
                     {matchedDb && (
-                      <p className="text-xs text-neutral-400 font-semibold">{matchedDb.indonesianName}</p>
+                      <p className="text-xs text-neutral-400 font-semibold">{isEN ? matchedDb.equipmentName : matchedDb.indonesianName}</p>
                     )}
                   </div>
                   <button
@@ -4704,7 +4727,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 {matchedDb && (
                   <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 space-y-2 text-xs">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-neutral-400">Target Otot:</span>
+                      <span className="text-[11px] font-bold text-neutral-400">{isEN ? "Target Muscles:" : "Target Otot:"}</span>
                       {matchedDb.targetMuscles.map((m, idx) => (
                         <span key={idx} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
                           🎯 {m}
@@ -4718,7 +4741,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 {matchedDb && matchedDb.instructions.length > 0 && (
                   <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2.5">
                     <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
-                      <BookOpen size={14} /> Cara Eksekusi Step-by-Step
+                      <BookOpen size={14} /> {isEN ? "Step-by-Step Instructions" : "Cara Eksekusi Step-by-Step"}
                     </h4>
                     <ol className="space-y-1.5 text-xs text-neutral-300 font-medium list-decimal list-inside leading-relaxed">
                       {matchedDb.instructions.map((step, idx) => (
@@ -4745,10 +4768,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase text-white tracking-wider">
-                      Checklist Tiap Set ({activeWorkoutDetail.targetReps}):
+                      {isEN ? `Per-Set Checklist (${activeWorkoutDetail.targetReps}):` : `Checklist Tiap Set (${activeWorkoutDetail.targetReps}):`}
                     </span>
                     <span className="text-xs font-black text-[#D4FF00]">
-                      {activeWorkoutDetail.completedSets} / {activeWorkoutDetail.targetSets} Set ({percent}%)
+                      {activeWorkoutDetail.completedSets} / {activeWorkoutDetail.targetSets} {isEN ? "Sets" : "Set"} ({percent}%)
                     </span>
                   </div>
 
@@ -4765,7 +4788,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         }`}
                       >
                         <span className="text-xs font-black">Set {idx + 1}</span>
-                        {isDone ? <Check size={14} strokeWidth={3} /> : <span className="text-[10px] text-neutral-500 font-bold">Belum</span>}
+                        {isDone ? <Check size={14} strokeWidth={3} /> : <span className="text-[10px] text-neutral-500 font-bold">{isEN ? "Pending" : "Belum"}</span>}
                       </button>
                     ))}
                   </div>
@@ -4777,7 +4800,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     onClick={() => setActiveWorkoutDetail(null)}
                     className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black transition-all cursor-pointer shadow-md"
                   >
-                    Simpan & Tutup
+                    {isEN ? "Save & Close" : "Simpan & Tutup"}
                   </button>
                 </div>
               </motion.div>
@@ -4806,7 +4829,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       className="px-3.5 py-1.5 rounded-xl bg-[#18202E] hover:bg-[#202c3f] border border-white/10 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                     >
                       <ArrowLeft size={15} className="text-[#D4FF00]" />
-                      <span>Kembali ke Daftar Alat</span>
+                      <span>{isEN ? "Back to Equipment List" : "Kembali ke Daftar Alat"}</span>
                     </button>
                     <button
                       onClick={() => {
@@ -4826,7 +4849,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       {viewingDetailExercise.equipmentName}
                     </span>
                     <h3 className="font-['Archivo_Black'] text-xl text-white mt-1">{viewingDetailExercise.name}</h3>
-                    <p className="text-xs text-neutral-400 font-semibold">{viewingDetailExercise.indonesianName}</p>
+                    <p className="text-xs text-neutral-400 font-semibold">{isEN ? viewingDetailExercise.equipmentName : viewingDetailExercise.indonesianName}</p>
                   </div>
 
                   {/* Animated Movement Visual Player */}
@@ -4835,7 +4858,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   {/* Target Muscles */}
                   <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 space-y-2 text-xs">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-neutral-400">Target Otot:</span>
+                      <span className="text-[11px] font-bold text-neutral-400">{isEN ? "Target Muscles:" : "Target Otot:"}</span>
                       {viewingDetailExercise.targetMuscles.map((m, idx) => (
                         <span key={idx} className="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
                           🎯 {m}
@@ -4848,7 +4871,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   {viewingDetailExercise.equipmentSetup.length > 0 && (
                     <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
                       <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
-                        <Sliders size={14} /> Cara Setting Alat
+                        <Sliders size={14} /> {isEN ? "Equipment Setup Guide" : "Cara Setting Alat"}
                       </h4>
                       <ul className="space-y-1 text-xs text-neutral-300 font-medium list-disc list-inside leading-relaxed">
                         {viewingDetailExercise.equipmentSetup.map((stp, idx) => (
@@ -4862,7 +4885,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   {viewingDetailExercise.instructions.length > 0 && (
                     <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-4 space-y-2">
                       <h4 className="text-xs font-black uppercase text-[#D4FF00] tracking-wider flex items-center gap-1.5">
-                        <BookOpen size={14} /> Cara Eksekusi Step-by-Step
+                        <BookOpen size={14} /> {isEN ? "Step-by-Step Instructions" : "Cara Eksekusi Step-by-Step"}
                       </h4>
                       <ol className="space-y-1.5 text-xs text-neutral-300 font-medium list-decimal list-inside leading-relaxed">
                         {viewingDetailExercise.instructions.map((stp, idx) => (
@@ -4875,13 +4898,17 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   {/* Do's and Dont's */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-[#161C28] border border-emerald-500/20 rounded-2xl p-3.5 space-y-1.5">
-                      <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">✔ Tips Kunci Form</span>
+                      <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">
+                        {isEN ? "✔ Key Form Tips" : "✔ Tips Kunci Form"}
+                      </span>
                       {viewingDetailExercise.dosAndDonts.dos.map((d, i) => (
                         <p key={i} className="text-xs text-neutral-300">• {d}</p>
                       ))}
                     </div>
                     <div className="bg-[#161C28] border border-red-500/20 rounded-2xl p-3.5 space-y-1.5">
-                      <span className="text-[11px] font-black text-red-400 uppercase tracking-wider block">✖ Kesalahan Umum</span>
+                      <span className="text-[11px] font-black text-red-400 uppercase tracking-wider block">
+                        {isEN ? "✖ Common Mistakes" : "✖ Kesalahan Umum"}
+                      </span>
                       {viewingDetailExercise.dosAndDonts.donts.map((d, i) => (
                         <p key={i} className="text-xs text-neutral-300">• {d}</p>
                       ))}
@@ -4894,7 +4921,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       onClick={() => setViewingDetailExercise(null)}
                       className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-white cursor-pointer"
                     >
-                      ← Kembali ke Daftar
+                      {isEN ? "← Back to List" : "← Kembali ke Daftar"}
                     </button>
                     <button
                       onClick={() => {
@@ -4904,7 +4931,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       }}
                       className="px-6 py-2.5 rounded-xl text-xs font-black bg-[#D4FF00] hover:bg-[#c4ec00] text-black transition-all cursor-pointer shadow-md"
                     >
-                      Tutup Kamus
+                      {isEN ? "Close Explorer" : "Tutup Kamus"}
                     </button>
                   </div>
                 </div>
@@ -4919,12 +4946,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </div>
                       <div>
                         <h3 className="font-['Archivo_Black'] text-lg text-white flex items-center gap-2">
-                          <span>Kamus Alat & Gerakan Gym</span>
+                          <span>{isEN ? "Gym Equipment & Exercise Library" : "Kamus Alat & Gerakan Gym"}</span>
                           <span className="px-2 py-0.5 rounded-full bg-[#D4FF00]/20 text-[#D4FF00] border border-[#D4FF00]/40 text-[10px] font-black">
-                            {EXERCISE_DATABASE.length} Latihan
+                            {EXERCISE_DATABASE.length} {isEN ? "Exercises" : "Latihan"}
                           </span>
                         </h3>
-                        <p className="text-xs text-neutral-400 font-medium">Database lengkap 870+ latihan gym open source dengan animasi gerakan</p>
+                        <p className="text-xs text-neutral-400 font-medium">
+                          {isEN ? "Comprehensive database of 870+ exercises with visual movement animations" : "Database lengkap 870+ latihan gym open source dengan animasi gerakan"}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -4947,7 +4976,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         type="text"
                         value={explorerSearch}
                         onChange={(e) => setExplorerSearch(e.target.value)}
-                        placeholder="Cari dari 870+ latihan (misal: Bicep, Squat, Bench Press, Lat Pulldown, Tricep)..."
+                        placeholder={isEN ? "Search 870+ exercises (e.g. Bicep, Squat, Bench Press, Lat Pulldown)..." : "Cari dari 870+ latihan (misal: Bicep, Squat, Bench Press, Lat Pulldown)..."}
                         className="w-full pl-10 pr-4 py-2.5 bg-[#161C28] border border-neutral-800 rounded-xl text-xs font-semibold text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00] transition-colors"
                       />
                       {explorerSearch && (
@@ -4963,14 +4992,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     {/* Category Pill Filters */}
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
                       {[
-                        { id: "all", label: `Semua (${EXERCISE_DATABASE.length})` },
-                        { id: "machine", label: "Mesin / Machine" },
-                        { id: "cable", label: "Kabel / Cable" },
-                        { id: "barbell", label: "Barbel" },
-                        { id: "dumbbell", label: "Dumbbell" },
-                        { id: "bodyweight", label: "Bodyweight" },
-                        { id: "kettlebell", label: "Kettlebell" },
-                        { id: "cardio", label: "Kardio" }
+                        { id: "all", label: `${isEN ? "All" : "Semua"} (${EXERCISE_DATABASE.length})` },
+                        { id: "machine", label: isEN ? "Machine" : "Mesin / Machine" },
+                        { id: "cable", label: isEN ? "Cable" : "Kabel / Cable" },
+                        { id: "barbell", label: isEN ? "Barbell" : "Barbel" },
+                        { id: "dumbbell", label: isEN ? "Dumbbell" : "Dumbbell" },
+                        { id: "bodyweight", label: isEN ? "Bodyweight" : "Bodyweight" },
+                        { id: "kettlebell", label: isEN ? "Kettlebell" : "Kettlebell" },
+                        { id: "cardio", label: isEN ? "Cardio" : "Kardio" }
                       ].map((cat) => (
                         <button
                           key={cat.id}
@@ -5022,7 +5051,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               </span>
                               {isSelected && (
                                 <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-black">
-                                  ✓ TERPILIH
+                                  {isEN ? "✓ SELECTED" : "✓ TERPILIH"}
                                 </span>
                               )}
                             </div>
@@ -5042,10 +5071,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <div className="text-xs">
                       {selectedExplorerItem ? (
                         <span className="text-neutral-300">
-                          Alat Terpilih: <strong className="text-[#D4FF00]">{selectedExplorerItem.name}</strong>
+                          {isEN ? "Selected Exercise: " : "Alat Terpilih: "}<strong className="text-[#D4FF00]">{selectedExplorerItem.name}</strong>
                         </span>
                       ) : (
-                        <span className="text-neutral-500 font-medium">Klik salah satu alat di atas untuk memilih</span>
+                        <span className="text-neutral-500 font-medium">{isEN ? "Click any exercise above to select" : "Klik salah satu alat di atas untuk memilih"}</span>
                       )}
                     </div>
 
@@ -5062,7 +5091,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           : "bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50"
                       }`}
                     >
-                      <span>Lanjut (Lihat Cara Pakai)</span>
+                      <span>{isEN ? "Continue (View Guide)" : "Lanjut (Lihat Cara Pakai)"}</span>
                       <ArrowRight size={15} />
                     </button>
                   </div>
@@ -5090,8 +5119,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <Watch size={20} color="#D4FF00" />
                 </div>
                 <div>
-                  <h3 style={{ fontFamily: "Arial Black, sans-serif", fontSize: "15px", fontWeight: 900, color: "white", margin: 0 }}>Hubungkan ke Apple Watch</h3>
-                  <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0 0" }}>Buka di jam tanpa perlu ketik login</p>
+                  <h3 style={{ fontFamily: "Arial Black, sans-serif", fontSize: "15px", fontWeight: 900, color: "white", margin: 0 }}>
+                    {isEN ? "Connect Apple Watch" : "Hubungkan ke Apple Watch"}
+                  </h3>
+                  <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0 0 0" }}>
+                    {isEN ? "Open on your watch without typing logins" : "Buka di jam tanpa perlu ketik login"}
+                  </p>
                 </div>
               </div>
               <button
@@ -5104,9 +5137,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
             {/* Magic Link Box */}
             <div style={{ backgroundColor: "#161C28", border: "1px solid rgba(212,255,0,0.25)", borderRadius: "16px", padding: "14px", marginBottom: "12px" }}>
-              <span style={{ display: "block", fontWeight: 900, color: "#D4FF00", fontSize: "12px", marginBottom: "6px" }}>✨ Magic Link — Login Otomatis:</span>
+              <span style={{ display: "block", fontWeight: 900, color: "#D4FF00", fontSize: "12px", marginBottom: "6px" }}>
+                {isEN ? "✨ Magic Link — Automatic Login:" : "✨ Magic Link — Login Otomatis:"}
+              </span>
               <p style={{ fontSize: "11px", color: "#cbd5e1", lineHeight: 1.6, margin: "0 0 10px 0" }}>
-                Karena layar Apple Watch kecil untuk mengetik, kirim link ini ke dirimu sendiri. Sekali tap di jam, akun langsung terhubung otomatis!
+                {isEN
+                  ? "Because Apple Watch screens are compact, send this magic link to yourself. One tap opens your account instantly!"
+                  : "Karena layar Apple Watch kecil untuk mengetik, kirim link ini ke dirimu sendiri. Sekali tap di jam, akun langsung terhubung otomatis!"}
               </p>
 
               {/* URL Display */}
@@ -5129,25 +5166,27 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   }}
                   style={{ flex: 1, padding: "10px", borderRadius: "10px", backgroundColor: watchLinkCopied ? "#16a34a" : "#1e2535", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontWeight: 800, fontSize: "12px", cursor: "pointer" }}
                 >
-                  {watchLinkCopied ? "✓ Disalin!" : "📋 Salin Link"}
+                  {watchLinkCopied ? (isEN ? "✓ Copied!" : "✓ Disalin!") : (isEN ? "📋 Copy Link" : "📋 Salin Link")}
                 </button>
                 <a
-                  href={`https://wa.me/?text=${encodeURIComponent("Buka GymBuddy di Apple Watch: " + (typeof window !== "undefined" ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}` : "/watch"))}`}
+                  href={`https://wa.me/?text=${encodeURIComponent((isEN ? "Open GymBuddy on Apple Watch: " : "Buka GymBuddy di Apple Watch: ") + (typeof window !== "undefined" ? `${window.location.origin}/watch?phone=${encodeURIComponent(activeUser.phone || "0851")}&name=${encodeURIComponent(activeUser.name || "Member")}&goal=${encodeURIComponent(activeUser.goal || "muscle")}` : "/watch"))}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ flex: 1, padding: "10px", borderRadius: "10px", backgroundColor: "#25D366", color: "black", fontWeight: 800, fontSize: "12px", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}
                 >
-                  📱 Kirim ke WA
+                  {isEN ? "📱 Send to WA" : "📱 Kirim ke WA"}
                 </a>
               </div>
             </div>
 
             {/* Step Guide */}
             <div style={{ backgroundColor: "#161C28", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "12px", fontSize: "11px", color: "#cbd5e1", marginBottom: "14px" }}>
-              <span style={{ display: "block", fontWeight: 700, color: "white", marginBottom: "6px" }}>Cara Pakai di Apple Watch:</span>
-              <p style={{ margin: "2px 0" }}>1. Kirim link di atas ke WhatsApp / iMessage kamu.</p>
-              <p style={{ margin: "2px 0" }}>2. Di Apple Watch, buka pesan & tap linknya.</p>
-              <p style={{ margin: "2px 0" }}>3. Watch Mode langsung terbuka — tombol besar & rest timer aktif!</p>
+              <span style={{ display: "block", fontWeight: 700, color: "white", marginBottom: "6px" }}>
+                {isEN ? "How to use on Apple Watch:" : "Cara Pakai di Apple Watch:"}
+              </span>
+              <p style={{ margin: "2px 0" }}>{isEN ? "1. Send the magic link above to your WhatsApp or iMessage." : "1. Kirim link di atas ke WhatsApp / iMessage kamu."}</p>
+              <p style={{ margin: "2px 0" }}>{isEN ? "2. On Apple Watch, open the message and tap the link." : "2. Di Apple Watch, buka pesan & tap linknya."}</p>
+              <p style={{ margin: "2px 0" }}>{isEN ? "3. Watch Mode opens immediately with large buttons & rest timer!" : "3. Watch Mode langsung terbuka — tombol besar & rest timer aktif!"}</p>
             </div>
 
             {/* Open in browser CTA */}
@@ -5159,7 +5198,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               style={{ width: "100%", padding: "13px", borderRadius: "14px", backgroundColor: "#D4FF00", border: "none", color: "black", fontWeight: 900, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
             >
               <Watch size={15} color="black" />
-              Buka Watch Mode di Browser Ini
+              {isEN ? "Open Watch Mode in This Browser" : "Buka Watch Mode di Browser Ini"}
             </button>
           </div>
         </div>
@@ -5184,8 +5223,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <Bell size={20} color="#D4FF00" />
                 </div>
                 <div>
-                  <h3 style={{ fontWeight: 900, fontSize: "15px", color: "white", margin: 0 }}>Notifikasi & Scheduler</h3>
-                  <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0 0" }}>Atur kapan GymBuddy mengingatkanmu</p>
+                  <h3 style={{ fontWeight: 900, fontSize: "15px", color: "white", margin: 0 }}>
+                    {isEN ? "Notifications & Scheduler" : "Notifikasi & Scheduler"}
+                  </h3>
+                  <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 0 0" }}>
+                    {isEN ? "Configure when GymBuddy reminds you" : "Atur kapan GymBuddy mengingatkanmu"}
+                  </p>
                 </div>
               </div>
               <button onClick={() => setShowNotifSettingsModal(false)} style={{ background: "#1e2535", border: "none", borderRadius: "10px", padding: "6px", cursor: "pointer", color: "#64748b" }}>
@@ -5197,10 +5240,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             <div style={{ backgroundColor: notifSettings.permissionGranted ? "rgba(212,255,0,0.08)" : "rgba(255,100,100,0.08)", border: `1px solid ${notifSettings.permissionGranted ? "rgba(212,255,0,0.25)" : "rgba(255,100,100,0.25)"}`, borderRadius: "14px", padding: "12px 14px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: "12px", color: notifSettings.permissionGranted ? "#D4FF00" : "#ff6b6b" }}>
-                  {notifSettings.permissionGranted ? "✅ Notifikasi Aktif" : "❌ Izin Belum Diberikan"}
+                  {notifSettings.permissionGranted
+                    ? (isEN ? "✅ Notifications Active" : "✅ Notifikasi Aktif")
+                    : (isEN ? "❌ Permission Not Granted" : "❌ Izin Belum Diberikan")}
                 </div>
                 <div style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
-                  {notifSettings.permissionGranted ? "Scheduler berjalan di background" : "Klik Aktifkan untuk meminta izin"}
+                  {notifSettings.permissionGranted
+                    ? (isEN ? "Scheduler running in background" : "Scheduler berjalan di background")
+                    : (isEN ? "Click Enable to grant permission" : "Klik Aktifkan untuk meminta izin")}
                 </div>
               </div>
               {!notifSettings.permissionGranted && (
@@ -5213,12 +5260,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       applyNotifSchedulers(updated);
                       notificationService.sendTestNotification();
                     } else {
-                      alert("Pastikan Allow di popup browser. Coba di browser lain jika tidak muncul.");
+                      alert(isEN ? "Please allow notification permission in your browser popup." : "Pastikan Allow di popup browser. Coba di browser lain jika tidak muncul.");
                     }
                   }}
                   style={{ padding: "8px 14px", borderRadius: "10px", backgroundColor: "#D4FF00", color: "#000", fontWeight: 900, fontSize: "11px", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}
                 >
-                  Aktifkan →
+                  {isEN ? "Enable →" : "Aktifkan →"}
                 </button>
               )}
             </div>
@@ -5232,11 +5279,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "20px" }}>🏋️</span>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Pengingat Workout</div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>
+                        {isEN ? "Workout Reminder" : "Pengingat Workout"}
+                      </div>
                       <div style={{ fontSize: "10px", color: "#64748b" }}>
                         {notifSettings.workoutEnabled
-                          ? `Setiap hari jam ${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`
-                          : "Nonaktif"}
+                          ? (isEN
+                              ? `Daily at ${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`
+                              : `Setiap hari jam ${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`)
+                          : (isEN ? "Disabled" : "Nonaktif")}
                       </div>
                     </div>
                   </div>
@@ -5255,7 +5306,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 {notifSettings.workoutEnabled && (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap" }}>Jam:</span>
+                    <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap" }}>{isEN ? "Time:" : "Jam:"}</span>
                     <input
                       type="time"
                       value={`${String(notifSettings.workoutHour).padStart(2, "0")}:${String(notifSettings.workoutMinute).padStart(2, "0")}`}
@@ -5277,11 +5328,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "20px" }}>💧</span>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Pengingat Minum Air</div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>
+                        {isEN ? "Hydration Reminder" : "Pengingat Minum Air"}
+                      </div>
                       <div style={{ fontSize: "10px", color: "#64748b" }}>
                         {notifSettings.hydrationEnabled
-                          ? `Setiap ${notifSettings.hydrationInterval} jam (08:00–20:00)`
-                          : "Nonaktif"}
+                          ? (isEN ? `Every ${notifSettings.hydrationInterval} hours (08:00–20:00)` : `Setiap ${notifSettings.hydrationInterval} jam (08:00–20:00)`)
+                          : (isEN ? "Disabled" : "Nonaktif")}
                       </div>
                     </div>
                   </div>
@@ -5309,7 +5362,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         }}
                         style={{ flex: 1, padding: "8px 4px", borderRadius: "10px", backgroundColor: notifSettings.hydrationInterval === h ? "#D4FF00" : "#0d1117", border: `1px solid ${notifSettings.hydrationInterval === h ? "#D4FF00" : "#262d3d"}`, color: notifSettings.hydrationInterval === h ? "#000" : "#64748b", fontWeight: 800, fontSize: "12px", cursor: "pointer" }}
                       >
-                        {h}j
+                        {h}{isEN ? "h" : "j"}
                       </button>
                     ))}
                   </div>
@@ -5322,9 +5375,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "20px" }}>🔥</span>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>Penjaga Streak</div>
+                      <div style={{ fontWeight: 800, fontSize: "13px", color: "white" }}>
+                        {isEN ? "Streak Guard" : "Penjaga Streak"}
+                      </div>
                       <div style={{ fontSize: "10px", color: "#64748b" }}>
-                        {notifSettings.streakEnabled ? "Ingatkan jam 20:00 jika belum log hari ini" : "Nonaktif"}
+                        {notifSettings.streakEnabled
+                          ? (isEN ? "Remind at 20:00 if not logged today" : "Ingatkan jam 20:00 jika belum log hari ini")
+                          : (isEN ? "Disabled" : "Nonaktif")}
                       </div>
                     </div>
                   </div>
@@ -5351,20 +5408,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     applyNotifSchedulers(notifSettings);
                     notificationService.sendTestNotification();
                     setShowNotifSettingsModal(false);
-                    setReminderNotificationMsg("Scheduler diperbarui & notifikasi tes dikirim! 🔔");
+                    setReminderNotificationMsg(isEN ? "Scheduler updated & test notification sent! 🔔" : "Scheduler diperbarui & notifikasi tes dikirim! 🔔");
                     setTimeout(() => setReminderNotificationMsg(null), 3500);
                   }}
                   style={{ flex: 1, padding: "13px", borderRadius: "14px", backgroundColor: "#D4FF00", color: "#000", fontWeight: 900, fontSize: "12px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                 >
                   <Bell size={14} color="black" />
-                  Simpan & Kirim Tes
+                  {isEN ? "Save & Test Send" : "Simpan & Kirim Tes"}
                 </button>
               )}
               <button
                 onClick={() => setShowNotifSettingsModal(false)}
                 style={{ flex: notifSettings.permissionGranted ? 0 : 1, padding: "13px 18px", borderRadius: "14px", backgroundColor: "#1e2535", color: "#94a3b8", fontWeight: 700, fontSize: "12px", border: "1px solid #262d3d", cursor: "pointer" }}
               >
-                Tutup
+                {isEN ? "Close" : "Tutup"}
               </button>
             </div>
           </div>
@@ -6579,7 +6636,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
-                      {selectedMealDetail.mealType || "Lunch"}
+                      {isEN
+                        ? (selectedMealDetail.mealType === "breakfast" ? "Breakfast" : selectedMealDetail.mealType === "lunch" ? "Lunch" : selectedMealDetail.mealType === "dinner" ? "Dinner" : "Snacks")
+                        : (selectedMealDetail.mealType === "breakfast" ? "Sarapan" : selectedMealDetail.mealType === "lunch" ? "Makan Siang" : selectedMealDetail.mealType === "dinner" ? "Makan Malam" : "Camilan")}
                     </span>
                     {selectedMealDetail.time && (
                       <span className="text-xs text-neutral-400 font-mono flex items-center gap-1">
@@ -6605,7 +6664,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               <div className="p-4 bg-[#161C28] rounded-2xl border border-white/5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
-                    <Sparkles size={13} className="text-[#D4FF00]" /> Total Nutrisi
+                    <Sparkles size={13} className="text-[#D4FF00]" /> {isEN ? "Total Nutrition" : "Total Nutrisi"}
                   </span>
                   <span className="text-sm font-black text-black bg-[#D4FF00] px-3 py-0.5 rounded-lg shadow-sm">
                     ~{Number(selectedMealDetail.calories || 0).toLocaleString()} kcal
@@ -6618,19 +6677,19 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <span className="text-white font-black">{selectedMealDetail.protein || 0}g</span>
                   </div>
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                    <span className="block text-[9px] text-emerald-400 font-bold">Karbo</span>
+                    <span className="block text-[9px] text-emerald-400 font-bold">{isEN ? "Carbs" : "Karbo"}</span>
                     <span className="text-white font-black">{selectedMealDetail.carbs || 0}g</span>
                   </div>
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                    <span className="block text-[9px] text-rose-400 font-bold">Lemak</span>
+                    <span className="block text-[9px] text-rose-400 font-bold">{isEN ? "Fat" : "Lemak"}</span>
                     <span className="text-white font-black">{selectedMealDetail.fat || 0}g</span>
                   </div>
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                    <span className="block text-[9px] text-amber-400 font-bold">Serat</span>
+                    <span className="block text-[9px] text-amber-400 font-bold">{isEN ? "Fiber" : "Serat"}</span>
                     <span className="text-white font-black">{selectedMealDetail.fiber || 0}g</span>
                   </div>
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                    <span className="block text-[9px] text-cyan-400 font-bold">Gula</span>
+                    <span className="block text-[9px] text-cyan-400 font-bold">{isEN ? "Sugar" : "Gula"}</span>
                     <span className="text-white font-black">{selectedMealDetail.sugar || 0}g</span>
                   </div>
                 </div>
@@ -6640,12 +6699,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-neutral-300 uppercase tracking-wider">
-                    Rincian Komponen Makanan
+                    {isEN ? "Food Item Breakdown" : "Rincian Komponen Makanan"}
                   </span>
                   <span className="text-[10px] text-neutral-500 font-medium">
                     {Array.isArray(selectedMealDetail.items) && selectedMealDetail.items.length > 0
-                      ? `${selectedMealDetail.items.length} item terdeteksi`
-                      : "Porsi tercatat"}
+                      ? `${selectedMealDetail.items.length} ${isEN ? "items detected" : "item terdeteksi"}`
+                      : (isEN ? "Logged portion" : "Porsi tercatat")}
                   </span>
                 </div>
 
@@ -6659,7 +6718,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               • {it.normalized_food_name || it.food_name}
                             </span>
                             <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
-                              {it.estimated_weight_grams || 100}g · <span className="text-neutral-500">{it.data_source || "Estimated nutrition"}</span>
+                              {it.estimated_weight_grams || 100}g · <span className="text-neutral-500">{it.data_source || (isEN ? "Estimated nutrition" : "Estimasi nutrisi")}</span>
                             </span>
                           </div>
                           <span className="text-xs font-black text-white whitespace-nowrap">
@@ -6671,7 +6730,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
                           <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
                           {it.fiber !== undefined && it.fiber > 0 && (
-                            <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                            <span>{isEN ? "Fib" : "Serat"}: <strong className="text-amber-400">{it.fiber}g</strong></span>
                           )}
                         </div>
                       </div>
@@ -6679,7 +6738,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   </div>
                 ) : (
                   <div className="p-3 bg-[#161C28]/60 rounded-xl border border-white/5 text-xs text-neutral-400 font-medium">
-                    Makanan dicatat sebagai satu menu komplit: <strong className="text-white">{selectedMealDetail.foodName}</strong> (~{selectedMealDetail.calories} kcal).
+                    {isEN ? "Meal logged as a single complete menu: " : "Makanan dicatat sebagai satu menu komplit: "}
+                    <strong className="text-white">{selectedMealDetail.foodName}</strong> (~{selectedMealDetail.calories} kcal).
                   </div>
                 )}
               </div>
@@ -6692,7 +6752,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="flex-1 py-2.5 rounded-xl border border-white/20 hover:bg-white/10 text-neutral-200 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Edit3 size={14} />
-                  <span>Edit Nutrisi</span>
+                  <span>{isEN ? "Edit Nutrition" : "Edit Nutrisi"}</span>
                 </button>
 
                 <button
@@ -6701,7 +6761,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="flex-1 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Trash2 size={14} />
-                  <span>Hapus Makanan</span>
+                  <span>{isEN ? "Delete Meal" : "Hapus Makanan"}</span>
                 </button>
               </div>
             </motion.div>
@@ -6725,7 +6785,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="flex items-center gap-2">
                   <Edit3 size={16} className="text-[#D4FF00]" />
                   <h3 className="font-['Archivo_Black'] text-base text-white">
-                    Edit Nutrisi Makanan
+                    {isEN ? "Edit Meal Nutrition" : "Edit Nutrisi Makanan"}
                   </h3>
                 </div>
                 <button
@@ -6739,7 +6799,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-neutral-300">Nama Makanan</label>
+                  <label className="text-xs font-bold text-neutral-300">{isEN ? "Food Name" : "Nama Makanan"}</label>
                   <input
                     type="text"
                     value={editMealName}
@@ -6749,28 +6809,33 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-neutral-300">Waktu Makan</label>
+                  <label className="text-xs font-bold text-neutral-300">{isEN ? "Meal Type" : "Waktu Makan"}</label>
                   <div className="grid grid-cols-4 gap-1.5 mt-1">
-                    {(["breakfast", "lunch", "dinner", "snack"] as const).map((mType) => (
-                      <button
-                        key={mType}
-                        type="button"
-                        onClick={() => setEditMealType(mType)}
-                        className={`py-2 rounded-xl text-xs font-bold capitalize transition-all cursor-pointer border ${
-                          editMealType === mType
-                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
-                            : "bg-[#161C28] text-neutral-400 border-white/10 hover:text-white"
-                        }`}
-                      >
-                        {mType}
-                      </button>
-                    ))}
+                    {(["breakfast", "lunch", "dinner", "snack"] as const).map((mType) => {
+                      const mLabel = isEN
+                        ? (mType === "breakfast" ? "Breakfast" : mType === "lunch" ? "Lunch" : mType === "dinner" ? "Dinner" : "Snack")
+                        : (mType === "breakfast" ? "Sarapan" : mType === "lunch" ? "Siang" : mType === "dinner" ? "Malam" : "Camilan");
+                      return (
+                        <button
+                          key={mType}
+                          type="button"
+                          onClick={() => setEditMealType(mType)}
+                          className={`py-2 rounded-xl text-xs font-bold capitalize transition-all cursor-pointer border ${
+                            editMealType === mType
+                              ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                              : "bg-[#161C28] text-neutral-400 border-white/10 hover:text-white"
+                          }`}
+                        >
+                          {mLabel}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <div>
-                    <label className="text-xs font-bold text-white">Kalori (kcal)</label>
+                    <label className="text-xs font-bold text-white">{isEN ? "Calories (kcal)" : "Kalori (kcal)"}</label>
                     <input
                       type="number"
                       value={editMealCal}
@@ -6779,7 +6844,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-indigo-400">Protein (g)</label>
+                    <label className="text-xs font-bold text-indigo-400">{isEN ? "Protein (g)" : "Protein (g)"}</label>
                     <input
                       type="number"
                       value={editMealProt}
@@ -6788,7 +6853,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-emerald-400">Karbo (g)</label>
+                    <label className="text-xs font-bold text-emerald-400">{isEN ? "Carbs (g)" : "Karbo (g)"}</label>
                     <input
                       type="number"
                       value={editMealCarb}
@@ -6797,7 +6862,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-rose-400">Lemak (g)</label>
+                    <label className="text-xs font-bold text-rose-400">{isEN ? "Fat (g)" : "Lemak (g)"}</label>
                     <input
                       type="number"
                       value={editMealFat}
@@ -6806,7 +6871,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-amber-400">Serat (Fiber g)</label>
+                    <label className="text-xs font-bold text-amber-400">{isEN ? "Fiber (g)" : "Serat (g)"}</label>
                     <input
                       type="number"
                       value={editMealFib}
@@ -6815,7 +6880,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-cyan-400">Gula (Sugar g)</label>
+                    <label className="text-xs font-bold text-cyan-400">{isEN ? "Sugar (g)" : "Gula (g)"}</label>
                     <input
                       type="number"
                       value={editMealSug}
@@ -6832,14 +6897,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   onClick={() => setEditingMeal(null)}
                   className="flex-1 py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs transition-all cursor-pointer"
                 >
-                  Batal
+                  {isEN ? "Cancel" : "Batal"}
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveEditMeal}
                   className="flex-1 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all cursor-pointer shadow-md"
                 >
-                  Simpan Perubahan
+                  {isEN ? "Save Changes" : "Simpan Perubahan"}
                 </button>
               </div>
             </motion.div>
@@ -6865,13 +6930,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               <div className="space-y-1">
                 <h3 className="font-['Archivo_Black'] text-base text-white">
-                  Hapus Makanan Ini?
+                  {isEN ? "Delete this meal?" : "Hapus Makanan Ini?"}
                 </h3>
                 <p className="text-xs font-bold text-[#D4FF00] px-2 py-1 bg-white/5 rounded-lg inline-block max-w-full truncate">
                   "{mealToDelete.foodName}"
                 </p>
                 <p className="text-xs text-neutral-400 font-medium pt-1">
-                  Total kalori dan makronutrisi harian akan otomatis dikurangi setelah dihapus.
+                  {isEN
+                    ? "Daily calorie and macronutrient totals will be automatically recalculated upon deletion."
+                    : "Total kalori dan makronutrisi harian akan otomatis dikurangi setelah dihapus."}
                 </p>
               </div>
 
@@ -6881,7 +6948,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   onClick={() => setMealToDelete(null)}
                   className="flex-1 py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs transition-all cursor-pointer"
                 >
-                  Batal
+                  {isEN ? "Cancel" : "Batal"}
                 </button>
                 <button
                   type="button"
@@ -6894,7 +6961,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   }}
                   className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs transition-all cursor-pointer shadow-md"
                 >
-                  Hapus Makanan
+                  {isEN ? "Delete Meal" : "Hapus Makanan"}
                 </button>
               </div>
             </motion.div>
