@@ -2353,7 +2353,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       </aside>
 
       {/* RIGHT MAIN CONTENT CONTAINER */}
-      <main className="flex-1 bg-[#0A0D14] sm:bg-[#0F141C] border-0 sm:border sm:border-white/[0.06] rounded-none sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto shadow-sm text-white pb-24 lg:pb-8">
+      <main className="flex-1 bg-[#0A0D14] sm:bg-[#0F141C] border-0 sm:border sm:border-white/[0.06] rounded-none sm:rounded-3xl px-3.5 sm:px-6 md:px-8 pt-[max(env(safe-area-inset-top),2.75rem)] sm:pt-6 md:pt-8 pb-28 lg:pb-8 space-y-5 overflow-y-auto shadow-sm text-white">
         
         {/* PWA INSTALL BANNER (Non-intrusive, auto hides when installed/dismissed) */}
         {/* ========================================================================= */}
@@ -2362,32 +2362,32 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {activeTab === "home" && (
           <div className="space-y-5">
             {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs">
-              <div className="flex items-center gap-3.5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
                 <div className="w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-lg shadow-sm shrink-0">
                   {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
                       {activeUser.name || "Member"}
                     </h1>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">
                       🔥 {currentStreak} {t.activeDaysConsecutive}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                  <p className="text-xs text-neutral-400 font-medium mt-0.5 truncate">
                     {selectedDayName}, {selectedDate} • {todayScheduleObj.focus}
                   </p>
                 </div>
               </div>
 
               {/* Action Buttons: Calendar, Sync & Layout */}
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end flex-wrap pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.04]">
                 <button
                   type="button"
                   onClick={() => setShowLayoutModal(true)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  className="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                   title={isEN ? "Customize Dashboard Cards Layout" : "Atur Tata Letak Card Dashboard"}
                 >
                   <LayoutGrid size={15} className="text-[#D4FF00]" />
@@ -2404,7 +2404,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     }
                     setShowCalendarModal(true);
                   }}
-                  className="px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  className="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >
                   <CalendarIcon size={15} className="text-[#D4FF00]" />
                   <span>{t.todayBtn ? (isEN ? "Calendar" : "Kalender") : "Kalender"}</span>
@@ -2414,7 +2414,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   type="button"
                   onClick={() => fetchLogsForDate(selectedDate, false)}
                   disabled={isSyncing}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                  className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs font-bold bg-[#18202E] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
                     isSyncing ? "opacity-75" : ""
                   }`}
                   title={t.syncWhatsApp || "Sync WhatsApp"}
