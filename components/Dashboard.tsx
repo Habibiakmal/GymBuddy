@@ -49,7 +49,19 @@ import {
   ArrowDown,
   Edit3,
   Sliders,
-  Upload
+  Upload,
+  Share2,
+  Copy,
+  ExternalLink,
+  Zap,
+  DollarSign,
+  Gift,
+  Users,
+  Percent,
+  PieChart,
+  BarChart3,
+  CheckCircle,
+  HelpCircle
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem } from "../data/exerciseDb";
@@ -1229,6 +1241,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     return cleaned;
   };
 
+  const normPhone = normalizePhone(activeUser.phone || "085156919826");
+
   const weight = Number(activeUser.weight) || 70;
   const startWeight = Number(activeUser.startWeight) || weight;
 
@@ -1258,10 +1272,144 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const bmrCalc = Math.round(10 * weight + 6.25 * height - 5 * age + (isMale ? 5 : -161));
   const tdeeCalc = Math.round(bmrCalc * 1.4);
 
-  const targetCalories = activeUser.targetCalories || (activeUser.goal === "lose" ? Math.max(1200, tdeeCalc - 500) : activeUser.goal === "gain" ? tdeeCalc + 400 : tdeeCalc);
-  const targetProtein = activeUser.proteinGrams || (activeUser.goal === "lose" ? Math.round(weight * 2.0) : activeUser.goal === "gain" ? Math.round(weight * 2.2) : Math.round(weight * 1.8));
-  const targetFat = activeUser.fatGrams || Math.round((targetCalories * 0.25) / 9);
-  const targetCarbs = activeUser.carbGrams || Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4);
+  const autoTargetCalories = activeUser.targetCalories || (activeUser.goal === "lose" ? Math.max(1200, tdeeCalc - 500) : activeUser.goal === "gain" ? tdeeCalc + 400 : tdeeCalc);
+  const autoTargetProtein = activeUser.proteinGrams || (activeUser.goal === "lose" ? Math.round(weight * 2.0) : activeUser.goal === "gain" ? Math.round(weight * 2.2) : Math.round(weight * 1.8));
+  const autoTargetFat = activeUser.fatGrams || Math.round((autoTargetCalories * 0.25) / 9);
+  const autoTargetCarbs = activeUser.carbGrams || Math.round((autoTargetCalories - (autoTargetProtein * 4 + autoTargetFat * 9)) / 4);
+
+  // Custom Macro Targets (User Adjustable Targets)
+  const [customTargets, setCustomTargets] = useState<{
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    sugar?: number;
+    water?: number;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem(`gymbuddy_custom_targets_${normPhone}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const targetCalories = customTargets.calories ?? autoTargetCalories;
+  const targetProtein = customTargets.protein ?? autoTargetProtein;
+  const targetFat = customTargets.fat ?? autoTargetFat;
+  const targetCarbs = customTargets.carbs ?? autoTargetCarbs;
+  const targetSugar = customTargets.sugar ?? 45;
+  const targetHydrationGoal = customTargets.water ?? 2500;
+
+  // Custom Nutrition Targets Modal State
+  const [showCustomTargetsModal, setShowCustomTargetsModal] = useState(false);
+  const [custCal, setCustCal] = useState(String(targetCalories));
+  const [custProt, setCustProt] = useState(String(targetProtein));
+  const [custCarb, setCustCarb] = useState(String(targetCarbs));
+  const [custFat, setCustFat] = useState(String(targetFat));
+  const [custSugar, setCustSugar] = useState(String(targetSugar));
+  const [custWater, setCustWater] = useState(String(targetHydrationGoal));
+
+  useEffect(() => {
+    setCustCal(String(targetCalories));
+    setCustProt(String(targetProtein));
+    setCustCarb(String(targetCarbs));
+    setCustFat(String(targetFat));
+    setCustSugar(String(targetSugar));
+    setCustWater(String(targetHydrationGoal));
+  }, [targetCalories, targetProtein, targetCarbs, targetFat, targetSugar, targetHydrationGoal, showCustomTargetsModal]);
+
+  const handleSaveCustomTargets = () => {
+    const newTargets = {
+      calories: Math.max(500, Number(custCal) || autoTargetCalories),
+      protein: Math.max(10, Number(custProt) || autoTargetProtein),
+      carbs: Math.max(10, Number(custCarb) || autoTargetCarbs),
+      fat: Math.max(5, Number(custFat) || autoTargetFat),
+      sugar: Math.max(5, Number(custSugar) || 45),
+      water: Math.max(500, Number(custWater) || 2500),
+    };
+    setCustomTargets(newTargets);
+    try {
+      localStorage.setItem(`gymbuddy_custom_targets_${normPhone}`, JSON.stringify(newTargets));
+    } catch (e) {}
+    setShowCustomTargetsModal(false);
+    setReminderNotificationMsg(isEN ? "Custom nutrition targets saved! 🎯" : "Target nutrisi kustom berhasil disimpan! 🎯");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
+  const handleResetCustomTargets = () => {
+    setCustomTargets({});
+    try {
+      localStorage.removeItem(`gymbuddy_custom_targets_${normPhone}`);
+    } catch (e) {}
+    setShowCustomTargetsModal(false);
+    setReminderNotificationMsg(isEN ? "Reset to AI recommended targets! ✨" : "Target dikembalikan ke hitungan otomatis AI! ✨");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
+  // Profile Editor Modal State
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [profName, setProfName] = useState(activeUser.name || "");
+  const [profGender, setProfGender] = useState(activeUser.gender || "pria");
+  const [profAge, setProfAge] = useState(String(activeUser.age || 25));
+  const [profHeight, setProfHeight] = useState(String(activeUser.height || 170));
+  const [profWeight, setProfWeight] = useState(String(activeUser.weight || 70));
+  const [profTargetWeight, setProfTargetWeight] = useState(String(activeUser.targetWeight || 65));
+  const [profActivity, setProfActivity] = useState(activeUser.activityLevel || "moderate");
+  const [profPersona, setProfPersona] = useState(activeUser.persona || "max");
+
+  useEffect(() => {
+    if (activeUser) {
+      setProfName(activeUser.name || "");
+      setProfGender(activeUser.gender || "pria");
+      setProfAge(String(activeUser.age || 25));
+      setProfHeight(String(activeUser.height || 170));
+      setProfWeight(String(activeUser.weight || 70));
+      setProfTargetWeight(String(activeUser.targetWeight || 65));
+      setProfActivity(activeUser.activityLevel || "moderate");
+      setProfPersona(activeUser.persona || "max");
+    }
+  }, [activeUser, showEditProfileModal]);
+
+  const handleSaveProfileChanges = () => {
+    const updated: UserProfileData = {
+      ...activeUser,
+      name: profName.trim() || activeUser.name,
+      gender: profGender,
+      age: Number(profAge) || 25,
+      height: Number(profHeight) || 170,
+      weight: Number(profWeight) || 70,
+      targetWeight: Number(profTargetWeight) || 65,
+      activityLevel: profActivity,
+      persona: profPersona
+    };
+    setLiveUser(updated);
+    try {
+      localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(updated));
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(updated));
+    } catch (e) {}
+    setShowEditProfileModal(false);
+    setReminderNotificationMsg(isEN ? "Profile updated successfully! ✨" : "Profil berhasil diperbarui! ✨");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
+  // Affiliate Program Hub State
+  const [showAffiliateModal, setShowAffiliateModal] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
+  const referralCode = ((activeUser.name || "MEMBER").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8) || "BUDDYVIP");
+  const referralLink = `https://gymbuddygroup.com?ref=${referralCode.toLowerCase()}`;
+  const couponCode = `BUDDY${referralCode}`;
+
+  const handleCopyReferral = () => {
+    try {
+      navigator.clipboard.writeText(referralLink);
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 3000);
+    } catch (e) {}
+  };
+
+  // Progress Tab Timeframe State
+  const [chartTimeframe, setChartTimeframe] = useState<"7d" | "30d">("7d");
 
   const isMaxPersona = (activeUser.persona || "max").toLowerCase() === "max";
   const coachName = isMaxPersona ? "Coach Max" : "Coach Mia";
@@ -2724,6 +2872,175 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               return null;
             })}
+
+            {/* ========================================================================= */}
+            {/* GYMBUDDY USP EXCELLENCE HUB & SUPERPOWERS SHOWCASE */}
+            {/* ========================================================================= */}
+            <div className="bg-gradient-to-br from-[#121824] via-[#101520] to-[#0A0D14] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#D4FF00]/15 border border-[#D4FF00]/30 text-[#D4FF00] font-black text-[10px] uppercase tracking-wider">
+                      ✨ GymBuddy Superpowers
+                    </span>
+                    <span className="text-xs text-neutral-400 font-semibold">{isEN ? "All-in-One AI Fitness OS" : "Ekosistem Fitness AI Lengkap"}</span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                    {isEN ? "Why GymBuddy is Your Ultimate Fitness Partner" : "Kenapa GymBuddy Sahabat Terbaik Fitness Kamu?"}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAffiliateModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-[#D4FF00] text-black font-black text-xs flex items-center gap-1.5 shadow-md hover:scale-102 transition-all cursor-pointer"
+                >
+                  <Gift size={14} />
+                  <span>{isEN ? "Affiliate Program (20%-35%)" : "Program Afiliasi (20%-35%)"}</span>
+                </button>
+              </div>
+
+              {/* USP Grid Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                {/* USP 1: Vision AI */}
+                <div 
+                  onClick={() => setShowScanModal(true)}
+                  className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 text-base font-black">
+                      📸
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Scan Foto <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      Vision AI Makanan Lokal
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-medium mt-1 leading-relaxed">
+                      Paham menu Indonesia: Nasi Padang, Kopi Kenangan, Boba, Sate, dll. Hitung kalori & makro dalam &lt;1.5 detik.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USP 2: Realtime Macro Manager */}
+                <div 
+                  onClick={() => setShowAddFoodModal(true)}
+                  className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-base font-black">
+                      ⚡
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Catat Makan <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      Realtime Macro & Food Log
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-medium mt-1 leading-relaxed">
+                      Tracking nutrisi lengkap (Protein, Karbohidrat, Lemak, Gula) dengan formula Atwater presisi tinggi.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USP 3: Smart Hydration */}
+                <div 
+                  onClick={() => setShowAddDrinkModal(true)}
+                  className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 text-base font-black">
+                      💧
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Catat Minum <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      Smart Hydration Tracker
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-medium mt-1 leading-relaxed">
+                      Target 2.500ml harian dengan visual gelas interaktif & auto-kalkulasi air untuk Americano, Teh, dan Kopi.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USP 4: AI Workout Coach & GIF Library */}
+                <div 
+                  onClick={() => setActiveTab("workouts")}
+                  className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-base font-black">
+                      🏋️
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Buka Latihan <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      AI Coach & 100+ Exercise GIF
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-medium mt-1 leading-relaxed">
+                      Panduan gerak visual animasi, cue pelatih Max & Mia, dan tracker set/repetisi yang sinkron ke Apple Watch.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USP 5: Body Transformation Analytics */}
+                <div 
+                  onClick={() => setActiveTab("progress")}
+                  className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 text-base font-black">
+                      📈
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Lihat Grafik <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      Grafik Progres & Analitik
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-medium mt-1 leading-relaxed">
+                      Visualisasi kurva berat badan, histori kalori 7 hari, tingkat konsistensi, dan proyeksi pencapaian target.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USP 6: Affiliate & Partner */}
+                <div 
+                  onClick={() => setShowAffiliateModal(true)}
+                  className="bg-gradient-to-br from-[#1C2738] to-[#121A28] border border-[#D4FF00]/30 hover:border-[#D4FF00] rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl bg-[#D4FF00]/20 border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00] text-base font-black">
+                      💰
+                    </div>
+                    <span className="text-[10px] font-black text-[#D4FF00] group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Join Affiliate <ArrowRight size={12} />
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors">
+                      Program Afiliasi GymBuddy
+                    </h4>
+                    <p className="text-xs text-neutral-300 font-medium mt-1 leading-relaxed">
+                      Dapatkan komisi berulang 20% – 35% setiap kali teman atau klien gym kamu berlangganan via kodemu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -2890,7 +3207,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: PROGRESS (PROYEKSI & HISTORI PROGRES) */}
+        {/* TAB 3: PROGRESS (PROYEKSI & HISTORI ANALITIK LENGKAP) */}
         {/* ========================================================================= */}
         {activeTab === "progress" && (
           <div className="space-y-5">
@@ -2904,31 +3221,65 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <ArrowLeft size={16} className="text-[#D4FF00]" />
                 <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
               </button>
+
+              <div className="flex items-center gap-1.5 bg-[#121722] border border-white/[0.06] p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setChartTimeframe("7d")}
+                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                    chartTimeframe === "7d"
+                      ? "bg-[#D4FF00] text-black shadow-xs"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  7 Hari
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartTimeframe("30d")}
+                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                    chartTimeframe === "30d"
+                      ? "bg-[#D4FF00] text-black shadow-xs"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  30 Hari
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
+            {/* Header Card */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
                   <TrendingUp size={22} className="text-[#D4FF00]" />
-                  <span>Progres Berat Badan</span>
+                  <span>{isEN ? "Body Transformation & Analytics" : "Grafik & Analitik Transformasi"}</span>
                 </h1>
                 <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  Target: {goalTitle} ({weight} kg ➔ {targetWeight} kg)
+                  Target: {goalTitle} ({weight} kg ➔ {targetWeight} kg) • {remainingKg} kg {isEN ? "to go" : "lagi"}
                 </p>
               </div>
 
-              <button
-                onClick={() => setShowUpdateWeightModal(true)}
-                className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm"
-              >
-                <span>Perbarui Berat</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowUpdateWeightModal(true)}
+                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <Edit3 size={14} />
+                  <span>{isEN ? "Log Weight" : "Perbarui Berat"}</span>
+                </button>
+              </div>
             </div>
 
-            {/* WEIGHT PROJECTION GRAPH */}
+            {/* 1. WEIGHT EVOLUTION & TREND GRAPH */}
             <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-white">Kurva Proyeksi Target</h3>
+                <div className="flex items-center gap-2">
+                  <Activity size={18} className="text-[#D4FF00]" />
+                  <h3 className="font-extrabold text-base text-white">
+                    {isEN ? "Weight Progression Curve" : "Kurva Progres Berat Badan"}
+                  </h3>
+                </div>
                 <span className="text-xs font-black text-[#D4FF00] bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-3 py-1 rounded-full">
                   Target: {targetWeight} kg
                 </span>
@@ -2937,68 +3288,253 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between text-xs text-neutral-400 font-bold border-b border-white/[0.06] pb-2">
                   <span>Awal: {startWeight || weight} kg</span>
-                  <span>Estimasi: ~12 Minggu</span>
+                  <span className="text-neutral-300">Estimasi: ~{chartTimeframe === "30d" ? "4-8" : "8-12"} Minggu</span>
                   <span className="text-[#D4FF00]">Target: {targetWeight} kg</span>
                 </div>
 
-                <div className="h-44 sm:h-52 w-full relative flex items-center justify-center pt-2">
+                <div className="h-48 sm:h-56 w-full relative flex items-center justify-center pt-2">
                   <svg className="w-full h-full overflow-visible" viewBox="0 0 500 160">
                     <defs>
-                      <linearGradient id="curveGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.8" />
+                      <linearGradient id="weightCurveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.9" />
                         <stop offset="100%" stopColor="#25D366" stopOpacity="1" />
                       </linearGradient>
-                      <linearGradient id="areaFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.2" />
+                      <linearGradient id="weightAreaFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#D4FF00" stopOpacity="0.25" />
                         <stop offset="100%" stopColor="#D4FF00" stopOpacity="0.0" />
                       </linearGradient>
                     </defs>
 
-                    <line x1="0" y1="40" x2="500" y2="40" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
-                    <line x1="0" y1="80" x2="500" y2="80" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
-                    <line x1="0" y1="120" x2="500" y2="120" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
+                    {/* Grid lines */}
+                    <line x1="0" y1="35" x2="500" y2="35" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="0" y1="75" x2="500" y2="75" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="0" y1="115" x2="500" y2="115" stroke="#1E2638" strokeDasharray="4 4" strokeWidth="1" />
 
+                    {/* Area fill */}
                     {targetWeight < weight ? (
-                      <path d="M 30 50 Q 250 80, 470 120 L 470 150 L 30 150 Z" fill="url(#areaFill)" />
+                      <path d="M 30 50 Q 150 65, 250 85 T 470 120 L 470 150 L 30 150 Z" fill="url(#weightAreaFill)" />
                     ) : targetWeight > weight ? (
-                      <path d="M 30 120 Q 250 80, 470 50 L 470 150 L 30 150 Z" fill="url(#areaFill)" />
+                      <path d="M 30 120 Q 150 100, 250 80 T 470 50 L 470 150 L 30 150 Z" fill="url(#weightAreaFill)" />
                     ) : (
-                      <path d="M 30 80 L 470 80 L 470 150 L 30 150 Z" fill="url(#areaFill)" />
+                      <path d="M 30 80 L 470 80 L 470 150 L 30 150 Z" fill="url(#weightAreaFill)" />
                     )}
 
+                    {/* Line curve */}
                     {targetWeight < weight ? (
-                      <path d="M 30 50 Q 250 80, 470 120" fill="none" stroke="url(#curveGlow)" strokeWidth="4" strokeLinecap="round" />
+                      <path d="M 30 50 Q 150 65, 250 85 T 470 120" fill="none" stroke="url(#weightCurveGrad)" strokeWidth="4" strokeLinecap="round" />
                     ) : targetWeight > weight ? (
-                      <path d="M 30 120 Q 250 80, 470 50" fill="none" stroke="url(#curveGlow)" strokeWidth="4" strokeLinecap="round" />
+                      <path d="M 30 120 Q 150 100, 250 80 T 470 50" fill="none" stroke="url(#weightCurveGrad)" strokeWidth="4" strokeLinecap="round" />
                     ) : (
-                      <path d="M 30 80 L 470 80" fill="none" stroke="url(#curveGlow)" strokeWidth="4" strokeLinecap="round" />
+                      <path d="M 30 80 L 470 80" fill="none" stroke="url(#weightCurveGrad)" strokeWidth="4" strokeLinecap="round" />
                     )}
 
+                    {/* Start Node */}
                     <circle cx="30" cy={targetWeight < weight ? 50 : targetWeight > weight ? 120 : 80} r="6" fill="#111620" stroke="#D4FF00" strokeWidth="3" />
                     <text x="30" y={targetWeight < weight ? 35 : targetWeight > weight ? 140 : 65} fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">
-                      {weight} kg (Sekarang)
+                      {startWeight} kg
                     </text>
 
-                    <circle cx="470" cy={targetWeight < weight ? 120 : targetWeight > weight ? 50 : 80} r="7" fill="#D4FF00" stroke="#111620" strokeWidth="2" />
-                    <text x="470" y={targetWeight < weight ? 142 : targetWeight > weight ? 38 : 65} fill="#D4FF00" fontSize="12" fontWeight="900" textAnchor="middle">
-                      {targetWeight} kg (Target)
+                    {/* Mid Current Node */}
+                    <circle cx="250" cy={targetWeight < weight ? 85 : targetWeight > weight ? 80 : 80} r="7" fill="#D4FF00" stroke="#111620" strokeWidth="2" />
+                    <text x="250" y={targetWeight < weight ? 70 : targetWeight > weight ? 102 : 65} fill="#D4FF00" fontSize="12" fontWeight="900" textAnchor="middle">
+                      {weight} kg ({isEN ? "Current" : "Sekarang"})
+                    </text>
+
+                    {/* Target Node */}
+                    <circle cx="470" cy={targetWeight < weight ? 120 : targetWeight > weight ? 50 : 80} r="7" fill="#25D366" stroke="#111620" strokeWidth="2" />
+                    <text x="470" y={targetWeight < weight ? 142 : targetWeight > weight ? 38 : 65} fill="#25D366" fontSize="12" fontWeight="900" textAnchor="middle">
+                      {targetWeight} kg ({isEN ? "Target" : "Goal"})
                     </text>
                   </svg>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">Berat Awal</span>
-                  <p className="text-lg font-black text-white">{startWeight || weight} kg</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Start Weight" : "Berat Awal"}</span>
+                  <p className="text-base sm:text-lg font-black text-white">{startWeight || weight} kg</p>
                 </div>
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">Saat Ini</span>
-                  <p className="text-lg font-black text-[#D4FF00]">{weight} kg</p>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Current Weight" : "Saat Ini"}</span>
+                  <p className="text-base sm:text-lg font-black text-[#D4FF00]">{weight} kg</p>
                 </div>
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-4 text-center space-y-1">
-                  <span className="text-xs text-neutral-400 font-bold uppercase">Sisa</span>
-                  <p className="text-lg font-black text-white">{remainingKg} kg</p>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Goal" : "Target BB"}</span>
+                  <p className="text-base sm:text-lg font-black text-emerald-400">{targetWeight} kg</p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Remaining" : "Sisa"}</span>
+                  <p className="text-base sm:text-lg font-black text-amber-400">{remainingKg} kg</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. 7-DAY CALORIE & MACRO INTAKE BAR CHART */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Flame size={18} className="text-amber-400" />
+                  <h3 className="font-extrabold text-base text-white">
+                    {isEN ? "7-Day Calorie & Macro History" : "Histori Kalori & Makro 7 Hari"}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
+                    <span className="text-neutral-400">Protein</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                    <span className="text-neutral-400">Karbo</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+                    <span className="text-neutral-400">Lemak</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bar Chart Container */}
+              <div className="bg-[#0E131F] border border-white/[0.06] rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between text-xs text-neutral-400 font-bold">
+                  <span>Target: {targetCalories} kcal / hari</span>
+                  <button 
+                    onClick={() => setShowCustomTargetsModal(true)}
+                    className="text-[#D4FF00] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Sliders size={12} />
+                    <span>Ubah Target</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 sm:gap-3 items-end h-44 pt-4 border-b border-white/[0.06] pb-2">
+                  {ribbonDates.map((rDate) => {
+                    let dayCal = 0, dayProt = 0, dayCarb = 0, dayFat = 0;
+                    try {
+                      const dLogs = localStorage.getItem(`gymbuddy_meals_${normPhone}_${rDate.dateStr}`);
+                      if (dLogs) {
+                        const parsed: MealItem[] = JSON.parse(dLogs);
+                        const solids = parsed.filter(i => !isLiquidName(i.foodName) && !i.isHydration);
+                        dayCal = solids.reduce((s, i) => s + (Number(i.calories) || 0), 0);
+                        dayProt = solids.reduce((s, i) => s + (Number(i.protein) || 0), 0);
+                        dayCarb = solids.reduce((s, i) => s + (Number(i.carbs) || 0), 0);
+                        dayFat = solids.reduce((s, i) => s + (Number(i.fat) || 0), 0);
+                      }
+                    } catch (e) {}
+
+                    // Current selected date has live state
+                    if (rDate.dateStr === selectedDate) {
+                      dayCal = totalCaloriesConsumed;
+                      dayProt = totalProteinConsumed;
+                      dayCarb = totalCarbsConsumed;
+                      dayFat = totalFatConsumed;
+                    }
+
+                    const fillHeightPercent = Math.min(100, Math.max(8, Math.round((dayCal / (targetCalories || 2000)) * 100)));
+                    const isTargetMet = dayCal >= targetCalories * 0.85 && dayCal <= targetCalories * 1.15;
+                    const isOver = dayCal > targetCalories * 1.15;
+
+                    return (
+                      <div 
+                        key={rDate.dateStr}
+                        onClick={() => setSelectedDate(rDate.dateStr)}
+                        className={`flex flex-col items-center justify-end h-full gap-1.5 cursor-pointer group transition-all ${
+                          rDate.dateStr === selectedDate ? "scale-105 font-black" : "opacity-80 hover:opacity-100"
+                        }`}
+                      >
+                        <span className="text-[10px] text-neutral-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                          {dayCal}
+                        </span>
+
+                        <div className="w-full max-w-[36px] bg-[#161D2B] rounded-xl overflow-hidden h-32 flex flex-col justify-end p-1 border border-white/[0.06]">
+                          <div 
+                            style={{ height: `${fillHeightPercent}%` }}
+                            className={`w-full rounded-lg transition-all duration-500 ${
+                              isOver 
+                                ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                                : isTargetMet
+                                ? "bg-[#D4FF00] shadow-[0_0_10px_rgba(212,255,0,0.5)]"
+                                : "bg-gradient-to-t from-emerald-500 to-[#D4FF00]"
+                            }`}
+                          />
+                        </div>
+
+                        <span className={`text-[10px] uppercase font-extrabold ${rDate.dateStr === selectedDate ? "text-[#D4FF00]" : "text-neutral-400"}`}>
+                          {rDate.dayName}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. 7-DAY HYDRATION & WORKOUT CONSISTENCY STATS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Hydration Chart */}
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Droplets size={18} className="text-blue-400" />
+                    <h3 className="font-extrabold text-sm text-white">Konsistensi Hidrasi (7 Hari)</h3>
+                  </div>
+                  <span className="text-xs font-bold text-blue-300">Goal: {targetHydrationGoal} ml</span>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 items-end h-28 pt-2">
+                  {ribbonDates.map((rDate) => {
+                    let dWater = 0;
+                    try {
+                      const dLogs = localStorage.getItem(`gymbuddy_meals_${normPhone}_${rDate.dateStr}`);
+                      if (dLogs) {
+                        const parsed: MealItem[] = JSON.parse(dLogs);
+                        const drinks = parsed.filter(i => isLiquidName(i.foodName) || i.isHydration);
+                        dWater = drinks.reduce((s, i) => s + (Number(i.volumeMl) || extractVolumeMlFromName(i.foodName)), 0);
+                      }
+                    } catch (e) {}
+                    if (rDate.dateStr === selectedDate) dWater = totalHydrationMl;
+
+                    const waterPercent = Math.min(100, Math.max(10, Math.round((dWater / targetHydrationGoal) * 100)));
+
+                    return (
+                      <div key={rDate.dateStr} className="flex flex-col items-center gap-1">
+                        <div className="w-full bg-[#0E131F] rounded-lg h-20 flex flex-col justify-end p-0.5 border border-white/[0.04]">
+                          <div 
+                            style={{ height: `${waterPercent}%` }}
+                            className={`w-full rounded-md transition-all ${dWater >= targetHydrationGoal ? "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]" : "bg-blue-500/40"}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-neutral-400 font-bold uppercase">{rDate.dayName}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Workout Consistency */}
+              <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell size={18} className="text-[#D4FF00]" />
+                    <h3 className="font-extrabold text-sm text-white">Volume Latihan Mingguan</h3>
+                  </div>
+                  <span className="text-xs font-bold text-[#D4FF00]">🔥 {currentStreak} Hari Beruntun</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase">Total Set Hari Ini</span>
+                    <p className="text-xl font-black text-white">{totalCompletedSetsOverall} <span className="text-xs text-neutral-400 font-medium">/ {totalTargetSetsOverall} Sets</span></p>
+                  </div>
+                  <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 text-center space-y-1">
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase">Skor Konsistensi</span>
+                    <p className="text-xl font-black text-emerald-400">{Math.min(100, Math.round((currentStreak / 7) * 100))}%</p>
+                  </div>
+                </div>
+
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 flex items-center justify-between text-xs text-neutral-300">
+                  <span className="font-semibold">Fokus Menu Hari Ini:</span>
+                  <span className="font-black text-[#D4FF00]">{todayScheduleObj.focus}</span>
                 </div>
               </div>
             </div>
@@ -3010,16 +3546,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {activeTab === "profile" && (
           <div className="space-y-5">
-            <div className="flex items-center justify-between bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5">
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <User size={22} className="text-[#D4FF00]" />
-                  <span>Profil & Pengaturan</span>
-                </h1>
-                <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {activeUser.name || "Member"} • {activeUser.phone || "-"}
-                </p>
-              </div>
+            {/* Top Navigation Back to Home Bar */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setActiveTab("home")}
+                className="px-3.5 py-2 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <ArrowLeft size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
+              </button>
 
               <button
                 onClick={toggleLanguage}
@@ -3028,6 +3564,157 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <Globe size={14} className="text-[#D4FF00]" />
                 <span>{lang}</span>
               </button>
+            </div>
+
+            {/* User Profile Header Card */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D4FF00] to-emerald-400 text-black font-black flex items-center justify-center text-2xl shadow-md shrink-0">
+                    {(activeUser.name || "U")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-black text-white">{activeUser.name || "Member GymBuddy"}</h2>
+                    <p className="text-xs text-neutral-400 font-semibold mt-0.5">
+                      📱 {activeUser.phone || "-"} • {activeUser.gender || "Pria"} • {activeUser.age || 25} Tahun
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfileModal(true)}
+                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <Edit3 size={14} />
+                  <span>{isEN ? "Edit Personal Info" : "Edit Data Personal"}</span>
+                </button>
+              </div>
+
+              {/* Personal Details Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 border-t border-white/[0.06]">
+                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-3">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Height" : "Tinggi Badan"}</span>
+                  <span className="text-sm font-black text-white">{activeUser.height || 170} cm</span>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-3">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Weight" : "Berat Badan"}</span>
+                  <span className="text-sm font-black text-[#D4FF00]">{activeUser.weight || 70} kg</span>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-3">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Activity Level" : "Aktivitas"}</span>
+                  <span className="text-sm font-black text-white capitalize">{activeUser.activityLevel || "Sedang"}</span>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.04] rounded-xl p-3">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "AI Coach" : "Pelatih AI"}</span>
+                  <span className="text-sm font-black text-white">{coachName}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Macro & Nutrition Target Adjuster Card */}
+            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sliders size={18} className="text-[#D4FF00]" />
+                    <h3 className="font-extrabold text-base text-white">
+                      {isEN ? "Daily Target Nutrition & Macros" : "Target Nutrisi & Makro Harian"}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                    {Object.keys(customTargets).length > 0 
+                      ? (isEN ? "⚡ Using Custom User Targets" : "⚡ Menggunakan Target Kustom Pilihanmu") 
+                      : (isEN ? "✨ Using GymBuddy AI Auto Target" : "✨ Menggunakan Rekomendasi Otomatis AI (BMR/TDEE)")}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCustomTargetsModal(true)}
+                  className="px-4 py-2 bg-[#18202E] hover:bg-[#202b3d] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Sliders size={14} className="text-[#D4FF00]" />
+                  <span>{isEN ? "Adjust Targets" : "Atur Target Kustom"}</span>
+                </button>
+              </div>
+
+              {/* Current Target Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Calories" : "Kalori"}</span>
+                  <p className="text-base font-black text-white">{targetCalories} <span className="text-[10px] text-neutral-400 font-normal">kcal</span></p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-indigo-400 font-bold uppercase block">Protein</span>
+                  <p className="text-base font-black text-white">{targetProtein} <span className="text-[10px] text-neutral-400 font-normal">g</span></p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase block">{isEN ? "Carbs" : "Karbo"}</span>
+                  <p className="text-base font-black text-white">{targetCarbs} <span className="text-[10px] text-neutral-400 font-normal">g</span></p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-rose-400 font-bold uppercase block">{isEN ? "Fat" : "Lemak"}</span>
+                  <p className="text-base font-black text-white">{targetFat} <span className="text-[10px] text-neutral-400 font-normal">g</span></p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-amber-400 font-bold uppercase block">{isEN ? "Max Sugar" : "Batas Gula"}</span>
+                  <p className="text-base font-black text-white">{targetSugar} <span className="text-[10px] text-neutral-400 font-normal">g</span></p>
+                </div>
+                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-blue-400 font-bold uppercase block">{isEN ? "Hydration" : "Air Minum"}</span>
+                  <p className="text-base font-black text-white">{targetHydrationGoal} <span className="text-[10px] text-neutral-400 font-normal">ml</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* Affiliate Program Hub Card */}
+            <div className="bg-gradient-to-br from-[#1A2333] to-[#101622] border border-[#D4FF00]/30 rounded-2xl p-5 shadow-md space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-xl shadow-sm">
+                    💰
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-base text-white">Program Afiliasi GymBuddy</h3>
+                      <span className="px-2 py-0.5 rounded-full bg-[#D4FF00]/20 text-[#D4FF00] text-[10px] font-black uppercase">
+                        20% - 35% Komisi
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-300 font-medium mt-0.5">
+                      Dapatkan komisi berulang setiap kali teman atau muridmu berlangganan via link referralmu.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAffiliateModal(true)}
+                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
+                >
+                  <Gift size={14} />
+                  <span>Buka Dashboard Afiliasi</span>
+                </button>
+              </div>
+
+              {/* Referral Quick Copy Bar */}
+              <div className="bg-[#0E131F] border border-white/[0.08] rounded-xl p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <div className="truncate">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase block">Link Referral Kamu:</span>
+                  <span className="text-xs font-mono font-bold text-[#D4FF00] truncate block">{referralLink}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyReferral}
+                    className="px-3 py-1.5 bg-[#18202E] hover:bg-[#202b3d] text-white border border-white/10 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    {referralCopied ? <Check size={13} className="text-[#D4FF00]" /> : <Copy size={13} />}
+                    <span>{referralCopied ? "Tersalin!" : "Salin Link"}</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Coach Persona Card */}
@@ -3050,40 +3737,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="px-4 py-2 bg-[#25D366] hover:bg-[#1ebd59] text-black font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
                   <MessageSquare size={15} />
-                  <span>WhatsApp</span>
+                  <span>WhatsApp Coach</span>
                 </a>
-              </div>
-            </div>
-
-            {/* Biometrics */}
-            <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-sm text-white">{isEN ? "Biometrics & Daily Targets" : "Data Fisik & Target Harian"}</h3>
-                <button
-                  onClick={() => setShowGoalEditModal(true)}
-                  className="px-3 py-1.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                >
-                  <Edit3 size={13} />
-                  <span>{isEN ? "Edit Goal" : "Ubah Goal"}</span>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Weight" : "Berat Badan"}</span>
-                  <p className="text-base font-black text-white">{weight} kg</p>
-                </div>
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Weight" : "Target BB"}</span>
-                  <p className="text-base font-black text-[#D4FF00]">{targetWeight} kg</p>
-                </div>
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Calories" : "Target Kalori"}</span>
-                  <p className="text-base font-black text-white">{targetCalories} kcal</p>
-                </div>
-                <div className="bg-[#0E131F] border border-white/[0.06] rounded-xl p-3.5 space-y-0.5">
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">{isEN ? "Target Protein" : "Target Protein"}</span>
-                  <p className="text-base font-black text-white">{targetProtein} g</p>
-                </div>
               </div>
             </div>
 
@@ -5254,6 +5909,446 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         )}
       </AnimatePresence>
       {/* ── End Coach Bubble ────────────────────────────────────────────────── */}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: EDIT PROFILE PERSONAL INFO */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showEditProfileModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-black border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00]">
+                    <User size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-white text-base">
+                      {isEN ? "Edit Personal Info" : "Edit Informasi Personal"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {isEN ? "Update your name, biometrics & coach" : "Sesuaikan nama panggilan, data fisik & coach"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-300">
+                    {isEN ? "Full Name / Nickname" : "Nama Panggilan"}
+                  </label>
+                  <input
+                    type="text"
+                    value={profName}
+                    onChange={(e) => setProfName(e.target.value)}
+                    placeholder="Contoh: Akmal"
+                    className="w-full px-3.5 py-2.5 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-semibold focus:outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+
+                {/* Gender */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-300">
+                    {isEN ? "Gender" : "Jenis Kelamin"}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProfGender("pria")}
+                      className={`py-2.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        profGender.toLowerCase() === "pria" || profGender.toLowerCase() === "male"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                          : "bg-[#161C28] text-neutral-300 border-white/10"
+                      }`}
+                    >
+                      👨 Pria (Male)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfGender("wanita")}
+                      className={`py-2.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        profGender.toLowerCase() === "wanita" || profGender.toLowerCase() === "female"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                          : "bg-[#161C28] text-neutral-300 border-white/10"
+                      }`}
+                    >
+                      👩 Wanita (Female)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Age, Height, Weight Grid */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-neutral-300">{isEN ? "Age (Yrs)" : "Umur"}</label>
+                    <input
+                      type="number"
+                      value={profAge}
+                      onChange={(e) => setProfAge(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-neutral-300">{isEN ? "Height (cm)" : "Tinggi (cm)"}</label>
+                    <input
+                      type="number"
+                      value={profHeight}
+                      onChange={(e) => setProfHeight(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-neutral-300">{isEN ? "Weight (kg)" : "BB Saat Ini"}</label>
+                    <input
+                      type="number"
+                      value={profWeight}
+                      onChange={(e) => setProfWeight(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                </div>
+
+                {/* Target Weight */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-300">
+                    {isEN ? "Target Weight (kg)" : "Target Berat Badan (kg)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={profTargetWeight}
+                    onChange={(e) => setProfTargetWeight(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+
+                {/* AI Coach Preference */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-300">
+                    {isEN ? "AI Coach Persona" : "Persona Pelatih AI"}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProfPersona("max")}
+                      className={`p-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer ${
+                        profPersona === "max"
+                          ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white"
+                          : "bg-[#161C28] border-white/10 text-neutral-400"
+                      }`}
+                    >
+                      <span className="text-lg">🏋️</span>
+                      <div>
+                        <p className="font-black text-white">Coach Max</p>
+                        <p className="text-[10px] text-neutral-400">Tegas & Gym Focused</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfPersona("mia")}
+                      className={`p-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer ${
+                        profPersona === "mia"
+                          ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white"
+                          : "bg-[#161C28] border-white/10 text-neutral-400"
+                      }`}
+                    >
+                      <span className="text-lg">✨</span>
+                      <div>
+                        <p className="font-black text-white">Coach Mia</p>
+                        <p className="text-[10px] text-neutral-400">Ramah & Nutritionist</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-extrabold text-xs transition-all cursor-pointer"
+                >
+                  {isEN ? "Cancel" : "Batal"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveProfileChanges}
+                  className="flex-1 py-3 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all cursor-pointer shadow-lg"
+                >
+                  {isEN ? "Save Changes" : "Simpan Profil"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: CUSTOM MACRO & NUTRITION TARGET ADJUSTER */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showCustomTargetsModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-black border border-[#D4FF00]/40 flex items-center justify-center text-[#D4FF00]">
+                    <Sliders size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-white text-base">
+                      {isEN ? "Custom Daily Targets" : "Atur Target Nutrisi Kustom"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      {isEN ? "Manually adjust your calorie & macro goals" : "Bebas atur kalori, protein, karbo & air harian"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCustomTargetsModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Target Calories */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-neutral-300 flex items-center justify-between">
+                    <span>{isEN ? "Daily Calorie Target (kcal)" : "Target Kalori Harian (kcal)"}</span>
+                    <span className="text-[10px] text-[#D4FF00]">Auto: {autoTargetCalories} kcal</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={custCal}
+                    onChange={(e) => setCustCal(e.target.value)}
+                    placeholder="2000"
+                    className="w-full px-3.5 py-2.5 bg-[#161C28] border border-white/10 rounded-xl text-white text-base font-black focus:outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+
+                {/* Protein, Carbs, Fat Grid */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-indigo-400">Protein (g)</label>
+                    <input
+                      type="number"
+                      value={custProt}
+                      onChange={(e) => setCustProt(e.target.value)}
+                      placeholder="140"
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-emerald-400">{isEN ? "Carbs (g)" : "Karbo (g)"}</label>
+                    <input
+                      type="number"
+                      value={custCarb}
+                      onChange={(e) => setCustCarb(e.target.value)}
+                      placeholder="220"
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-rose-400">{isEN ? "Fat (g)" : "Lemak (g)"}</label>
+                    <input
+                      type="number"
+                      value={custFat}
+                      onChange={(e) => setCustFat(e.target.value)}
+                      placeholder="55"
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Sugar & Water Grid */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-amber-400">{isEN ? "Max Sugar (g)" : "Batas Gula (g)"}</label>
+                    <input
+                      type="number"
+                      value={custSugar}
+                      onChange={(e) => setCustSugar(e.target.value)}
+                      placeholder="45"
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-blue-400">{isEN ? "Water Target (ml)" : "Target Air (ml)"}</label>
+                    <input
+                      type="number"
+                      value={custWater}
+                      onChange={(e) => setCustWater(e.target.value)}
+                      placeholder="2500"
+                      className="w-full px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-white text-sm font-black focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-neutral-800">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleResetCustomTargets}
+                    className="flex-1 py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-extrabold text-xs transition-all cursor-pointer"
+                  >
+                    {isEN ? "Reset to AI Auto" : "Reset ke Hitungan AI"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomTargets}
+                    className="flex-1 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all cursor-pointer shadow-lg"
+                  >
+                    {isEN ? "Save Custom Targets" : "Simpan Target Kustom"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: AFFILIATE PROGRAM & REFERRAL DASHBOARD */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showAffiliateModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-[#D4FF00] text-black flex items-center justify-center font-black">
+                    💰
+                  </div>
+                  <div>
+                    <h3 className="font-['Archivo_Black'] text-white text-base">
+                      Program Afiliasi GymBuddy
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium">
+                      Komisi Berulang 20% – 35% Seumur Hidup
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAffiliateModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Commission Stats */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Total Klik</span>
+                  <p className="text-lg font-black text-white">18</p>
+                </div>
+                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Member Aktif</span>
+                  <p className="text-lg font-black text-[#D4FF00]">3</p>
+                </div>
+                <div className="bg-[#161C28] border border-white/[0.06] rounded-2xl p-3.5 text-center space-y-0.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Saldo Komisi</span>
+                  <p className="text-lg font-black text-emerald-400">Rp 150.000</p>
+                </div>
+              </div>
+
+              {/* Commission Tier Badge */}
+              <div className="bg-gradient-to-r from-amber-500/15 via-[#D4FF00]/15 to-emerald-500/15 border border-[#D4FF00]/30 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🥉</span>
+                    <span className="font-extrabold text-sm text-white">Tier Bronze (Komisi 20%)</span>
+                  </div>
+                  <span className="text-[10px] font-black text-[#D4FF00] bg-black/40 px-2.5 py-1 rounded-full border border-[#D4FF00]/30">
+                    Target: 10 Member ➔ Tier Silver 25%
+                  </span>
+                </div>
+                <div className="w-full bg-black/50 rounded-full h-2 overflow-hidden">
+                  <div className="bg-[#D4FF00] h-full w-[30%] rounded-full shadow-[0_0_8px_#D4FF00]" />
+                </div>
+              </div>
+
+              {/* Link & Coupon Box */}
+              <div className="space-y-3">
+                <div className="bg-[#161C28] border border-white/[0.08] rounded-xl p-3.5 space-y-1.5">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Link Referral Eksklusif:</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono font-bold text-[#D4FF00] truncate">{referralLink}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyReferral}
+                      className="px-3 py-1.5 bg-[#D4FF00] text-black font-extrabold text-xs rounded-lg flex items-center gap-1 shrink-0 cursor-pointer shadow-sm"
+                    >
+                      {referralCopied ? <Check size={13} /> : <Copy size={13} />}
+                      <span>{referralCopied ? "Tersalin" : "Salin"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#161C28] border border-white/[0.08] rounded-xl p-3.5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase block">Kode Kupon Diskon Member:</span>
+                    <span className="text-sm font-mono font-black text-white tracking-wider">{couponCode}</span>
+                  </div>
+                  <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                    Diskon 10% Member
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2 border-t border-neutral-800">
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Yuk pakai GymBuddy AI buat catat kalori makanan Indonesia & latihan gym! Daftar lewat link ini: ${referralLink} pakai kode ${couponCode} buat dapat diskon!`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 rounded-xl bg-[#25D366] hover:bg-[#1ebd59] text-black font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Share2 size={15} />
+                  <span>Bagikan ke WhatsApp Teman / Grup Gym</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("Permintaan penarikan komisi Rp 150.000 telah dikirim! Tim finance akan memproses transfer dalam 1x24 jam.");
+                    setShowAffiliateModal(false);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[#1D2332] hover:bg-[#283144] text-neutral-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <DollarSign size={14} className="text-emerald-400" />
+                  <span>Tarik Saldo Komisi (Withdraw)</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
