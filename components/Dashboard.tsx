@@ -1202,6 +1202,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [itemProteinInput, setItemProteinInput] = useState("");
   const [itemCarbsInput, setItemCarbsInput] = useState("");
   const [itemFatInput, setItemFatInput] = useState("");
+  const [itemFiberInput, setItemFiberInput] = useState("0");
+  const [itemSugarInput, setItemSugarInput] = useState("0");
   const [itemVolumeInput, setItemVolumeInput] = useState("250");
   const [newWeightInput, setNewWeightInput] = useState(String(safeUser.weight || 70));
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
@@ -1735,141 +1737,122 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const estimateIndonesianNutritionClient = (text: string) => {
     const cleanText = cleanIndonesianFoodSentence(text);
     const lower = cleanText.toLowerCase().trim();
-    let cal = 0, prot = 0, carb = 0, fat = 0;
+    const parts = lower.split(/[,+&]| dan /).map(p => p.trim()).filter(Boolean);
+
+    let totalCal = 0, totalProt = 0, totalCarb = 0, totalFat = 0, totalFiber = 0, totalSugar = 0;
     let isHydration = false, volumeMl = 0;
-    let formattedName = cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
 
-    // 1. Exact Beverages
-    if (lower.includes("americano") || lower.includes("espresso") || lower.includes("kopi hitam") || lower.includes("black coffee")) {
-      return { foodName: "Iced Americano", calories: 5, protein: 0, carbs: 1, fat: 0, isHydration: true, volumeMl: 250 };
-    }
-    if (lower === "air" || lower.includes("air putih") || lower.includes("air mineral") || lower.includes("aqua") || lower.includes("le minerale")) {
-      return { foodName: "Air Mineral", calories: 0, protein: 0, carbs: 0, fat: 0, isHydration: true, volumeMl: 250 };
-    }
-    if (lower.includes("teh tawar") || lower.includes("green tea") || lower.includes("teh hijau")) {
-      return { foodName: "Teh Tawar", calories: 2, protein: 0, carbs: 0, fat: 0, isHydration: true, volumeMl: 250 };
-    }
-    if (lower.includes("teh manis") || lower.includes("es teh manis") || lower.includes("teh obeng")) {
-      return { foodName: "Es Teh Manis", calories: 90, protein: 0, carbs: 22, fat: 0, isHydration: true, volumeMl: 300 };
-    }
-    if (lower.includes("kopi susu") || lower.includes("latte") || lower.includes("cappuccino")) {
-      return { foodName: "Kopi Susu / Latte", calories: 150, protein: 5, carbs: 18, fat: 6, isHydration: true, volumeMl: 250 };
-    }
-    if (lower.includes("jus alpukat")) {
-      return { foodName: "Jus Alpukat", calories: 240, protein: 3, carbs: 32, fat: 12, isHydration: true, volumeMl: 300 };
-    }
-    if (lower.includes("jus jeruk")) {
-      return { foodName: "Jus Jeruk", calories: 110, protein: 2, carbs: 26, fat: 0, isHydration: true, volumeMl: 250 };
-    }
-    if (lower.includes("whey") || lower.includes("susu protein") || lower.includes("protein shake")) {
-      return { foodName: "Whey Protein Shake", calories: 140, protein: 25, carbs: 3, fat: 2, isHydration: true, volumeMl: 300 };
-    }
+    for (const item of parts) {
+      let cal = 0, prot = 0, carb = 0, fat = 0, fib = 0, sug = 0;
 
-    // 2. Snacks, Fast Food & Western Foods
-    if (lower.includes("french fries") || lower.includes("kentang goreng") || lower.includes("fries")) {
-      return { foodName: "French Fries (Kentang Goreng)", calories: 340, protein: 4, carbs: 44, fat: 17, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("kentang rebus") || lower.includes("mashed potato")) {
-      return { foodName: "Kentang Rebus / Mashed Potato", calories: 160, protein: 4, carbs: 36, fat: 1, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("burger")) {
-      return { foodName: "Burger Daging Sapi", calories: 450, protein: 22, carbs: 40, fat: 22, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("pizza")) {
-      return { foodName: "Pizza (1 Slice)", calories: 280, protein: 12, carbs: 32, fat: 11, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("martabak manis") || lower.includes("terang bulan")) {
-      return { foodName: "Martabak Manis (1 Potong)", calories: 290, protein: 5, carbs: 38, fat: 14, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("martabak telur") || lower.includes("martabak telor")) {
-      return { foodName: "Martabak Telur (2 Potong)", calories: 310, protein: 14, carbs: 16, fat: 21, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("gorengan") || lower.includes("bakwan") || lower.includes("bala-bala")) {
-      return { foodName: "Gorengan / Bakwan (2 Pcs)", calories: 260, protein: 4, carbs: 28, fat: 15, isHydration: false, volumeMl: 0 };
-    }
-    if (lower.includes("pisang goreng")) {
-      return { foodName: "Pisang Goreng (2 Pcs)", calories: 280, protein: 2, carbs: 46, fat: 10, isHydration: false, volumeMl: 0 };
-    }
-
-    // 3. Base Indonesian Main Dishes
-    if (lower.includes("nasi goreng")) {
-      formattedName = "Nasi Goreng";
-      cal += 520; prot += 14; carb += 68; fat += 20;
-    } else if (lower.includes("mie goreng") || lower.includes("indomie goreng") || lower.includes("bihun goreng") || lower.includes("kwetiau")) {
-      formattedName = "Mie Goreng";
-      cal += 420; prot += 10; carb += 58; fat += 16;
-    } else if (lower.includes("mie rebus") || lower.includes("indomie rebus") || lower.includes("ramen")) {
-      formattedName = "Mie Kuah / Rebus";
-      cal += 360; prot += 9; carb += 50; fat += 12;
-    } else if (lower.includes("nasi padang")) {
-      formattedName = "Nasi Padang Komplit";
-      cal += 720; prot += 36; carb += 70; fat += 32;
-    } else if (lower.includes("nasi uduk") || lower.includes("nasi kuning") || lower.includes("nasi liwet")) {
-      formattedName = "Nasi Uduk / Kuning";
-      cal += 320; prot += 6; carb += 52; fat += 10;
-    } else if (lower.includes("nasi putih") || lower.includes("nasi merah")) {
-      formattedName = lower.includes("merah") ? "Nasi Merah" : "Nasi Putih";
-      cal += 200; prot += 4; carb += 44; fat += 1;
-    } else if (lower.includes("roti") || lower.includes("sandwich") || lower.includes("toast")) {
-      formattedName = "Roti / Sandwich";
-      cal += 250; prot += 8; carb += 38; fat += 6;
-    } else if (lower.includes("bakso")) {
-      formattedName = "Bakso Sapi Kuah";
-      cal += 420; prot += 26; carb += 38; fat += 16;
-    } else if (lower.includes("soto")) {
-      formattedName = "Soto Ayam / Sapi";
-      cal += 380; prot += 24; carb += 42; fat += 12;
-    } else if (lower.includes("sate")) {
-      formattedName = "Sate Ayam / Sapi";
-      cal += 440; prot += 32; carb += 18; fat += 24;
-    } else if (lower.includes("batagor") || lower.includes("siomay")) {
-      formattedName = lower.includes("batagor") ? "Batagor Bandung" : "Siomay Bandung";
-      cal += 460; prot += 20; carb += 45; fat += 22;
-    } else if (lower.includes("gado") || lower.includes("pecel")) {
-      formattedName = "Gado-Gado / Pecel";
-      cal += 380; prot += 15; carb += 46; fat += 16;
-    }
-
-    // 4. Protein additions & toppings
-    if (lower.includes("seafood") || lower.includes("udang") || lower.includes("cumi") || lower.includes("kepiting")) {
-      cal += 110; prot += 16; carb += 1; fat += 3;
-    }
-    if (lower.includes("telur") || lower.includes("telor") || lower.includes("ceplok") || lower.includes("dadar")) {
-      cal += 90; prot += 7; carb += 1; fat += 7;
-    }
-    if (lower.includes("ayam") || lower.includes("chicken")) {
-      if (lower.includes("dada")) {
-        cal += 180; prot += 30; carb += 0; fat += 5;
-      } else if (lower.includes("geprek") || lower.includes("crispy") || lower.includes("kfc")) {
-        cal += 280; prot += 22; carb += 14; fat += 16;
-      } else {
-        cal += 210; prot += 24; carb += 2; fat += 12;
+      // Beverages
+      if (item.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
+        isHydration = true; volumeMl += 500;
+      } else if (item.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
+        cal += 10; carb += 2; isHydration = true; volumeMl += 250;
+      } else if (item.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
+        cal += 150; prot += 5; carb += 18; fat += 6; sug += 14; isHydration = true; volumeMl += 250;
+      } else if (item.match(/teh\s*manis|es\s*teh\s*manis|teh\s*kotak/)) {
+        cal += 90; carb += 22; sug += 20; isHydration = true; volumeMl += 300;
+      } else if (item.match(/teh\s*tawar|green\s*tea|ocha/)) {
+        cal += 5; carb += 1; isHydration = true; volumeMl += 250;
+      } else if (item.match(/jus|juice/)) {
+        cal += 120; prot += 2; carb += 28; fib += 2; sug += 22; isHydration = true; volumeMl += 250;
+      } else if (item.match(/susu|milk/)) {
+        cal += 150; prot += 8; carb += 12; fat += 8; sug += 11; isHydration = true; volumeMl += 250;
       }
-    }
-    if (lower.includes("daging") || lower.includes("sapi") || lower.includes("rendang") || lower.includes("steak")) {
-      cal += 260; prot += 26; carb += 4; fat += 16;
-    }
-    if (lower.includes("ikan") || lower.includes("salmon") || lower.includes("tuna") || lower.includes("lele")) {
-      cal += 190; prot += 24; carb += 2; fat += 9;
-    }
-    if (lower.includes("tahu") || lower.includes("tempe")) {
-      cal += 120; prot += 9; carb += 7; fat += 6;
+      // Carbs & Grains
+      else if (item.match(/nasi\s*padang/)) {
+        cal += 750; prot += 38; carb += 70; fat += 34; fib += 4; sug += 3;
+      } else if (item.match(/nasi\s*goreng/)) {
+        cal += 550; prot += 18; carb += 65; fat += 22; fib += 2; sug += 3;
+      } else if (item.match(/nasi\s*putih|nasi\s*uduk|nasi\s*kuning|nasi\s*liwet|nasi/)) {
+        cal += 200; prot += 4; carb += 45; fat += 1; fib += 1; sug += 0;
+      } else if (item.match(/mie\s*goreng|indomie\s*goreng/)) {
+        cal += 390; prot += 9; carb += 55; fat += 14; fib += 2; sug += 4;
+      } else if (item.match(/mie\s*rebus|indomie\s*rebus|mie|ramen/)) {
+        cal += 340; prot += 8; carb += 50; fat += 11; fib += 1; sug += 2;
+      } else if (item.match(/roti|bread|sandwich|toast/)) {
+        cal += 240; prot += 8; carb += 42; fat += 4; fib += 2; sug += 5;
+      }
+
+      // Proteins & Meats
+      if (item.match(/ayam\s*geprek/)) {
+        cal += 380; prot += 28; carb += 16; fat += 22; fib += 1;
+      } else if (item.match(/ayam\s*goreng|fried\s*chicken/)) {
+        cal += 280; prot += 26; carb += 6; fat += 16;
+      } else if (item.match(/ayam|chicken/)) {
+        cal += 200; prot += 28; carb += 0; fat += 8;
+      }
+      if (item.match(/kulit\s*ayam|kulit/)) {
+        cal += 160; prot += 6; carb += 2; fat += 15;
+      }
+      if (item.match(/usus|ati\s*ampela|jeroan/)) {
+        cal += 130; prot += 10; carb += 1; fat += 9;
+      }
+      if (item.match(/udang|shrimp|prawn/)) {
+        cal += 110; prot += 22; carb += 1; fat += 2;
+      }
+      if (item.match(/cumi|squid|seafood/)) {
+        cal += 120; prot += 20; carb += 2; fat += 3;
+      }
+      if (item.match(/sapi|daging|rendang|beef|steak/)) {
+        cal += 260; prot += 26; carb += 4; fat += 16;
+      }
+      if (item.match(/ikan|fish|lele|gurame|salmon|tuna/)) {
+        cal += 210; prot += 24; carb += 2; fat += 11;
+      }
+      if (item.match(/telur\s*rebus/)) {
+        cal += 78; prot += 6; carb += 1; fat += 5;
+      } else if (item.match(/telur|telor|ceplok|dadar|egg/)) {
+        cal += 110; prot += 7; carb += 1; fat += 8;
+      }
+      if (item.match(/tempe/)) {
+        cal += 120; prot += 9; carb += 8; fat += 6; fib += 2;
+      }
+      if (item.match(/tahu/)) {
+        cal += 80; prot += 8; carb += 3; fat += 4; fib += 1;
+      }
+
+      // Vegetables & Extras
+      if (item.match(/sayur\s*asem/)) {
+        cal += 65; prot += 2; carb += 12; fat += 1; fib += 3; sug += 4;
+      } else if (item.match(/sayur|sop|kangkung|bayam|tumis/)) {
+        cal += 60; prot += 2; carb += 8; fat += 2; fib += 3; sug += 2;
+      }
+      if (item.match(/jengkol|petai|pete/)) {
+        cal += 120; prot += 4; carb += 22; fat += 2; fib += 4; sug += 2;
+      }
+      if (item.match(/sambal|sambel/)) {
+        cal += 45; prot += 1; carb += 4; fat += 3; fib += 1; sug += 2;
+      }
+      if (item.match(/kerupuk|krupuk/)) {
+        cal += 80; prot += 1; carb += 12; fat += 3;
+      }
+
+      totalCal += cal;
+      totalProt += prot;
+      totalCarb += carb;
+      totalFat += fat;
+      totalFiber += fib;
+      totalSugar += sug;
     }
 
-    // Default baseline if no matches found
-    if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
-      cal = 380; prot = 15; carb = 48; fat = 14;
+    if (totalCal === 0 && totalProt === 0 && totalCarb === 0 && totalFat === 0) {
+      totalCal = 450; totalProt = 20; totalCarb = 50; totalFat = 16; totalFiber = 3; totalSugar = 4;
     }
 
-    const macroCal = (prot * 4) + (carb * 4) + (fat * 9);
-    const finalCal = macroCal > 0 ? macroCal : cal;
+    const macroCal = (totalProt * 4) + (totalCarb * 4) + (totalFat * 9);
+    const finalCal = macroCal > 0 ? macroCal : totalCal;
 
     return {
-      foodName: formattedName,
+      foodName: cleanText.charAt(0).toUpperCase() + cleanText.slice(1),
       calories: finalCal,
-      protein: prot,
-      carbs: carb,
-      fat,
+      protein: totalProt,
+      carbs: totalCarb,
+      fat: totalFat,
+      fiber: totalFiber,
+      sugar: totalSugar,
       isHydration,
       volumeMl
     };
@@ -1884,77 +1867,71 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setIsAnalyzingAi(true);
 
     const baseEstimation = estimateIndonesianNutritionClient(queryText);
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
 
-    // 1. Direct Gemini AI NLP Analysis (Zero server latency, instant NLP)
+    // 1. Call Backend AI /api/ai/analyze-food
     try {
-      const kPart = atob("QVEuQWI4Uk42SzdueVBVdkNNVnZFR0VGcjJUaFdWbDJCSzNwdFVtVDFqSVpBeE84TkxuWHc=");
-      const prompt = `KAMU ADALAH PAKAR NUTRISI AI GYMBUDDY.
-Tugas: Analisis input makanan/minuman user berikut: "${rawQuery}".
-1. Ekstrak nama makanan/minuman yang bersih dan rapi dalam bahasa Indonesia (misal: jika input "sore ini aku makan french fries", nama makanan: "French Fries (Kentang Goreng)").
-2. Hitung kalori & makronutrisi realistis untuk 1 porsi standar orang dewasa:
-   - Rumus wajib: (protein * 4) + (carbs * 4) + (fat * 9) = calories.
-3. Tentukan jika minuman (isHydration=true/false).
-Kembalikan HANYA JSON valid:
-{
-  "foodName": "Nama Makanan Rapi",
-  "calories": 340,
-  "protein": 4,
-  "carbs": 44,
-  "fat": 17,
-  "fiber": 3,
-  "isHydration": false,
-  "volumeMl": 0,
-  "portion": "1 Porsi Standar"
-}`;
-      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${kPart}`, {
+      let bRes = await fetch("/api/ai/analyze-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
-        })
-      });
+        body: JSON.stringify({ text: rawQuery })
+      }).catch(() => null);
 
-      if (gRes.ok) {
-        const gData = await gRes.json();
-        const candidate = gData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidate) {
-          const parsed = JSON.parse(candidate);
-          const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-          const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-          const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+      if (!bRes || !bRes.ok) {
+        bRes = await fetch(`${API_BASE_URL}/api/ai/analyze-food`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: rawQuery })
+        }).catch(() => null);
+      }
+
+      if (bRes && bRes.ok) {
+        const bData = await bRes.json();
+        if (bData.success) {
+          const protein = Math.max(0, Math.round(Number(bData.protein) || 0));
+          const carbs = Math.max(0, Math.round(Number(bData.carbs) || 0));
+          const fat = Math.max(0, Math.round(Number(bData.fat) || 0));
+          const fiber = Math.max(0, Math.round(Number(bData.fiber) || 0));
+          const sugar = Math.max(0, Math.round(Number(bData.sugar) || 0));
           const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
-          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
-          const cleanName = parsed.foodName || baseEstimation.foodName;
+          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(bData.calories) || 0));
+          const cleanName = bData.foodName || baseEstimation.foodName;
 
           setItemNameInput(cleanName);
           setItemCalInput(String(calories));
           setItemProteinInput(String(protein));
           setItemCarbsInput(String(carbs));
           setItemFatInput(String(fat));
+          setItemFiberInput(String(fiber));
+          setItemSugarInput(String(sugar));
+
           setAiPreview({
             foodName: cleanName,
             calories,
             protein,
             carbs,
             fat,
-            isHydration: Boolean(parsed.isHydration),
-            volumeMl: Number(parsed.volumeMl) || 0
+            fiber,
+            sugar,
+            isHydration: Boolean(bData.isHydration),
+            volumeMl: Number(bData.volumeMl) || 0
           });
           setIsAnalyzingAi(false);
-          return { ...parsed, foodName: cleanName, calories, protein, carbs, fat };
+          return { ...bData, foodName: cleanName, calories, protein, carbs, fat, fiber, sugar };
         }
       }
-    } catch (gErr) {
-      console.warn("Direct Gemini AI NLP note:", gErr);
+    } catch (bErr) {
+      console.warn("Backend AI Food analysis error:", bErr);
     }
 
-    // 2. Fallback to client-side nutrition estimation
+    // 2. Fallback to multi-item client-side estimation
     setItemNameInput(baseEstimation.foodName);
     setItemCalInput(String(baseEstimation.calories));
     setItemProteinInput(String(baseEstimation.protein));
     setItemCarbsInput(String(baseEstimation.carbs));
     setItemFatInput(String(baseEstimation.fat));
+    setItemFiberInput(String(baseEstimation.fiber || 0));
+    setItemSugarInput(String(baseEstimation.sugar || 0));
     setAiPreview(baseEstimation);
     setIsAnalyzingAi(false);
     return baseEstimation;
@@ -5291,7 +5268,7 @@ Kembalikan HANYA JSON valid:
 
                 {/* AI Preview Result */}
                 {aiPreview && !isAnalyzingAi && (
-                  <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-xl space-y-2">
+                  <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black text-white flex items-center gap-1">
                         <Sparkles size={12} className="text-[#D4FF00]" /> Output Nutrisi AI:
@@ -5300,18 +5277,26 @@ Kembalikan HANYA JSON valid:
                         {itemCalInput} kcal
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-neutral-200 pt-1">
-                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                        <span className="block text-[10px] text-indigo-400 font-bold">Protein</span>
-                        <span>{itemProteinInput}g</span>
+                    <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
+                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                        <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
+                        <span className="font-black text-white">{itemProteinInput}g</span>
                       </div>
-                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                        <span className="block text-[10px] text-emerald-400 font-bold">Karbo</span>
-                        <span>{itemCarbsInput}g</span>
+                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                        <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Karbo</span>
+                        <span className="font-black text-white">{itemCarbsInput}g</span>
                       </div>
-                      <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
-                        <span className="block text-[10px] text-rose-400 font-bold">Lemak</span>
-                        <span>{itemFatInput}g</span>
+                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                        <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Lemak</span>
+                        <span className="font-black text-white">{itemFatInput}g</span>
+                      </div>
+                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                        <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Serat</span>
+                        <span className="font-black text-white">{itemFiberInput || "0"}g</span>
+                      </div>
+                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                        <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Gula</span>
+                        <span className="font-black text-white">{itemSugarInput || "0"}g</span>
                       </div>
                     </div>
                   </div>
@@ -5331,7 +5316,7 @@ Kembalikan HANYA JSON valid:
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      className="grid grid-cols-2 gap-2.5 pt-3 border-t border-neutral-800 mt-2"
+                      className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-3 border-t border-neutral-800 mt-2"
                     >
                       <div>
                         <label className="text-[11px] font-bold text-neutral-300">{t.caloriesInputLabel}</label>
@@ -5373,6 +5358,26 @@ Kembalikan HANYA JSON valid:
                           className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-rose-400"
                         />
                       </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-amber-400">Serat (Fiber)</label>
+                        <input
+                          type="number"
+                          value={itemFiberInput}
+                          onChange={(e) => setItemFiberInput(e.target.value)}
+                          placeholder="3"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-cyan-400">Gula (Sugar)</label>
+                        <input
+                          type="number"
+                          value={itemSugarInput}
+                          onChange={(e) => setItemSugarInput(e.target.value)}
+                          placeholder="2"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-cyan-400"
+                        />
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -5393,19 +5398,27 @@ Kembalikan HANYA JSON valid:
                       </span>
                     </div>
 
-                    {/* Macro summary row */}
-                    <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
+                    {/* Macro & Micro summary row */}
+                    <div className="grid grid-cols-5 gap-1 text-center text-[10px] sm:text-[11px] font-bold">
                       <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[10px] text-indigo-400 font-bold">Protein</span>
+                        <span className="block text-[9px] text-indigo-400 font-bold">Protein</span>
                         <span className="text-white font-black">{itemProteinInput || "22"}g</span>
                       </div>
                       <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[10px] text-emerald-400 font-bold">Karbo</span>
+                        <span className="block text-[9px] text-emerald-400 font-bold">Karbo</span>
                         <span className="text-white font-black">{itemCarbsInput || "56"}g</span>
                       </div>
                       <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
-                        <span className="block text-[10px] text-rose-400 font-bold">Lemak</span>
+                        <span className="block text-[9px] text-rose-400 font-bold">Lemak</span>
                         <span className="text-white font-black">{itemFatInput || "18"}g</span>
+                      </div>
+                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
+                        <span className="block text-[9px] text-amber-400 font-bold">Serat</span>
+                        <span className="text-white font-black">{itemFiberInput || "0"}g</span>
+                      </div>
+                      <div className="bg-[#111620] rounded-xl py-2 border border-white/5">
+                        <span className="block text-[9px] text-cyan-400 font-bold">Gula</span>
+                        <span className="text-white font-black">{itemSugarInput || "0"}g</span>
                       </div>
                     </div>
 
@@ -5440,6 +5453,8 @@ Kembalikan HANYA JSON valid:
                         setItemProteinInput("");
                         setItemCarbsInput("");
                         setItemFatInput("");
+                        setItemFiberInput("0");
+                        setItemSugarInput("0");
                       }}
                       className="w-full py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
                     >

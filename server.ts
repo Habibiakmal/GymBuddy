@@ -2212,7 +2212,6 @@ PENTING:
 
   // AI Food Text Analyzer Endpoint for Web App Add Meal Modal
   app.post("/api/ai/analyze-food", express.json(), async (req, res) => {
-
     try {
       const { text } = req.body;
       if (!text || !String(text).trim()) {
@@ -2222,87 +2221,130 @@ PENTING:
       const cleanText = String(text).trim();
       const lower = cleanText.toLowerCase();
 
-      // Precise heuristic fallback with full Indonesian food database
+      // Precise heuristic fallback with multi-item compound accumulation
       const getFallback = () => {
-        let calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0, isHydration = false, volumeMl = 0;
+        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0, totalSugar = 0;
+        let isHydration = false, volumeMl = 0;
 
-        // Beverages
-        if (lower.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
-          calories = 0; protein = 0; carbs = 0; fat = 0; isHydration = true; volumeMl = 500;
-        } else if (lower.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
-          calories = 10; protein = 0; carbs = 2; fat = 0; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
-          calories = 150; protein = 5; carbs = 18; fat = 6; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/teh\s*manis|teh\s*kotak|teh\s*pucuk/)) {
-          calories = 90; protein = 0; carbs = 22; fat = 0; isHydration = true; volumeMl = 300;
-        } else if (lower.match(/teh\s*tawar|green\s*tea|ocha/)) {
-          calories = 5; protein = 0; carbs = 1; fat = 0; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/jus|juice/) && lower.match(/jeruk|orange/)) {
-          calories = 110; protein = 2; carbs = 26; fat = 0; fiber = 1; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/susu|milk/) && lower.match(/full\s*cream|whole/)) {
-          calories = 150; protein = 8; carbs = 12; fat = 8; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/milo|ovaltine/)) {
-          calories = 200; protein = 5; carbs = 35; fat = 5; isHydration = true; volumeMl = 250;
-        } else if (lower.match(/soda|cola|sprite|fanta|coke|pepsi/)) {
-          calories = 140; protein = 0; carbs = 35; fat = 0; isHydration = true; volumeMl = 330;
-        }
-        // Proteins
-        else if (lower.match(/ayam\s*geprek|geprek/)) {
-          calories = 650; protein = 32; carbs = 65; fat = 28; fiber = 2;
-        } else if (lower.match(/ayam\s*goreng|fried\s*chicken/) && lower.match(/nasi|rice/)) {
-          calories = 580; protein = 30; carbs = 60; fat = 22; fiber = 1;
-        } else if (lower.match(/ayam\s*goreng|fried\s*chicken/)) {
-          calories = 320; protein = 28; carbs = 8; fat = 18; fiber = 0;
-        } else if (lower.match(/rendang/)) {
-          calories = 470; protein = 40; carbs = 12; fat = 30; fiber = 1;
-        } else if (lower.match(/telur\s*rebus|boiled\s*egg/)) {
-          calories = 155; protein = 13; carbs = 1; fat = 11; fiber = 0;
-        } else if (lower.match(/telur\s*goreng|fried\s*egg/)) {
-          calories = 185; protein = 13; carbs = 1; fat = 14; fiber = 0;
-        } else if (lower.match(/tempe\s*goreng/)) {
-          calories = 220; protein = 14; carbs = 12; fat = 13; fiber = 2;
-        } else if (lower.match(/tahu\s*goreng/)) {
-          calories = 165; protein = 11; carbs = 4; fat = 12; fiber = 0;
-        } else if (lower.match(/ikan\s*goreng|fried\s*fish/)) {
-          calories = 290; protein = 25; carbs = 5; fat = 18; fiber = 0;
-        }
-        // Carbs
-        else if (lower.match(/nasi\s*putih|nasi\s*uduk/) || (lower.match(/nasi/) && !lower.match(/goreng|padang/))) {
-          calories = 240; protein = 5; carbs = 52; fat = 1; fiber = 1;
-        } else if (lower.match(/nasi\s*goreng/)) {
-          calories = 550; protein = 18; carbs = 65; fat = 22; fiber = 2;
-        } else if (lower.match(/mie\s*goreng|indomie\s*goreng/)) {
-          calories = 390; protein = 9; carbs = 55; fat = 14; fiber = 2;
-        } else if (lower.match(/mie\s*rebus|indomie\s*rebus/)) {
-          calories = 320; protein = 8; carbs = 48; fat = 10; fiber = 1;
-        } else if (lower.match(/roti\s*tawar|white\s*bread/)) {
-          calories = 265; protein = 9; carbs = 49; fat = 3; fiber = 3;
-        }
-        // Combos
-        else if (lower.match(/chicken\s*rice\s*bowl|rice\s*bowl/)) {
-          calories = 580; protein = 35; carbs = 60; fat = 20; fiber = 2;
-        } else if (lower.match(/nasi\s*padang/)) {
-          calories = 750; protein = 38; carbs = 70; fat = 34; fiber = 4;
-        } else if (lower.match(/bakso/)) {
-          calories = 420; protein = 26; carbs = 40; fat = 18; fiber = 2;
-        } else if (lower.match(/gado.gado|pecel/)) {
-          calories = 430; protein = 16; carbs = 52; fat = 18; fiber = 6;
-        } else if (lower.match(/batagor/)) {
-          calories = 450; protein = 18; carbs = 45; fat = 22; fiber = 3;
-        } else if (lower.match(/siomay/)) {
-          calories = 480; protein = 24; carbs = 42; fat = 24; fiber = 3;
-        } else if (lower.match(/soto\s*ayam/)) {
-          calories = 410; protein = 25; carbs = 50; fat = 12; fiber = 2;
-        } else {
-          calories = 350; protein = 15; carbs = 40; fat = 12; fiber = 2;
+        // Split multiple items by comma, plus, 'dan', '&'
+        const parts = lower.split(/[,+&]| dan /).map(p => p.trim()).filter(Boolean);
+
+        for (const item of parts) {
+          let cal = 0, prot = 0, carb = 0, fat = 0, fib = 0, sug = 0;
+
+          // Beverage check
+          if (item.match(/air\s*putih|air\s*mineral|mineral\s*water|plain\s*water/)) {
+            isHydration = true; volumeMl += 500;
+          } else if (item.match(/americano|espresso|kopi\s*hitam|black\s*coffee/)) {
+            cal += 10; carb += 2; isHydration = true; volumeMl += 250;
+          } else if (item.match(/kopi\s*susu|latte|cappuccino|flat\s*white/)) {
+            cal += 150; prot += 5; carb += 18; fat += 6; sug += 14; isHydration = true; volumeMl += 250;
+          } else if (item.match(/teh\s*manis|teh\s*kotak|teh\s*pucuk/)) {
+            cal += 90; carb += 22; sug += 20; isHydration = true; volumeMl += 300;
+          } else if (item.match(/teh\s*tawar|green\s*tea|ocha/)) {
+            cal += 5; carb += 1; isHydration = true; volumeMl += 250;
+          } else if (item.match(/jus|juice/)) {
+            cal += 120; prot += 2; carb += 28; fib += 2; sug += 22; isHydration = true; volumeMl += 250;
+          } else if (item.match(/susu|milk/)) {
+            cal += 150; prot += 8; carb += 12; fat += 8; sug += 11; isHydration = true; volumeMl += 250;
+          }
+          // Main Carbs
+          else if (item.match(/nasi\s*padang/)) {
+            cal += 750; prot += 38; carb += 70; fat += 34; fib += 4; sug += 3;
+          } else if (item.match(/nasi\s*goreng/)) {
+            cal += 550; prot += 18; carb += 65; fat += 22; fib += 2; sug += 3;
+          } else if (item.match(/nasi\s*putih|nasi\s*uduk|nasi\s*kuning|nasi\s*liwet|nasi/)) {
+            cal += 200; prot += 4; carb += 45; fat += 1; fib += 1; sug += 0;
+          } else if (item.match(/mie\s*goreng|indomie\s*goreng/)) {
+            cal += 390; prot += 9; carb += 55; fat += 14; fib += 2; sug += 4;
+          } else if (item.match(/mie\s*rebus|indomie\s*rebus|mie|ramen/)) {
+            cal += 340; prot += 8; carb += 50; fat += 11; fib += 1; sug += 2;
+          } else if (item.match(/roti|bread|sandwich|toast/)) {
+            cal += 240; prot += 8; carb += 42; fat += 4; fib += 2; sug += 5;
+          }
+          // Proteins & Meats
+          if (item.match(/ayam\s*geprek/)) {
+            cal += 380; prot += 28; carb += 16; fat += 22; fib += 1;
+          } else if (item.match(/ayam\s*goreng|fried\s*chicken/)) {
+            cal += 280; prot += 26; carb += 6; fat += 16;
+          } else if (item.match(/ayam|chicken/)) {
+            cal += 200; prot += 28; carb += 0; fat += 8;
+          }
+          if (item.match(/kulit\s*ayam|kulit/)) {
+            cal += 160; prot += 6; carb += 2; fat += 15;
+          }
+          if (item.match(/usus|ati\s*ampela|jeroan/)) {
+            cal += 130; prot += 10; carb += 1; fat += 9;
+          }
+          if (item.match(/udang|shrimp|prawn/)) {
+            cal += 110; prot += 22; carb += 1; fat += 2;
+          }
+          if (item.match(/cumi|squid|seafood/)) {
+            cal += 120; prot += 20; carb += 2; fat += 3;
+          }
+          if (item.match(/sapi|daging|rendang|beef|steak/)) {
+            cal += 260; prot += 26; carb += 4; fat += 16;
+          }
+          if (item.match(/ikan|fish|lele|gurame|salmon|tuna/)) {
+            cal += 210; prot += 24; carb += 2; fat += 11;
+          }
+          if (item.match(/telur\s*rebus/)) {
+            cal += 78; prot += 6; carb += 1; fat += 5;
+          } else if (item.match(/telur|telor|ceplok|dadar|egg/)) {
+            cal += 110; prot += 7; carb += 1; fat += 8;
+          }
+          if (item.match(/tempe/)) {
+            cal += 120; prot += 9; carb += 8; fat += 6; fib += 2;
+          }
+          if (item.match(/tahu/)) {
+            cal += 80; prot += 8; carb += 3; fat += 4; fib += 1;
+          }
+          // Vegetables & Extras
+          if (item.match(/sayur\s*asem/)) {
+            cal += 65; prot += 2; carb += 12; fat += 1; fib += 3; sug += 4;
+          } else if (item.match(/sayur|sop|kangkung|bayam|tumis/)) {
+            cal += 60; prot += 2; carb += 8; fat += 2; fib += 3; sug += 2;
+          }
+          if (item.match(/jengkol|petai|pete/)) {
+            cal += 120; prot += 4; carb += 22; fat += 2; fib += 4; sug += 2;
+          }
+          if (item.match(/sambal|sambel/)) {
+            cal += 45; prot += 1; carb += 4; fat += 3; fib += 1; sug += 2;
+          }
+          if (item.match(/kerupuk|krupuk/)) {
+            cal += 80; prot += 1; carb += 12; fat += 3;
+          }
+
+          // Accumulate
+          totalCalories += cal;
+          totalProtein += prot;
+          totalCarbs += carb;
+          totalFat += fat;
+          totalFiber += fib;
+          totalSugar += sug;
         }
 
-        // Enforce Atwater if all macros present
-        if (protein + carbs + fat > 0) {
-          calories = (protein * 4) + (carbs * 4) + (fat * 9);
+        // If no match found, baseline estimate
+        if (totalCalories === 0 && totalProtein === 0 && totalCarbs === 0 && totalFat === 0) {
+          totalCalories = 450; totalProtein = 20; totalCarbs = 50; totalFat = 16; totalFiber = 3; totalSugar = 4;
         }
 
-        return { foodName: cleanText, calories, protein, carbs, fat, fiber, isHydration, volumeMl, mealType: getMealTypeByHour() };
+        // Atwater formula exact verification
+        const macroCal = (totalProtein * 4) + (totalCarbs * 4) + (totalFat * 9);
+        const finalCalories = macroCal > 0 ? macroCal : totalCalories;
+
+        return {
+          foodName: cleanText,
+          calories: finalCalories,
+          protein: totalProtein,
+          carbs: totalCarbs,
+          fat: totalFat,
+          fiber: totalFiber,
+          sugar: totalSugar,
+          isHydration,
+          volumeMl,
+          mealType: getMealTypeByHour()
+        };
       };
 
       if (!getAi()) {
@@ -2310,49 +2352,39 @@ PENTING:
         return res.json({ success: true, ...fallback, note: "Estimated using offline database" });
       }
 
-      const prompt = `Kamu adalah Nutritionist AI GymBuddy yang sangat akurat. Tugas: analisis makanan/minuman berikut dan berikan estimasi nutrisi yang TEPAT.
+      const prompt = `Kamu adalah Nutritionist AI GymBuddy Indonesia yang SANGAT DETAIL & AKURAT.
+Tugas: Analisis makanan/minuman user berikut:
+"${cleanText}"
 
-INPUT USER: "${cleanText}"
+PERHATIKAN DENGAN SANGAT TELITI:
+1. Jika user menulis banyak lauk / combo (contoh: "Nasi ayam goreng, usus, kulit, udang, sayur asem, jengkol"):
+   - Hitung AKUMULASI DARI SEMUA ITEM YANG DISEBUTKAN:
+     * Nasi putih 1 porsi: ~200 kcal | P:4g, Karbo:45g, Lemak:1g
+     * Ayam goreng: ~260 kcal | P:26g, Karbo:4g, Lemak:16g
+     * Usus goreng: ~120 kcal | P:8g, Karbo:1g, Lemak:9g
+     * Kulit ayam crispy: ~150 kcal | P:6g, Karbo:2g, Lemak:14g
+     * Udang: ~100 kcal | P:20g, Karbo:1g, Lemak:2g
+     * Sayur asem: ~65 kcal | P:2g, Karbo:12g, Lemak:1g, Serat:3g, Gula:4g
+     * Jengkol: ~120 kcal | P:3g, Karbo:22g, Lemak:2g, Serat:4g
+   - Jumlahkan seluruh komponen menjadi total makro & mikro yang lengkap!
+2. RUMUS WAJIB KALORI: calories = (protein * 4) + (carbs * 4) + (fat * 9).
+3. Hitung juga "fiber" (serat dalam gram) dan "sugar" (gula dalam gram).
+4. Jika minuman, set isHydration=true dan volumeMl yang sesuai.
 
-ATURAN WAJIB (MUTLAK, TIDAK BOLEH DILANGGAR):
-1. RUMUS KALORI: calories HARUS SAMA PERSIS dengan (protein × 4) + (carbs × 4) + (fat × 9). Hitung ulang sebelum output!
-2. Estimasi porsi STANDAR orang Indonesia dewasa (bukan porsi miniatur).
-3. Jika input adalah minuman (kopi, teh, jus, air, susu, dll), set isHydration=true.
-4. Jika minuman berbasis susu/gula, kalori berkisar 100-250 kcal per sajian.
-
-DATABASE BENCHMARK NUTRISI INDONESIA (PANGANKU / USDA) — GUNAKAN SEBAGAI ACUAN:
-- Nasi Putih 1 centong (100g): 130 kcal | P:3g C:28g F:0.3g
-- Ayam Goreng (1 paha + kulit, 120g): 320 kcal | P:28g C:8g F:18g
-- Ayam Geprek + Nasi + Sambal: 650 kcal | P:32g C:65g F:28g
-- Chicken Rice Bowl + Telur: 580 kcal | P:35g C:60g F:20g
-- Nasi Padang (Rendang/Ayam + Sayur): 750 kcal | P:38g C:70g F:34g
-- Bakso Sapi + Mie: 420 kcal | P:26g C:40g F:18g
-- Tempe Goreng (2 potong): 220 kcal | P:14g C:12g F:13g
-- Telur Rebus (2 butir): 155 kcal | P:13g C:1g F:11g
-- Americano / Espresso (250ml): 10 kcal | P:0g C:2g F:0g
-- Kopi Susu / Latte (250ml): 150 kcal | P:5g C:18g F:6g
-- Teh Manis (300ml): 90 kcal | P:0g C:22g F:0g
-- Jus Jeruk (250ml): 110 kcal | P:2g C:26g F:0g
-- Batagor 1 porsi: 450 kcal | P:18g C:45g F:22g
-- Siomay Bandung: 480 kcal | P:24g C:42g F:24g
-- Soto Ayam + Nasi: 410 kcal | P:25g C:50g F:12g
-- Gado-Gado / Pecel: 430 kcal | P:16g C:52g F:18g
-
-OUTPUT: Hanya JSON valid, tanpa markdown, tanpa teks lain:
+Outputkan HANYA format JSON valid berikut (tanpa markdown, tanpa teks lain):
 {
-  "foodName": "Nama lengkap makanan dengan porsi (misal: Ayam Geprek + Nasi Putih 1 Porsi)",
-  "calories": 650,
-  "protein": 32,
-  "carbs": 65,
-  "fat": 28,
-  "fiber": 2,
+  "foodName": "Nama Makanan Lengkap yang Rapi",
+  "calories": 950,
+  "protein": 68,
+  "carbs": 85,
+  "fat": 42,
+  "fiber": 7,
+  "sugar": 6,
   "isHydration": false,
   "volumeMl": 0,
   "mealType": "lunch",
-  "portionNote": "Estimasi: 1 porsi standar (nasi 1 piring + ayam 1 dada)"
-}
-
-VERIFIKASI WAJIB sebelum output: (protein×4) + (carbs×4) + (fat×9) = calories. Jika tidak sama, koreksi calories!`;
+  "portionNote": "Kombinasi lengkap nasi + lauk komplit"
+}`;
 
       try {
         const rawText = await generateGeminiContent(prompt);
@@ -2364,6 +2396,7 @@ VERIFIKASI WAJIB sebelum output: (protein×4) + (carbs×4) + (fat×9) = calories
         let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
         let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
         let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
+        let sugar = Math.max(0, Math.round(Number(parsed.sugar) || 0));
         
         // ENFORCE Atwater formula: calories must match macros exactly
         const macroCalories = (protein * 4) + (carbs * 4) + (fat * 9);
@@ -2379,6 +2412,7 @@ VERIFIKASI WAJIB sebelum output: (protein×4) + (carbs×4) + (fat×9) = calories
           carbs,
           fat,
           fiber,
+          sugar,
           isHydration: Boolean(parsed.isHydration),
           volumeMl: Number(parsed.volumeMl) || 0,
           mealType: parsed.mealType,
