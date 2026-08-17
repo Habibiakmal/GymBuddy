@@ -2319,6 +2319,19 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         };
 
                         try {
+                          // Purge old meal logs or exercise logs for this phone so fresh account starts clean
+                          Object.keys(localStorage).forEach((key) => {
+                            if (
+                              key.startsWith(`gymbuddy_meals_${norm}`) ||
+                              key.startsWith(`gymbuddy_exercises_${norm}`) ||
+                              key.startsWith(`gymbuddy_weight_history_${norm}`) ||
+                              key.startsWith(`gymbuddy_water_${norm}`) ||
+                              key.startsWith(`gymbuddy_feel_${norm}`)
+                            ) {
+                              localStorage.removeItem(key);
+                            }
+                          });
+
                           localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(finalUserObj));
                           localStorage.setItem("gymbuddy_last_user", JSON.stringify(finalUserObj));
                           localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));

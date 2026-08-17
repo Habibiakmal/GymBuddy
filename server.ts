@@ -2083,23 +2083,35 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true }));
   app.use("/infographics", express.static(path.join(process.cwd(), "public", "infographics")));
 
-  // Save onboarding registration data & user profile
+  // Save onboarding registration data & user profile (Fresh Account Creation)
   app.post("/api/onboarding", (req, res) => {
     const { phone, profile } = req.body;
     if (profile) {
-      dbData.users["latest_onboarding"] = {
-        ...profile,
-        updatedAt: new Date().toISOString()
-      };
+      const norm = normalizePhone(phone || profile.phone || "");
+      const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
 
-      if (phone) {
-        const saved = saveUserProfile(phone, profile);
-        console.log("Saved user profile in database for:", phone, profile);
+      if (norm) {
+        // Fresh registration: purge any old daily logs or water logs from previous sessions
+        Object.keys(dbData.dailyLogs).forEach((key) => {
+          if (key.startsWith(norm) || key.startsWith(altNorm)) {
+            delete dbData.dailyLogs[key];
+          }
+        });
+        Object.keys(dbData.waterLogs).forEach((key) => {
+          if (key.startsWith(norm) || key.startsWith(altNorm)) {
+            delete dbData.waterLogs[key];
+          }
+        });
+        delete dbData.weeklyProgress[norm];
+        delete dbData.weeklyProgress[altNorm];
+
+        const saved = saveUserProfile(norm, profile);
+        saveDb();
+        console.log("Saved clean user profile in database for:", norm);
         return res.json({ success: true, profile: saved });
       }
 
       saveDb();
-      console.log("Saved latest_onboarding profile in database");
       return res.json({ success: true, profile });
     }
     return res.status(400).json({ error: "Profile object is required" });
@@ -2721,20 +2733,28 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     });
   });
 
-  // Delete user profile endpoint
+  // Delete user profile endpoint (Purge user, logs, and progress)
   app.delete("/api/user/:phone", (req, res) => {
     const phone = normalizePhone(req.params.phone);
-    if (phone && dbData.users[phone]) {
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    if (phone) {
       delete dbData.users[phone];
+      delete dbData.users[altPhone];
       delete dbData.weeklyProgress[phone];
+      delete dbData.weeklyProgress[altPhone];
       Object.keys(dbData.dailyLogs).forEach((key) => {
-        if (key.startsWith(phone)) {
+        if (key.startsWith(phone) || key.startsWith(altPhone)) {
           delete dbData.dailyLogs[key];
         }
       });
+      Object.keys(dbData.waterLogs).forEach((key) => {
+        if (key.startsWith(phone) || key.startsWith(altPhone)) {
+          delete dbData.waterLogs[key];
+        }
+      });
       saveDb();
-      console.log(`Deleted user profile for ${phone}`);
-      return res.json({ success: true, message: `Data user ${phone} berhasil dihapus.` });
+      console.log(`Deleted user profile and all logs for ${phone}`);
+      return res.json({ success: true, message: `Data user ${phone} dan semua riwayat log berhasil dihapus 100%.` });
     }
     return res.status(404).json({ success: false, error: "User profile not found" });
   });

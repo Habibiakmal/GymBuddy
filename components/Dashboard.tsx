@@ -2214,13 +2214,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   const handleDeleteAccount = async () => {
     if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const normPhone = normalizePhone(activeUser.phone || "");
+    const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
     try {
-      await fetch(`${API_BASE_URL}/api/user/${normPhone}`, { method: "DELETE" });
+      if (normPhone) {
+        await fetch(`/api/user/${normPhone}`, { method: "DELETE" }).catch(() => {});
+        await fetch(`${API_BASE_URL}/api/user/${normPhone}`, { method: "DELETE" }).catch(() => {});
+      }
     } catch (e) {}
     try {
-      localStorage.clear();
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("gymbuddy")) {
+          localStorage.removeItem(key);
+        }
+      });
     } catch (e) {}
     if (onResetData) onResetData();
     else onLogout();
