@@ -123,37 +123,23 @@ export default function LoginModal({
       } catch (e) {}
     }
 
-    // 4. Auto-generate starter profile for ANY phone number if DB is offline or user is new
+    // 4. Strict DB check: If user profile is not found in database or local storage, REJECT login!
     if (!foundProfile) {
-      foundProfile = {
-        name: `Member ${normPhone.slice(-4)}`,
-        phone: normPhone,
-        goal: "healthy",
-        goalTitle: isEN ? "Healthy & Fit Lifestyle" : "Gaya Hidup Sehat & Bugar",
-        weight: 65,
-        startWeight: 65,
-        targetWeight: 65,
-        height: 170,
-        age: 25,
-        gender: "pria",
-        persona: "max",
-        activityLevel: "moderate"
-      };
-      try {
-        localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(foundProfile));
-        localStorage.setItem("gymbuddy_active_session", JSON.stringify(foundProfile));
-      } catch (e) {}
+      setErrorMsg(
+        isEN
+          ? "This WhatsApp number is not registered yet. Please start by completing the onboarding first."
+          : "Nomor WhatsApp ini belum terdaftar. Silakan daftar dan isi data tubuh kamu melalui kuesioner onboarding terlebih dahulu."
+      );
+      setLoading(false);
+      return;
     }
 
-    if (foundProfile) {
-      setUserProfile(foundProfile);
-      if (foundProgress) setProgressData(foundProgress);
-      if (onLoginSuccess) {
-        onLoginSuccess(foundProfile);
-      }
-      onClose();
+    setUserProfile(foundProfile);
+    if (foundProgress) setProgressData(foundProgress);
+    if (onLoginSuccess) {
+      onLoginSuccess(foundProfile);
     }
-
+    onClose();
     setLoading(false);
   };
 
@@ -319,9 +305,22 @@ export default function LoginModal({
                     </div>
 
                     {errorMsg && (
-                      <div className="p-4 rounded-2xl bg-red-500/10 text-xs text-red-400 flex items-start gap-2.5">
-                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                        <span>{errorMsg}</span>
+                      <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 space-y-2.5">
+                        <div className="flex items-start gap-2.5">
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                          <span className="font-semibold leading-relaxed">{errorMsg}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onStartOnboarding();
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border-none"
+                        >
+                          <Sparkles size={14} />
+                          <span>{isEN ? "Start Onboarding Now →" : "Daftar / Mulai Onboarding Sekarang →"}</span>
+                        </button>
                       </div>
                     )}
 
