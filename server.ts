@@ -3361,24 +3361,34 @@ Keluarkan output JSON valid:
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | undefined = undefined;
 
-      const matchedEx = findExerciseOrEquipment(userText);
+      const isWorkoutScheduleQuery = (
+        lowerText.includes("latihan apa") ||
+        lowerText.includes("workout apa") ||
+        lowerText.includes("jadwal hari ini") ||
+        lowerText.includes("latihan hari ini") ||
+        lowerText.includes("workout hari ini") ||
+        lowerText.includes("jadwal gym") ||
+        lowerText.includes("jadwal latihan") ||
+        lowerText.includes("menu latihan") ||
+        lowerText.includes("rekomendasi workout") ||
+        lowerText.includes("rekomendasi latihan") ||
+        lowerText.includes("olahraga hari ini") ||
+        (lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"))) ||
+        (lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")))
+      );
+
+      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
         matchedEx && (
           userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
-          userText.includes("?") ||
-          lowerText.includes("alat") ||
-          lowerText.includes("mesin") ||
-          lowerText.includes("cara") ||
-          lowerText.includes("teknik") ||
-          lowerText.includes("postur") ||
-          lowerText.includes("gerakan") ||
-          lowerText.includes("squat") ||
-          lowerText.includes("press") ||
-          lowerText.includes("pulldown") ||
-          lowerText.includes("push up") ||
-          lowerText.includes("plank") ||
-          lowerText.includes("row") ||
-          lowerText.includes("curl")
+          lowerText.includes("cara pakai") ||
+          lowerText.includes("cara menggunakan") ||
+          lowerText.includes("cara ") ||
+          lowerText.includes("tutorial ") ||
+          lowerText.includes("alat ") ||
+          lowerText.includes("mesin ") ||
+          lowerText.includes("teknik ") ||
+          lowerText.includes("postur ")
         )
       );
 
@@ -3400,6 +3410,8 @@ Keluarkan output JSON valid:
           `Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.\n\n` +
           `Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! ✨`
         ];
+      } else if (isWorkoutScheduleQuery) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
@@ -4278,24 +4290,34 @@ Keluarkan output JSON valid:
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | null = null;
 
-      const matchedEx = findExerciseOrEquipment(userText);
+      const isWorkoutScheduleQuery = (
+        lowerText.includes("latihan apa") ||
+        lowerText.includes("workout apa") ||
+        lowerText.includes("jadwal hari ini") ||
+        lowerText.includes("latihan hari ini") ||
+        lowerText.includes("workout hari ini") ||
+        lowerText.includes("jadwal gym") ||
+        lowerText.includes("jadwal latihan") ||
+        lowerText.includes("menu latihan") ||
+        lowerText.includes("rekomendasi workout") ||
+        lowerText.includes("rekomendasi latihan") ||
+        lowerText.includes("olahraga hari ini") ||
+        (lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"))) ||
+        (lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")))
+      );
+
+      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
         matchedEx && (
           userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
-          userText.includes("?") ||
-          lowerText.includes("alat") ||
-          lowerText.includes("mesin") ||
-          lowerText.includes("cara") ||
-          lowerText.includes("teknik") ||
-          lowerText.includes("postur") ||
-          lowerText.includes("gerakan") ||
-          lowerText.includes("squat") ||
-          lowerText.includes("press") ||
-          lowerText.includes("pulldown") ||
-          lowerText.includes("push up") ||
-          lowerText.includes("plank") ||
-          lowerText.includes("row") ||
-          lowerText.includes("curl")
+          lowerText.includes("cara pakai") ||
+          lowerText.includes("cara menggunakan") ||
+          lowerText.includes("cara ") ||
+          lowerText.includes("tutorial ") ||
+          lowerText.includes("alat ") ||
+          lowerText.includes("mesin ") ||
+          lowerText.includes("teknik ") ||
+          lowerText.includes("postur ")
         )
       );
 
@@ -4306,7 +4328,9 @@ Keluarkan output JSON valid:
                                   lowerText.includes("menu latihan") ||
                                   lowerText.includes("olahraga");
 
-      if (isExerciseInquiry && matchedEx) {
+      if (isWorkoutScheduleQuery) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
+      } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
           userData.persona || "mia",

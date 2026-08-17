@@ -45945,9 +45945,10 @@ https://gymbuddygroup.com`
       const isResetMessage = lowerText.includes("reset akun") || lowerText.includes("hapus akun") || lowerText.includes("reset data") || lowerText.includes("hapus data saya");
       let responseMessages = [];
       let mediaUrlToSend = void 0;
-      const matchedEx = findExerciseOrEquipment(userText);
+      const isWorkoutScheduleQuery = lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")) || lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"));
+      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
-        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || userText.includes("?") || lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("cara") || lowerText.includes("teknik") || lowerText.includes("postur") || lowerText.includes("gerakan") || lowerText.includes("squat") || lowerText.includes("press") || lowerText.includes("pulldown") || lowerText.includes("push up") || lowerText.includes("plank") || lowerText.includes("row") || lowerText.includes("curl"))
+        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
       if (isResetMessage) {
         const normPhone = normalizePhone(From);
@@ -45969,6 +45970,8 @@ Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.
 
 Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! \u2728`
         ];
+      } else if (isWorkoutScheduleQuery) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
@@ -46742,12 +46745,15 @@ Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untu
       }
       let responseMessages = [];
       let mediaUrlToSend = null;
-      const matchedEx = findExerciseOrEquipment(userText);
+      const isWorkoutScheduleQuery = lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")) || lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"));
+      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
-        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || userText.includes("?") || lowerText.includes("alat") || lowerText.includes("mesin") || lowerText.includes("cara") || lowerText.includes("teknik") || lowerText.includes("postur") || lowerText.includes("gerakan") || lowerText.includes("squat") || lowerText.includes("press") || lowerText.includes("pulldown") || lowerText.includes("push up") || lowerText.includes("plank") || lowerText.includes("row") || lowerText.includes("curl"))
+        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
-      if (isExerciseInquiry && matchedEx) {
+      if (isWorkoutScheduleQuery) {
+        responseMessages = [generateWorkoutRecommendations(userData)];
+      } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
           userData.persona || "mia",
