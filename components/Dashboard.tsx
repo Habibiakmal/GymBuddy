@@ -1107,7 +1107,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       console.warn("Direct Gemini Vision attempt error:", gErr);
     }
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
     try {
       // Backend Vision AI fallback
@@ -1202,7 +1202,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         });
       } catch (e) {}
       try {
-        const remoteUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+        const remoteUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
         if (remoteUrl) {
           await fetch(`${remoteUrl}/api/user/${normPhone}/meals`, {
             method: "POST",
@@ -1477,7 +1477,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     } catch (e) {}
 
     // Sync to backend
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1662,7 +1662,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     };
 
     try {
-      const primaryUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      const primaryUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
       const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
@@ -1872,7 +1872,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   const handleSetReminderTime = async () => {
     const normPhone = normalizePhone(activeUser.phone || "085156919826");
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/reminder`, {
         method: "POST",
@@ -1931,7 +1931,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemSugarInput("");
 
     const baseEstimation = estimateMealNutritionDeterministic(queryText);
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
     let resultItems: FoodItemNutrition[] = baseEstimation.items || [];
     let resultFoodName = baseEstimation.foodName;
@@ -2083,7 +2083,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       }
     };
     syncToServer("");
-    syncToServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com");
+    syncToServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app");
 
     // Reset all form state
     setItemNameInput("");
@@ -2102,7 +2102,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const totalProt = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.protein) || 0), 0);
     const totalCarb = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.carbs) || 0), 0);
     const totalFat  = [...allLogs, ...newItems].filter(i => !isLiquidName(i.foodName) && !i.isHydration).reduce((s, i) => s + (Number(i.fat) || 0), 0);
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       const tipRes = await fetch(`${API_BASE_URL}/api/ai/next-step`, {
         method: "POST",
@@ -2167,7 +2167,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
     } catch (e) {}
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
         method: "POST",
@@ -2214,7 +2214,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
     } catch (e) {}
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
         method: "POST",
@@ -2240,7 +2240,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     } catch (e) {}
 
     // Sync deletion to local and Render backend immediately
-    const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       // 1. Delete the specific meal by ID
       fetch(`/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
@@ -2269,7 +2269,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const handleDeleteAccount = async () => {
     if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
     const normPhone = normalizePhone(activeUser.phone || "");
-    const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       if (normPhone) {
         await fetch(`/api/user/${normPhone}`, { method: "DELETE" }).catch(() => {});
@@ -5999,7 +5999,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         localStorage.setItem(histKey, JSON.stringify([...prevHist, { date: selectedDate, weight: w, timestamp: new Date().toISOString() }]));
                       } catch (e) {}
 
-                      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+                      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
                       try {
                         await fetch(`/api/user/${normPhone}/weight`, {
                           method: "POST",

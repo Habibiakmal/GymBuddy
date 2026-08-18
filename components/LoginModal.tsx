@@ -80,7 +80,7 @@ export default function LoginModal({
       ? "0" + cleanedPhone.substring(2)
       : (cleanedPhone.startsWith("8") ? "0" + cleanedPhone : cleanedPhone);
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
     let foundProfile: any = null;
     let foundProgress: any = null;
@@ -109,7 +109,7 @@ export default function LoginModal({
 
     // 2. Try configured environment API or external fallback URL
     if (!foundProfile) {
-      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
       foundProfile = await tryFetchProfile(envUrl);
     }
 

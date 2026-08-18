@@ -123,7 +123,7 @@ export default function App() {
           // Background sync with server database
           const norm = String(parsed.phone).replace(/\D/g, "").replace(/^62/, "0");
           const cleanPhone = norm.startsWith("8") ? "0" + norm : norm;
-          const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
           try {
             const res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`, {

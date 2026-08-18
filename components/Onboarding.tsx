@@ -226,7 +226,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           if (envUrl && envUrl !== "") {
             await postOnboarding(`${envUrl}/api/onboarding`);
           } else {
-            await postOnboarding("https://gymbuddy-backend-zfft.onrender.com/api/onboarding");
+            await postOnboarding("https://gymbuddy-backend-253242815083.asia-southeast2.run.app/api/onboarding");
           }
         } catch (e) {
           console.error("Failed to save profile", e);
@@ -2338,7 +2338,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         } catch (e) {}
 
                         // Sync to backend database immediately
-                        const API_BASE_URL = "https://gymbuddy-backend-zfft.onrender.com";
+                        const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
                         try {
                           fetch("/api/onboarding", {
                             method: "POST",
