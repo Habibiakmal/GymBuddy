@@ -43930,7 +43930,7 @@ function getFirestore() {
   if (firestoreInstance) return firestoreInstance;
   try {
     const firebaseAdmin = typeof import_firebase_admin.default === "function" ? import_firebase_admin.default : import_firebase_admin.default?.default || import_firebase_admin.default;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "gen-lang-client-0130714675";
     const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
     if (serviceAccountJson) {
       const parsedCredentials = typeof serviceAccountJson === "string" && serviceAccountJson.startsWith("{") ? JSON.parse(serviceAccountJson) : serviceAccountJson;
@@ -43957,9 +43957,16 @@ function getFirestore() {
       console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} \u2705`);
       return firestoreInstance;
     }
-    return null;
+    firestoreInstance = new import_firestore.Firestore();
+    return firestoreInstance;
   } catch (err) {
-    return null;
+    console.warn("[Firestore] Initialization warning:", err?.message || err);
+    try {
+      firestoreInstance = new import_firestore.Firestore();
+      return firestoreInstance;
+    } catch (e) {
+      return null;
+    }
   }
 }
 async function findUserInFirestore(identifier) {

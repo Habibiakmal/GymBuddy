@@ -29,6 +29,8 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "gen-lang-client-0130714675"
         - name: ENABLE_MONGO_DUAL_WRITE
           value: "false"
         # Secrets mounted from Google Secret Manager

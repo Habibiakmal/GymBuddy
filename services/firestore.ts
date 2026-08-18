@@ -17,7 +17,7 @@ export function getFirestore(): Firestore | null {
 
   try {
     const firebaseAdmin: any = typeof admin === "function" ? admin : (admin as any)?.default || admin;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "gen-lang-client-0130714675";
     const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 
     if (serviceAccountJson) {
@@ -51,9 +51,16 @@ export function getFirestore(): Firestore | null {
       return firestoreInstance;
     }
 
-    return null;
+    firestoreInstance = new Firestore();
+    return firestoreInstance;
   } catch (err: any) {
-    return null;
+    console.warn("[Firestore] Initialization warning:", err?.message || err);
+    try {
+      firestoreInstance = new Firestore();
+      return firestoreInstance;
+    } catch (e) {
+      return null;
+    }
   }
 }
 
