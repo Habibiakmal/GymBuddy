@@ -44536,6 +44536,39 @@ function getTwilio() {
   }
   return twilioClient;
 }
+async function downloadTwilioMedia(mediaUrl) {
+  if (!mediaUrl) return null;
+  const sid = (process.env.TWILIO_ACCOUNT_SID || TWILIO_ACCOUNT_SID || "").trim();
+  const token = (process.env.TWILIO_AUTH_TOKEN || TWILIO_AUTH_TOKEN || "").trim();
+  const authHeader = sid && token ? "Basic " + Buffer.from(`${sid}:${token}`).toString("base64") : "";
+  try {
+    const headers = {};
+    if (authHeader) headers["Authorization"] = authHeader;
+    const initialRes = await fetch(mediaUrl, {
+      method: "GET",
+      headers,
+      redirect: "manual"
+    });
+    let targetUrl = mediaUrl;
+    if (initialRes.status >= 300 && initialRes.status < 400) {
+      const redirectLoc = initialRes.headers.get("location");
+      if (redirectLoc) targetUrl = redirectLoc;
+    }
+    const imgRes = await fetch(targetUrl, {
+      headers: targetUrl === mediaUrl && authHeader ? { Authorization: authHeader } : {}
+    });
+    if (imgRes.ok) {
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const mimeType = (imgRes.headers.get("content-type") || "image/jpeg").split(";")[0];
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      console.log(`[Twilio WA] Successfully downloaded media image (${base64.length} chars, mime: ${mimeType}) \u2705`);
+      return { data: base64, mimeType };
+    }
+  } catch (err) {
+    console.error("[Twilio WA] downloadTwilioMedia error:", err?.message || err);
+  }
+  return null;
+}
 var USER_GEMINI_KEY = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
 console.log(`[Gemini] Key loaded: prefix=${USER_GEMINI_KEY.substring(0, 10)}... length=${USER_GEMINI_KEY.length}`);
 var aiClient = null;
@@ -48527,27 +48560,12 @@ Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untu
           let imagePart = null;
           if (mediaUrl) {
             try {
-              let imgResp = null;
-              try {
-                imgResp = await import_axios.default.get(mediaUrl, {
-                  responseType: "arraybuffer",
-                  auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
-                  timeout: 15e3
-                });
-              } catch (e1) {
-                imgResp = await import_axios.default.get(mediaUrl, {
-                  responseType: "arraybuffer",
-                  timeout: 15e3
-                });
-              }
-              if (imgResp && imgResp.data) {
-                const base64Image = Buffer.from(imgResp.data).toString("base64");
-                const mimeType = String(imgResp.headers?.["content-type"] || "image/jpeg").split(";")[0];
-                imagePart = { inlineData: { data: base64Image, mimeType } };
-                console.log("[Twilio WA] Successfully downloaded media image for Gemini vision processing!");
+              const downloaded = await downloadTwilioMedia(mediaUrl);
+              if (downloaded) {
+                imagePart = { inlineData: { data: downloaded.data, mimeType: downloaded.mimeType } };
               }
             } catch (imgErr) {
-              console.error("[Twilio WA] Image download error:", imgErr?.message || imgErr);
+              console.error("[Twilio WA] Image processing note:", imgErr?.message || imgErr);
             }
           }
           const isMia = userData.persona === "mia" || userData.persona === "nikita";
@@ -48565,16 +48583,16 @@ INFORMASI USER:
 - Makanan yang Sudah Dimakan Hari Ini:
 ${todayMealLogsStr}
 
-PESAN PENGGUNA: "${userText}"${imagePart ? " + FOTO MAKANAN/ALAT" : ""}
+PESAN PENGGUNA: "${userText}"${imagePart ? " + [FOTO MAKANAN/MINUMAN TERLAMPIR]" : ""}
 
-TUGAS: Analisis pesan/foto pengguna. Pahami Bahasa Indonesia alamiah (contoh: "tadi pagi makan nasi uduk sama telur", "siang makan ayam geprek level 2", "koreksi: ayamnya 2 potong").
+${imagePart ? "PENTING: PENGGUNA MENGIRIMKAN FOTO MAKANAN/MINUMAN! Analisis foto makanan/minuman tersebut secara langsung, kenali nama hidangan beserta porsinya, dan WAJIB kembalikan JSON FORMAT 1 (FOOD_LOG). Dilarang bertanya menu apa karena foto sudah dilampirkan." : "TUGAS: Analisis pesan pengguna. Pahami Bahasa Indonesia alamiah (contoh: 'tadi pagi makan nasi uduk sama telur', 'siang makan ayam geprek level 2')."}
 Keluarkan HANYA JSON valid sesuai salah satu format berikut:
 
 FORMAT 1 - JIKA USER MELAPORKAN/MENGINPUT MAKANAN ATAU MINUMAN (BAHASA ALAMIAH / TEKS ATAU FOTO MAKANAN):
 {
   "intent": "FOOD_LOG",
   "isFood": true,
-  "foodName": "Nama Makanan/Minuman Spesifik & Porsi (misal: Batagor 1 Porsi + Bumbu Kacang / Chicken Rice Bowl + Telur / Nasi Uduk + Telur Balado)",
+  "foodName": "Nama Makanan/Minuman Spesifik & Porsi (misal: Ayam Geprek Dada + Nasi Putih + Lalapan + Es Teh Manis / Batagor 1 Porsi + Bumbu Kacang / Chicken Rice Bowl + Telur)",
   "calories": 650,
   "protein": 32,
   "carbs": 65,
