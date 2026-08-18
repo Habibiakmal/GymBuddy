@@ -48757,7 +48757,9 @@ CATATAN:
                 console.error("[Food] Stack:", foodErr?.stack?.substring(0, 500));
                 responseMessages = [`\u2705 *${parsed.foodName || "Makanan"} berhasil dicatat!*
 
-\u{1F525} ~${parsed.calories || 350} kcal | \u{1F356} ${parsed.protein || 15}g protein`];
+\u{1F525} ~${parsed.calories || 350} kcal | \u{1F356} ${parsed.protein || 15}g protein
+
+_(Debug: ${foodErr?.message || "none"})_`];
               }
               if (imagePart) {
                 try {

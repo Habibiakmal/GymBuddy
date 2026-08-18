@@ -4922,8 +4922,8 @@ CATATAN:
               } catch (foodErr: any) {
                 console.error("[Food] ERROR in food processing:", foodErr?.message || foodErr);
                 console.error("[Food] Stack:", foodErr?.stack?.substring(0, 500));
-                // Fallback simple response
-                responseMessages = [`✅ *${parsed.foodName || "Makanan"} berhasil dicatat!*\n\n🔥 ~${parsed.calories || 350} kcal | 🍖 ${parsed.protein || 15}g protein`];
+                // Fallback simple response with debug info
+                responseMessages = [`✅ *${parsed.foodName || "Makanan"} berhasil dicatat!*\n\n🔥 ~${parsed.calories || 350} kcal | 🍖 ${parsed.protein || 15}g protein\n\n_(Debug: ${foodErr?.message || "none"})_`];
               }
 
               // ── Generate Visual Nutrition Card Image (only when user sent a photo) ──
