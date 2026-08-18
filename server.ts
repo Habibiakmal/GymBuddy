@@ -410,10 +410,6 @@ function getLocalDateStr(d: Date = new Date()): string {
   }
 }
 
-function getTodayDateStr(): string {
-  return getLocalDateStr();
-}
-
 // Helper to determine streak count
 function getStreakCount(rawPhone: string): number {
   const phone = normalizePhone(rawPhone);
