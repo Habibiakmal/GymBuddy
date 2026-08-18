@@ -1,0 +1,44 @@
+steps:
+  # 1. Build container image with Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
+      - '.'
+
+  # 2. Push container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
+
+  # 3. Deploy to Cloud Run using declarative cloudrun.yaml
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'replace'
+      - 'cloudrun.yaml'
+      - '--region=asia-southeast2'
+      - '--project=gen-lang-client-0130714675'
+
+  # 4. Ensure public unauthenticated access
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'add-iam-policy-binding'
+      - 'gymbuddy-backend'
+      - '--region=asia-southeast2'
+      - '--member=allUsers'
+      - '--role=roles/run.invoker'
+      - '--project=gen-lang-client-0130714675'
+
+images:
+  - 'asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
