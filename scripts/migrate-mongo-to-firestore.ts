@@ -163,6 +163,75 @@ async function runMigration() {
     console.error("❌ Error migrating AI usage:", e.message);
   }
 
+  // 7. Migrate Legacy AppData Document (if present)
+  try {
+    const legacyDoc = await mongoDb.collection("appdata").findOne({ _id: "main" as any });
+    if (legacyDoc) {
+      console.log("[Legacy AppData] Found 'main' document. Migrating legacy records...");
+
+      // A. Legacy Users
+      if (legacyDoc.users) {
+        for (const [phone, u] of Object.entries(legacyDoc.users as Record<string, any>)) {
+          if (u && u.weight) {
+            const docId = u.userId || `usr_${phone}`;
+            await firestore.collection("users").doc(docId).set({
+              ...u,
+              userId: docId,
+              phone: phone,
+              createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
+              updatedAt: u.updatedAt ? new Date(u.updatedAt) : new Date()
+            }, { merge: true });
+            stats.users.firestore++;
+          }
+        }
+      }
+
+      // B. Legacy Daily Food Logs
+      if (legacyDoc.dailyLogs) {
+        for (const [userDateKey, logs] of Object.entries(legacyDoc.dailyLogs as Record<string, any[]>)) {
+          if (Array.isArray(logs)) {
+            const parts = userDateKey.split("_");
+            const phone = parts[0];
+            const date = parts.slice(1).join("_");
+            for (const log of logs) {
+              if (log && log.foodName && log.id !== "completed") {
+                const logId = log.id || `m_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                await firestore.collection("foodLogs").doc(logId).set({
+                  ...log,
+                  id: logId,
+                  phone,
+                  date,
+                  createdAt: log.timestamp ? new Date(log.timestamp) : new Date()
+                }, { merge: true });
+                stats.foodLogs.firestore++;
+              }
+            }
+          }
+        }
+      }
+
+      // C. Legacy Water Logs
+      if (legacyDoc.waterLogs) {
+        for (const [key, cups] of Object.entries(legacyDoc.waterLogs as Record<string, number>)) {
+          const parts = key.split("_");
+          const phone = parts[0];
+          const date = parts.slice(1).join("_");
+          await firestore.collection("waterLogs").doc(key).set({
+            phone,
+            date,
+            cups: Number(cups) || 0,
+            volumeMl: (Number(cups) || 0) * 250,
+            updatedAt: new Date()
+          }, { merge: true });
+          stats.waterLogs.firestore++;
+        }
+      }
+      console.log("✓ [Legacy AppData] Successfully extracted and migrated legacy records!");
+    }
+  } catch (e: any) {
+    console.error("❌ Error migrating legacy appdata:", e.message);
+  }
+
   console.log("\n==========================================================");
   console.log("MIGRATION SUMMARY & DATA PARITY VERIFICATION");
   console.log("==========================================================");
