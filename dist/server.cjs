@@ -44011,6 +44011,9 @@ async function saveSubscriptionToFirestore(doc) {
 }
 
 // services/db.ts
+function isMongoDualWriteEnabled() {
+  return process.env.ENABLE_MONGO_DUAL_WRITE === "true";
+}
 var client = null;
 var database = null;
 async function getDatabase() {
@@ -44026,9 +44029,11 @@ async function getDatabase() {
     if (!database) {
       await client.connect();
       database = client.db("gymbuddy");
-      console.log("[MongoDB] Production Atlas connection established \u2705");
-      await initIndexes(database);
-      await migrateLegacyAppData(database);
+      console.log("[MongoDB] Connection established \u2705");
+      if (isMongoDualWriteEnabled()) {
+        await initIndexes(database);
+        await migrateLegacyAppData(database);
+      }
     }
     return database;
   } catch (err) {
@@ -44227,24 +44232,26 @@ async function saveUserDocument(doc) {
   } catch (e) {
     console.warn("[Firestore] saveUser warning:", e?.message || e);
   }
-  try {
-    const db = await getDatabase();
-    if (db) {
-      await db.collection("users").updateOne(
-        { phone: doc.phone },
-        {
-          $set: {
-            ...doc,
-            userId,
-            updatedAt: /* @__PURE__ */ new Date()
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("users").updateOne(
+          { phone: doc.phone },
+          {
+            $set: {
+              ...doc,
+              userId,
+              updatedAt: /* @__PURE__ */ new Date()
+            },
+            $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
           },
-          $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
-        },
-        { upsert: true }
-      );
+          { upsert: true }
+        );
+      }
+    } catch (e) {
+      console.warn("[MongoDB] saveUser warning:", e?.message || e);
     }
-  } catch (e) {
-    console.warn("[MongoDB] saveUser warning:", e?.message || e);
   }
 }
 async function getUserSubscription(userIdOrPhone) {
@@ -44280,22 +44287,24 @@ async function saveUserSubscription(doc) {
   } catch (e) {
     console.warn("[Firestore] saveSubscription warning:", e?.message || e);
   }
-  try {
-    const db = await getDatabase();
-    if (db) {
-      await db.collection("subscriptions").updateOne(
-        { phone: doc.phone },
-        {
-          $set: {
-            ...doc,
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        },
-        { upsert: true }
-      );
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("subscriptions").updateOne(
+          { phone: doc.phone },
+          {
+            $set: {
+              ...doc,
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+    } catch (e) {
+      console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
     }
-  } catch (e) {
-    console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
   }
 }
 

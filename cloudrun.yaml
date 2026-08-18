@@ -31,6 +31,8 @@ spec:
           value: "production"
         - name: PORT
           value: "8080"
+        - name: ENABLE_MONGO_DUAL_WRITE
+          value: "false"
         # Secrets mounted from Google Secret Manager
         - name: GEMINI_API_KEY
           valueFrom:
@@ -41,11 +43,6 @@ spec:
           valueFrom:
             secretKeyRef:
               name: gymbuddy-jwt-secret
-              key: latest
-        - name: MONGODB_URI
-          valueFrom:
-            secretKeyRef:
-              name: gymbuddy-mongodb-uri
               key: latest
         - name: TWILIO_ACCOUNT_SID
           valueFrom:

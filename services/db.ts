@@ -105,6 +105,10 @@ export interface AiUsageDocument {
   timestamp: Date;
 }
 
+export function isMongoDualWriteEnabled(): boolean {
+  return process.env.ENABLE_MONGO_DUAL_WRITE === "true";
+}
+
 let client: MongoClient | null = null;
 let database: Db | null = null;
 
@@ -123,9 +127,11 @@ export async function getDatabase(): Promise<Db | null> {
     if (!database) {
       await client.connect();
       database = client.db("gymbuddy");
-      console.log("[MongoDB] Production Atlas connection established ✅");
-      await initIndexes(database);
-      await migrateLegacyAppData(database);
+      console.log("[MongoDB] Connection established ✅");
+      if (isMongoDualWriteEnabled()) {
+        await initIndexes(database);
+        await migrateLegacyAppData(database);
+      }
     }
     return database;
   } catch (err: any) {
@@ -377,25 +383,27 @@ export async function saveUserDocument(doc: Partial<UserDocument> & { phone: str
     console.warn("[Firestore] saveUser warning:", e?.message || e);
   }
 
-  // 2. Dual-write to MongoDB (Rollback Safety)
-  try {
-    const db = await getDatabase();
-    if (db) {
-      await db.collection("users").updateOne(
-        { phone: doc.phone },
-        {
-          $set: {
-            ...doc,
-            userId,
-            updatedAt: new Date()
+  // 2. Dual-write to MongoDB (Rollback Safety - ONLY when explicitly enabled)
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("users").updateOne(
+          { phone: doc.phone },
+          {
+            $set: {
+              ...doc,
+              userId,
+              updatedAt: new Date()
+            },
+            $setOnInsert: { createdAt: new Date() }
           },
-          $setOnInsert: { createdAt: new Date() }
-        },
-        { upsert: true }
-      );
+          { upsert: true }
+        );
+      }
+    } catch (e: any) {
+      console.warn("[MongoDB] saveUser warning:", e?.message || e);
     }
-  } catch (e: any) {
-    console.warn("[MongoDB] saveUser warning:", e?.message || e);
   }
 }
 
@@ -442,23 +450,25 @@ export async function saveUserSubscription(doc: SubscriptionDocument): Promise<v
     console.warn("[Firestore] saveSubscription warning:", e?.message || e);
   }
 
-  // 2. Dual-write to MongoDB
-  try {
-    const db = await getDatabase();
-    if (db) {
-      await db.collection("subscriptions").updateOne(
-        { phone: doc.phone },
-        {
-          $set: {
-            ...doc,
-            updatedAt: new Date()
-          }
-        },
-        { upsert: true }
-      );
+  // 2. Dual-write to MongoDB (ONLY when explicitly enabled)
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("subscriptions").updateOne(
+          { phone: doc.phone },
+          {
+            $set: {
+              ...doc,
+              updatedAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+    } catch (e: any) {
+      console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
     }
-  } catch (e: any) {
-    console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
   }
 }
 
@@ -512,18 +522,20 @@ export async function insertFoodLog(doc: FoodLogDocument): Promise<void> {
     console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
   }
 
-  // 2. MongoDB Dual-Write
-  try {
-    const db = await getDatabase();
-    if (db) {
-      await db.collection("foodLogs").updateOne(
-        { id: doc.id },
-        { $set: doc },
-        { upsert: true }
-      );
+  // 2. Dual-write to MongoDB (ONLY when explicitly enabled)
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("foodLogs").updateOne(
+          { id: doc.id },
+          { $set: doc },
+          { upsert: true }
+        );
+      }
+    } catch (e: any) {
+      console.warn("[MongoDB] insertFoodLog warning:", e?.message || e);
     }
-  } catch (e: any) {
-    console.warn("[MongoDB] insertFoodLog warning:", e?.message || e);
   }
 }
 
@@ -536,9 +548,16 @@ export async function deleteFoodLog(id: string): Promise<void> {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
   }
 
-  const db = await getDatabase();
-  if (!db) return;
-  await db.collection("foodLogs").deleteOne({ id });
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("foodLogs").deleteOne({ id });
+      }
+    } catch (e: any) {
+      console.warn("[MongoDB] deleteFoodLog warning:", e?.message || e);
+    }
+  }
 }
 
 export async function getWaterLog(phone: string, date: string): Promise<WaterLogDocument | null> {
@@ -551,12 +570,20 @@ export async function getWaterLog(phone: string, date: string): Promise<WaterLog
     console.warn("[Firestore] getWaterLog fallback note:", e?.message || e);
   }
 
-  const db = await getDatabase();
-  if (!db) return null;
-  return await db.collection<WaterLogDocument>("waterLogs").findOne({
-    $or: [{ phone }, { userId: `usr_${phone}` }],
-    date
-  });
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection<WaterLogDocument>("waterLogs").findOne({
+        $or: [{ phone }, { userId: `usr_${phone}` }],
+        date
+      });
+      if (found) return found;
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] getWaterLog fallback note:", e?.message || e);
+  }
+
+  return null;
 }
 
 export async function saveWaterLog(doc: WaterLogDocument): Promise<void> {
@@ -568,13 +595,20 @@ export async function saveWaterLog(doc: WaterLogDocument): Promise<void> {
     console.warn("[Firestore] saveWaterLog warning:", e?.message || e);
   }
 
-  const db = await getDatabase();
-  if (!db) return;
-  await db.collection("waterLogs").updateOne(
-    { phone: doc.phone, date: doc.date },
-    { $set: doc },
-    { upsert: true }
-  );
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("waterLogs").updateOne(
+          { phone: doc.phone, date: doc.date },
+          { $set: doc },
+          { upsert: true }
+        );
+      }
+    } catch (e: any) {
+      console.warn("[MongoDB] saveWaterLog warning:", e?.message || e);
+    }
+  }
 }
 
 export async function recordAiTelemetry(entry: AiUsageDocument): Promise<void> {
@@ -586,11 +620,14 @@ export async function recordAiTelemetry(entry: AiUsageDocument): Promise<void> {
     console.warn("[Firestore] recordAiTelemetry warning:", e?.message || e);
   }
 
-  try {
-    const db = await getDatabase();
-    if (!db) return;
-    await db.collection("aiUsage").insertOne(entry);
-  } catch (e: any) {
-    console.warn("[Telemetry] MongoDB write note:", e?.message || e);
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("aiUsage").insertOne(entry);
+      }
+    } catch (e: any) {
+      console.warn("[Telemetry] MongoDB write note:", e?.message || e);
+    }
   }
 }
