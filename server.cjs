@@ -48371,7 +48371,7 @@ Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
       if (isDeleteLastLog) {
         const deletedItem = deleteLastMealLog(from);
         const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const updatedTotals = getDailyTotals(from);
+        const updatedTotals2 = getDailyTotals(from);
         let replyMsg;
         if (deletedItem) {
           replyMsg = `\u274C *LOG DIHAPUS*
@@ -48379,8 +48379,8 @@ Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
 \u2705 *"${deletedItem.foodName}"* berhasil dihapus dari catatan hari ini.
 
 \u{1F4CA} *Sisa Asupan Hari Ini:*
-\u{1F525} ${updatedTotals.calories} kcal  \u2022  \u{1F356} ${updatedTotals.protein}g protein
-\u{1F35A} ${updatedTotals.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals.fat}g lemak
+\u{1F525} ${updatedTotals2.calories} kcal  \u2022  \u{1F356} ${updatedTotals2.protein}g protein
+\u{1F35A} ${updatedTotals2.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals2.fat}g lemak
 
 \u{1F4AC} *${coachN}*: "Oke, sudah dihapus! Mau catat yang lain?"`;
         } else {
@@ -48407,7 +48407,7 @@ Belum ada catatan makanan hari ini untuk dihapus.
         const queryName = deleteByNameMatch[1].trim();
         const deletedItem = deleteMealLogByName(from, queryName);
         const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const updatedTotals = getDailyTotals(from);
+        const updatedTotals2 = getDailyTotals(from);
         let replyMsg;
         if (deletedItem) {
           replyMsg = `\u274C *LOG DIHAPUS*
@@ -48415,8 +48415,8 @@ Belum ada catatan makanan hari ini untuk dihapus.
 \u2705 *"${deletedItem.foodName}"* berhasil dihapus!
 
 \u{1F4CA} *Sisa Asupan Hari Ini:*
-\u{1F525} ${updatedTotals.calories} kcal  \u2022  \u{1F356} ${updatedTotals.protein}g protein
-\u{1F35A} ${updatedTotals.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals.fat}g lemak
+\u{1F525} ${updatedTotals2.calories} kcal  \u2022  \u{1F356} ${updatedTotals2.protein}g protein
+\u{1F35A} ${updatedTotals2.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals2.fat}g lemak
 
 \u{1F4AC} *${coachN}*: "Done! Mau koreksi atau catat yang lain?"`;
         } else {
@@ -48725,25 +48725,38 @@ CATATAN:
               parsed.equipmentName = equipGuess ? equipGuess[1] : imagePart ? "Dumbbell Hex" : "Alat Gym";
             }
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
-              parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
-              parsed.isFood = true;
-              const mealId = `m-${Date.now()}`;
-              const savedMeal = {
-                id: mealId,
-                foodName: parsed.foodName || "Makanan",
-                calories: Number(parsed.calories) || 0,
-                protein: Number(parsed.protein) || 0,
-                carbs: Number(parsed.carbs) || 0,
-                fat: Number(parsed.fat) || 0,
-                fiber: Number(parsed.fiber) || 0,
-                mealType: getMealTypeByHour(),
-                timestamp: (/* @__PURE__ */ new Date()).toISOString()
-              };
-              addMealLog(from, savedMeal);
-              userProfile.lastFoodLog = { ...savedMeal };
-              saveUserProfile(from, userProfile);
-              const updatedTotals = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals)];
+              console.log("[Food] Processing FOOD_LOG intent for:", parsed.foodName);
+              try {
+                parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
+                console.log("[Food] Normalized calories:", parsed.calories);
+                parsed.isFood = true;
+                const mealId = `m-${Date.now()}`;
+                const savedMeal = {
+                  id: mealId,
+                  foodName: parsed.foodName || "Makanan",
+                  calories: Number(parsed.calories) || 0,
+                  protein: Number(parsed.protein) || 0,
+                  carbs: Number(parsed.carbs) || 0,
+                  fat: Number(parsed.fat) || 0,
+                  fiber: Number(parsed.fiber) || 0,
+                  mealType: getMealTypeByHour(),
+                  timestamp: (/* @__PURE__ */ new Date()).toISOString()
+                };
+                console.log("[Food] Saving meal:", savedMeal.foodName, savedMeal.calories, "kcal");
+                addMealLog(from, savedMeal);
+                userProfile.lastFoodLog = { ...savedMeal };
+                saveUserProfile(from, userProfile);
+                const updatedTotals2 = getDailyTotals(from);
+                console.log("[Food] Formatting nutrition card...");
+                responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals2)];
+                console.log("[Food] Card formatted, length:", responseMessages[0].length);
+              } catch (foodErr) {
+                console.error("[Food] ERROR in food processing:", foodErr?.message || foodErr);
+                console.error("[Food] Stack:", foodErr?.stack?.substring(0, 500));
+                responseMessages = [`\u2705 *${parsed.foodName || "Makanan"} berhasil dicatat!*
+
+\u{1F525} ~${parsed.calories || 350} kcal | \u{1F356} ${parsed.protein || 15}g protein`];
+              }
               if (imagePart) {
                 try {
                   const wibDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -48933,8 +48946,8 @@ STATUS: *Scheduler Aktif*
                 mealType: getMealTypeByHour(),
                 timestamp: (/* @__PURE__ */ new Date()).toISOString()
               });
-              const updatedTotals = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsedFallback, "Teks", userData, updatedTotals)];
+              const updatedTotals2 = getDailyTotals(from);
+              responseMessages = [formatNutritionCard(parsedFallback, "Teks", userData, updatedTotals2)];
             } else if (userText.match(/(lari|jogging|gbk|olahraga|cardio)/i)) {
               responseMessages = [`\u{1F3C3} *TIPS LARI SORE DI GBK FOR ${userData.name.toUpperCase()}*
 

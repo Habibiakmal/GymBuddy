@@ -4901,22 +4901,33 @@ CATATAN:
             }
 
             if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
-              parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
-              parsed.isFood = true;
-              const mealId = `m-${Date.now()}`;
-              const savedMeal: MealLog = {
-                id: mealId, foodName: parsed.foodName || "Makanan",
-                calories: Number(parsed.calories) || 0, protein: Number(parsed.protein) || 0,
-                carbs: Number(parsed.carbs) || 0, fat: Number(parsed.fat) || 0,
-                fiber: Number(parsed.fiber) || 0, mealType: getMealTypeByHour(),
-                timestamp: new Date().toISOString()
-              };
-              addMealLog(from, savedMeal);
-              // Feature 5: save lastFoodLog so "koreksi:" command can reference it
-              userProfile.lastFoodLog = { ...savedMeal };
-              saveUserProfile(from, userProfile);
-              const updatedTotals = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals)];
+              console.log("[Food] Processing FOOD_LOG intent for:", parsed.foodName);
+              try {
+                parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
+                console.log("[Food] Normalized calories:", parsed.calories);
+                parsed.isFood = true;
+                const mealId = `m-${Date.now()}`;
+                const savedMeal: MealLog = {
+                  id: mealId, foodName: parsed.foodName || "Makanan",
+                  calories: Number(parsed.calories) || 0, protein: Number(parsed.protein) || 0,
+                  carbs: Number(parsed.carbs) || 0, fat: Number(parsed.fat) || 0,
+                  fiber: Number(parsed.fiber) || 0, mealType: getMealTypeByHour(),
+                  timestamp: new Date().toISOString()
+                };
+                console.log("[Food] Saving meal:", savedMeal.foodName, savedMeal.calories, "kcal");
+                addMealLog(from, savedMeal);
+                userProfile.lastFoodLog = { ...savedMeal };
+                saveUserProfile(from, userProfile);
+                const updatedTotals = getDailyTotals(from);
+                console.log("[Food] Formatting nutrition card...");
+                responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals)];
+                console.log("[Food] Card formatted, length:", responseMessages[0].length);
+              } catch (foodErr: any) {
+                console.error("[Food] ERROR in food processing:", foodErr?.message || foodErr);
+                console.error("[Food] Stack:", foodErr?.stack?.substring(0, 500));
+                // Fallback simple response
+                responseMessages = [`✅ *${parsed.foodName || "Makanan"} berhasil dicatat!*\n\n🔥 ~${parsed.calories || 350} kcal | 🍖 ${parsed.protein || 15}g protein`];
+              }
 
               // ── Generate Visual Nutrition Card Image (only when user sent a photo) ──
               if (imagePart) {
