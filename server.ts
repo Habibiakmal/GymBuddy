@@ -2584,7 +2584,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
 
   // REST API: Get meal logs for specific user and date
-  app.get("/api/user/:phone/meals", (req, res) => {
+  app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
@@ -2593,17 +2593,29 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const altKey = `${altPhone}_${targetDate}`;
 
     let logs: MealLog[] = [];
-    if (dbData.dailyLogs[key] !== undefined && Array.isArray(dbData.dailyLogs[key])) {
+    if (dbData.dailyLogs[key] !== undefined && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
       logs = dbData.dailyLogs[key].filter(m => !isLegacyMockMeal(m));
-    } else if (dbData.dailyLogs[altKey] !== undefined && Array.isArray(dbData.dailyLogs[altKey])) {
+    } else if (dbData.dailyLogs[altKey] !== undefined && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
       logs = dbData.dailyLogs[altKey].filter(m => !isLegacyMockMeal(m));
+    } else {
+      // Query persistent database layer (Firestore / MongoDB / memory)
+      try {
+        const dbLogs = await getFoodLogsForDate(phone, targetDate);
+        if (dbLogs && dbLogs.length > 0) {
+          logs = dbLogs as unknown as MealLog[];
+          dbData.dailyLogs[key] = logs;
+          saveDb();
+        }
+      } catch (e: any) {
+        console.warn("[Meals API] Database fetch note:", e?.message || e);
+      }
     }
 
     res.json({ success: true, phone, date: targetDate, logs });
   });
 
   // REST API: Add meal log for user
-  app.post("/api/user/:phone/meals", express.json(), (req, res) => {
+  app.post("/api/user/:phone/meals", express.json(), async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const meal = req.body;
     const targetDate = meal.date || (req.query.date as string) || getLocalDateStr();
@@ -2621,17 +2633,40 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       sugar: Number(meal.sugar) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
       timestamp: meal.timestamp || new Date().toISOString(),
-      // Bug 2b Fix: preserve isHydration and volumeMl sent from frontend
       isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : (meal.isHydration === false || meal.isHydration === "false" ? false : undefined),
       volumeMl: meal.volumeMl ? Number(meal.volumeMl) : undefined
     };
     addMealLog(phone, mealObj, targetDate);
+
+    // Save to persistent database layer
+    try {
+      await insertFoodLog({
+        id: mealObj.id,
+        userId: `usr_${phone}`,
+        phone,
+        date: targetDate,
+        foodName: mealObj.foodName,
+        calories: mealObj.calories,
+        protein: mealObj.protein,
+        carbs: mealObj.carbs,
+        fat: mealObj.fat,
+        fiber: mealObj.fiber,
+        sugar: mealObj.sugar,
+        isHydration: mealObj.isHydration,
+        volumeMl: mealObj.volumeMl,
+        itemType: mealObj.isHydration ? "water" : "food",
+        createdAt: new Date()
+      });
+    } catch (e: any) {
+      console.warn("[Meals API] insertFoodLog note:", e?.message || e);
+    }
+
     const key = `${phone}_${targetDate}`;
     res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
   });
 
   // REST API: Delete single meal log for user (cleans BOTH key and altKey)
-  app.delete("/api/user/:phone/meals/:mealId", (req, res) => {
+  app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
@@ -2646,6 +2681,13 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m: any) => m.id !== mealId);
     }
     saveDb();
+
+    try {
+      await deleteFoodLog(mealId);
+    } catch (e: any) {
+      console.warn("[Meals API] deleteFoodLog note:", e?.message || e);
+    }
+
     res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
   });
 
@@ -2664,7 +2706,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Full synchronization / replace of meal logs for user on a date
-  app.put("/api/user/:phone/meals", express.json(), (req, res) => {
+  app.put("/api/user/:phone/meals", express.json(), async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || req.body?.date || getLocalDateStr();
@@ -2675,6 +2717,30 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[key] = rawMeals;
     dbData.dailyLogs[altKey] = rawMeals;
     saveDb();
+
+    // Persist each meal to database layer
+    for (const m of rawMeals) {
+      if (m && m.foodName) {
+        insertFoodLog({
+          id: m.id || `m-${Date.now()}`,
+          userId: `usr_${phone}`,
+          phone,
+          date: targetDate,
+          foodName: m.foodName,
+          calories: Number(m.calories) || 0,
+          protein: Number(m.protein) || 0,
+          carbs: Number(m.carbs) || 0,
+          fat: Number(m.fat) || 0,
+          fiber: Number(m.fiber) || 0,
+          sugar: Number(m.sugar) || 0,
+          isHydration: Boolean(m.isHydration),
+          volumeMl: Number(m.volumeMl) || undefined,
+          itemType: m.isHydration ? "water" : "food",
+          createdAt: m.createdAt ? new Date(m.createdAt) : new Date()
+        }).catch(() => {});
+      }
+    }
+
     res.json({ success: true, phone, date: targetDate, logs: rawMeals });
   });
 

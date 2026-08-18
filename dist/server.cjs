@@ -44009,6 +44009,28 @@ async function saveSubscriptionToFirestore(doc) {
     updatedAt: /* @__PURE__ */ new Date()
   }, { merge: true });
 }
+async function getFoodLogsFromFirestore(phone, date) {
+  const db = getFirestore();
+  if (!db) return [];
+  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const snap2 = await db.collection("foodLogs").where("phone", "in", [phone, clean]).where("date", "==", date).get();
+  const results = snap2.docs.map((d) => d.data());
+  return results.sort((a, b) => {
+    const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return tA - tB;
+  });
+}
+async function insertFoodLogToFirestore(doc) {
+  const db = getFirestore();
+  if (!db) return;
+  await db.collection("foodLogs").doc(doc.id).set(doc, { merge: true });
+}
+async function deleteFoodLogFromFirestore(id) {
+  const db = getFirestore();
+  if (!db) return;
+  await db.collection("foodLogs").doc(id).delete();
+}
 
 // services/db.ts
 function isMongoDualWriteEnabled() {
@@ -44304,6 +44326,80 @@ async function saveUserSubscription(doc) {
       }
     } catch (e) {
       console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
+    }
+  }
+}
+async function getFoodLogsForDate(phone, date) {
+  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${date}`;
+  try {
+    if (getFirestore()) {
+      const firestoreLogs = await getFoodLogsFromFirestore(phone, date);
+      if (firestoreLogs.length > 0) return firestoreLogs;
+    }
+  } catch (e) {
+    console.warn("[Firestore] getFoodLogs fallback note:", e?.message || e);
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection("foodLogs").find({
+        $or: [{ phone }, { userId: `usr_${phone}` }],
+        date
+      }).sort({ createdAt: 1 }).toArray();
+      if (found.length > 0) return found;
+    }
+  } catch (e) {
+    console.warn("[MongoDB] getFoodLogs fallback note:", e?.message || e);
+  }
+  return memCache.foodLogs.get(cacheKey) || [];
+}
+async function insertFoodLog(doc) {
+  const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${doc.date}`;
+  const existing = memCache.foodLogs.get(cacheKey) || [];
+  const idx = existing.findIndex((m) => m.id === doc.id);
+  if (idx >= 0) existing[idx] = doc;
+  else existing.push(doc);
+  memCache.foodLogs.set(cacheKey, existing);
+  try {
+    if (getFirestore()) {
+      await insertFoodLogToFirestore(doc);
+    }
+  } catch (e) {
+    console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
+  }
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("foodLogs").updateOne(
+          { id: doc.id },
+          { $set: doc },
+          { upsert: true }
+        );
+      }
+    } catch (e) {
+      console.warn("[MongoDB] insertFoodLog warning:", e?.message || e);
+    }
+  }
+}
+async function deleteFoodLog(id) {
+  try {
+    if (getFirestore()) {
+      await deleteFoodLogFromFirestore(id);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
+  }
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("foodLogs").deleteOne({ id });
+      }
+    } catch (e) {
+      console.warn("[MongoDB] deleteFoodLog warning:", e?.message || e);
     }
   }
 }
@@ -46684,7 +46780,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       res.status(500).json({ success: false, error: err.message || "Failed to analyze image" });
     }
   });
-  app.get("/api/user/:phone/meals", (req, res) => {
+  app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
@@ -46692,14 +46788,25 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
     let logs = [];
-    if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key])) {
+    if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
       logs = dbData.dailyLogs[key].filter((m) => !isLegacyMockMeal(m));
-    } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey])) {
+    } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
       logs = dbData.dailyLogs[altKey].filter((m) => !isLegacyMockMeal(m));
+    } else {
+      try {
+        const dbLogs = await getFoodLogsForDate(phone, targetDate);
+        if (dbLogs && dbLogs.length > 0) {
+          logs = dbLogs;
+          dbData.dailyLogs[key] = logs;
+          saveDb();
+        }
+      } catch (e) {
+        console.warn("[Meals API] Database fetch note:", e?.message || e);
+      }
     }
     res.json({ success: true, phone, date: targetDate, logs });
   });
-  app.post("/api/user/:phone/meals", import_express.default.json(), (req, res) => {
+  app.post("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const meal = req.body;
     const targetDate = meal.date || req.query.date || getLocalDateStr();
@@ -46717,15 +46824,35 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       sugar: Number(meal.sugar) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
       timestamp: meal.timestamp || (/* @__PURE__ */ new Date()).toISOString(),
-      // Bug 2b Fix: preserve isHydration and volumeMl sent from frontend
       isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : meal.isHydration === false || meal.isHydration === "false" ? false : void 0,
       volumeMl: meal.volumeMl ? Number(meal.volumeMl) : void 0
     };
     addMealLog(phone, mealObj, targetDate);
+    try {
+      await insertFoodLog({
+        id: mealObj.id,
+        userId: `usr_${phone}`,
+        phone,
+        date: targetDate,
+        foodName: mealObj.foodName,
+        calories: mealObj.calories,
+        protein: mealObj.protein,
+        carbs: mealObj.carbs,
+        fat: mealObj.fat,
+        fiber: mealObj.fiber,
+        sugar: mealObj.sugar,
+        isHydration: mealObj.isHydration,
+        volumeMl: mealObj.volumeMl,
+        itemType: mealObj.isHydration ? "water" : "food",
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    } catch (e) {
+      console.warn("[Meals API] insertFoodLog note:", e?.message || e);
+    }
     const key = `${phone}_${targetDate}`;
     res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
   });
-  app.delete("/api/user/:phone/meals/:mealId", (req, res) => {
+  app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
@@ -46739,6 +46866,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== mealId);
     }
     saveDb();
+    try {
+      await deleteFoodLog(mealId);
+    } catch (e) {
+      console.warn("[Meals API] deleteFoodLog note:", e?.message || e);
+    }
     res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
   });
   app.delete("/api/user/:phone/meals", (req, res) => {
@@ -46752,7 +46884,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     saveDb();
     res.json({ success: true, phone, date: targetDate, logs: [] });
   });
-  app.put("/api/user/:phone/meals", import_express.default.json(), (req, res) => {
+  app.put("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || req.body?.date || getLocalDateStr();
@@ -46762,6 +46894,28 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[key] = rawMeals;
     dbData.dailyLogs[altKey] = rawMeals;
     saveDb();
+    for (const m of rawMeals) {
+      if (m && m.foodName) {
+        insertFoodLog({
+          id: m.id || `m-${Date.now()}`,
+          userId: `usr_${phone}`,
+          phone,
+          date: targetDate,
+          foodName: m.foodName,
+          calories: Number(m.calories) || 0,
+          protein: Number(m.protein) || 0,
+          carbs: Number(m.carbs) || 0,
+          fat: Number(m.fat) || 0,
+          fiber: Number(m.fiber) || 0,
+          sugar: Number(m.sugar) || 0,
+          isHydration: Boolean(m.isHydration),
+          volumeMl: Number(m.volumeMl) || void 0,
+          itemType: m.isHydration ? "water" : "food",
+          createdAt: m.createdAt ? new Date(m.createdAt) : /* @__PURE__ */ new Date()
+        }).catch(() => {
+        });
+      }
+    }
     res.json({ success: true, phone, date: targetDate, logs: rawMeals });
   });
   app.get("/api/user/:phone/water", (req, res) => {

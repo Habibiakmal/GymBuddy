@@ -1644,12 +1644,32 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
-        const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
-        const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
-        setAllLogs(sanitized);
-        try {
-          localStorage.setItem(localKey, JSON.stringify(sanitized));
-        } catch (e) {}
+        if (serverLogs.length > 0) {
+          const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
+          const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
+          setAllLogs(sanitized);
+          try {
+            localStorage.setItem(localKey, JSON.stringify(sanitized));
+          } catch (e) {}
+        } else {
+          // If server returned 0 logs, check if browser has local logs to preserve & backfill
+          try {
+            const localData = localStorage.getItem(localKey);
+            if (localData) {
+              const localParsed = JSON.parse(localData);
+              if (Array.isArray(localParsed) && localParsed.length > 0) {
+                const sanitized = sanitizeAndSplitComboLogs(localParsed);
+                setAllLogs(sanitized);
+                // Auto-sync backfill to server
+                fetch(`/api/user/${normPhone}/meals`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ meals: sanitized, date: dateStr })
+                }).catch(() => {});
+              }
+            }
+          } catch (e) {}
+        }
       }
 
       // Also refresh live user profile in background (for streaks, live target, & weight sync)
