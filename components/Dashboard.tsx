@@ -703,7 +703,35 @@ export default function Dashboard({
   const todayDateStr = formatDateKey(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
   const [liveUser, setLiveUser] = useState<UserProfileData>(safeUser);
-  const [allLogs, setAllLogs] = useState<MealItem[]>([]);
+
+  // Robust Local Storage Meal Retrieval with Multiple Phone Format Fallbacks
+  const getLocalMeals = (phone: string, dateStr: string): MealItem[] => {
+    const norm = normalizePhone(phone || "085156919826");
+    const alt = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
+    const candidateKeys = [
+      `gymbuddy_meals_${norm}_${dateStr}`,
+      `gymbuddy_meals_${alt}_${dateStr}`,
+      `gymbuddy_meals_${phone}_${dateStr}`,
+      `gymbuddy_meals_user_${dateStr}`,
+      `gymbuddy_meals_${dateStr}`
+    ];
+    for (const k of candidateKeys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return sanitizeAndSplitComboLogs(parsed);
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const [allLogs, setAllLogs] = useState<MealItem[]>(() => {
+    return getLocalMeals(safeUser.phone || "085156919826", todayDateStr);
+  });
   const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
 
@@ -1610,16 +1638,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
     // 1. Immediate Display from local cache (fast initial render, no flicker)
-    try {
-      const localData = localStorage.getItem(localKey);
-      if (localData !== null) {
-        const parsed = JSON.parse(localData);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const sanitizedLocal = sanitizeAndSplitComboLogs(parsed);
-          setAllLogs(sanitizedLocal);
-        }
-      }
-    } catch (e) {}
+    const localLogs = getLocalMeals(activeUser.phone, dateStr);
+    if (localLogs.length > 0) {
+      setAllLogs(localLogs);
+    }
 
     if (!silent) setIsSyncing(true);
 
@@ -1653,22 +1675,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           } catch (e) {}
         } else {
           // If server returned 0 logs, check if browser has local logs to preserve & backfill
-          try {
-            const localData = localStorage.getItem(localKey);
-            if (localData) {
-              const localParsed = JSON.parse(localData);
-              if (Array.isArray(localParsed) && localParsed.length > 0) {
-                const sanitized = sanitizeAndSplitComboLogs(localParsed);
-                setAllLogs(sanitized);
-                // Auto-sync backfill to server
-                fetch(`/api/user/${normPhone}/meals`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ meals: sanitized, date: dateStr })
-                }).catch(() => {});
-              }
-            }
-          } catch (e) {}
+          const currentLocal = getLocalMeals(activeUser.phone, dateStr);
+          if (currentLocal.length > 0) {
+            setAllLogs(currentLocal);
+            // Auto-sync backfill to server
+            fetch(`/api/user/${normPhone}/meals`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ meals: currentLocal, date: dateStr })
+            }).catch(() => {});
+          }
         }
       }
 
