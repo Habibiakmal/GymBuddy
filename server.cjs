@@ -46860,7 +46860,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : meal.isHydration === false || meal.isHydration === "false" ? false : void 0,
       volumeMl: meal.volumeMl ? Number(meal.volumeMl) : void 0
     };
-    addMealLog(phone, mealObj, targetDate);
+    const key = `${phone}_${targetDate}`;
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const altKey = `${altPhone}_${targetDate}`;
+    if (!dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
+    if (!dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = [];
+    dbData.dailyLogs[key].push(mealObj);
+    dbData.dailyLogs[altKey].push(mealObj);
+    saveDb();
     try {
       await insertFoodLog({
         id: mealObj.id,
@@ -46882,7 +46889,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     } catch (e) {
       console.warn("[Meals API] insertFoodLog note:", e?.message || e);
     }
-    const key = `${phone}_${targetDate}`;
     res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
   });
   app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
