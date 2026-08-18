@@ -48,3 +48,11 @@ echo ""
 cat $KEY_FILE
 echo ""
 echo "=========================================================================="
+
+GH_PAT="${1:-$GH_TOKEN}"
+if [ -n "$GH_PAT" ] && command -v gh &> /dev/null; then
+  echo "Mengunggah secret GCP_SA_KEY ke GitHub secara otomatis..."
+  echo "$GH_PAT" | gh auth login --with-token 2>/dev/null || true
+  gh secret set GCP_SA_KEY --repo="Habibiakmal/GymBuddy" < $KEY_FILE
+  echo "✅ BERHASIL 100%: Secret GCP_SA_KEY sudah terpasang otomatis di GitHub!"
+fi
