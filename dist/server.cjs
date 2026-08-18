@@ -44496,9 +44496,10 @@ var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var generalRateLimiter = (0, import_express_rate_limit.default)({
   windowMs: 1 * 60 * 1e3,
   // 1 minute
-  max: 60,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.includes("webhook") || req.path.includes("health"),
   message: {
     success: false,
     error: "Too many requests. Please slow down and try again in a minute."
@@ -46376,6 +46377,7 @@ Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
 async function startServer() {
   const app = (0, import_express.default)();
   const PORT = Number(process.env.PORT) || 3e3;
+  app.set("trust proxy", true);
   app.use((0, import_cors.default)());
   app.use(import_express.default.json({ limit: "25mb" }));
   app.use(import_express.default.urlencoded({ extended: true, limit: "25mb" }));

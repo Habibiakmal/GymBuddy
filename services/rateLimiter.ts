@@ -7,9 +7,10 @@ import { Request, Response } from "express";
  */
 export const generalRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 60,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req: Request) => req.path.includes("webhook") || req.path.includes("health"),
   message: {
     success: false,
     error: "Too many requests. Please slow down and try again in a minute."
