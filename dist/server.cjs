@@ -48230,7 +48230,7 @@ ${mistakes}
   function escapeXml(unsafe) {
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
   }
-  app.post("/api/twilio/webhook", import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
+  app.post(["/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
     try {
       const body = req.body;
       const rawFrom = body.From || "";

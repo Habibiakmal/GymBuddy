@@ -4303,7 +4303,7 @@ Keluarkan output JSON valid:
       .replace(/'/g, "&apos;");
   }
 
-  app.post("/api/twilio/webhook", express.urlencoded({ extended: true }), express.json(), async (req, res) => {
+  app.post(["/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], express.urlencoded({ extended: true }), express.json(), async (req, res) => {
     try {
       const body = req.body;
       const rawFrom = body.From || "";
