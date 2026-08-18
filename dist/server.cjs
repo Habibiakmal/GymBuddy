@@ -43920,6 +43920,97 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 
 // services/db.ts
 var import_mongodb = require("mongodb");
+
+// services/firestore.ts
+var import_firestore = require("@google-cloud/firestore");
+var import_firebase_admin = __toESM(require("firebase-admin"), 1);
+var firestoreInstance = null;
+var isFirebaseInitialized = false;
+function getFirestore() {
+  if (firestoreInstance) return firestoreInstance;
+  try {
+    const firebaseAdmin = typeof import_firebase_admin.default === "function" ? import_firebase_admin.default : import_firebase_admin.default?.default || import_firebase_admin.default;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    if (serviceAccountJson) {
+      const parsedCredentials = typeof serviceAccountJson === "string" && serviceAccountJson.startsWith("{") ? JSON.parse(serviceAccountJson) : serviceAccountJson;
+      if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
+        firebaseAdmin.initializeApp({
+          credential: firebaseAdmin.credential.cert(parsedCredentials),
+          projectId: projectId || parsedCredentials.project_id
+        });
+        isFirebaseInitialized = true;
+      }
+      firestoreInstance = firebaseAdmin.firestore() || new import_firestore.Firestore({ projectId: projectId || parsedCredentials.project_id });
+      console.log("[Firestore] Initialized via Service Account credentials \u2705");
+      return firestoreInstance;
+    }
+    if (projectId) {
+      if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
+        try {
+          firebaseAdmin.initializeApp({ projectId });
+          isFirebaseInitialized = true;
+        } catch (e) {
+        }
+      }
+      firestoreInstance = new import_firestore.Firestore({ projectId });
+      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} \u2705`);
+      return firestoreInstance;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+async function findUserInFirestore(identifier) {
+  const db = getFirestore();
+  if (!db) return null;
+  const cleanPhone = identifier.replace(/[^\d+a-zA-Z_]/g, "");
+  const directDoc = await db.collection("users").doc(identifier).get();
+  if (directDoc.exists) {
+    return directDoc.data();
+  }
+  const querySnap = await db.collection("users").where("phone", "in", [identifier, cleanPhone, `usr_${cleanPhone}`]).limit(1).get();
+  if (!querySnap.empty) {
+    return querySnap.docs[0].data();
+  }
+  return null;
+}
+async function saveUserToFirestore(doc) {
+  const db = getFirestore();
+  if (!db) return;
+  const userId = doc.userId || `usr_${doc.phone}`;
+  const now = /* @__PURE__ */ new Date();
+  await db.collection("users").doc(userId).set({
+    ...doc,
+    userId,
+    updatedAt: now,
+    createdAt: doc.createdAt || now
+  }, { merge: true });
+}
+async function getSubscriptionFromFirestore(userIdOrPhone) {
+  const db = getFirestore();
+  if (!db) return null;
+  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+  const doc = await db.collection("subscriptions").doc(userIdOrPhone).get();
+  if (doc.exists) return doc.data();
+  const snap2 = await db.collection("subscriptions").where("phone", "in", [userIdOrPhone, clean]).limit(1).get();
+  if (!snap2.empty) {
+    return snap2.docs[0].data();
+  }
+  return null;
+}
+async function saveSubscriptionToFirestore(doc) {
+  const db = getFirestore();
+  if (!db) return;
+  const docId = doc.userId || `usr_${doc.phone}`;
+  await db.collection("subscriptions").doc(docId).set({
+    ...doc,
+    updatedAt: /* @__PURE__ */ new Date()
+  }, { merge: true });
+}
+
+// services/db.ts
 var client = null;
 var database = null;
 async function getDatabase() {
@@ -44090,57 +44181,129 @@ async function migrateLegacyAppData(db) {
     console.warn("[MongoDB] Migration warning:", e?.message || e);
   }
 }
+var memCache = {
+  users: /* @__PURE__ */ new Map(),
+  subscriptions: /* @__PURE__ */ new Map(),
+  foodLogs: /* @__PURE__ */ new Map(),
+  waterLogs: /* @__PURE__ */ new Map()
+};
 async function findUserByPhoneOrId(identifier) {
-  const db = await getDatabase();
-  if (!db) return null;
   const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
-  return await db.collection("users").findOne({
-    $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
-  }) || null;
+  try {
+    if (getFirestore()) {
+      const firestoreUser = await findUserInFirestore(identifier);
+      if (firestoreUser) return firestoreUser;
+    }
+  } catch (e) {
+    console.warn("[Firestore] findUser fallback note:", e?.message || e);
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection("users").findOne({
+        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
+      });
+      if (found) return found;
+    }
+  } catch (e) {
+    console.warn("[MongoDB] findUser fallback note:", e?.message || e);
+  }
+  return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
 }
 async function saveUserDocument(doc) {
-  const db = await getDatabase();
-  if (!db) return;
   const userId = doc.userId || `usr_${doc.phone}`;
-  await db.collection("users").updateOne(
-    { phone: doc.phone },
-    {
-      $set: {
-        ...doc,
-        userId,
-        updatedAt: /* @__PURE__ */ new Date()
-      },
-      $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
-    },
-    { upsert: true }
-  );
+  const completeDoc = {
+    ...doc,
+    userId,
+    updatedAt: /* @__PURE__ */ new Date(),
+    createdAt: doc.createdAt || /* @__PURE__ */ new Date()
+  };
+  memCache.users.set(doc.phone, completeDoc);
+  memCache.users.set(userId, completeDoc);
+  try {
+    if (getFirestore()) {
+      await saveUserToFirestore(doc);
+    }
+  } catch (e) {
+    console.warn("[Firestore] saveUser warning:", e?.message || e);
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("users").updateOne(
+        { phone: doc.phone },
+        {
+          $set: {
+            ...doc,
+            userId,
+            updatedAt: /* @__PURE__ */ new Date()
+          },
+          $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
+        },
+        { upsert: true }
+      );
+    }
+  } catch (e) {
+    console.warn("[MongoDB] saveUser warning:", e?.message || e);
+  }
 }
 async function getUserSubscription(userIdOrPhone) {
-  const db = await getDatabase();
-  if (!db) return null;
-  return await db.collection("subscriptions").findOne({
-    $or: [{ userId: userIdOrPhone }, { phone: userIdOrPhone }]
-  }) || null;
+  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+  try {
+    if (getFirestore()) {
+      const firestoreSub = await getSubscriptionFromFirestore(userIdOrPhone);
+      if (firestoreSub) return firestoreSub;
+    }
+  } catch (e) {
+    console.warn("[Firestore] getSubscription fallback note:", e?.message || e);
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection("subscriptions").findOne({
+        $or: [{ userId: userIdOrPhone }, { phone: userIdOrPhone }]
+      });
+      if (found) return found;
+    }
+  } catch (e) {
+    console.warn("[MongoDB] getSubscription fallback note:", e?.message || e);
+  }
+  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean) || null;
 }
 async function saveUserSubscription(doc) {
-  const db = await getDatabase();
-  if (!db) return;
-  await db.collection("subscriptions").updateOne(
-    { phone: doc.phone },
-    {
-      $set: {
-        ...doc,
-        updatedAt: /* @__PURE__ */ new Date()
-      }
-    },
-    { upsert: true }
-  );
+  memCache.subscriptions.set(doc.phone, doc);
+  if (doc.userId) memCache.subscriptions.set(doc.userId, doc);
+  try {
+    if (getFirestore()) {
+      await saveSubscriptionToFirestore(doc);
+    }
+  } catch (e) {
+    console.warn("[Firestore] saveSubscription warning:", e?.message || e);
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("subscriptions").updateOne(
+        { phone: doc.phone },
+        {
+          $set: {
+            ...doc,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        },
+        { upsert: true }
+      );
+    }
+  } catch (e) {
+    console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
+  }
 }
 
 // services/auth.ts
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
+var import_firebase_admin2 = __toESM(require("firebase-admin"), 1);
 var JWT_SECRET = process.env.JWT_SECRET || "gymbuddy_production_jwt_secret_key_2026_fitness";
 var JWT_EXPIRES_IN = "30d";
 async function hashPassword(password) {
@@ -44176,11 +44339,26 @@ async function requireAuthMiddleware(req, res, next) {
   }
   const token = authHeader.split(" ")[1];
   const payload = verifyAuthToken(token);
-  if (!payload) {
-    return res.status(401).json({ success: false, error: "Invalid or expired token. Please log in again." });
+  if (payload) {
+    req.user = payload;
+    return next();
   }
-  req.user = payload;
-  next();
+  if (import_firebase_admin2.default.apps.length > 0) {
+    try {
+      const decodedFirebase = await import_firebase_admin2.default.auth().verifyIdToken(token);
+      if (decodedFirebase) {
+        const phone = decodedFirebase.phone_number || decodedFirebase.uid;
+        const user = await findUserByPhoneOrId(phone);
+        req.user = {
+          userId: decodedFirebase.uid,
+          phone: user ? user.phone : phone
+        };
+        return next();
+      }
+    } catch (firebaseErr) {
+    }
+  }
+  return res.status(401).json({ success: false, error: "Invalid or expired authentication token. Please log in again." });
 }
 function verifyMidtransSignature(orderId, statusCode, grossAmount, incomingSignature, serverKey) {
   if (!orderId || !statusCode || !grossAmount || !incomingSignature || !serverKey) {
@@ -46060,7 +46238,23 @@ async function startServer() {
   app.use("/api/", generalRateLimiter);
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
+  getFirestore();
   getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
+  app.get(["/health", "/api/health"], (req, res) => {
+    res.json({
+      status: "ok",
+      service: "gymbuddy-backend",
+      version: "2.0.0",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
+      cloudRun: Boolean(process.env.K_SERVICE),
+      database: {
+        firestoreAvailable: Boolean(getFirestore()),
+        mongoConfigured: Boolean(process.env.MONGODB_URI)
+      }
+    });
+  });
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { phone, password, name, profile = {} } = req.body;

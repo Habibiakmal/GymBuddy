@@ -301,84 +301,256 @@ async function migrateLegacyAppData(db: Db) {
   }
 }
 
-// ─── Direct DB Access Methods ──────────────────────────────────────────────
+// ─── Direct DB Access Methods (Firestore Primary + MongoDB Dual-Write + Local Cache) ────
+
+import {
+  findUserInFirestore,
+  saveUserToFirestore,
+  getSubscriptionFromFirestore,
+  saveSubscriptionToFirestore,
+  getFoodLogsFromFirestore,
+  insertFoodLogToFirestore,
+  deleteFoodLogFromFirestore,
+  getWaterLogFromFirestore,
+  saveWaterLogToFirestore,
+  recordAiTelemetryToFirestore,
+  getFirestore
+} from "./firestore";
+
+// Local development fallback cache
+const memCache = {
+  users: new Map<string, UserDocument>(),
+  subscriptions: new Map<string, SubscriptionDocument>(),
+  foodLogs: new Map<string, FoodLogDocument[]>(),
+  waterLogs: new Map<string, WaterLogDocument>(),
+};
 
 export async function findUserByPhoneOrId(identifier: string): Promise<UserDocument | null> {
-  const db = await getDatabase();
-  if (!db) return null;
   const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
-  return (await db.collection<UserDocument>("users").findOne({
-    $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
-  })) || null;
+
+  // 1. Try Firestore first if initialized
+  try {
+    if (getFirestore()) {
+      const firestoreUser = await findUserInFirestore(identifier);
+      if (firestoreUser) return firestoreUser;
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] findUser fallback note:", e?.message || e);
+  }
+
+  // 2. Fallback to MongoDB
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection<UserDocument>("users").findOne({
+        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
+      });
+      if (found) return found;
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] findUser fallback note:", e?.message || e);
+  }
+
+  // 3. Fallback to Memory Store
+  return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
 }
 
 export async function saveUserDocument(doc: Partial<UserDocument> & { phone: string }): Promise<void> {
-  const db = await getDatabase();
-  if (!db) return;
   const userId = doc.userId || `usr_${doc.phone}`;
-  await db.collection("users").updateOne(
-    { phone: doc.phone },
-    {
-      $set: {
-        ...doc,
-        userId,
-        updatedAt: new Date()
-      },
-      $setOnInsert: { createdAt: new Date() }
-    },
-    { upsert: true }
-  );
+  const completeDoc = {
+    ...doc,
+    userId,
+    updatedAt: new Date(),
+    createdAt: doc.createdAt || new Date()
+  } as UserDocument;
+
+  // Store in memory cache
+  memCache.users.set(doc.phone, completeDoc);
+  memCache.users.set(userId, completeDoc);
+
+  // 1. Save to Firestore (Primary)
+  try {
+    if (getFirestore()) {
+      await saveUserToFirestore(doc);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] saveUser warning:", e?.message || e);
+  }
+
+  // 2. Dual-write to MongoDB (Rollback Safety)
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("users").updateOne(
+        { phone: doc.phone },
+        {
+          $set: {
+            ...doc,
+            userId,
+            updatedAt: new Date()
+          },
+          $setOnInsert: { createdAt: new Date() }
+        },
+        { upsert: true }
+      );
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] saveUser warning:", e?.message || e);
+  }
 }
 
 export async function getUserSubscription(userIdOrPhone: string): Promise<SubscriptionDocument | null> {
-  const db = await getDatabase();
-  if (!db) return null;
-  return (await db.collection<SubscriptionDocument>("subscriptions").findOne({
-    $or: [{ userId: userIdOrPhone }, { phone: userIdOrPhone }]
-  })) || null;
+  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+
+  // 1. Try Firestore
+  try {
+    if (getFirestore()) {
+      const firestoreSub = await getSubscriptionFromFirestore(userIdOrPhone);
+      if (firestoreSub) return firestoreSub;
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] getSubscription fallback note:", e?.message || e);
+  }
+
+  // 2. MongoDB Fallback
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection<SubscriptionDocument>("subscriptions").findOne({
+        $or: [{ userId: userIdOrPhone }, { phone: userIdOrPhone }]
+      });
+      if (found) return found;
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] getSubscription fallback note:", e?.message || e);
+  }
+
+  // 3. Memory Store
+  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean) || null;
 }
 
 export async function saveUserSubscription(doc: SubscriptionDocument): Promise<void> {
-  const db = await getDatabase();
-  if (!db) return;
-  await db.collection("subscriptions").updateOne(
-    { phone: doc.phone },
-    {
-      $set: {
-        ...doc,
-        updatedAt: new Date()
-      }
-    },
-    { upsert: true }
-  );
+  memCache.subscriptions.set(doc.phone, doc);
+  if (doc.userId) memCache.subscriptions.set(doc.userId, doc);
+
+  // 1. Save to Firestore (Primary)
+  try {
+    if (getFirestore()) {
+      await saveSubscriptionToFirestore(doc);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] saveSubscription warning:", e?.message || e);
+  }
+
+  // 2. Dual-write to MongoDB
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("subscriptions").updateOne(
+        { phone: doc.phone },
+        {
+          $set: {
+            ...doc,
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] saveSubscription warning:", e?.message || e);
+  }
 }
 
 export async function getFoodLogsForDate(phone: string, date: string): Promise<FoodLogDocument[]> {
-  const db = await getDatabase();
-  if (!db) return [];
-  return await db.collection<FoodLogDocument>("foodLogs").find({
-    $or: [{ phone }, { userId: `usr_${phone}` }],
-    date
-  }).sort({ createdAt: 1 }).toArray();
+  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${date}`;
+
+  // 1. Try Firestore
+  try {
+    if (getFirestore()) {
+      const firestoreLogs = await getFoodLogsFromFirestore(phone, date);
+      if (firestoreLogs.length > 0) return firestoreLogs;
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] getFoodLogs fallback note:", e?.message || e);
+  }
+
+  // 2. MongoDB Fallback
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection<FoodLogDocument>("foodLogs").find({
+        $or: [{ phone }, { userId: `usr_${phone}` }],
+        date
+      }).sort({ createdAt: 1 }).toArray();
+      if (found.length > 0) return found;
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] getFoodLogs fallback note:", e?.message || e);
+  }
+
+  // 3. Memory Store
+  return memCache.foodLogs.get(cacheKey) || [];
 }
 
 export async function insertFoodLog(doc: FoodLogDocument): Promise<void> {
-  const db = await getDatabase();
-  if (!db) return;
-  await db.collection("foodLogs").updateOne(
-    { id: doc.id },
-    { $set: doc },
-    { upsert: true }
-  );
+  const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${doc.date}`;
+  const existing = memCache.foodLogs.get(cacheKey) || [];
+  const idx = existing.findIndex(m => m.id === doc.id);
+  if (idx >= 0) existing[idx] = doc;
+  else existing.push(doc);
+  memCache.foodLogs.set(cacheKey, existing);
+
+  // 1. Firestore Primary
+  try {
+    if (getFirestore()) {
+      await insertFoodLogToFirestore(doc);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
+  }
+
+  // 2. MongoDB Dual-Write
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("foodLogs").updateOne(
+        { id: doc.id },
+        { $set: doc },
+        { upsert: true }
+      );
+    }
+  } catch (e: any) {
+    console.warn("[MongoDB] insertFoodLog warning:", e?.message || e);
+  }
 }
 
 export async function deleteFoodLog(id: string): Promise<void> {
+  try {
+    if (getFirestore()) {
+      await deleteFoodLogFromFirestore(id);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
+  }
+
   const db = await getDatabase();
   if (!db) return;
   await db.collection("foodLogs").deleteOne({ id });
 }
 
 export async function getWaterLog(phone: string, date: string): Promise<WaterLogDocument | null> {
+  try {
+    if (getFirestore()) {
+      const firestoreWater = await getWaterLogFromFirestore(phone, date);
+      if (firestoreWater) return firestoreWater;
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] getWaterLog fallback note:", e?.message || e);
+  }
+
   const db = await getDatabase();
   if (!db) return null;
   return await db.collection<WaterLogDocument>("waterLogs").findOne({
@@ -388,6 +560,14 @@ export async function getWaterLog(phone: string, date: string): Promise<WaterLog
 }
 
 export async function saveWaterLog(doc: WaterLogDocument): Promise<void> {
+  try {
+    if (getFirestore()) {
+      await saveWaterLogToFirestore(doc);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] saveWaterLog warning:", e?.message || e);
+  }
+
   const db = await getDatabase();
   if (!db) return;
   await db.collection("waterLogs").updateOne(
@@ -399,10 +579,18 @@ export async function saveWaterLog(doc: WaterLogDocument): Promise<void> {
 
 export async function recordAiTelemetry(entry: AiUsageDocument): Promise<void> {
   try {
+    if (getFirestore()) {
+      await recordAiTelemetryToFirestore(entry);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] recordAiTelemetry warning:", e?.message || e);
+  }
+
+  try {
     const db = await getDatabase();
     if (!db) return;
     await db.collection("aiUsage").insertOne(entry);
   } catch (e: any) {
-    console.warn("[Telemetry] Could not write AI usage:", e?.message || e);
+    console.warn("[Telemetry] MongoDB write note:", e?.message || e);
   }
 }

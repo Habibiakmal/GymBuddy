@@ -35,6 +35,8 @@ export function verifyAuthToken(token: string): AuthTokenPayload | null {
   }
 }
 
+import admin from "firebase-admin";
+
 export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPayload }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -51,13 +53,33 @@ export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPay
   }
 
   const token = authHeader.split(" ")[1];
+
+  // 1. Try GymBuddy JWT token
   const payload = verifyAuthToken(token);
-  if (!payload) {
-    return res.status(401).json({ success: false, error: "Invalid or expired token. Please log in again." });
+  if (payload) {
+    req.user = payload;
+    return next();
   }
 
-  req.user = payload;
-  next();
+  // 2. Try Firebase Auth ID token
+  if (admin.apps.length > 0) {
+    try {
+      const decodedFirebase = await admin.auth().verifyIdToken(token);
+      if (decodedFirebase) {
+        const phone = decodedFirebase.phone_number || decodedFirebase.uid;
+        const user = await findUserByPhoneOrId(phone);
+        req.user = {
+          userId: decodedFirebase.uid,
+          phone: user ? user.phone : phone
+        };
+        return next();
+      }
+    } catch (firebaseErr) {
+      // Not a valid Firebase token either
+    }
+  }
+
+  return res.status(401).json({ success: false, error: "Invalid or expired authentication token. Please log in again." });
 }
 
 /**

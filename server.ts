@@ -29,6 +29,7 @@ import {
   saveWaterLog,
   recordAiTelemetry
 } from "./services/db";
+import { getFirestore } from "./services/firestore";
 import {
   hashPassword,
   comparePassword,
@@ -2041,8 +2042,26 @@ async function startServer() {
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
 
-  // Initialize MongoDB Atlas entity layer
+  // Initialize Database Layers (Firestore Primary & MongoDB Atlas Rollback)
+  getFirestore();
   getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
+
+  // ── Health Check Endpoints (Google Cloud Run liveness/readiness) ─────────
+  app.get(["/health", "/api/health"], (req, res) => {
+    res.json({
+      status: "ok",
+      service: "gymbuddy-backend",
+      version: "2.0.0",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
+      cloudRun: Boolean(process.env.K_SERVICE),
+      database: {
+        firestoreAvailable: Boolean(getFirestore()),
+        mongoConfigured: Boolean(process.env.MONGODB_URI)
+      }
+    });
+  });
 
   // ── Authentication Endpoints ──────────────────────────────────────────────
   app.post("/api/auth/register", async (req, res) => {
