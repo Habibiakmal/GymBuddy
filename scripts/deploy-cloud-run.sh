@@ -7,7 +7,7 @@
 
 set -e
 
-PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-"gymbuddy-app"}
+PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-"gen-lang-client-0130714675"}
 REGION="asia-southeast2"
 SERVICE_NAME="gymbuddy-backend"
 IMAGE_TAG="asia-southeast2-docker.pkg.dev/${PROJECT_ID}/gymbuddy/${SERVICE_NAME}:latest"
@@ -37,7 +37,9 @@ gcloud run deploy "${SERVICE_NAME}" \
   --concurrency 80 \
   --timeout 300s \
   --execution-environment gen2 \
+  --service-account 253242815083-compute@developer.gserviceaccount.com \
   --set-env-vars NODE_ENV=production,PORT=8080 \
+  --set-secrets GEMINI_API_KEY=gymbuddy-gemini-api-key:latest,JWT_SECRET=gymbuddy-jwt-secret:latest,MONGODB_URI=gymbuddy-mongodb-uri:latest,TWILIO_ACCOUNT_SID=gymbuddy-twilio-account-sid:latest,TWILIO_AUTH_TOKEN=gymbuddy-twilio-auth-token:latest \
   --project "${PROJECT_ID}"
 
 # 3. Output Service URL

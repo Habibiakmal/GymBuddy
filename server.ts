@@ -4832,9 +4832,9 @@ CATATAN:
 
                   // Build the public URL for this card
                   const publicHost = process.env.PUBLIC_URL
+                    || (req.headers.host ? `${req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.headers.host}` : "")
                     || process.env.RENDER_EXTERNAL_URL
-                    || process.env.RAILWAY_PUBLIC_DOMAIN
-                    || "https://gymbuddy-backend-zfft.onrender.com";
+                    || "https://gymbuddy.id";
                   const cardUrl = `${publicHost.replace(/\/$/, "")}/api/nutrition-card/${cardId}.png`;
                   mediaUrlToSend = cardUrl;
                   console.log("[NutritionCard] Generated card URL:", cardUrl);

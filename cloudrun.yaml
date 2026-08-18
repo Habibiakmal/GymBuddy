@@ -14,10 +14,11 @@ spec:
         run.googleapis.com/cpu-throttling: "true"
         run.googleapis.com/startup-cpu-boost: "true"
     spec:
+      serviceAccountName: 253242815083-compute@developer.gserviceaccount.com
       containerConcurrency: 80
       timeoutSeconds: 300
       containers:
-      - image: asia-southeast2-docker.pkg.dev/PROJECT_ID/gymbuddy/gymbuddy-backend:latest
+      - image: asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest
         resources:
           limits:
             cpu: "1000m"
@@ -36,21 +37,6 @@ spec:
             secretKeyRef:
               name: gymbuddy-gemini-api-key
               key: latest
-        - name: TWILIO_ACCOUNT_SID
-          valueFrom:
-            secretKeyRef:
-              name: gymbuddy-twilio-account-sid
-              key: latest
-        - name: TWILIO_AUTH_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: gymbuddy-twilio-auth-token
-              key: latest
-        - name: MIDTRANS_SERVER_KEY
-          valueFrom:
-            secretKeyRef:
-              name: gymbuddy-midtrans-server-key
-              key: latest
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -60,4 +46,14 @@ spec:
           valueFrom:
             secretKeyRef:
               name: gymbuddy-mongodb-uri
+              key: latest
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              name: gymbuddy-twilio-account-sid
+              key: latest
+        - name: TWILIO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gymbuddy-twilio-auth-token
               key: latest
