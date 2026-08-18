@@ -1377,16 +1377,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   }>(() => {
     try {
       const saved = localStorage.getItem(`gymbuddy_custom_targets_${normPhone}`);
-      return saved ? JSON.parse(saved) : {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.calories && parsed.calories !== 2000) return parsed;
+      }
+      return {};
     } catch (e) {
       return {};
     }
   });
 
-  const targetCalories = customTargets.calories ?? autoTargetCalories;
-  const targetProtein = customTargets.protein ?? autoTargetProtein;
-  const targetFat = customTargets.fat ?? autoTargetFat;
-  const targetCarbs = customTargets.carbs ?? autoTargetCarbs;
+  const targetCalories = customTargets.calories ?? (activeUser.targetCalories || autoTargetCalories);
+  const targetProtein = customTargets.protein ?? (activeUser.proteinGrams || autoTargetProtein);
+  const targetFat = customTargets.fat ?? (activeUser.fatGrams || autoTargetFat);
+  const targetCarbs = customTargets.carbs ?? (activeUser.carbGrams || autoTargetCarbs);
   const targetSugar = customTargets.sugar ?? 45;
   const targetHydrationGoal = customTargets.water ?? 2500;
 
