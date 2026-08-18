@@ -983,6 +983,40 @@ function saveUserProfile(rawPhone: string, profile: any) {
   return updated;
 }
 
+function addMealLog(rawPhone: string, meal: MealLog, dateStr?: string) {
+  const phone = normalizePhone(rawPhone);
+  if (!phone || !meal) return;
+  const targetDate = dateStr || meal.timestamp?.substring(0, 10) || getLocalDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  const altKey = `${altPhone}_${targetDate}`;
+
+  if (!dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
+  if (!dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = [];
+  dbData.dailyLogs[key].push(meal);
+  dbData.dailyLogs[altKey].push(meal);
+  saveDb();
+
+  // Dual-write to Firestore foodLogs collection
+  insertFoodLog({
+    id: meal.id || `m-${Date.now()}`,
+    userId: `usr_${phone}`,
+    phone,
+    date: targetDate,
+    foodName: meal.foodName,
+    calories: Number(meal.calories) || 0,
+    protein: Number(meal.protein) || 0,
+    carbs: Number(meal.carbs) || 0,
+    fat: Number(meal.fat) || 0,
+    fiber: Number(meal.fiber) || 0,
+    sugar: Number(meal.sugar) || 0,
+    isHydration: Boolean(meal.isHydration),
+    volumeMl: Number(meal.volumeMl) || undefined,
+    itemType: meal.isHydration ? "water" : "food",
+    createdAt: new Date()
+  }).catch((err) => console.warn("[Firestore] Food log save warning:", err?.message || err));
+}
+
 function getDefaultWorkoutSchedule(goal: string, equipment?: string, injuries?: string[]) {
   const isBodyweight = equipment === "bodyweight";
   const isDumbbells = equipment === "dumbbells";
