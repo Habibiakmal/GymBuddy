@@ -45993,14 +45993,15 @@ function parseDateFromQuery(userText) {
   return { dateStr: formatDate(today), label: formatLabel(today, "Hari Ini") };
 }
 function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
-  const rawFoodName = (parsedAi.foodName || "Analisis Makanan").trim();
-  const portionStr = (parsedAi.portion || parsedAi.portionWeight || Array.isArray(parsedAi.portionEstimates) && parsedAi.portionEstimates[0] || (parsedAi.portionDetail ? String(parsedAi.portionDetail) : "1 porsi")).trim();
-  const calories = Number(parsedAi.calories) || 0;
-  const protein = Number(parsedAi.protein) || 0;
-  const carbs = Number(parsedAi.carbs) || 0;
-  const fat = Number(parsedAi.fat) || 0;
-  const fiber = Number(parsedAi.fiber) || 0;
-  const sugar = Number(parsedAi.sugar) || 0;
+  const rawFoodName = String(parsedAi?.foodName || "Analisis Makanan").trim();
+  const rawPortion = parsedAi?.portion || parsedAi?.portionWeight || (Array.isArray(parsedAi?.portionEstimates) && parsedAi?.portionEstimates[0] ? parsedAi.portionEstimates[0] : null) || parsedAi?.portionDetail || "1 porsi";
+  const portionStr = String(rawPortion).trim();
+  const calories = Number(parsedAi?.calories) || 0;
+  const protein = Number(parsedAi?.protein) || 0;
+  const carbs = Number(parsedAi?.carbs) || 0;
+  const fat = Number(parsedAi?.fat) || 0;
+  const fiber = Number(parsedAi?.fiber) || 0;
+  const sugar = Number(parsedAi?.sugar) || 0;
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
   const fatKcal = fat * 9;
@@ -46008,28 +46009,29 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const protPercent = Math.round(protKcal / totalMacroKcal * 100);
   const carbPercent = Math.round(carbKcal / totalMacroKcal * 100);
   const fatPercent = Math.round(fatKcal / totalMacroKcal * 100);
-  const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi.confidenceLevel) || (inputSource.toLowerCase().includes("foto") ? 88 : 92)));
-  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi.satietyScore) || 5));
-  const healthScore = Math.min(10, Math.max(1, Number(parsedAi.healthScore) || 8));
-  let satietyExplanation = parsedAi.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.";
+  const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi?.confidenceLevel) || (String(inputSource).toLowerCase().includes("foto") ? 88 : 92)));
+  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi?.satietyScore) || 5));
+  const healthScore = Math.min(10, Math.max(1, Number(parsedAi?.healthScore) || 8));
+  let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
   satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
   let portionDetailText = "";
-  if (parsedAi.portionDetail) {
+  if (parsedAi?.portionDetail) {
     portionDetailText = String(parsedAi.portionDetail).trim();
-  } else if (Array.isArray(parsedAi.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates.join("\n");
+  } else if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates.map((p) => typeof p === "string" ? p : JSON.stringify(p)).join("\n");
   } else {
     portionDetailText = portionStr;
   }
   let insightsFormatted = "";
-  if (Array.isArray(parsedAi.keyInsights) && parsedAi.keyInsights.length > 0) {
+  if (Array.isArray(parsedAi?.keyInsights) && parsedAi.keyInsights.length > 0) {
     insightsFormatted = parsedAi.keyInsights.map((i) => {
-      const cleanInsight = i.trim();
+      const cleanInsight = String(i || "").trim();
+      if (!cleanInsight) return "";
       if (cleanInsight.startsWith("\u{1F7E2}") || cleanInsight.startsWith("\u{1F7E1}") || cleanInsight.startsWith("\u{1F534}")) {
         return cleanInsight;
       }
       return `\u{1F7E2} ${cleanInsight}`;
-    }).join("\n");
+    }).filter(Boolean).join("\n");
   } else {
     insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung aktivitas harian
 \u{1F7E2} Kandungan makro terdistribusi dengan baik`;
@@ -46041,9 +46043,9 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
   const dateStr = `${parseInt(wibDay)} ${monthNames[parseInt(wibMonth) - 1]} ${wibYear}`;
   const timeStr = wibTimePart.substring(0, 5).replace(":", ".");
-  const isMia = userData.persona === "mia" || userData.persona === "nikita";
+  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
-  const coachComment = (parsedAi.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
+  const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
   const foodTitleWithEmoji = rawFoodName.startsWith("\u{1F95C}") ? rawFoodName : `\u{1F95C} ${rawFoodName}`;
   return `${foodTitleWithEmoji} \u2014 ${portionStr}
 
