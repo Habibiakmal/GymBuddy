@@ -631,7 +631,7 @@ function initDb() {
   // Purge any legacy mock logs
   purgeLegacyMockLogs();
 
-  // Ensure default profile for primary user Bibi (085156919826) is always seeded if absent
+  // Ensure default profile for primary user Bibi (085156919826) is accurately seeded with real biometrics
   const bibiPhone = "085156919826";
   const bibiAlt = "6285156919826";
   if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
@@ -639,17 +639,21 @@ function initDb() {
       name: "Bibi",
       phone: bibiPhone,
       normalizedPhone: bibiPhone,
-      goal: "healthy",
+      goal: "health",
       goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 65,
-      startWeight: 65,
-      targetWeight: 65,
-      height: 170,
-      age: 25,
+      weight: 78,
+      startWeight: 78,
+      targetWeight: 78,
+      height: 177,
+      age: 24,
       gender: "pria",
-      persona: "max",
-      activityLevel: "moderate",
-      targetCalories: 2000,
+      persona: "mia",
+      activityLevel: "light",
+      targetCalories: 2435,
+      proteinGrams: 140,
+      carbGrams: 316,
+      fatGrams: 68,
+      fiberGrams: 32,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
