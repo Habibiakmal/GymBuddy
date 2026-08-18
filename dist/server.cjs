@@ -46484,18 +46484,6 @@ async function startServer() {
       const norm = normalizePhone(phone || profile.phone || "");
       const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : norm.startsWith("62") ? "0" + norm.substring(2) : norm;
       if (norm) {
-        Object.keys(dbData.dailyLogs).forEach((key) => {
-          if (key.startsWith(norm) || key.startsWith(altNorm)) {
-            delete dbData.dailyLogs[key];
-          }
-        });
-        Object.keys(dbData.waterLogs).forEach((key) => {
-          if (key.startsWith(norm) || key.startsWith(altNorm)) {
-            delete dbData.waterLogs[key];
-          }
-        });
-        delete dbData.weeklyProgress[norm];
-        delete dbData.weeklyProgress[altNorm];
         const saved = saveUserProfile(norm, profile);
         saveDb();
         saveUserDocument({

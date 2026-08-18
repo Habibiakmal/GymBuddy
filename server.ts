@@ -2201,20 +2201,7 @@ async function startServer() {
       const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
 
       if (norm) {
-        // Fresh registration: purge any old daily logs or water logs from previous sessions
-        Object.keys(dbData.dailyLogs).forEach((key) => {
-          if (key.startsWith(norm) || key.startsWith(altNorm)) {
-            delete dbData.dailyLogs[key];
-          }
-        });
-        Object.keys(dbData.waterLogs).forEach((key) => {
-          if (key.startsWith(norm) || key.startsWith(altNorm)) {
-            delete dbData.waterLogs[key];
-          }
-        });
-        delete dbData.weeklyProgress[norm];
-        delete dbData.weeklyProgress[altNorm];
-
+        // Preserve all existing food logs and history
         const saved = saveUserProfile(norm, profile);
         saveDb();
 
