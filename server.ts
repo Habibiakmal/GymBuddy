@@ -2282,11 +2282,11 @@ PENTING:
           sumSug += Number(it.sugar) || 0;
         }
 
-        const protein = Math.round(sumProt);
-        const carbs = Math.round(sumCarb);
-        const fat = Math.round(sumFat);
-        const fiber = Math.round(sumFib);
-        const sugar = Math.round(sumSug);
+        const protein = Math.round(sumProt * 10) / 10;
+        const carbs = Math.round(sumCarb * 10) / 10;
+        const fat = Math.round(sumFat * 10) / 10;
+        const fiber = Math.round(sumFib * 10) / 10;
+        const sugar = Math.round(sumSug * 10) / 10;
         const calories = Math.round(sumCal);
 
         parsed.mealType = parsed.mealType || getMealTypeByHour();

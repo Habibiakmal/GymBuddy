@@ -61,12 +61,21 @@ import {
   PieChart,
   BarChart3,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Scale
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
 import { notificationService } from "../services/notificationService";
 import { estimateMealNutritionDeterministic, FoodItemNutrition, MealNutritionResult } from "../services/nutritionEngine";
+
+function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "breakfast";
+  if (hour >= 11 && hour < 15) return "lunch";
+  if (hour >= 15 && hour < 18) return "snack";
+  return "dinner";
+}
 
 interface MealItem {
   id: string;
@@ -76,7 +85,9 @@ interface MealItem {
   carbs: number;
   fat: number;
   fiber?: number;
+  sugar?: number;
   timestamp?: string;
+  time?: string;
   mealType?: "breakfast" | "lunch" | "dinner" | "snack";
   isHydration?: boolean;
   volumeMl?: number;
@@ -94,6 +105,7 @@ interface UserProfileData {
   age: number;
   gender: string;
   persona: string;
+  activityLevel?: string;
   createdAt?: string;
   registerDate?: string;
   tdee?: number;
@@ -1215,6 +1227,36 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [coachTip, setCoachTip] = useState<string | null>(null); // Coach next-step bubble
   const [showCoachTip, setShowCoachTip] = useState(false);
 
+  const openAddFoodModal = () => {
+    setItemNameInput("");
+    setItemCalInput("");
+    setItemProteinInput("");
+    setItemCarbsInput("");
+    setItemFatInput("");
+    setItemFiberInput("0");
+    setItemSugarInput("0");
+    setAiPreview(null);
+    setAiConfirmStep(false);
+    setShowManualInputs(false);
+    setShowAddDrinkModal(false);
+    setShowAddFoodModal(true);
+  };
+
+  const openAddDrinkModal = () => {
+    setItemNameInput("");
+    setItemCalInput("");
+    setItemProteinInput("");
+    setItemCarbsInput("");
+    setItemFatInput("");
+    setItemFiberInput("0");
+    setItemSugarInput("0");
+    setAiPreview(null);
+    setAiConfirmStep(false);
+    setShowManualInputs(false);
+    setShowAddFoodModal(false);
+    setShowAddDrinkModal(true);
+  };
+
   const normPhone = normalizePhone(activeUser.phone || "085156919826");
 
   const weight = Number(activeUser.weight) || 70;
@@ -1821,8 +1863,24 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const queryText = cleanIndonesianFoodSentence(rawQuery);
     setIsAnalyzingAi(true);
 
+    // CRITICAL: Complete State Reset before performing new analysis
+    setAiPreview(null);
+    setAiConfirmStep(false);
+    setItemCalInput("");
+    setItemProteinInput("");
+    setItemCarbsInput("");
+    setItemFatInput("");
+    setItemFiberInput("");
+    setItemSugarInput("");
+
     const baseEstimation = estimateMealNutritionDeterministic(queryText);
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-zfft.onrender.com";
+
+    let resultItems: FoodItemNutrition[] = baseEstimation.items || [];
+    let resultFoodName = baseEstimation.foodName;
+    let isHydration = Boolean(baseEstimation.isHydration);
+    let volumeMl = Number(baseEstimation.volumeMl) || 0;
+    let portionNote = baseEstimation.portionNote;
 
     // 1. Call Backend AI /api/ai/analyze-food
     try {
@@ -1843,55 +1901,64 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       if (bRes && bRes.ok) {
         const bData = await bRes.json();
         if (bData.success) {
-          const protein = Math.max(0, Math.round(Number(bData.protein) || baseEstimation.protein));
-          const carbs = Math.max(0, Math.round(Number(bData.carbs) || baseEstimation.carbs));
-          const fat = Math.max(0, Math.round(Number(bData.fat) || baseEstimation.fat));
-          const fiber = Math.max(0, Math.round(Number(bData.fiber) || baseEstimation.fiber));
-          const sugar = Math.max(0, Math.round(Number(bData.sugar) || baseEstimation.sugar));
-          const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
-          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(bData.calories) || baseEstimation.calories));
-          const cleanName = bData.foodName || baseEstimation.foodName;
-
-          setItemNameInput(cleanName);
-          setItemCalInput(String(calories));
-          setItemProteinInput(String(protein));
-          setItemCarbsInput(String(carbs));
-          setItemFatInput(String(fat));
-          setItemFiberInput(String(fiber));
-          setItemSugarInput(String(sugar));
-
-          setAiPreview({
-            foodName: cleanName,
-            calories,
-            protein,
-            carbs,
-            fat,
-            fiber,
-            sugar,
-            items: bData.items || baseEstimation.items,
-            portionNote: bData.portionNote || baseEstimation.portionNote,
-            isHydration: Boolean(bData.isHydration || baseEstimation.isHydration),
-            volumeMl: Number(bData.volumeMl) || baseEstimation.volumeMl || 0
-          });
-          setIsAnalyzingAi(false);
-          return { ...bData, foodName: cleanName, calories, protein, carbs, fat, fiber, sugar, items: bData.items || baseEstimation.items };
+          if (Array.isArray(bData.items) && bData.items.length > 0) {
+            resultItems = bData.items;
+          }
+          resultFoodName = bData.foodName || baseEstimation.foodName;
+          isHydration = Boolean(bData.isHydration || baseEstimation.isHydration);
+          volumeMl = Number(bData.volumeMl) || baseEstimation.volumeMl || 0;
+          portionNote = bData.portionNote || `${resultItems.length} detected food items`;
         }
       }
     } catch (bErr) {
       console.warn("Backend AI Food analysis error:", bErr);
     }
 
-    // 2. Verified Deterministic fallback (USDA & TKPI)
-    setItemNameInput(baseEstimation.foodName);
-    setItemCalInput(String(baseEstimation.calories));
-    setItemProteinInput(String(baseEstimation.protein));
-    setItemCarbsInput(String(baseEstimation.carbs));
-    setItemFatInput(String(baseEstimation.fat));
-    setItemFiberInput(String(baseEstimation.fiber || 0));
-    setItemSugarInput(String(baseEstimation.sugar || 0));
-    setAiPreview(baseEstimation);
+    // STRICT REQUIREMENT: Summary values MUST ALWAYS be calculated directly from SUM(current detected items)
+    let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
+    for (const it of resultItems) {
+      sumCal += Number(it.calories) || 0;
+      sumProt += Number(it.protein) || 0;
+      sumCarb += Number(it.carbs) || 0;
+      sumFat += Number(it.fat) || 0;
+      sumFib += Number(it.fiber) || 0;
+      sumSug += Number(it.sugar) || 0;
+    }
+
+    const protein = Math.round(sumProt * 10) / 10;
+    const carbs = Math.round(sumCarb * 10) / 10;
+    const fat = Math.round(sumFat * 10) / 10;
+    const fiber = Math.round(sumFib * 10) / 10;
+    const sugar = Math.round(sumSug * 10) / 10;
+    const calories = Math.round(sumCal);
+
+    const validatedResult: MealNutritionResult = {
+      foodName: resultFoodName,
+      calories,
+      protein,
+      carbs,
+      fat,
+      fiber,
+      sugar,
+      items: resultItems,
+      portionNote: portionNote || `${resultItems.length} detected food items`,
+      isHydration,
+      volumeMl,
+      mealType: "lunch",
+      calculatedFromItems: true
+    };
+
+    setItemNameInput(resultFoodName);
+    setItemCalInput(String(calories));
+    setItemProteinInput(String(protein));
+    setItemCarbsInput(String(carbs));
+    setItemFatInput(String(fat));
+    setItemFiberInput(String(fiber));
+    setItemSugarInput(String(sugar));
+
+    setAiPreview(validatedResult);
     setIsAnalyzingAi(false);
-    return baseEstimation;
+    return validatedResult;
   };
 
   // Step 1: AI Analysis & Preview — does NOT save yet, fills form + shows confirm panel
@@ -1900,30 +1967,22 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setIsAnalyzingAi(true);
     setAiConfirmStep(false);
 
-    let cal = Number(itemCalInput) || 0;
-    let prot = Number(itemProteinInput) || 0;
-    let carb = Number(itemCarbsInput) || 0;
-    let fat = Number(itemFatInput) || 0;
+    // Completely clear stale state before starting
+    setAiPreview(null);
+    setItemCalInput("");
+    setItemProteinInput("");
+    setItemCarbsInput("");
+    setItemFatInput("");
+    setItemFiberInput("");
+    setItemSugarInput("");
 
-    // If user didn't fill macros manually, calculate via AI & estimation engine
-    if (cal === 0 && prot === 0 && carb === 0 && fat === 0) {
-      const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
-      if (aiRes) {
-        cal = Number(aiRes.calories) || 0;
-        prot = Number(aiRes.protein) || 0;
-        carb = Number(aiRes.carbs) || 0;
-        fat = Number(aiRes.fat) || 0;
-      }
-    }
-
-    // Guarantee that inputs are NEVER empty
-    if (!itemCalInput || Number(itemCalInput) === 0) setItemCalInput(String(cal || 480));
-    if (!itemProteinInput) setItemProteinInput(String(prot || 22));
-    if (!itemCarbsInput) setItemCarbsInput(String(carb || 56));
-    if (!itemFatInput) setItemFatInput(String(fat || 18));
+    // Calculate via AI & estimation engine (single source of truth = detected items)
+    const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
 
     setIsAnalyzingAi(false);
-    setAiConfirmStep(true); // Show confirmation panel
+    if (aiRes) {
+      setAiConfirmStep(true); // Show confirmation panel
+    }
   };
 
   // Step 2: User confirmed — actually save to log
@@ -2893,7 +2952,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <span>{isEN ? "Scan Photo" : "Scan Foto"}</span>
                         </button>
                         <button
-                          onClick={() => setShowAddFoodModal(true)}
+                          onClick={openAddFoodModal}
                           className="px-3.5 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
                         >
                           <Plus size={14} />
@@ -2918,7 +2977,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         <div className="flex items-center justify-center gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={() => setShowAddFoodModal(true)}
+                            onClick={openAddFoodModal}
                             className="px-4 py-2 bg-[#D4FF00] text-black font-black text-xs rounded-xl hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
                           >
                             + {isEN ? "Add Meal" : "Catat Makanan"}
@@ -3020,7 +3079,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           +500 ml
                         </button>
                         <button
-                          onClick={() => setShowAddDrinkModal(true)}
+                          onClick={openAddDrinkModal}
                           className="px-3 py-1.5 rounded-xl bg-[#D4FF00] text-black font-extrabold text-xs flex items-center gap-1 hover:bg-[#c4ec00] transition-all cursor-pointer shadow-xs"
                         >
                           <Plus size={14} />
@@ -3164,7 +3223,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 {/* USP 2: Realtime Macro Manager */}
                 <div 
-                  onClick={() => setShowAddFoodModal(true)}
+                  onClick={openAddFoodModal}
                   className="bg-[#151D2A] border border-white/[0.06] hover:border-[#D4FF00]/40 rounded-2xl p-4 space-y-2.5 transition-all cursor-pointer group hover:bg-[#1A2333]"
                 >
                   <div className="flex items-center justify-between">
@@ -5482,7 +5541,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <input
                       type="text"
                       value={itemNameInput}
-                      onChange={(e) => setItemNameInput(e.target.value)}
+                      onChange={(e) => {
+                        setItemNameInput(e.target.value);
+                        if (aiPreview) {
+                          setAiPreview(null);
+                          setAiConfirmStep(false);
+                        }
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !isAnalyzingAi) {
                           handleSaveLogItem();
@@ -5523,7 +5588,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         )}
                       </div>
                       <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
-                        ~{Number(itemCalInput || 0).toLocaleString()} kcal
+                        ~{Number(aiPreview.calories ?? itemCalInput ?? 0).toLocaleString()} kcal
                       </span>
                     </div>
 
@@ -5565,28 +5630,48 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     )}
 
                     {/* 5-Metric Total Macro Grid */}
-                    <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
-                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                        <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
-                        <span className="font-black text-white">{itemProteinInput}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                        <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Karbo</span>
-                        <span className="font-black text-white">{itemCarbsInput}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                        <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Lemak</span>
-                        <span className="font-black text-white">{itemFatInput}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                        <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Serat</span>
-                        <span className="font-black text-white">{itemFiberInput || "0"}g</span>
-                      </div>
-                      <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                        <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Gula</span>
-                        <span className="font-black text-white">{itemSugarInput || "0"}g</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const displayProtein = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.protein) || 0), 0) * 10) / 10
+                        : (Number(itemProteinInput) || 0);
+                      const displayCarbs = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.carbs) || 0), 0) * 10) / 10
+                        : (Number(itemCarbsInput) || 0);
+                      const displayFat = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fat) || 0), 0) * 10) / 10
+                        : (Number(itemFatInput) || 0);
+                      const displayFiber = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fiber) || 0), 0) * 10) / 10
+                        : (Number(itemFiberInput) || 0);
+                      const displaySugar = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.sugar) || 0), 0) * 10) / 10
+                        : (Number(itemSugarInput) || 0);
+
+                      return (
+                        <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
+                            <span className="font-black text-white">{displayProtein}g</span>
+                          </div>
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Karbo</span>
+                            <span className="font-black text-white">{displayCarbs}g</span>
+                          </div>
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Lemak</span>
+                            <span className="font-black text-white">{displayFat}g</span>
+                          </div>
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Serat</span>
+                            <span className="font-black text-white">{displayFiber}g</span>
+                          </div>
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Gula</span>
+                            <span className="font-black text-white">{displaySugar}g</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

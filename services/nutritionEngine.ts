@@ -206,6 +206,16 @@ export const NUTRITION_DATABASE: FoodReference[] = [
 
   // ── PROTEINS & MEATS ──────────────────────────────────────────
   {
+    keywords: ["chicken meal", "chicken", "ayam", "olahan ayam", "daging ayam"],
+    normalizedName: "Chicken Meal (Dada/Paha)",
+    category: "protein",
+    defaultServingGrams: 150,
+    perPieceGrams: 150,
+    servingUnit: "1 porsi (~150g)",
+    per100g: { calories: 190, protein: 26.0, carbs: 0.0, fat: 9.0, fiber: 0.0, sugar: 0.0 },
+    source: "USDA"
+  },
+  {
     keywords: ["ayam goreng", "fried chicken", "ayam kfc", "ayam crispy"],
     normalizedName: "Ayam Goreng (Dada/Paha + Kulit)",
     category: "protein",
@@ -646,12 +656,12 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     source: "USDA"
   },
   {
-    keywords: ["americano", "espresso", "kopi hitam", "black coffee"],
+    keywords: ["americano / kopi hitam", "americano", "espresso", "kopi hitam", "black coffee", "kopi o", "long black", "kopi tubruk tawar", "kopi"],
     normalizedName: "Americano / Kopi Hitam",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
-    per100g: { calories: 2, protein: 0.1, carbs: 0.4, fat: 0.0, fiber: 0.0, sugar: 0.0 },
+    per100g: { calories: 2, protein: 0.12, carbs: 0.4, fat: 0.0, fiber: 0.0, sugar: 0.0 },
     isHydration: true,
     defaultVolumeMl: 250,
     source: "USDA"
@@ -827,34 +837,6 @@ export function splitFoodItems(rawInput: string): string[] {
   return finalItems.length > 0 ? finalItems : [cleaned];
 }
 
-export interface FoodReference {
-  keywords: string[];
-  normalizedName: string;
-  category: "grain" | "protein" | "vegetable" | "fruit" | "beverage" | "dairy" | "snack" | "fat";
-  defaultServingGrams: number;
-  perPieceGrams?: number;
-  servingUnit: string;
-  per100g: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    fiber: number;
-    sugar: number;
-  };
-  cookingVariants?: Record<string, {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    fiber: number;
-    sugar: number;
-  }>;
-  isHydration?: boolean;
-  defaultVolumeMl?: number;
-  source: "USDA" | "TKPI" | "Estimated nutrition";
-}
-
 /**
  * Calculate nutrition for a single identified food item
  */
@@ -951,7 +933,7 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
     fat: fat,
     fiber: 1,
     sugar: 1,
-    data_source: "Estimated nutrition",
+    data_source: "ai_estimation",
     confidence: "low",
     notes: "Estimasi generik"
   };
@@ -982,12 +964,12 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     const itemNutr = calculateSingleItemNutrition(rawItem);
     items.push(itemNutr);
 
-    sumCalories += itemNutr.calories;
-    sumProtein += itemNutr.protein;
-    sumCarbs += itemNutr.carbs;
-    sumFat += itemNutr.fat;
-    sumFiber += itemNutr.fiber;
-    sumSugar += itemNutr.sugar;
+    sumCalories += Number(itemNutr.calories) || 0;
+    sumProtein += Number(itemNutr.protein) || 0;
+    sumCarbs += Number(itemNutr.carbs) || 0;
+    sumFat += Number(itemNutr.fat) || 0;
+    sumFiber += Number(itemNutr.fiber) || 0;
+    sumSugar += Number(itemNutr.sugar) || 0;
 
     if (itemNutr.is_hydration) {
       isHydration = true;
@@ -1001,15 +983,23 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
   }
 
   // TOTALS ARE EXACTLY DERIVED FROM THE ITEMS (Rule 2 & 3)
-  const totalProtein = Math.round(sumProtein);
-  const totalCarbs = Math.round(sumCarbs);
-  const totalFat = Math.round(sumFat);
-  const totalFiber = Math.round(sumFiber);
-  const totalSugar = Math.round(sumSugar);
+  const totalProtein = Math.round(sumProtein * 10) / 10;
+  const totalCarbs = Math.round(sumCarbs * 10) / 10;
+  const totalFat = Math.round(sumFat * 10) / 10;
+  const totalFiber = Math.round(sumFiber * 10) / 10;
+  const totalSugar = Math.round(sumSugar * 10) / 10;
   const totalCalories = Math.round(sumCalories);
 
+  // Strict consistency validation: summary MUST match SUM(items)
+  const validatedProtein = Math.round(items.reduce((s, it) => s + (Number(it.protein) || 0), 0) * 10) / 10;
+  const validatedCarbs = Math.round(items.reduce((s, it) => s + (Number(it.carbs) || 0), 0) * 10) / 10;
+  const validatedFat = Math.round(items.reduce((s, it) => s + (Number(it.fat) || 0), 0) * 10) / 10;
+  const validatedFiber = Math.round(items.reduce((s, it) => s + (Number(it.fiber) || 0), 0) * 10) / 10;
+  const validatedSugar = Math.round(items.reduce((s, it) => s + (Number(it.sugar) || 0), 0) * 10) / 10;
+  const validatedCalories = Math.round(items.reduce((s, it) => s + (Number(it.calories) || 0), 0));
+
   debugLogs.push(
-    `[NutritionEngine] EXACT SUM TOTAL: ${totalCalories} kcal | Protein: ${totalProtein}g | Carbs: ${totalCarbs}g | Fat: ${totalFat}g | Fiber: ${totalFiber}g | Sugar: ${totalSugar}g`
+    `[NutritionEngine] EXACT SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
   );
 
   const cleanTitle = items.length === 1 
@@ -1018,12 +1008,12 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
 
   return {
     foodName: cleanTitle,
-    calories: totalCalories,
-    protein: totalProtein,
-    carbs: totalCarbs,
-    fat: totalFat,
-    fiber: totalFiber,
-    sugar: totalSugar,
+    calories: validatedCalories,
+    protein: validatedProtein,
+    carbs: validatedCarbs,
+    fat: validatedFat,
+    fiber: validatedFiber,
+    sugar: validatedSugar,
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
