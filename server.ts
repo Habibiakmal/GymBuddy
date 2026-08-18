@@ -284,7 +284,9 @@ function extractAndParseJson(text: string): any {
 
 function validateAndNormalizeNutrition(parsed: any, isPhoto: boolean = false): any {
   if (!parsed || typeof parsed !== "object") return parsed;
-  if (!parsed.isFood && parsed.intent !== "FOOD_LOG") return parsed;
+  // Accept isFood as boolean true OR string "true" from Gemini
+  const isFood = String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG";
+  if (!isFood) return parsed;
 
   let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
   let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
@@ -982,48 +984,6 @@ function saveUserProfile(rawPhone: string, profile: any) {
 
   saveDb();
   return updated;
-}
-
-function validateAndNormalizeNutrition(parsed: any, isPhoto: boolean = false): any {
-  let calories = Number(parsed.calories) || 0;
-  let protein = Number(parsed.protein) || 0;
-  let carbs = Number(parsed.carbs) || 0;
-  let fat = Number(parsed.fat) || 0;
-  let fiber = Number(parsed.fiber) || 0;
-  let sugar = Number(parsed.sugar) || 0;
-
-  // Compute from macros if calories missing or zero
-  const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
-  if (!calories && macroCal > 0) {
-    calories = macroCal;
-  }
-
-  // Sanity caps
-  calories = Math.min(9999, Math.max(0, calories));
-  protein = Math.min(999, Math.max(0, protein));
-  carbs = Math.min(999, Math.max(0, carbs));
-  fat = Math.min(999, Math.max(0, fat));
-  fiber = Math.min(200, Math.max(0, fiber));
-  sugar = Math.min(500, Math.max(0, sugar));
-
-  // Round
-  parsed.calories = Math.round(calories);
-  parsed.protein = Math.round(protein);
-  parsed.carbs = Math.round(carbs);
-  parsed.fat = Math.round(fat);
-  parsed.fiber = Math.round(fiber);
-  parsed.sugar = Math.round(sugar);
-
-  // Ensure required fields
-  if (!parsed.foodName || typeof parsed.foodName !== "string") {
-    parsed.foodName = "Makanan";
-  }
-  if (!parsed.intent) {
-    parsed.intent = "FOOD_LOG";
-  }
-  parsed.isFood = true;
-
-  return parsed;
 }
 
 function formatEquipmentTutorialCard(parsed: any, userData: any): string {
