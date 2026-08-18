@@ -1176,6 +1176,26 @@ function extractVolumeMlFromName(name: string): number {
   return 250;
 }
 
+// Check if a message contains explicit food/meal context to avoid false-positive shortcut matching
+function hasFoodContext(text: string): boolean {
+  if (!text) return false;
+  return /(?:makan|sarapan|lunch|dinner|breakfast|ngemil|snack|lauk|nasi|ayam|mie|soto|bakso|goreng|bakar|tumis|rebus|panggang|telur|daging|ikan|bebek|tahu|tempe|sayur|buah|keju|roti|kentang|bubur|porsi|mangkok|piring|potong|lembar|bungkus|sendok|gram|ons|kalori|kcal|siang|malam|pagi)/i.test(text);
+}
+
+// Match pure water logging intent without meal context
+function matchPureWaterLog(text: string): RegExpMatchArray | null {
+  if (hasFoodContext(text)) return null;
+  return text.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+}
+
+// Match pure weight logging intent without meal context
+function matchPureWeightLog(text: string): RegExpMatchArray | null {
+  if (hasFoodContext(text) && !/^(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang)\b/i.test(text.trim())) {
+    return null;
+  }
+  return text.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
+}
+
 function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
@@ -1248,6 +1268,13 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
     }
     if (!dbData.dailyLogs[altKey].some((m: any) => m.id === itemMeal.id)) {
       dbData.dailyLogs[altKey].push(itemMeal);
+    }
+
+    if (itemMeal.isHydration && !itemMeal.id?.startsWith("wa-water-")) {
+      const vol = itemMeal.volumeMl || 250;
+      const cupsToAdd = Math.max(1, Math.round(vol / 250));
+      const currentCups = getWaterCups(phone, targetDate);
+      setWaterCups(phone, currentCups + cupsToAdd, targetDate);
     }
   }
 
@@ -2884,10 +2911,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                                           lowerText.includes("progress minggu");
 
           // Weight Update Intent Match (e.g. "update bb 78", "lapor bb 77.5", "bb 76")
-          const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
+          const weightMatch = matchPureWeightLog(userText);
 
           // Water Intake Intent Match (e.g. "minum 2 gelas", "air 500ml", "water 3 cups")
-          const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+          const waterMatch = matchPureWaterLog(userText);
 
           let responseMessages: string[] = [];
 
@@ -3247,10 +3274,10 @@ Keluarkan output JSON valid:
                                       lowerText.includes("riwayat progress") || 
                                       lowerText.includes("progress minggu");
 
-      const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
+      const weightMatch = matchPureWeightLog(userText);
 
       // Water Intake Intent Match (e.g. "minum 2 gelas", "air 500ml", "water 3 cups")
-      const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+      const waterMatch = matchPureWaterLog(userText);
 
       const isResetMessage = lowerText.includes("reset akun") || 
                              lowerText.includes("hapus akun") || 
@@ -4093,8 +4120,8 @@ Keluarkan output JSON valid:
         return res.type("text/xml").send(twiml);
       }
 
-      const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
-      const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+      const weightMatch = matchPureWeightLog(userText);
+      const waterMatch = matchPureWaterLog(userText);
 
       // ── Feature 4: DELETE LOG COMMAND ──────────────────────────────────────
       // Supported commands:

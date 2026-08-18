@@ -44930,6 +44930,20 @@ function extractVolumeMlFromName(name) {
   if (lMatch) return parseFloat(lMatch[1].replace(",", ".")) * 1e3;
   return 250;
 }
+function hasFoodContext(text) {
+  if (!text) return false;
+  return /(?:makan|sarapan|lunch|dinner|breakfast|ngemil|snack|lauk|nasi|ayam|mie|soto|bakso|goreng|bakar|tumis|rebus|panggang|telur|daging|ikan|bebek|tahu|tempe|sayur|buah|keju|roti|kentang|bubur|porsi|mangkok|piring|potong|lembar|bungkus|sendok|gram|ons|kalori|kcal|siang|malam|pagi)/i.test(text);
+}
+function matchPureWaterLog(text) {
+  if (hasFoodContext(text)) return null;
+  return text.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+}
+function matchPureWeightLog(text) {
+  if (hasFoodContext(text) && !/^(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang)\b/i.test(text.trim())) {
+    return null;
+  }
+  return text.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
+}
 function addMealLog(rawPhone, meal, targetDateStr) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
@@ -44992,6 +45006,12 @@ function addMealLog(rawPhone, meal, targetDateStr) {
     }
     if (!dbData.dailyLogs[altKey].some((m) => m.id === itemMeal.id)) {
       dbData.dailyLogs[altKey].push(itemMeal);
+    }
+    if (itemMeal.isHydration && !itemMeal.id?.startsWith("wa-water-")) {
+      const vol = itemMeal.volumeMl || 250;
+      const cupsToAdd = Math.max(1, Math.round(vol / 250));
+      const currentCups = getWaterCups(phone, targetDate);
+      setWaterCups(phone, currentCups + cupsToAdd, targetDate);
     }
   }
   saveDb();
@@ -46359,8 +46379,8 @@ https://gymbuddygroup.com`
           const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
           const isCheckSummaryMessage = lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("makan apa");
           const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
-          const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
-          const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+          const weightMatch = matchPureWeightLog(userText);
+          const waterMatch = matchPureWaterLog(userText);
           let responseMessages = [];
           if (isWelcomeMessage) {
             const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
@@ -46674,8 +46694,8 @@ https://gymbuddygroup.com`
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
       const isCheckSummaryMessage = lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("makan apa");
       const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
-      const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
-      const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+      const weightMatch = matchPureWeightLog(userText);
+      const waterMatch = matchPureWaterLog(userText);
       const isResetMessage = lowerText.includes("reset akun") || lowerText.includes("hapus akun") || lowerText.includes("reset data") || lowerText.includes("hapus data saya");
       let responseMessages = [];
       let mediaUrlToSend = void 0;
@@ -47381,8 +47401,8 @@ Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
         const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(resetMsg)}</Message></Response>`;
         return res.type("text/xml").send(twiml);
       }
-      const weightMatch = userText.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
-      const waterMatch = userText.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
+      const weightMatch = matchPureWeightLog(userText);
+      const waterMatch = matchPureWaterLog(userText);
       const isDeleteLastLog = /^(hapus\s+log\s+terakhir|batal\s+log|cancel\s+log|delete\s+last|undo\s+log|hapus\s+yang\s+terakhir|cancel\s+entry)/i.test(userText.trim());
       const isDeleteAllLog = /^(hapus\s+semua\s+log|clear\s+log|hapus\s+semua\s+makanan|reset\s+log\s+hari\s+ini)/i.test(userText.trim());
       const deleteByNameMatch = userText.trim().match(/^hapus\s+log\s+(.+)/i);
