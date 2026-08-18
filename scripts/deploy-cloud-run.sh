@@ -23,18 +23,14 @@ echo "=========================================================="
 echo "Building container image with Cloud Build..."
 gcloud builds submit --tag "${IMAGE_TAG}" --project "${PROJECT_ID}"
 
-# 2. Deploy to Google Cloud Run using declarative cloudrun.yaml manifest
-echo "Applying declarative Cloud Run service manifest (cloudrun.yaml)..."
-gcloud run services replace cloudrun.yaml \
+# 2. Deploy to Google Cloud Run
+echo "Deploying newly built image to Cloud Run..."
+gcloud run deploy "${SERVICE_NAME}" \
+  --image "${IMAGE_TAG}" \
   --region "${REGION}" \
-  --project "${PROJECT_ID}"
-
-# Ensure public unauthenticated access for staging testing
-gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
-  --region "${REGION}" \
-  --member="allUsers" \
-  --role="roles/run.invoker" \
-  --project "${PROJECT_ID}"
+  --project "${PROJECT_ID}" \
+  --platform managed \
+  --allow-unauthenticated
 
 # 3. Output Service URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --platform managed --region "${REGION}" --format 'value(status.url)' --project "${PROJECT_ID}")

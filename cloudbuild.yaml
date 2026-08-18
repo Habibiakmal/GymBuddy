@@ -13,29 +13,18 @@ steps:
       - 'push'
       - 'asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
 
-  # 3. Deploy to Cloud Run using declarative cloudrun.yaml
+  # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
-      - 'services'
-      - 'replace'
-      - 'cloudrun.yaml'
-      - '--region=asia-southeast2'
-      - '--project=gen-lang-client-0130714675'
-
-  # 4. Ensure public unauthenticated access
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'services'
-      - 'add-iam-policy-binding'
+      - 'deploy'
       - 'gymbuddy-backend'
+      - '--image=asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
       - '--region=asia-southeast2'
-      - '--member=allUsers'
-      - '--role=roles/run.invoker'
       - '--project=gen-lang-client-0130714675'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
 
 images:
   - 'asia-southeast2-docker.pkg.dev/gen-lang-client-0130714675/gymbuddy/gymbuddy-backend:latest'
