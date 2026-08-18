@@ -18,6 +18,9 @@ export interface FoodItemNutrition {
   estimated_quantity: number;
   estimated_weight_grams: number;
   serving_unit: string;
+  display_unit?: string;
+  item_type?: "water" | "beverage" | "food";
+  portion_type?: "estimated" | "user_provided";
   calories: number;
   protein: number;
   carbs: number;
@@ -645,8 +648,8 @@ export const NUTRITION_DATABASE: FoodReference[] = [
 
   // ── BEVERAGES ──────────────────────────────────────────────────
   {
-    keywords: ["air putih", "air mineral", "mineral water", "plain water", "air"],
-    normalizedName: "Air Mineral (Hydration)",
+    keywords: ["mineral water 500ml", "mineral water", "air putih", "air mineral", "plain water", "aqua", "le minerale", "vit", "cleo", "air"],
+    normalizedName: "Air Mineral (Water)",
     category: "beverage",
     defaultServingGrams: 500,
     servingUnit: "500 ml",
@@ -656,13 +659,24 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     source: "USDA"
   },
   {
-    keywords: ["americano / kopi hitam", "americano", "espresso", "kopi hitam", "black coffee", "kopi o", "long black", "kopi tubruk tawar", "kopi"],
+    keywords: ["americano / kopi hitam", "americano 500ml", "americano", "espresso", "kopi hitam", "black coffee", "kopi o", "long black", "kopi tubruk tawar", "kopi"],
     normalizedName: "Americano / Kopi Hitam",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
     per100g: { calories: 2, protein: 0.12, carbs: 0.4, fat: 0.0, fiber: 0.0, sugar: 0.0 },
-    isHydration: true,
+    isHydration: false,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    keywords: ["orange juice 250ml", "orange juice", "jus jeruk", "es jeruk"],
+    normalizedName: "Orange Juice",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "250 ml",
+    per100g: { calories: 45, protein: 0.7, carbs: 10.4, fat: 0.2, fiber: 0.2, sugar: 8.4 },
+    isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
@@ -671,9 +685,9 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     normalizedName: "Kopi Susu / Latte",
     category: "beverage",
     defaultServingGrams: 250,
-    servingUnit: "1 cup (250ml)",
+    servingUnit: "250 ml",
     per100g: { calories: 60, protein: 2.0, carbs: 7.2, fat: 2.5, fiber: 0.0, sugar: 5.6 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
@@ -682,9 +696,9 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     normalizedName: "Boba Milk Tea (1 Cup)",
     category: "beverage",
     defaultServingGrams: 450,
-    servingUnit: "1 cup (450ml)",
+    servingUnit: "450 ml",
     per100g: { calories: 75, protein: 1.0, carbs: 16.5, fat: 1.0, fiber: 0.2, sugar: 14.0 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 450,
     source: "USDA"
   },
@@ -693,9 +707,9 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     normalizedName: "Es Teh Manis",
     category: "beverage",
     defaultServingGrams: 300,
-    servingUnit: "1 gelas (300ml)",
+    servingUnit: "300 ml",
     per100g: { calories: 32, protein: 0.0, carbs: 8.0, fat: 0.0, fiber: 0.0, sugar: 7.5 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 300,
     source: "TKPI"
   },
@@ -706,29 +720,29 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     defaultServingGrams: 250,
     servingUnit: "250 ml",
     per100g: { calories: 1, protein: 0.0, carbs: 0.2, fat: 0.0, fiber: 0.0, sugar: 0.0 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
-    keywords: ["jus buah", "jus alpukat", "jus mangga", "jus jeruk", "juice"],
+    keywords: ["jus buah", "jus alpukat", "jus mangga", "juice"],
     normalizedName: "Jus Buah Segar",
     category: "beverage",
     defaultServingGrams: 300,
-    servingUnit: "1 gelas (300ml)",
+    servingUnit: "300 ml",
     per100g: { calories: 55, protein: 0.8, carbs: 13.0, fat: 0.5, fiber: 1.5, sugar: 11.0 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 300,
     source: "TKPI"
   },
   {
     keywords: ["whey", "protein shake", "susu protein"],
-    normalizedName: "Whey Protein Shake (1 Scoop)",
+    normalizedName: "Whey Protein Shake",
     category: "beverage",
     defaultServingGrams: 300,
-    servingUnit: "1 scoop + air",
+    servingUnit: "300 ml",
     per100g: { calories: 45, protein: 8.0, carbs: 1.0, fat: 0.6, fiber: 0.2, sugar: 0.5 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 300,
     source: "USDA"
   }
@@ -740,6 +754,7 @@ export const NUTRITION_DATABASE: FoodReference[] = [
 export function parseQuantityAndUnit(text: string): {
   quantity: number;
   explicitGrams?: number;
+  explicitVolumeMl?: number;
   multiplier: number;
   cookingMethod?: "fried" | "boiled" | "grilled" | "steamed" | "roasted" | "raw" | "creamy" | "standard";
   cleanedText: string;
@@ -747,27 +762,49 @@ export function parseQuantityAndUnit(text: string): {
   let cleaned = text.trim();
   let quantity = 1;
   let explicitGrams: number | undefined = undefined;
+  let explicitVolumeMl: number | undefined = undefined;
   let multiplier = 1.0;
   let cookingMethod: FoodItemNutrition["cooking_method"] = "standard";
 
-  // Detect explicit grams (e.g., "150g", "150 gram", "100gr")
-  const gramMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+  // 1. Detect explicit volume in ml (e.g., "500ml", "500 ml", "250ml", "750 ml")
+  const mlMatch = cleaned.match(/(\d+(?:[\.,]\d+)?)\s*(?:ml|milliliter|mililiter)\b/i);
+  if (mlMatch) {
+    explicitVolumeMl = parseFloat(mlMatch[1].replace(',', '.'));
+    cleaned = cleaned.replace(mlMatch[0], "").trim();
+  }
+
+  // 2. Detect explicit liters (e.g., "1.5L", "1 liter", "2L", "1,5 liter")
+  const literMatch = cleaned.match(/(\d+(?:[\.,]\d+)?)\s*(?:l|liter|litre)\b/i);
+  if (literMatch) {
+    explicitVolumeMl = parseFloat(literMatch[1].replace(',', '.')) * 1000;
+    cleaned = cleaned.replace(literMatch[0], "").trim();
+  }
+
+  // 3. Detect explicit grams (e.g., "150g", "150 gram", "100gr")
+  const gramMatch = cleaned.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
   if (gramMatch) {
-    explicitGrams = parseFloat(gramMatch[1]);
+    explicitGrams = parseFloat(gramMatch[1].replace(',', '.'));
     cleaned = cleaned.replace(gramMatch[0], "").trim();
   }
 
-  // Detect numeric pieces/slices/units (e.g., "2 telur", "2 slices", "3 buah", "2 potong", "1 piring", "1 centong")
-  const qtyMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|gelas|cup|scoop)?\b/i);
+  // 4. Detect cup / gelas / bottle quantities (e.g. "2 cups", "2 gelas", "1 cup", "1 botol")
+  const cupMatch = cleaned.match(/(\d+(?:[\.,]\d+)?)\s*(?:cup|cups|gelas|cangkir|can|kaleng|botol|bottle)\b/i);
+  if (cupMatch) {
+    quantity = parseFloat(cupMatch[1].replace(',', '.'));
+    cleaned = cleaned.replace(cupMatch[0], "").trim();
+  }
+
+  // 5. Detect numeric pieces/slices/units (e.g., "2 telur", "2 slices", "3 buah", "2 potong", "1 piring", "1 centong")
+  const qtyMatch = cleaned.match(/^(\d+(?:[\.,]\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|scoop)?\b/i);
   if (qtyMatch) {
-    quantity = parseFloat(qtyMatch[1]);
+    quantity = parseFloat(qtyMatch[1].replace(',', '.'));
     cleaned = cleaned.replace(qtyMatch[0], "").trim();
   }
 
-  // Detect suffix quantities (e.g., "udang 2 buah", "telur 2 butir")
-  const suffixQtyMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|gelas|cup|scoop)\b/i);
+  // 6. Detect suffix quantities (e.g., "udang 2 buah", "telur 2 butir")
+  const suffixQtyMatch = cleaned.match(/\b(\d+(?:[\.,]\d+)?)\s*(?:buah|biji|butir|potong|lembar|slice|slices|pcs|porsi|mangkok|mangkuk|centong|piring|scoop)\b/i);
   if (suffixQtyMatch) {
-    quantity = parseFloat(suffixQtyMatch[1]);
+    quantity = parseFloat(suffixQtyMatch[1].replace(',', '.'));
     cleaned = cleaned.replace(suffixQtyMatch[0], "").trim();
   }
 
@@ -794,7 +831,7 @@ export function parseQuantityAndUnit(text: string): {
   else if (cleaned.match(/\bcreamy|carbonara|keju\b/i)) cookingMethod = "creamy";
   else if (cleaned.match(/\bmentah|raw\b/i)) cookingMethod = "raw";
 
-  return { quantity, explicitGrams, multiplier, cookingMethod, cleanedText: cleaned };
+  return { quantity, explicitGrams, explicitVolumeMl, multiplier, cookingMethod, cleanedText: cleaned };
 }
 
 /**
@@ -841,7 +878,7 @@ export function splitFoodItems(rawInput: string): string[] {
  * Calculate nutrition for a single identified food item
  */
 export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutrition {
-  const { quantity, explicitGrams, multiplier, cookingMethod, cleanedText } = parseQuantityAndUnit(rawItemText);
+  const { quantity, explicitGrams, explicitVolumeMl, multiplier, cookingMethod, cleanedText } = parseQuantityAndUnit(rawItemText);
   const lower = cleanedText.toLowerCase();
 
   // Match against Nutrition Database
@@ -861,18 +898,55 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
   }
 
   if (matchedRef) {
-    // 1. Determine Weight in Grams with piece unit calibration
+    const isBeverage = matchedRef.category === "beverage";
+    const isWater = isBeverage && (matchedRef.keywords.some(k => k.includes("air") || k.includes("water") || k.includes("mineral")));
+    const itemType: "water" | "beverage" | "food" = isWater ? "water" : (isBeverage ? "beverage" : "food");
+
     let targetGrams = 0;
-    if (explicitGrams !== undefined && explicitGrams > 0) {
-      targetGrams = explicitGrams;
-    } else if (matchedRef.perPieceGrams && quantity > 1) {
-      // E.g. "2 slices roti" -> 2 * 30g = 60g | "udang 2 buah" -> 2 * 15g = 30g
-      targetGrams = matchedRef.perPieceGrams * quantity * multiplier;
+    let targetVolumeMl: number | undefined = undefined;
+    let portionType: "estimated" | "user_provided" = "estimated";
+    let displayUnit = "";
+
+    if (isBeverage || isWater) {
+      if (explicitVolumeMl !== undefined && explicitVolumeMl > 0) {
+        targetVolumeMl = explicitVolumeMl;
+        targetGrams = explicitVolumeMl;
+        portionType = "user_provided";
+        displayUnit = `${explicitVolumeMl} ml`;
+      } else if (explicitGrams !== undefined && explicitGrams > 0) {
+        targetVolumeMl = explicitGrams;
+        targetGrams = explicitGrams;
+        portionType = "user_provided";
+        displayUnit = `${explicitGrams}g`;
+      } else if (quantity > 1 || multiplier !== 1) {
+        targetVolumeMl = Math.round((matchedRef.defaultVolumeMl || 250) * quantity * multiplier);
+        targetGrams = targetVolumeMl;
+        portionType = quantity > 1 ? "user_provided" : "estimated";
+        displayUnit = `${targetVolumeMl} ml`;
+      } else {
+        targetVolumeMl = matchedRef.defaultVolumeMl || 250;
+        targetGrams = matchedRef.defaultServingGrams || 250;
+        portionType = "estimated";
+        displayUnit = `${targetVolumeMl} ml`;
+      }
     } else {
-      targetGrams = matchedRef.defaultServingGrams * (matchedRef.perPieceGrams ? 1 : quantity) * multiplier;
+      // Solid Food
+      if (explicitGrams !== undefined && explicitGrams > 0) {
+        targetGrams = explicitGrams;
+        portionType = "user_provided";
+        displayUnit = `${explicitGrams}g`;
+      } else if (matchedRef.perPieceGrams && quantity > 1) {
+        targetGrams = matchedRef.perPieceGrams * quantity * multiplier;
+        portionType = "user_provided";
+        displayUnit = `${Math.round(targetGrams)}g`;
+      } else {
+        targetGrams = matchedRef.defaultServingGrams * (matchedRef.perPieceGrams ? 1 : quantity) * multiplier;
+        portionType = quantity > 1 || explicitGrams !== undefined ? "user_provided" : "estimated";
+        displayUnit = `${Math.round(targetGrams)}g`;
+      }
     }
 
-    // 2. Determine per100g values based on cooking method variant
+    // Determine per100g values based on cooking method variant
     let per100g = matchedRef.per100g;
     if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
       per100g = matchedRef.cookingVariants[cookingMethod];
@@ -898,26 +972,37 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams),
-      serving_unit: explicitGrams ? `${explicitGrams}g` : `${Math.round(targetGrams)}g`,
+      serving_unit: displayUnit,
+      display_unit: displayUnit,
+      item_type: itemType,
+      portion_type: portionType,
       calories,
       protein,
       carbs,
       fat,
       fiber,
       sugar,
-      is_hydration: matchedRef.isHydration,
-      volume_ml: matchedRef.defaultVolumeMl ? Math.round(matchedRef.defaultVolumeMl * quantity * multiplier) : undefined,
+      is_hydration: isWater, // ONLY plain water is treated as is_hydration
+      volume_ml: targetVolumeMl,
       data_source: matchedRef.source,
-      confidence: explicitGrams ? "high" : "medium",
-      notes: `${targetGrams}g (${matchedRef.source})`
+      confidence: portionType === "user_provided" ? "high" : "medium",
+      notes: `${displayUnit} (${matchedRef.source})`
     };
   }
 
   // Fallback heuristic for unrecognized item
-  const estimatedGrams = explicitGrams || Math.round(100 * multiplier * quantity);
-  const prot = Math.round(5 * (estimatedGrams / 100) * 10) / 10;
-  const carb = Math.round(18 * (estimatedGrams / 100) * 10) / 10;
-  const fat = Math.round(4 * (estimatedGrams / 100) * 10) / 10;
+  const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
+  const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
+  const itemType: "water" | "beverage" | "food" = isWaterGuess ? "water" : (isBeverageGuess ? "beverage" : "food");
+
+  let targetGrams = explicitGrams || explicitVolumeMl || Math.round((isBeverageGuess ? 250 : 100) * multiplier * quantity);
+  let targetVolumeMl = isBeverageGuess ? targetGrams : undefined;
+  let portionType: "estimated" | "user_provided" = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
+  let displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
+
+  const prot = Math.round((isBeverageGuess ? 1 : 5) * (targetGrams / 100) * 10) / 10;
+  const carb = Math.round((isBeverageGuess ? 5 : 18) * (targetGrams / 100) * 10) / 10;
+  const fat = Math.round((isBeverageGuess ? 0.5 : 4) * (targetGrams / 100) * 10) / 10;
   const cal = Math.round((prot * 4) + (carb * 4) + (fat * 9));
 
   return {
@@ -925,14 +1010,19 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
     normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
     cooking_method: cookingMethod,
     estimated_quantity: quantity,
-    estimated_weight_grams: estimatedGrams,
-    serving_unit: `${estimatedGrams}g (est)`,
+    estimated_weight_grams: targetGrams,
+    serving_unit: displayUnit,
+    display_unit: displayUnit,
+    item_type: itemType,
+    portion_type: portionType,
     calories: cal,
     protein: prot,
     carbs: carb,
     fat: fat,
-    fiber: 1,
-    sugar: 1,
+    fiber: 0,
+    sugar: isBeverageGuess ? 4 : 1,
+    is_hydration: isWaterGuess,
+    volume_ml: targetVolumeMl,
     data_source: "ai_estimation",
     confidence: "low",
     notes: "Estimasi generik"
@@ -977,7 +1067,7 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     }
 
     debugLogs.push(
-      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.estimated_weight_grams}g | ` +
+      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.display_unit || itemNutr.estimated_weight_grams + 'g'} | ` +
       `Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
     );
   }
@@ -1006,6 +1096,8 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     ? items[0].normalized_food_name 
     : items.map(i => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
 
+  const dynamicPortionNote = items.length === 1 ? "1 detected food item" : `${items.length} detected food items`;
+
   return {
     foodName: cleanTitle,
     calories: validatedCalories,
@@ -1017,7 +1109,7 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
-    portionNote: `${items.length} detected food items`,
+    portionNote: dynamicPortionNote,
     items,
     calculatedFromItems: true,
     debugLog: debugLogs

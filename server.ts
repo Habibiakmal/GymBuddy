@@ -1270,7 +1270,7 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
       dbData.dailyLogs[altKey].push(itemMeal);
     }
 
-    if (itemMeal.isHydration && !itemMeal.id?.startsWith("wa-water-")) {
+    if (isPlainWaterName(itemMeal.foodName) && !itemMeal.id?.startsWith("wa-water-")) {
       const vol = itemMeal.volumeMl || 250;
       const cupsToAdd = Math.max(1, Math.round(vol / 250));
       const currentCups = getWaterCups(phone, targetDate);
@@ -2303,7 +2303,7 @@ PENTING:
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: `${items.length} detected food items`,
+          portionNote: items.length === 1 ? "1 detected food item" : `${items.length} detected food items`,
           items,
           debugLog: deterministicResult.debugLog
         });

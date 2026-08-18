@@ -204,6 +204,25 @@ const extractVolumeMlFromName = (name: string): number => {
   return 250;
 };
 
+// Plain Water vs Beverage / Liquid Helper (Prevents Coffee/Tea from polluting plain water tracker)
+const isPlainWaterName = (name: string): boolean => {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  const notPlainWater = [
+    "kopi", "coffee", "americano", "latte", "cappuccino", "espresso",
+    "teh", "tea", "susu", "milk", "jus", "juice", "soda", "cola",
+    "boba", "syrup", "sirup", "beer", "bir", "wine", "shake",
+    "smoothie", "bcaa", "creatine", "whey", "lemonade", "cendol",
+    "dawet", "kelapa", "jeruk", "alpukat", "milo", "dancow", "matcha"
+  ];
+  if (notPlainWater.some((kw) => lower.includes(kw))) return false;
+  const waterKeywords = [
+    "air putih", "air mineral", "mineral water", "plain water",
+    "aqua", "le minerale", "vit", "cleo", "ades", "air"
+  ];
+  return waterKeywords.some((kw) => lower.includes(kw));
+};
+
 // Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "rice bowl + americano")
 const splitAndCategorizeComboText = (
   rawName: string,
@@ -1521,17 +1540,19 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const ribbonDates = getStaticRibbonDates();
   const isSelectedDateInRibbon = ribbonDates.some((d) => d.dateStr === selectedDate);
 
-  // Solid Foods vs Hydration
-  const foodMeals = allLogs.filter((item) => !isLiquidName(item.foodName) && !item.isHydration);
-  const hydrationLogs = allLogs.filter((item) => isLiquidName(item.foodName) || item.isHydration);
+  // Categorization: Plain Water vs Food & Beverages (Coffee/Beverages are logged as meals, only plain water increments hydration tracker)
+  const plainWaterLogs = allLogs.filter((item) => isPlainWaterName(item.foodName));
+  const foodAndBeverageMeals = allLogs.filter((item) => !isPlainWaterName(item.foodName));
+  const foodMeals = foodAndBeverageMeals;
+  const hydrationLogs = plainWaterLogs;
 
   // Totals
-  const totalCaloriesConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
-  const totalProteinConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.protein) || 0), 0);
-  const totalCarbsConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
-  const totalFatConsumed = foodMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
+  const totalCaloriesConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
+  const totalProteinConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.protein) || 0), 0);
+  const totalCarbsConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
+  const totalFatConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
 
-  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
+  const totalHydrationMl = plainWaterLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
 
   // Sets Calculations
@@ -5581,9 +5602,18 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         <span className="text-xs font-black text-white flex items-center gap-1.5">
                           <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
                         </span>
+                        <p className="text-[10px] text-neutral-400 font-medium mt-0.5">
+                          {(() => {
+                            const sources = Array.from(new Set(aiPreview.items?.map((it: any) => it.data_source).filter(Boolean)));
+                            if (sources.length === 1 && sources[0] === "USDA") return "Based on USDA data and estimated portion";
+                            if (sources.length === 1 && sources[0] === "TKPI") return "Based on TKPI data and estimated portion";
+                            if (sources.includes("USDA") && sources.includes("TKPI")) return "Based on USDA & TKPI verified data";
+                            return "AI nutrition estimation";
+                          })()}
+                        </p>
                         {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
-                          <span className="text-[10px] text-neutral-400 font-medium">
-                            {aiPreview.items.length} detected food items
+                          <span className="text-[10px] text-[#D4FF00] font-semibold block mt-0.5">
+                            {aiPreview.items.length === 1 ? "1 detected food item" : `${aiPreview.items.length} detected food items`}
                           </span>
                         )}
                       </div>
@@ -5597,34 +5627,58 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       <div className="p-2.5 bg-[#111620]/90 rounded-xl border border-white/5 space-y-2">
                         <div className="text-[10px] font-black text-neutral-400 uppercase tracking-wider flex items-center justify-between">
                           <span>Food Item Breakdown</span>
-                          <span className="text-neutral-500 font-normal">Standard Servings</span>
+                          <span className="text-neutral-500 font-normal">
+                            {aiPreview.items.every((it: any) => it.portion_type === "user_provided")
+                              ? "USER PROVIDED"
+                              : "ESTIMATED PORTIONS"}
+                          </span>
                         </div>
                         <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
-                          {aiPreview.items.map((it: FoodItemNutrition, idx: number) => (
-                            <div key={idx} className="p-2 bg-[#161C28]/80 rounded-lg border border-white/5 flex flex-col gap-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                  <span className="text-neutral-100 font-bold text-xs block leading-tight">
-                                    • {it.normalized_food_name || it.food_name}
-                                  </span>
-                                  <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
-                                    {it.estimated_weight_grams}g · <span className="text-neutral-500">{it.data_source || "Estimated nutrition"}</span>
+                          {aiPreview.items.map((it: FoodItemNutrition, idx: number) => {
+                            const isLiquidItem = it.item_type === "beverage" || it.item_type === "water" || /(?:americano|kopi|coffee|tea|teh|jus|juice|milk|susu|latte|boba|drink|water|air)/i.test(it.normalized_food_name || it.food_name);
+                            const portionDisplay = it.display_unit || (isLiquidItem ? `${it.volume_ml || it.estimated_weight_grams} ml` : `${it.estimated_weight_grams}g`);
+                            const dbSourceDisplay = it.data_source === "USDA" ? "USDA" : (it.data_source === "TKPI" ? "TKPI" : "AI Estimation");
+                            const foodMatchConfidence = it.data_source === "USDA" || it.data_source === "TKPI" ? "High" : "Medium";
+                            const portionStatus = it.portion_type === "user_provided" ? "User Specified" : "Estimated";
+
+                            return (
+                              <div key={idx} className="p-2 bg-[#161C28]/80 rounded-lg border border-white/5 flex flex-col gap-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-neutral-100 font-bold text-xs leading-tight">
+                                        • {it.normalized_food_name || it.food_name}
+                                      </span>
+                                      {it.item_type && (
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${it.item_type === "water" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : (it.item_type === "beverage" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30")}`}>
+                                          {it.item_type === "water" ? "Water" : (it.item_type === "beverage" ? "Beverage" : "Food Meal")}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
+                                      {portionDisplay} · <span className="text-neutral-500">{dbSourceDisplay}</span>
+                                    </span>
+                                    <div className="flex items-center gap-2 text-[9px] text-neutral-400 mt-0.5">
+                                      <span>Food Match: <strong className="text-neutral-200">{foodMatchConfidence}</strong></span>
+                                      <span>•</span>
+                                      <span>Portion: <strong className="text-neutral-200">{portionStatus}</strong></span>
+                                    </div>
+                                  </div>
+                                  <span className="text-xs font-black text-white whitespace-nowrap">
+                                    {it.calories} kcal
                                   </span>
                                 </div>
-                                <span className="text-xs font-black text-white whitespace-nowrap">
-                                  {it.calories} kcal
-                                </span>
+                                <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5">
+                                  <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
+                                  <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
+                                  <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                                  {it.fiber !== undefined && it.fiber > 0 && (
+                                    <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5">
-                                <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
-                                <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
-                                <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
-                                {it.fiber !== undefined && it.fiber > 0 && (
-                                  <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
