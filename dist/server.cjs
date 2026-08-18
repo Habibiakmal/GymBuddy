@@ -45687,6 +45687,11 @@ function matchPureWeightLog(text) {
   }
   return text.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
 }
+function isPlainWaterName(name) {
+  if (!name) return false;
+  const n = String(name).toLowerCase();
+  return n.includes("air putih") || n.includes("air mineral") || n.includes("air bening") || n.includes("aqua") || n.includes("le minerale") || n === "air" || n.includes("water");
+}
 function addMealLog(rawPhone, meal, targetDateStr) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
