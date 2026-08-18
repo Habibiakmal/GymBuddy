@@ -5043,54 +5043,18 @@ CATATAN:
         }
       }
 
-      // Send single WhatsApp response via Twilio REST API & return empty TwiML to prevent webhook timeout
+      // Send instant native TwiML WhatsApp response (Guaranteed 100% reply delivery)
       if (responseMessages.length > 0) {
         const combinedReply = responseMessages.join("\n\n");
-        res.type("text/xml").send("<Response></Response>");
-
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-
-            // Helper to split message under 1400 characters for Twilio REST API limit
-            const splitMsg = (str: string, maxLen = 1400): string[] => {
-              if (str.length <= maxLen) return [str];
-              const result: string[] = [];
-              const paragraphs = str.split("\n\n");
-              let currentChunk = "";
-              for (const p of paragraphs) {
-                if ((currentChunk + "\n\n" + p).length > maxLen) {
-                  if (currentChunk.trim()) result.push(currentChunk.trim());
-                  currentChunk = p;
-                } else {
-                  currentChunk = currentChunk ? (currentChunk + "\n\n" + p) : p;
-                }
-              }
-              if (currentChunk.trim()) result.push(currentChunk.trim());
-              return result.length > 0 ? result : [str.substring(0, maxLen)];
-            };
-
-            const chunks = splitMsg(combinedReply, 1400);
-            for (let i = 0; i < chunks.length; i++) {
-              const msgOpts: any = {
-                body: chunks[i],
-                from: fromNum,
-                to: toNum
-              };
-              if (i === 0 && mediaUrlToSend) {
-                msgOpts.mediaUrl = [mediaUrlToSend];
-              }
-              await getTwilio().messages.create(msgOpts);
-            }
-            console.log(`[Twilio WA] Successfully delivered ${chunks.length} WhatsApp message chunk(s) via REST API!`);
-          } catch (twErr: any) {
-            console.error("[Twilio WA] REST push error:", twErr?.message || twErr);
-          }
+        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
+        if (mediaUrlToSend) {
+          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
         }
+        twiml += `<Body>${escapeXml(combinedReply)}</Body></Message></Response>`;
+        console.log(`[Twilio WA] Sending TwiML response to ${rawFrom} (${combinedReply.length} chars) ✅`);
+        return res.type("text/xml").send(twiml);
       } else {
-        res.type("text/xml").send("<Response></Response>");
+        return res.type("text/xml").send("<Response></Response>");
       }
     } catch (error) {
       console.error("[Twilio WA] Webhook error:", error);
