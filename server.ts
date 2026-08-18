@@ -12,15 +12,42 @@ import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
 import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt } from "./services/nutritionEngine";
 
-// Twilio credentials (concatenated to avoid GitHub secret push block)
-const TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
-const TW_TOKEN = ["db733da9b83409669", "ddcc0f0a55b9dcb"].join("");
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || TW_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || TW_TOKEN;
+// Twilio configuration (strictly from environment variables)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+
+import {
+  getDatabase,
+  findUserByPhoneOrId,
+  saveUserDocument,
+  getUserSubscription,
+  saveUserSubscription,
+  getFoodLogsForDate,
+  insertFoodLog,
+  deleteFoodLog,
+  getWaterLog,
+  saveWaterLog,
+  recordAiTelemetry
+} from "./services/db";
+import {
+  hashPassword,
+  comparePassword,
+  generateAuthToken,
+  verifyAuthToken,
+  requireAuthMiddleware,
+  requireEntitlementMiddleware,
+  verifyMidtransSignature
+} from "./services/auth";
+import {
+  generalRateLimiter,
+  aiRateLimiter,
+  authRateLimiter,
+  isDuplicateRequest
+} from "./services/rateLimiter";
 
 let twilioClient: any = null;
 function getTwilio() {
-  if (!twilioClient) {
+  if (!twilioClient && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
     const twFactory: any = typeof TwilioPackage === "function" ? TwilioPackage : (TwilioPackage as any).default || TwilioPackage;
     twilioClient = twFactory(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
   }
@@ -2006,11 +2033,110 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   app.use(cors());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "25mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+
+  // Apply infrastructure rate limiters
+  app.use("/api/", generalRateLimiter);
+  app.use("/api/ai/", aiRateLimiter);
+  app.use("/api/auth/", authRateLimiter);
+
+  // Initialize MongoDB Atlas entity layer
+  getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
+
+  // ── Authentication Endpoints ──────────────────────────────────────────────
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { phone, password, name, profile = {} } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
+      }
+
+      const normalized = normalizePhone(phone);
+      const existingUser = await findUserByPhoneOrId(normalized);
+      if (existingUser && existingUser.passwordHash) {
+        return res.status(400).json({ success: false, error: "Nomor ini sudah terdaftar. Silakan login." });
+      }
+
+      const passwordHash = password ? await hashPassword(password) : undefined;
+      const userId = `usr_${normalized}`;
+      const userDoc = {
+        userId,
+        phone: normalized,
+        name: name || profile.name || "Member GymBuddy",
+        passwordHash,
+        ...profile,
+        updatedAt: new Date()
+      };
+
+      await saveUserDocument(userDoc);
+      saveUserProfile(normalized, userDoc);
+      saveDb();
+
+      const token = generateAuthToken({ userId, phone: normalized });
+      res.json({
+        success: true,
+        token,
+        user: { userId, phone: normalized, name: userDoc.name, profile: userDoc }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { phone, password } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
+      }
+
+      const normalized = normalizePhone(phone);
+      const user = (await findUserByPhoneOrId(normalized)) || getUserProfile(normalized);
+
+      if (!user) {
+        return res.status(404).json({ success: false, error: "Akun belum terdaftar. Silakan daftar terlebih dahulu." });
+      }
+
+      // If user has a password set, verify it
+      if (user.passwordHash && password) {
+        const isValid = await comparePassword(password, user.passwordHash);
+        if (!isValid) {
+          return res.status(401).json({ success: false, error: "Password salah. Silakan coba lagi." });
+        }
+      }
+
+      const userId = user.userId || `usr_${normalized}`;
+      const token = generateAuthToken({ userId, phone: normalized });
+      const calculated = calculateUserData(user);
+
+      res.json({
+        success: true,
+        token,
+        user: { ...user, userId, phone: normalized, calculated }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Login failed" });
+    }
+  });
+
+  app.get("/api/auth/me", requireAuthMiddleware, async (req: any, res) => {
+    try {
+      const phone = req.user?.phone;
+      const user = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      const sub = await getUserSubscription(phone);
+      const calculated = calculateUserData(user);
+      res.json({ success: true, user: { ...user, subscription: sub, calculated } });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
 
   // Save onboarding registration data & user profile (Fresh Account Creation)
-  app.post("/api/onboarding", (req, res) => {
+  app.post("/api/onboarding", async (req, res) => {
     const { phone, profile } = req.body;
     if (profile) {
       const norm = normalizePhone(phone || profile.phone || "");
@@ -2033,8 +2159,18 @@ async function startServer() {
 
         const saved = saveUserProfile(norm, profile);
         saveDb();
+
+        // Also persist to MongoDB collections
+        saveUserDocument({
+          userId: `usr_${norm}`,
+          phone: norm,
+          ...profile,
+          updatedAt: new Date()
+        }).catch((err) => console.warn("[MongoDB] User doc save warning:", err?.message || err));
+
         console.log("Saved clean user profile in database for:", norm);
-        return res.json({ success: true, profile: saved });
+        const token = generateAuthToken({ userId: `usr_${norm}`, phone: norm });
+        return res.json({ success: true, profile: saved, token });
       }
 
       saveDb();
@@ -2778,26 +2914,77 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   // Midtrans Notification Webhook
   app.post("/api/midtrans/notification", async (req, res) => {
     try {
-      const statusResponse = await snap.transaction.notification(req.body);
-      const orderId = statusResponse.order_id;
-      const transactionStatus = statusResponse.transaction_status;
-      const fraudStatus = statusResponse.fraud_status;
+      const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
+      const body = req.body;
+      const orderId = body.order_id;
+      const statusCode = body.status_code;
+      const grossAmount = body.gross_amount;
+      const signatureKey = body.signature_key;
 
-      console.log(`Transaction notification received. Order ID: ${orderId}. Transaction status: ${transactionStatus}. Fraud status: ${fraudStatus}`);
-
-      if (transactionStatus == 'capture') {
-        if (fraudStatus == 'accept') {
-          console.log(`Payment success for order ${orderId}`);
+      // Verify SHA-512 Signature if server key is configured
+      if (serverKey && signatureKey) {
+        const isValidSignature = verifyMidtransSignature(orderId, statusCode, grossAmount, signatureKey, serverKey);
+        if (!isValidSignature) {
+          console.error(`[Midtrans Webhook] Invalid signature rejected for order ${orderId}`);
+          return res.status(403).json({ error: "Invalid signature" });
         }
-      } else if (transactionStatus == 'settlement') {
-        console.log(`Payment settled for order ${orderId}`);
-      } else if (transactionStatus == 'cancel' || transactionStatus == 'deny' || transactionStatus == 'expire') {
-        console.log(`Payment failed/cancelled for order ${orderId}`);
-      } else if (transactionStatus == 'pending') {
-        console.log(`Payment pending for order ${orderId}`);
       }
 
-      res.status(200).send('OK');
+      const statusResponse = await snap.transaction.notification(body);
+      const transactionStatus = statusResponse.transaction_status;
+      const fraudStatus = statusResponse.fraud_status;
+      const paymentType = statusResponse.payment_type;
+
+      console.log(`[Midtrans] Order ${orderId} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
+
+      const isSuccess = transactionStatus === "settlement" || (transactionStatus === "capture" && fraudStatus === "accept");
+      const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
+
+      // Extract phone from custom fields or order metadata
+      const phone = body.custom_field1 || body.phone || (orderId.includes("_") ? orderId.split("_")[1] : "");
+      const plan = body.custom_field2 || "premium";
+      const activeService = body.custom_field3 || "both";
+
+      if (isSuccess && phone) {
+        const normPhone = normalizePhone(phone);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000); // 30 days default monthly
+
+        await saveUserSubscription({
+          userId: `usr_${normPhone}`,
+          phone: normPhone,
+          plan: plan === "advanced" ? "advanced" : "premium",
+          activeService: activeService === "nutrition" || activeService === "coach" ? activeService : "both",
+          status: "active",
+          billingDuration: "1m",
+          startedAt: new Date(),
+          expiresAt,
+          midtransOrderId: orderId,
+          grossAmount: Number(grossAmount),
+          paymentType,
+          updatedAt: new Date()
+        });
+
+        // Update in-memory user profile
+        if (dbData.users[normPhone]) {
+          dbData.users[normPhone].subscription = {
+            plan,
+            activeService,
+            status: "active",
+            expiresAt: expiresAt.toISOString()
+          };
+          saveDb();
+        }
+        console.log(`[Midtrans] Activated premium subscription in MongoDB for ${normPhone} ✅`);
+      } else if (isFailed && phone) {
+        const normPhone = normalizePhone(phone);
+        const sub = await getUserSubscription(normPhone);
+        if (sub) {
+          sub.status = "expired";
+          await saveUserSubscription(sub);
+        }
+      }
+
+      res.status(200).send("OK");
     } catch (error: any) {
       console.error("Midtrans Webhook Error:", error);
       res.status(500).json({ error: error.message });

@@ -27,7 +27,7 @@ var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_config = require("dotenv/config");
-var import_mongodb = require("mongodb");
+var import_mongodb2 = require("mongodb");
 var import_vite = require("vite");
 var import_genai = require("@google/genai");
 var import_axios = __toESM(require("axios"), 1);
@@ -43918,14 +43918,329 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 }`;
 }
 
+// services/db.ts
+var import_mongodb = require("mongodb");
+var client = null;
+var database = null;
+async function getDatabase() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+  if (!client) {
+    client = new import_mongodb.MongoClient(uri, {
+      serverSelectionTimeoutMS: 5e3,
+      connectTimeoutMS: 1e4
+    });
+  }
+  try {
+    if (!database) {
+      await client.connect();
+      database = client.db("gymbuddy");
+      console.log("[MongoDB] Production Atlas connection established \u2705");
+      await initIndexes(database);
+      await migrateLegacyAppData(database);
+    }
+    return database;
+  } catch (err) {
+    console.error("[MongoDB] Connection failure:", err?.message || err);
+    client = null;
+    database = null;
+    return null;
+  }
+}
+async function initIndexes(db) {
+  try {
+    const usersCol = db.collection("users");
+    await usersCol.createIndex({ userId: 1 }, { unique: true, sparse: true });
+    await usersCol.createIndex({ phone: 1 });
+    await usersCol.createIndex({ email: 1 }, { sparse: true });
+    const subsCol = db.collection("subscriptions");
+    await subsCol.createIndex({ userId: 1 });
+    await subsCol.createIndex({ phone: 1 });
+    await subsCol.createIndex({ status: 1 });
+    await subsCol.createIndex({ expiresAt: 1 });
+    const foodCol = db.collection("foodLogs");
+    await foodCol.createIndex({ userId: 1, date: 1 });
+    await foodCol.createIndex({ phone: 1, date: 1 });
+    await foodCol.createIndex({ id: 1 });
+    const waterCol = db.collection("waterLogs");
+    await waterCol.createIndex({ userId: 1, date: 1 });
+    await waterCol.createIndex({ phone: 1, date: 1 });
+    const workoutCol = db.collection("workoutLogs");
+    await workoutCol.createIndex({ userId: 1, date: 1 });
+    await workoutCol.createIndex({ phone: 1, date: 1 });
+    const aiCol = db.collection("aiUsage");
+    await aiCol.createIndex({ userId: 1, timestamp: -1 });
+    await aiCol.createIndex({ feature: 1, timestamp: -1 });
+    console.log("[MongoDB] Production collection indexes verified \u2705");
+  } catch (e) {
+    console.warn("[MongoDB] Index setup note:", e?.message || e);
+  }
+}
+async function migrateLegacyAppData(db) {
+  try {
+    const legacyDoc = await db.collection("appdata").findOne({ _id: "main" });
+    if (!legacyDoc) return;
+    console.log("[MongoDB] Checking legacy appdata document for migration...");
+    if (legacyDoc.users && typeof legacyDoc.users === "object") {
+      const userEntries = Object.entries(legacyDoc.users);
+      for (const [phoneKey, u] of userEntries) {
+        const userObj = u;
+        if (!userObj || typeof userObj !== "object") continue;
+        const normalizedPhone = userObj.phone || phoneKey;
+        const userId = userObj.id || `usr_${normalizedPhone}`;
+        await db.collection("users").updateOne(
+          { phone: normalizedPhone },
+          {
+            $set: {
+              userId,
+              phone: normalizedPhone,
+              name: userObj.name || "User",
+              gender: userObj.gender,
+              age: userObj.age,
+              weight: userObj.weight,
+              height: userObj.height,
+              targetWeight: userObj.targetWeight,
+              startWeight: userObj.startWeight,
+              goal: userObj.goal,
+              activityLevel: userObj.activityLevel,
+              dietPreference: userObj.dietPreference,
+              experienceLevel: userObj.experienceLevel,
+              persona: userObj.persona || "mia",
+              selectedFeature: userObj.selectedFeature || userObj.activeService || "both",
+              activeService: userObj.activeService || userObj.selectedFeature || "both",
+              dailyTargetCalories: userObj.dailyTargetCalories || 2e3,
+              dailyTargetProtein: userObj.dailyTargetProtein || 120,
+              dailyTargetCarbs: userObj.dailyTargetCarbs || 220,
+              dailyTargetFat: userObj.dailyTargetFat || 50,
+              customSchedule: userObj.customSchedule,
+              customGoals: userObj.customGoals,
+              reminderTime: userObj.reminderTime,
+              updatedAt: /* @__PURE__ */ new Date()
+            },
+            $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
+          },
+          { upsert: true }
+        );
+        if (userObj.subscription) {
+          const sub = userObj.subscription;
+          await db.collection("subscriptions").updateOne(
+            { phone: normalizedPhone },
+            {
+              $set: {
+                userId,
+                phone: normalizedPhone,
+                plan: sub.plan || "advanced",
+                activeService: sub.activeService || userObj.activeService || "both",
+                status: sub.status || "trial",
+                billingDuration: sub.billingDuration || "1m",
+                startedAt: sub.startedAt ? new Date(sub.startedAt) : /* @__PURE__ */ new Date(),
+                expiresAt: sub.expiresAt ? new Date(sub.expiresAt) : new Date(Date.now() + 48 * 3600 * 1e3),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            },
+            { upsert: true }
+          );
+        }
+      }
+      console.log(`[MongoDB] Migrated ${userEntries.length} users into relational collections.`);
+    }
+    if (legacyDoc.dailyLogs && typeof legacyDoc.dailyLogs === "object") {
+      let migratedMealCount = 0;
+      for (const [key, meals] of Object.entries(legacyDoc.dailyLogs)) {
+        if (!Array.isArray(meals)) continue;
+        const [phone, date] = key.includes("_") ? key.split("_") : [key, (/* @__PURE__ */ new Date()).toISOString().split("T")[0]];
+        for (const meal of meals) {
+          if (!meal || typeof meal !== "object") continue;
+          const mealId = meal.id || `m_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          await db.collection("foodLogs").updateOne(
+            { id: mealId },
+            {
+              $set: {
+                id: mealId,
+                userId: `usr_${phone}`,
+                phone,
+                date: date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+                foodName: meal.foodName || "Food Log",
+                calories: Number(meal.calories) || 0,
+                protein: Number(meal.protein) || 0,
+                carbs: Number(meal.carbs) || 0,
+                fat: Number(meal.fat) || 0,
+                fiber: Number(meal.fiber) || 0,
+                sugar: Number(meal.sugar) || 0,
+                time: meal.time || "12:00",
+                isHydration: Boolean(meal.isHydration),
+                volumeMl: Number(meal.volumeMl) || void 0,
+                displayUnit: meal.displayUnit || void 0,
+                portionType: meal.portionType || "estimated",
+                itemType: meal.itemType || (meal.isHydration ? "water" : "food"),
+                source: meal.source || "USDA",
+                items: meal.items || [],
+                imageUrl: meal.imageUrl || void 0,
+                createdAt: meal.createdAt ? new Date(meal.createdAt) : /* @__PURE__ */ new Date()
+              }
+            },
+            { upsert: true }
+          );
+          migratedMealCount++;
+        }
+      }
+      console.log(`[MongoDB] Migrated ${migratedMealCount} food log items.`);
+    }
+  } catch (e) {
+    console.warn("[MongoDB] Migration warning:", e?.message || e);
+  }
+}
+async function findUserByPhoneOrId(identifier) {
+  const db = await getDatabase();
+  if (!db) return null;
+  const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
+  return await db.collection("users").findOne({
+    $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
+  }) || null;
+}
+async function saveUserDocument(doc) {
+  const db = await getDatabase();
+  if (!db) return;
+  const userId = doc.userId || `usr_${doc.phone}`;
+  await db.collection("users").updateOne(
+    { phone: doc.phone },
+    {
+      $set: {
+        ...doc,
+        userId,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      $setOnInsert: { createdAt: /* @__PURE__ */ new Date() }
+    },
+    { upsert: true }
+  );
+}
+async function getUserSubscription(userIdOrPhone) {
+  const db = await getDatabase();
+  if (!db) return null;
+  return await db.collection("subscriptions").findOne({
+    $or: [{ userId: userIdOrPhone }, { phone: userIdOrPhone }]
+  }) || null;
+}
+async function saveUserSubscription(doc) {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.collection("subscriptions").updateOne(
+    { phone: doc.phone },
+    {
+      $set: {
+        ...doc,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    },
+    { upsert: true }
+  );
+}
+
+// services/auth.ts
+var import_bcryptjs = __toESM(require("bcryptjs"), 1);
+var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_crypto = __toESM(require("crypto"), 1);
+var JWT_SECRET = process.env.JWT_SECRET || "gymbuddy_production_jwt_secret_key_2026_fitness";
+var JWT_EXPIRES_IN = "30d";
+async function hashPassword(password) {
+  const salt = await import_bcryptjs.default.genSalt(10);
+  return await import_bcryptjs.default.hash(password, salt);
+}
+async function comparePassword(password, hash) {
+  if (!password || !hash) return false;
+  return await import_bcryptjs.default.compare(password, hash);
+}
+function generateAuthToken(payload) {
+  return import_jsonwebtoken.default.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+function verifyAuthToken(token) {
+  try {
+    return import_jsonwebtoken.default.verify(token, JWT_SECRET);
+  } catch (e) {
+    return null;
+  }
+}
+async function requireAuthMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const legacyPhone = req.params.phone || req.headers["x-user-phone"];
+    if (legacyPhone) {
+      const user = await findUserByPhoneOrId(legacyPhone);
+      if (user) {
+        req.user = { userId: user.userId, phone: user.phone };
+        return next();
+      }
+    }
+    return res.status(401).json({ success: false, error: "Authentication required. Please log in." });
+  }
+  const token = authHeader.split(" ")[1];
+  const payload = verifyAuthToken(token);
+  if (!payload) {
+    return res.status(401).json({ success: false, error: "Invalid or expired token. Please log in again." });
+  }
+  req.user = payload;
+  next();
+}
+function verifyMidtransSignature(orderId, statusCode, grossAmount, incomingSignature, serverKey) {
+  if (!orderId || !statusCode || !grossAmount || !incomingSignature || !serverKey) {
+    return false;
+  }
+  const cleanAmount = Number(grossAmount).toFixed(2);
+  const candidatePayloads = [
+    `${orderId}${statusCode}${grossAmount}${serverKey}`,
+    `${orderId}${statusCode}${cleanAmount}${serverKey}`,
+    `${orderId}${statusCode}${Math.round(Number(grossAmount))}${serverKey}`
+  ];
+  for (const payload of candidatePayloads) {
+    const hash = import_crypto.default.createHash("sha512").update(payload).digest("hex");
+    if (hash === incomingSignature) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// services/rateLimiter.ts
+var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
+var generalRateLimiter = (0, import_express_rate_limit.default)({
+  windowMs: 1 * 60 * 1e3,
+  // 1 minute
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Too many requests. Please slow down and try again in a minute."
+  }
+});
+var aiRateLimiter = (0, import_express_rate_limit.default)({
+  windowMs: 1 * 60 * 1e3,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "AI analysis is processing quickly! Please wait a few seconds before submitting another request."
+  }
+});
+var authRateLimiter = (0, import_express_rate_limit.default)({
+  windowMs: 1 * 60 * 1e3,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Too many login attempts. Please wait a minute before trying again."
+  }
+});
+
 // server.ts
-var TW_SID = ["AC", "c48cc57b2ebef30c63d4e8dc1ffd2fc1"].join("");
-var TW_TOKEN = ["db733da9b83409669", "ddcc0f0a55b9dcb"].join("");
-var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || TW_SID;
-var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || TW_TOKEN;
+var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
+var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 var twilioClient = null;
 function getTwilio() {
-  if (!twilioClient) {
+  if (!twilioClient && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
     const twFactory = typeof import_twilio.default === "function" ? import_twilio.default : import_twilio.default.default || import_twilio.default;
     twilioClient = twFactory(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
   }
@@ -44208,7 +44523,7 @@ async function getMongoDb() {
   if (!MONGODB_URI) return null;
   try {
     if (!mongoClient) {
-      mongoClient = new import_mongodb.MongoClient(MONGODB_URI, {
+      mongoClient = new import_mongodb2.MongoClient(MONGODB_URI, {
         serverSelectionTimeoutMS: 5e3,
         connectTimeoutMS: 1e4
       });
@@ -45263,12 +45578,12 @@ async function sendMetaWhatsappMessage(to, bodyText) {
   }
 }
 async function sendTwilioWhatsappMessage(to, bodyText) {
-  const client = getTwilio();
-  if (!client) return;
+  const client2 = getTwilio();
+  if (!client2) return;
   try {
     const toNum = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
     const fromNum = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
-    await client.messages.create({
+    await client2.messages.create({
       from: fromNum,
       to: toNum,
       body: bodyText
@@ -45740,9 +46055,90 @@ async function startServer() {
   const app = (0, import_express.default)();
   const PORT = Number(process.env.PORT) || 3e3;
   app.use((0, import_cors.default)());
-  app.use(import_express.default.json());
-  app.use(import_express.default.urlencoded({ extended: true }));
-  app.post("/api/onboarding", (req, res) => {
+  app.use(import_express.default.json({ limit: "25mb" }));
+  app.use(import_express.default.urlencoded({ extended: true, limit: "25mb" }));
+  app.use("/api/", generalRateLimiter);
+  app.use("/api/ai/", aiRateLimiter);
+  app.use("/api/auth/", authRateLimiter);
+  getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { phone, password, name, profile = {} } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
+      }
+      const normalized = normalizePhone(phone);
+      const existingUser = await findUserByPhoneOrId(normalized);
+      if (existingUser && existingUser.passwordHash) {
+        return res.status(400).json({ success: false, error: "Nomor ini sudah terdaftar. Silakan login." });
+      }
+      const passwordHash = password ? await hashPassword(password) : void 0;
+      const userId = `usr_${normalized}`;
+      const userDoc = {
+        userId,
+        phone: normalized,
+        name: name || profile.name || "Member GymBuddy",
+        passwordHash,
+        ...profile,
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      await saveUserDocument(userDoc);
+      saveUserProfile(normalized, userDoc);
+      saveDb();
+      const token = generateAuthToken({ userId, phone: normalized });
+      res.json({
+        success: true,
+        token,
+        user: { userId, phone: normalized, name: userDoc.name, profile: userDoc }
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || "Registration failed" });
+    }
+  });
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { phone, password } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
+      }
+      const normalized = normalizePhone(phone);
+      const user = await findUserByPhoneOrId(normalized) || getUserProfile(normalized);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "Akun belum terdaftar. Silakan daftar terlebih dahulu." });
+      }
+      if (user.passwordHash && password) {
+        const isValid = await comparePassword(password, user.passwordHash);
+        if (!isValid) {
+          return res.status(401).json({ success: false, error: "Password salah. Silakan coba lagi." });
+        }
+      }
+      const userId = user.userId || `usr_${normalized}`;
+      const token = generateAuthToken({ userId, phone: normalized });
+      const calculated = calculateUserData(user);
+      res.json({
+        success: true,
+        token,
+        user: { ...user, userId, phone: normalized, calculated }
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || "Login failed" });
+    }
+  });
+  app.get("/api/auth/me", requireAuthMiddleware, async (req, res) => {
+    try {
+      const phone = req.user?.phone;
+      const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      const sub = await getUserSubscription(phone);
+      const calculated = calculateUserData(user);
+      res.json({ success: true, user: { ...user, subscription: sub, calculated } });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+  app.post("/api/onboarding", async (req, res) => {
     const { phone, profile } = req.body;
     if (profile) {
       const norm = normalizePhone(phone || profile.phone || "");
@@ -45762,8 +46158,15 @@ async function startServer() {
         delete dbData.weeklyProgress[altNorm];
         const saved = saveUserProfile(norm, profile);
         saveDb();
+        saveUserDocument({
+          userId: `usr_${norm}`,
+          phone: norm,
+          ...profile,
+          updatedAt: /* @__PURE__ */ new Date()
+        }).catch((err) => console.warn("[MongoDB] User doc save warning:", err?.message || err));
         console.log("Saved clean user profile in database for:", norm);
-        return res.json({ success: true, profile: saved });
+        const token = generateAuthToken({ userId: `usr_${norm}`, phone: norm });
+        return res.json({ success: true, profile: saved, token });
       }
       saveDb();
       return res.json({ success: true, profile });
@@ -46380,21 +46783,63 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
   app.post("/api/midtrans/notification", async (req, res) => {
     try {
-      const statusResponse = await snap.transaction.notification(req.body);
-      const orderId = statusResponse.order_id;
+      const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
+      const body = req.body;
+      const orderId = body.order_id;
+      const statusCode = body.status_code;
+      const grossAmount = body.gross_amount;
+      const signatureKey = body.signature_key;
+      if (serverKey && signatureKey) {
+        const isValidSignature = verifyMidtransSignature(orderId, statusCode, grossAmount, signatureKey, serverKey);
+        if (!isValidSignature) {
+          console.error(`[Midtrans Webhook] Invalid signature rejected for order ${orderId}`);
+          return res.status(403).json({ error: "Invalid signature" });
+        }
+      }
+      const statusResponse = await snap.transaction.notification(body);
       const transactionStatus = statusResponse.transaction_status;
       const fraudStatus = statusResponse.fraud_status;
-      console.log(`Transaction notification received. Order ID: ${orderId}. Transaction status: ${transactionStatus}. Fraud status: ${fraudStatus}`);
-      if (transactionStatus == "capture") {
-        if (fraudStatus == "accept") {
-          console.log(`Payment success for order ${orderId}`);
+      const paymentType = statusResponse.payment_type;
+      console.log(`[Midtrans] Order ${orderId} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
+      const isSuccess = transactionStatus === "settlement" || transactionStatus === "capture" && fraudStatus === "accept";
+      const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
+      const phone = body.custom_field1 || body.phone || (orderId.includes("_") ? orderId.split("_")[1] : "");
+      const plan = body.custom_field2 || "premium";
+      const activeService = body.custom_field3 || "both";
+      if (isSuccess && phone) {
+        const normPhone = normalizePhone(phone);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1e3);
+        await saveUserSubscription({
+          userId: `usr_${normPhone}`,
+          phone: normPhone,
+          plan: plan === "advanced" ? "advanced" : "premium",
+          activeService: activeService === "nutrition" || activeService === "coach" ? activeService : "both",
+          status: "active",
+          billingDuration: "1m",
+          startedAt: /* @__PURE__ */ new Date(),
+          expiresAt,
+          midtransOrderId: orderId,
+          grossAmount: Number(grossAmount),
+          paymentType,
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+        if (dbData.users[normPhone]) {
+          dbData.users[normPhone].subscription = {
+            plan,
+            activeService,
+            status: "active",
+            expiresAt: expiresAt.toISOString()
+          };
+          saveDb();
         }
-      } else if (transactionStatus == "settlement") {
-        console.log(`Payment settled for order ${orderId}`);
-      } else if (transactionStatus == "cancel" || transactionStatus == "deny" || transactionStatus == "expire") {
-        console.log(`Payment failed/cancelled for order ${orderId}`);
-      } else if (transactionStatus == "pending") {
-        console.log(`Payment pending for order ${orderId}`);
+        console.log(`[Midtrans] Activated premium subscription in MongoDB for ${normPhone} \u2705`);
+      } else if (isFailed && phone) {
+        const normPhone = normalizePhone(phone);
+        const sub = await getUserSubscription(normPhone);
+        if (sub) {
+          sub.status = "expired";
+          await saveUserSubscription(sub);
+        }
       }
       res.status(200).send("OK");
     } catch (error) {

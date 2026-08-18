@@ -1817,7 +1817,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                             Advanced Plan
                           </h3>
                           <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
-                            {isEN ? "$5 / mo" : "Rp 79rb / bln"}
+                            {isEN ? "$6 / mo" : "Rp 89rb / bln"}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-neutral-400 mt-1">
@@ -1888,7 +1888,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     )}
                   </div>
 
-                  {/* Option 3: Premium Plan ($8 / Rp 139.000) */}
+                  {/* Option 3: Premium Plan ($10 / Rp 149.000) */}
                   <button
                     onClick={() => {
                       setSelectedPlan("premium");
@@ -1909,7 +1909,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                             {isEN ? "Premium Plan (All-Access)" : "Paket Premium (All-Access)"}
                           </h3>
                           <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
-                            {isEN ? "$8 / mo" : "Rp 139rb / bln"}
+                            {isEN ? "$10 / mo" : "Rp 149rb / bln"}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-neutral-400 mt-1">

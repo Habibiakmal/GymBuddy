@@ -39,42 +39,42 @@ export default function PricingPage({
   const durationConfig = {
     "1m": {
       label: isEN ? "1 Month" : "1 Bulan",
-      singleIDR: "Rp 79rb", singleUSD: "$5",
-      premiumIDR: "Rp 139rb", premiumUSD: "$9",
+      singleIDR: "Rp 89rb", singleUSD: "$6",
+      premiumIDR: "Rp 149rb", premiumUSD: "$10",
       periodText: isEN ? "/month" : "/bulan",
-      subNote: isEN ? "Standard monthly plan" : "Paket bulanan fleksibel",
+      subNote: isEN ? "Flexible monthly plan" : "Paket bulanan fleksibel",
       badge: null
     },
     "3m": {
       label: isEN ? "3 Months" : "3 Bulan",
-      singleIDR: "Rp 219rb", singleUSD: "$14",
-      premiumIDR: "Rp 369rb", premiumUSD: "$24",
+      singleIDR: "Rp 249rb", singleUSD: "$16",
+      premiumIDR: "Rp 399rb", premiumUSD: "$26",
       periodText: isEN ? "/3 months" : "/3 bulan",
-      subNote: isEN ? "Save ~12% monthly" : "Hemat 12% dibanding bulanan",
-      badge: isEN ? "Save 12%" : "Hemat 12%"
+      subNote: isEN ? "Save ~7% to 11% vs monthly" : "Hemat 7% - 11% dibanding bulanan",
+      badge: isEN ? "Save ~11%" : "Hemat ~11%"
     },
     "6m": {
       label: isEN ? "6 Months" : "6 Bulan",
-      singleIDR: "Rp 399rb", singleUSD: "$25",
-      premiumIDR: "Rp 649rb", premiumUSD: "$42",
+      singleIDR: "Rp 449rb", singleUSD: "$29",
+      premiumIDR: "Rp 699rb", premiumUSD: "$45",
       periodText: isEN ? "/6 months" : "/6 bulan",
-      subNote: isEN ? "Save ~22% monthly" : "Hemat 22% dibanding bulanan",
+      subNote: isEN ? "Save ~16% to 22% vs monthly" : "Hemat 16% - 22% dibanding bulanan",
       badge: isEN ? "Save 22%" : "Hemat 22%"
     },
     "1y": {
       label: isEN ? "1 Year" : "1 Tahun",
-      singleIDR: "Rp 699rb", singleUSD: "$45",
-      premiumIDR: "Rp 999rb", premiumUSD: "$65",
+      singleIDR: "Rp 749rb", singleUSD: "$49",
+      premiumIDR: "Rp 1.199rb", premiumUSD: "$79",
       periodText: isEN ? "/year" : "/tahun",
-      subNote: isEN ? "Save 40% (Most Popular)" : "Hemat 40% (Paling Laris)",
-      badge: isEN ? "Best Value (Save 40%)" : "Paling Hemat 40%"
+      subNote: isEN ? "Save ~30% to 33% (Best Value)" : "Hemat 30% - 33% (Paling Laris)",
+      badge: isEN ? "Best Value (Save ~33%)" : "Paling Hemat ~33%"
     },
     "lifetime": {
       label: isEN ? "Lifetime" : "Lifetime",
       singleIDR: "Rp 1.499rb", singleUSD: "$99",
-      premiumIDR: "Rp 1.999rb", premiumUSD: "$129",
+      premiumIDR: "Rp 2.499rb", premiumUSD: "$160",
       periodText: isEN ? "one-time" : "1x bayar",
-      subNote: isEN ? "Pay once, access forever" : "Akses selamanya tanpa biaya bulanan",
+      subNote: isEN ? "Pay once, access forever (Fair Use)" : "Akses selamanya (Fair Use Policy)",
       badge: isEN ? "All-Time Access" : "Akses Selamanya"
     }
   };
