@@ -984,74 +984,7 @@ function saveUserProfile(rawPhone: string, profile: any) {
   return updated;
 }
 
-function formatNutritionCard(parsed: any, source: string, userData: any, updatedTotals: any): string {
-  const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
-  const coachName = isMia ? "Coach Mia" : "Coach Max";
-  const cal = Number(parsed.calories) || 0;
-  const prot = Number(parsed.protein) || 0;
-  const carb = Number(parsed.carbs) || 0;
-  const fat = Number(parsed.fat) || 0;
-  const fib = Number(parsed.fiber) || 0;
 
-  const targetCal = Number(userData.targetCalories) || 2000;
-  const currentCal = Number(updatedTotals?.calories) || cal;
-  const remCal = Math.max(0, targetCal - currentCal);
-
-  let portionText = "";
-  if (Array.isArray(parsed.portionEstimates) && parsed.portionEstimates.length > 0) {
-    portionText = `\n📦 *Porsi*: ${parsed.portionEstimates.join(", ")}`;
-  }
-
-  let insightsText = "";
-  if (Array.isArray(parsed.keyInsights) && parsed.keyInsights.length > 0) {
-    insightsText = `\n\n💡 *Analisis Nutrisi*:\n` + parsed.keyInsights.map((i: string) => `• ${i}`).join("\n");
-  }
-
-  const commentText = parsed.coachComment
-    ? `\n\n💬 *${coachName}*:\n"${parsed.coachComment}"`
-    : "";
-
-  return `🍽️ *CATATAN MAKANAN DISIMPAN (${source})*\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🥘 *Menu*: ${parsed.foodName || "Makanan"}${portionText}\n\n` +
-    `🔥 *Kalori*: ${cal} kcal\n` +
-    `🥩 *Protein*: ${prot}g\n` +
-    `🍚 *Karbohidrat*: ${carb}g\n` +
-    `🥑 *Lemak*: ${fat}g` +
-    (fib > 0 ? `\n🌾 *Serat*: ${fib}g` : "") +
-    `\n\n📊 *Total Asupan Hari Ini*:\n` +
-    `• Terpakai: ${currentCal} / ${targetCal} kcal\n` +
-    `• Sisa Kalori: ${remCal} kcal` +
-    insightsText +
-    commentText;
-}
-
-function generateDailySummaryCard(userData: any, totals: any, dayLabel: string): string {
-  const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
-  const coachName = isMia ? "Coach Mia" : "Coach Max";
-  const targetCal = Number(userData.targetCalories) || 2000;
-  const currentCal = Number(totals?.calories) || 0;
-  const remCal = Math.max(0, targetCal - currentCal);
-  const mealsCount = totals?.logs?.length || 0;
-
-  let mealsList = "Belum ada makanan tercatat.";
-  if (Array.isArray(totals?.logs) && totals.logs.length > 0) {
-    mealsList = totals.logs.map((m: any, idx: number) => `${idx + 1}. ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n");
-  }
-
-  return `📋 *REKAP NUTRISI HARIAN (${dayLabel})*\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `👤 *Nama*: ${userData.name} (${userData.weight} kg)\n` +
-    `🎯 *Target*: ${targetCal} kcal (${userData.goalTitle})\n\n` +
-    `📊 *Total Hari Ini (${mealsCount} Catatan)*:\n` +
-    `🔥 Kalori: *${currentCal}* / ${targetCal} kcal\n` +
-    `🥩 Protein: *${totals.protein || 0}* / ${userData.proteinGrams || 140}g\n` +
-    `🍚 Karbo: *${totals.carbs || 0}* / ${userData.carbGrams || 250}g\n` +
-    `🥑 Lemak: *${totals.fat || 0}* / ${userData.fatGrams || 60}g\n` +
-    `🎯 *Sisa Kalori*: ${remCal} kcal\n\n` +
-    `📝 *Daftar Menu Hari Ini*:\n${mealsList}\n\n` +
-    `💬 *${coachName}*:\n"Tetap semangat dan jaga konsistensi target nutrisimu ya! 💪✨"`;
-}
 
 function formatEquipmentTutorialCard(parsed: any, userData: any): string {
   const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
