@@ -44844,7 +44844,7 @@ function getMealTypeByHour() {
     return "dinner";
   }
 }
-var MONGODB_URI = process.env.MONGODB_URI || "";
+var MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://bibi:bibi123@gymbuddy.wb3i2.mongodb.net/gymbuddy?retryWrites=true&w=majority";
 var mongoClient = null;
 var mongoConnected = false;
 async function getMongoDb() {
@@ -48298,7 +48298,7 @@ Halo! Nomor WhatsApp kamu belum terdaftar.
 
 Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
 https://gymbuddygroup.com`;
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(reply)}</Body></Message></Response>`;
         res.type("text/xml").send(twiml);
         if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
           try {

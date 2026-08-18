@@ -495,7 +495,7 @@ function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
 }
 
 // ─── MongoDB Persistent Storage ──────────────────────────────────────────────
-const MONGODB_URI = process.env.MONGODB_URI || "";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://bibi:bibi123@gymbuddy.wb3i2.mongodb.net/gymbuddy?retryWrites=true&w=majority";
 let mongoClient: MongoClient | null = null;
 let mongoConnected = false;
 
@@ -4412,7 +4412,7 @@ Keluarkan output JSON valid:
           `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
           `https://gymbuddygroup.com`;
         
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(reply)}</Message></Response>`;
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(reply)}</Body></Message></Response>`;
         res.type("text/xml").send(twiml);
 
         // Also send direct via Twilio API if configured
