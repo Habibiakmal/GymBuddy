@@ -476,6 +476,42 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
   return newCups;
 }
 
+function getDailyTotals(rawPhone: string, dateStr?: string) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = dateStr || getLocalDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  const altKey = `${altPhone}_${targetDate}`;
+
+  const logs: MealLog[] = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || []).filter((m: any) => !m.isHydration);
+  
+  let calories = 0;
+  let protein = 0;
+  let carbs = 0;
+  let fat = 0;
+  let fiber = 0;
+  let sugar = 0;
+
+  for (const m of logs) {
+    calories += Number(m.calories) || 0;
+    protein += Number(m.protein) || 0;
+    carbs += Number(m.carbs) || 0;
+    fat += Number(m.fat) || 0;
+    fiber += Number(m.fiber) || 0;
+    sugar += Number(m.sugar) || 0;
+  }
+
+  return {
+    calories,
+    protein,
+    carbs,
+    fat,
+    fiber,
+    sugar,
+    logs
+  };
+}
+
 // Helper to determine meal type by hour — always computed in WIB (UTC+7)
 function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
   // Use Intl.DateTimeFormat to get the current hour in WIB timezone reliably
