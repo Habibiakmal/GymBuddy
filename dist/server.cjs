@@ -46501,9 +46501,9 @@ async function startServer() {
     }
     return res.status(400).json({ error: "Profile object is required" });
   });
-  app.get("/api/user/:phone", (req, res) => {
+  app.get("/api/user/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
-    const user = getUserProfile(phone);
+    const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
     if (!user) {
       return res.status(404).json({ error: "User profile not found in database" });
     }
@@ -46513,17 +46513,17 @@ async function startServer() {
     res.json({
       ...user,
       ...calculated,
-      user,
-      profile: user,
+      user: { ...user, ...calculated },
+      profile: { ...user, ...calculated },
       userData: calculated,
       calculated,
       streak,
       waterCups
     });
   });
-  app.get("/api/user-profile/:phone", (req, res) => {
+  app.get("/api/user-profile/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
-    const profile = getUserProfile(phone);
+    const profile = await findUserByPhoneOrId(phone) || getUserProfile(phone);
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });
     }
@@ -46532,8 +46532,8 @@ async function startServer() {
     const waterCups = getWaterCups(phone);
     res.json({
       success: true,
-      profile,
-      user: profile,
+      profile: { ...profile, ...calculated },
+      user: { ...profile, ...calculated },
       calculated,
       userData: calculated,
       streak,
@@ -48264,7 +48264,7 @@ ${mistakes}
       }
       console.log(`[Twilio WA] Message from ${rawFrom}: "${userText}" media: ${mediaUrl}`);
       const from = normalizePhone(rawFrom.replace("whatsapp:", ""));
-      let userProfile = getUserProfile(from);
+      let userProfile = await findUserByPhoneOrId(from) || getUserProfile(from);
       const lowerText = userText.toLowerCase();
       const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
       if (!userProfile) {
