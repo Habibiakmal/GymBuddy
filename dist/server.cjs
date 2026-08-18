@@ -44620,17 +44620,21 @@ async function generateGeminiContent(prompt, imagePart) {
       if (imagePart && imagePart.inlineData) {
         requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
       }
-      const res = await import_axios.default.post(
-        restUrl,
-        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
-        { headers: { "Content-Type": "application/json", "x-goog-api-key": cleanKey }, timeout: 2e4 }
-      );
-      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const res = await fetch(restUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: requestParts }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+        })
+      });
+      const data = await res.json();
+      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
         console.log(`[Gemini REST] Success with model: ${mName}`);
-        return res.data.candidates[0].content.parts[0].text;
+        return data.candidates[0].content.parts[0].text;
       }
     } catch (restErr) {
-      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message || restErr);
     }
   }
   throw new Error("All Gemini models failed");

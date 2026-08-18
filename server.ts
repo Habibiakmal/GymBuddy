@@ -143,7 +143,7 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
     }
   }
 
-  // 2. Try REST API with x-goog-api-key and ?key=
+  // 2. Try REST API with key in URL and native fetch
   for (const mName of modelsToTry) {
     try {
       const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
@@ -152,18 +152,22 @@ async function generateGeminiContent(prompt: string, imagePart?: any): Promise<s
         requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
       }
 
-      const res = await axios.post(
-        restUrl,
-        { contents: [{ parts: requestParts }], generationConfig: { temperature: 0.7, maxOutputTokens: 1024 } },
-        { headers: { "Content-Type": "application/json", "x-goog-api-key": cleanKey }, timeout: 20000 }
-      );
+      const res = await fetch(restUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: requestParts }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+        })
+      });
 
-      if (res.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const data: any = await res.json();
+      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
         console.log(`[Gemini REST] Success with model: ${mName}`);
-        return res.data.candidates[0].content.parts[0].text;
+        return data.candidates[0].content.parts[0].text;
       }
     } catch (restErr: any) {
-      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.response?.data?.error?.message || restErr?.message);
+      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message || restErr);
     }
   }
 
