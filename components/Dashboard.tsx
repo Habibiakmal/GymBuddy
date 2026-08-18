@@ -704,6 +704,32 @@ export default function Dashboard({
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
   const [liveUser, setLiveUser] = useState<UserProfileData>(safeUser);
 
+  useEffect(() => {
+    if (initialUser && initialUser.phone) {
+      setLiveUser(initialUser);
+    }
+  }, [initialUser]);
+
+  useEffect(() => {
+    const fetchLiveUser = async () => {
+      const phoneToUse = initialUser?.phone || safeUser?.phone || "085156919826";
+      const norm = normalizePhone(phoneToUse);
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/${norm}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.user || data.profile || data.name)) {
+            const profile = data.user || data.profile || data;
+            setLiveUser(profile);
+            localStorage.setItem("gymbuddy_active_session", JSON.stringify(profile));
+          }
+        }
+      } catch (e) {}
+    };
+    fetchLiveUser();
+  }, [initialUser?.phone]);
+
   // Robust Local Storage Meal Retrieval with Multiple Phone Format Fallbacks
   const getLocalMeals = (phone: string, dateStr: string): MealItem[] => {
     const norm = normalizePhone(phone || "085156919826");
