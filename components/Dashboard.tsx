@@ -386,9 +386,9 @@ const translations = {
     statusCompleted: "Selesai",
     clickForDetails: "Klik untuk detail & checklist set",
     exerciseCount: "Gerakan",
-    foodMeals: "Makanan (Food Meals)",
+    foodMeals: "Makanan & Minuman (Food & Drinks)",
     addFoodBtn: "Tambah Makanan",
-    noMealsLogged: "Belum ada makanan padat tercatat hari ini.",
+    noMealsLogged: "Belum ada makanan atau minuman tercatat hari ini.",
     waterHydration: "Air & Hidrasi (Water / Hydration)",
     addDrinkBtn: "Tambah Minuman",
     hydrationTarget: "Target Hidrasi Harian",
@@ -398,9 +398,9 @@ const translations = {
     coachRecommendation: "Rekomendasi Coach",
     coachAdviceTitle: "Saran Coach",
     autoReminderTitle: "Pengingat Latihan Harian",
-    autoReminderPrompt: "Ayo latihan hari ini! 💪 Mau diingetin jam berapa buat gym atau makan?",
-    selectReminderTime: "Pilih Jam Pengingat:",
-    setReminderBtn: "Atur Pengingat",
+    autoReminderPrompt: "Yuk latihan hari ini! 💪 Mau diingatkan jam berapa untuk nge-gym atau waktu makan?",
+    selectReminderTime: "Pilih Waktu Pengingat:",
+    setReminderBtn: "Pasang Pengingat",
     remindLater: "Nanti Saja",
     reminderSetMsg: "Pengingat telah diatur untuk pukul",
     workoutDetailTitle: "Detail Workout & Completion Set",
@@ -1598,11 +1598,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const ribbonDates = getStaticRibbonDates();
   const isSelectedDateInRibbon = ribbonDates.some((d) => d.dateStr === selectedDate);
 
-  // Categorization: Plain Water vs Food & Beverages (Coffee/Beverages are logged as meals, only plain water increments hydration tracker)
-  const plainWaterLogs = allLogs.filter((item) => isPlainWaterName(item.foodName));
+  // Categorization: Food & Beverages (All calorie meals) + Hydration Tracker (Water & Fluid Intake)
+  const plainWaterLogs = allLogs.filter((item) => isPlainWaterName(item.foodName) || item.isHydration);
+  const liquidBeverageLogs = allLogs.filter((item) => isLiquidName(item.foodName) && !isPlainWaterName(item.foodName));
   const foodAndBeverageMeals = allLogs.filter((item) => !isPlainWaterName(item.foodName));
   const foodMeals = foodAndBeverageMeals;
-  const hydrationLogs = plainWaterLogs;
+  // Hydration includes plain water plus all liquid beverages (tea, coffee, juice, etc.)
+  const hydrationLogs = allLogs.filter((item) => isPlainWaterName(item.foodName) || isLiquidName(item.foodName) || item.isHydration);
 
   // Totals
   const totalCaloriesConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
@@ -1610,7 +1612,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const totalCarbsConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
   const totalFatConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
 
-  const totalHydrationMl = plainWaterLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
+  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
 
   // Sets Calculations
@@ -3096,6 +3098,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-base leading-none">
+                                  {isLiquidName(item.foodName) ? "🥤" : "🍽️"}
+                                </span>
                                 <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors truncate">
                                   {item.foodName}
                                 </h4>
