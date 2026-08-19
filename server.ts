@@ -4128,7 +4128,7 @@ Keluarkan output JSON valid:
           responseMessages = ["Maaf, aku sedang tidak bisa memproses inputmu saat ini."];
         }
       } else {
-        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar."];
+        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
 
       function escapeXml(unsafe: string): string {
@@ -4140,21 +4140,24 @@ Keluarkan output JSON valid:
           .replace(/'/g, "&apos;");
       }
 
-      if (responseMessages.length > 0) {
-        const combinedMessage = responseMessages.join("\n\n---\n\n");
-        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
-        if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
-        }
-        twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
-        console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) ✅`);
-        return res.type("text/xml").send(twiml);
-      } else {
-        return res.type("text/xml").send("<Response></Response>");
+      // Last-resort fallback: jika responseMessages masih kosong setelah semua branch
+      if (responseMessages.length === 0) {
+        const coachN = (userData?.persona || "max") === "max" ? "Coach Max" : "Coach Mia";
+        responseMessages = [`Hei ${userData?.name || ""}! 💪 ${coachN} siap bantu kamu catat makanan, cek kalori, atau tanya workout. Kirim pesan apa saja!`];
+        console.warn("[Twilio WA] All branches produced empty responseMessages. Sending fallback.");
       }
-    } catch (error) {
-      console.error("Error processing Twilio webhook:", error);
-      return res.type("text/xml").send("<Response></Response>");
+
+      const combinedMessage = responseMessages.join("\n\n---\n\n");
+      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
+      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+        twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+      }
+      twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
+      console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) ✅`);
+      return res.type("text/xml").send(twiml);
+    } catch (error: any) {
+      console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis. Coba lagi sebentar ya! 🙏</Body></Message></Response>`);
     }
   });
 
