@@ -311,31 +311,26 @@ const isLegacyMockMeal = (item: MealItem): boolean => {
 const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   if (!Array.isArray(rawLogs)) return [];
   const result: MealItem[] = [];
+  const seenSignatures = new Set<string>();
 
   for (const item of rawLogs) {
     if (!item.foodName || isLegacyMockMeal(item)) continue;
-    const { foods, drinks } = splitAndCategorizeComboText(
-      item.foodName,
-      item.calories,
-      item.protein,
-      item.carbs,
-      item.fat,
-      Boolean(item.isHydration)
-    );
 
-    if (foods.length > 0 || drinks.length > 0) {
-      if (foods.length > 0) result.push(...foods);
-      if (drinks.length > 0) result.push(...drinks);
+    // Deduplication signature: combine foodName, calories, protein, and timestamp minute if available
+    const timeSig = item.timestamp ? item.timestamp.substring(0, 16) : "";
+    const signature = `${(item.foodName || "").toLowerCase().trim()}_${item.calories || 0}_${item.protein || 0}_${timeSig}`;
+    
+    if (seenSignatures.has(signature)) continue;
+    seenSignatures.add(signature);
+
+    if (isLiquidName(item.foodName) || item.isHydration) {
+      result.push({
+        ...item,
+        isHydration: true,
+        volumeMl: Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)
+      });
     } else {
-      if (isLiquidName(item.foodName) || item.isHydration) {
-        result.push({
-          ...item,
-          isHydration: true,
-          volumeMl: Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)
-        });
-      } else {
-        result.push(item);
-      }
+      result.push(item);
     }
   }
 
