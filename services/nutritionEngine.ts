@@ -993,7 +993,35 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
     };
   }
 
-  // Fallback heuristic for unrecognized item
+  // Check for non-food objects (electronics, furniture, vehicles, animals, clothes, etc.)
+  const nonFoodPattern = /\b(?:laptop|notebook|macbook|komputer|computer|pc|mouse|keyboard|monitor|cpu|printer|gadget|hp|handphone|smartphone|iphone|android|samsung|xiaomi|oppo|vivo|ipad|tablet|charger|kabel|headphone|earphone|headset|powerbank|baterai|batre|tws|airpods|speaker|tv|televisi|kamera|camera|tripod|flashdisk|harddisk|ssd|ram|flashdrive|modem|router|meja|kursi|lemari|pintu|jendela|kasur|bantal|guling|selimut|karpet|lantai|tembok|dinding|atap|genteng|lampu|kipas|ac|kulkas|mesin\s*cuci|setrika|sapu|pel|ember|gayung|sikat|odol|pasta\s*gigi|sabun|shampoo|sampo|parfum|handuk|sisir|cermin|kaca|baju|kaos|kemeja|celana|rok|jaket|hoodie|sweater|jas|gamis|jilbab|hijab|topi|helm|sepatu|sandal|kaos\s*kaki|tas|ransel|dompet|koper|ikat\s*pinggang|sabuk|jam\s*tangan|gelang|kalung|cincin|anting|kacamata|mobil|motor|sepeda|skuter|truk|bus|angkot|becak|helm|kunci|gembok|buku|novel|komik|majalah|koran|pulpen|bolpoin|pensil|penghapus|penggaris|gunting|cutter|kertas|karton|kardus|plastik|besi|baja|kayu|batu|pasir|semen|tanah|kucing|anjing|kelinci|hamster|burung|ikan\s*cupang|hewan|binatang|manusia|orang|teman|pacar|anak|gedung|rumah|kantor|toko|jalan|jembatan|uang|duit|koin|kartu|atm|ktp|sim|paspor|rokok|vape|pod|liquid|korek)\b/i;
+
+  if (nonFoodPattern.test(cleanedText)) {
+    return {
+      food_name: rawItemText.trim(),
+      normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      cooking_method: undefined,
+      estimated_quantity: quantity,
+      estimated_weight_grams: 0,
+      serving_unit: "-",
+      display_unit: "-",
+      item_type: "food",
+      portion_type: "estimated",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+      sugar: 0,
+      is_hydration: false,
+      volume_ml: 0,
+      data_source: "verified_nutrition_database",
+      confidence: "high",
+      notes: "Objek ini bukan makanan atau minuman"
+    };
+  }
+
+  // Fallback heuristic for unrecognized item (only if not a non-food item)
   const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
   const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
   const itemType: "water" | "beverage" | "food" = isWaterGuess ? "water" : (isBeverageGuess ? "beverage" : "food");
@@ -1003,9 +1031,9 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
   let portionType: "estimated" | "user_provided" = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
   let displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
 
-  const prot = Math.round((isBeverageGuess ? 1 : 5) * (targetGrams / 100) * 10) / 10;
-  const carb = Math.round((isBeverageGuess ? 5 : 18) * (targetGrams / 100) * 10) / 10;
-  const fat = Math.round((isBeverageGuess ? 0.5 : 4) * (targetGrams / 100) * 10) / 10;
+  const prot = Math.round((isBeverageGuess ? 0 : 4) * (targetGrams / 100) * 10) / 10;
+  const carb = Math.round((isBeverageGuess ? 5 : 15) * (targetGrams / 100) * 10) / 10;
+  const fat = Math.round((isBeverageGuess ? 0 : 3) * (targetGrams / 100) * 10) / 10;
   const cal = Math.round((prot * 4) + (carb * 4) + (fat * 9));
 
   return {
@@ -1129,7 +1157,25 @@ export function buildGeminiNutritionPrompt(cleanText: string): string {
 TUGAS WAJIB: Lakukan analisis Bottom-Up Nutrition Estimation untuk input makanan/minuman berikut:
 "${cleanText}"
 
-IKUTI 6 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+0. PERIKSA APAKAH INI MAKANAN/MINUMAN:
+   - Jika input adalah barang elektronik (laptop, komputer, hp, mouse), perabotan (meja, kursi), kendaraan, pakaian, atau hal lain yang BUKAN MAKANAN/MINUMAN:
+     Keluarkan JSON:
+     {
+       "isFood": false,
+       "foodName": "${cleanText}",
+       "calories": 0,
+       "protein": 0,
+       "carbs": 0,
+       "fat": 0,
+       "fiber": 0,
+       "sugar": 0,
+       "isHydration": false,
+       "volumeMl": 0,
+       "mealType": "snack",
+       "portionNote": "Bukan makanan atau minuman",
+       "items": []
+     }
 1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
    Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).

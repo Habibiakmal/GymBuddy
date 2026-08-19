@@ -43726,6 +43726,31 @@ function calculateSingleItemNutrition(rawItemText) {
       notes: `${displayUnit2} (${matchedRef.source})`
     };
   }
+  const nonFoodPattern = /\b(?:laptop|notebook|macbook|komputer|computer|pc|mouse|keyboard|monitor|cpu|printer|gadget|hp|handphone|smartphone|iphone|android|samsung|xiaomi|oppo|vivo|ipad|tablet|charger|kabel|headphone|earphone|headset|powerbank|baterai|batre|tws|airpods|speaker|tv|televisi|kamera|camera|tripod|flashdisk|harddisk|ssd|ram|flashdrive|modem|router|meja|kursi|lemari|pintu|jendela|kasur|bantal|guling|selimut|karpet|lantai|tembok|dinding|atap|genteng|lampu|kipas|ac|kulkas|mesin\s*cuci|setrika|sapu|pel|ember|gayung|sikat|odol|pasta\s*gigi|sabun|shampoo|sampo|parfum|handuk|sisir|cermin|kaca|baju|kaos|kemeja|celana|rok|jaket|hoodie|sweater|jas|gamis|jilbab|hijab|topi|helm|sepatu|sandal|kaos\s*kaki|tas|ransel|dompet|koper|ikat\s*pinggang|sabuk|jam\s*tangan|gelang|kalung|cincin|anting|kacamata|mobil|motor|sepeda|skuter|truk|bus|angkot|becak|helm|kunci|gembok|buku|novel|komik|majalah|koran|pulpen|bolpoin|pensil|penghapus|penggaris|gunting|cutter|kertas|karton|kardus|plastik|besi|baja|kayu|batu|pasir|semen|tanah|kucing|anjing|kelinci|hamster|burung|ikan\s*cupang|hewan|binatang|manusia|orang|teman|pacar|anak|gedung|rumah|kantor|toko|jalan|jembatan|uang|duit|koin|kartu|atm|ktp|sim|paspor|rokok|vape|pod|liquid|korek)\b/i;
+  if (nonFoodPattern.test(cleanedText)) {
+    return {
+      food_name: rawItemText.trim(),
+      normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      cooking_method: void 0,
+      estimated_quantity: quantity,
+      estimated_weight_grams: 0,
+      serving_unit: "-",
+      display_unit: "-",
+      item_type: "food",
+      portion_type: "estimated",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+      sugar: 0,
+      is_hydration: false,
+      volume_ml: 0,
+      data_source: "verified_nutrition_database",
+      confidence: "high",
+      notes: "Objek ini bukan makanan atau minuman"
+    };
+  }
   const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
   const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
   const itemType = isWaterGuess ? "water" : isBeverageGuess ? "beverage" : "food";
@@ -43733,9 +43758,9 @@ function calculateSingleItemNutrition(rawItemText) {
   let targetVolumeMl = isBeverageGuess ? targetGrams : void 0;
   let portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
   let displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
-  const prot = Math.round((isBeverageGuess ? 1 : 5) * (targetGrams / 100) * 10) / 10;
-  const carb = Math.round((isBeverageGuess ? 5 : 18) * (targetGrams / 100) * 10) / 10;
-  const fat = Math.round((isBeverageGuess ? 0.5 : 4) * (targetGrams / 100) * 10) / 10;
+  const prot = Math.round((isBeverageGuess ? 0 : 4) * (targetGrams / 100) * 10) / 10;
+  const carb = Math.round((isBeverageGuess ? 5 : 15) * (targetGrams / 100) * 10) / 10;
+  const fat = Math.round((isBeverageGuess ? 0 : 3) * (targetGrams / 100) * 10) / 10;
   const cal = Math.round(prot * 4 + carb * 4 + fat * 9);
   return {
     food_name: rawItemText.trim(),
@@ -43832,7 +43857,25 @@ function buildGeminiNutritionPrompt(cleanText) {
 TUGAS WAJIB: Lakukan analisis Bottom-Up Nutrition Estimation untuk input makanan/minuman berikut:
 "${cleanText}"
 
-IKUTI 6 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+0. PERIKSA APAKAH INI MAKANAN/MINUMAN:
+   - Jika input adalah barang elektronik (laptop, komputer, hp, mouse), perabotan (meja, kursi), kendaraan, pakaian, atau hal lain yang BUKAN MAKANAN/MINUMAN:
+     Keluarkan JSON:
+     {
+       "isFood": false,
+       "foodName": "${cleanText}",
+       "calories": 0,
+       "protein": 0,
+       "carbs": 0,
+       "fat": 0,
+       "fiber": 0,
+       "sugar": 0,
+       "isHydration": false,
+       "volumeMl": 0,
+       "mealType": "snack",
+       "portionNote": "Bukan makanan atau minuman",
+       "items": []
+     }
 1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
    Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
@@ -46954,8 +46997,25 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed = extractAndParseJson(textOutput) || {};
         const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+        if (parsed.isFood === false || String(parsed.isFood).toLowerCase() === "false" || items.length > 0 && items.every((i) => i.notes?.includes("bukan makanan"))) {
+          return res.json({
+            success: true,
+            isFood: false,
+            foodName: userInputFoodName,
+            message: "Objek ini bukan makanan atau minuman. Silakan masukkan nama makanan yang ingin dicatat.",
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+            sugar: 0,
+            items: [],
+            portionNote: "Bukan makanan"
+          });
+        }
+        const itemsToUse = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
         let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
-        for (const it of items) {
+        for (const it of itemsToUse) {
           sumCal += Number(it.calories) || 0;
           sumProt += Number(it.protein) || 0;
           sumCarb += Number(it.carbs) || 0;
@@ -46972,6 +47032,7 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         parsed.mealType = parsed.mealType || getMealTypeByHour();
         res.json({
           success: true,
+          isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
           calories,
@@ -46983,8 +47044,8 @@ ${cleanedAdvice}` : buildFallbackAdvice();
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: items.length === 1 ? "1 detected food item" : `${items.length} detected food items`,
-          items,
+          portionNote: itemsToUse.length === 1 ? "1 detected food item" : `${itemsToUse.length} detected food items`,
+          items: itemsToUse,
           debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {

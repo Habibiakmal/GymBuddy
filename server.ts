@@ -2591,12 +2591,30 @@ PENTING:
         const rawText = await generateGeminiContent(prompt);
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed: any = extractAndParseJson(textOutput) || {};
-        
         const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+
+        if (parsed.isFood === false || String(parsed.isFood).toLowerCase() === "false" || (items.length > 0 && items.every((i: any) => i.notes?.includes("bukan makanan")))) {
+          return res.json({
+            success: true,
+            isFood: false,
+            foodName: userInputFoodName,
+            message: "Objek ini bukan makanan atau minuman. Silakan masukkan nama makanan yang ingin dicatat.",
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+            sugar: 0,
+            items: [],
+            portionNote: "Bukan makanan"
+          });
+        }
+
+        const itemsToUse = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
 
         // Strict Requirement: Total Calories & Macros MUST ALWAYS BE SUM(items)
         let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
-        for (const it of items) {
+        for (const it of itemsToUse) {
           sumCal += Number(it.calories) || 0;
           sumProt += Number(it.protein) || 0;
           sumCarb += Number(it.carbs) || 0;
@@ -2616,6 +2634,7 @@ PENTING:
 
         res.json({
           success: true,
+          isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
           calories,
@@ -2627,8 +2646,8 @@ PENTING:
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: items.length === 1 ? "1 detected food item" : `${items.length} detected food items`,
-          items,
+          portionNote: itemsToUse.length === 1 ? "1 detected food item" : `${itemsToUse.length} detected food items`,
+          items: itemsToUse,
           debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {

@@ -2080,15 +2080,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       if (bRes && bRes.ok) {
         const bData = await bRes.json();
         if (bData.success) {
-          if (Array.isArray(bData.items) && bData.items.length > 0) {
+          if (bData.isFood === false) {
+            resultItems = [];
+            portionNote = "Bukan Makanan / Minuman (0 kcal)";
+          } else if (Array.isArray(bData.items) && bData.items.length > 0) {
             resultItems = bData.items;
+            portionNote = bData.portionNote || `${resultItems.length} detected food items`;
           }
-          // Bug #8: DO NOT use bData.foodName as display — keep original user input
-          // resultFoodName is only shown as AI preview label
           resultFoodName = bData.foodName || baseEstimation.foodName;
           isHydration = Boolean(bData.isHydration || baseEstimation.isHydration);
           volumeMl = Number(bData.volumeMl) || baseEstimation.volumeMl || 0;
-          portionNote = bData.portionNote || `${resultItems.length} detected food items`;
         }
       }
     } catch (bErr) {
