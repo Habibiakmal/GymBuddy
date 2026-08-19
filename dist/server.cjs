@@ -46305,8 +46305,7 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const calPercent = Math.min(100, Math.round(totalTodayCal / targetCal * 100));
   return `\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
-\u{1F552} ${dateStr}, ${timeStr} WIB
-\u{1F916} GymBuddy AI Analysis : ${confidenceScore}%
+\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} AI: ${confidenceScore}%
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F4CA} *REKAP NUTRISI*
@@ -46317,26 +46316,13 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
 \u{1F35A} *Karbo*: ${carbs}g (${carbPercent}%)
 \u{1F953} *Lemak*: ${fat}g (${fatPercent}%)
 \u{1F96C} *Serat*: ${fiber}g
-\u{1F9C2} *Natrium*: ${sodium} mg
-${sugar > 0 ? `\u{1F36F} *Gula*: ${sugar}g
-` : ""}
+\u{1F9C2} *Natrium*: ${sodium} mg${sugar > 0 ? `
+\u{1F36F} *Gula*: ${sugar}g` : ""}
+
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F37D}\uFE0F *ESTIMASI PORSI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 ${portionDetailText}
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2B50 *SCORE & KENYANG*
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F963} *Satiety (Kenyang)*: ${satietyScore}/10
-${satietyExplanation}
-
-\u{1F4AF} *Health Score*: ${healthScore}/10
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4A1} *KEY INSIGHTS*
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-${insightsFormatted}
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F916} *${coachHeader}*
@@ -46351,12 +46337,7 @@ ${insightsFormatted}
 \u{1F9C2} Natrium: ${dailyTotals.sodium || 0}/2000 mg
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2699\uFE0F *AKSI CEPAT*
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u270F\uFE0F Koreksi porsi? Balas:
-   _koreksi: [detail baru]_ (contoh: "koreksi: 1 porsi sedang")
-\u274C Hapus log ini? Balas:
-   _hapus log terakhir_`;
+\u2699\uFE0F _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
 }
 function generateWelcomeMessages(userData) {
   const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, activeService, equipment, injuries, customInjury } = userData;
@@ -48403,18 +48384,26 @@ Keluarkan output JSON valid:
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
+      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>`;
       if (responseMessages.length === 0) {
-        const coachN = (userData?.persona || "max") === "max" ? "Coach Max" : "Coach Mia";
-        responseMessages = [`Hei ${userData?.name || ""}! \u{1F4AA} ${coachN} siap bantu kamu catat makanan, cek kalori, atau tanya workout. Kirim pesan apa saja!`];
-        console.warn("[Twilio WA] All branches produced empty responseMessages. Sending fallback.");
+        responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
       }
-      const combinedMessage = responseMessages.join("\n\n---\n\n");
-      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
-      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-        twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+      for (let i = 0; i < responseMessages.length; i++) {
+        const msgText = responseMessages[i];
+        if (msgText && msgText.trim()) {
+          const maxChunk = 1400;
+          for (let j = 0; j < msgText.length; j += maxChunk) {
+            const chunk = msgText.substring(j, j + maxChunk);
+            twiml += `<Message>`;
+            if (i === 0 && j === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+              twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+            }
+            twiml += `<Body>${escapeXml(chunk)}</Body></Message>`;
+          }
+        }
       }
-      twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
-      console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) \u2705`);
+      twiml += `</Response>`;
+      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);
       return res.type("text/xml").send(twiml);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));

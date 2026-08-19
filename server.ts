@@ -1866,8 +1866,7 @@ function formatNutritionCard(
 
   return `🍽️ *${cleanFoodName.toUpperCase()}*
 
-🕒 ${dateStr}, ${timeStr} WIB
-🤖 GymBuddy AI Analysis : ${confidenceScore}%
+🕒 ${dateStr}, ${timeStr} WIB · 🤖 AI: ${confidenceScore}%
 
 ━━━━━━━━━━━━━━
 📊 *REKAP NUTRISI*
@@ -1878,25 +1877,12 @@ function formatNutritionCard(
 🍚 *Karbo*: ${carbs}g (${carbPercent}%)
 🥓 *Lemak*: ${fat}g (${fatPercent}%)
 🥬 *Serat*: ${fiber}g
-🧂 *Natrium*: ${sodium} mg
-${sugar > 0 ? `🍯 *Gula*: ${sugar}g\n` : ""}
+🧂 *Natrium*: ${sodium} mg${sugar > 0 ? `\n🍯 *Gula*: ${sugar}g` : ""}
+
 ━━━━━━━━━━━━━━
 🍽️ *ESTIMASI PORSI*
 ━━━━━━━━━━━━━━
 ${portionDetailText}
-
-━━━━━━━━━━━━━━
-⭐ *SCORE & KENYANG*
-━━━━━━━━━━━━━━
-🥣 *Satiety (Kenyang)*: ${satietyScore}/10
-${satietyExplanation}
-
-💯 *Health Score*: ${healthScore}/10
-
-━━━━━━━━━━━━━━
-💡 *KEY INSIGHTS*
-━━━━━━━━━━━━━━
-${insightsFormatted}
 
 ━━━━━━━━━━━━━━
 🤖 *${coachHeader}*
@@ -1911,12 +1897,7 @@ ${insightsFormatted}
 🧂 Natrium: ${dailyTotals.sodium || 0}/2000 mg
 
 ━━━━━━━━━━━━━━
-⚙️ *AKSI CEPAT*
-━━━━━━━━━━━━━━
-✏️ Koreksi porsi? Balas:
-   _koreksi: [detail baru]_ (contoh: "koreksi: 1 porsi sedang")
-❌ Hapus log ini? Balas:
-   _hapus log terakhir_`;
+⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
@@ -4365,20 +4346,27 @@ Keluarkan output JSON valid:
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
 
-      // Last-resort fallback: jika responseMessages masih kosong setelah semua branch
+      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>`;
       if (responseMessages.length === 0) {
-        const coachN = (userData?.persona || "max") === "max" ? "Coach Max" : "Coach Mia";
-        responseMessages = [`Hei ${userData?.name || ""}! 💪 ${coachN} siap bantu kamu catat makanan, cek kalori, atau tanya workout. Kirim pesan apa saja!`];
-        console.warn("[Twilio WA] All branches produced empty responseMessages. Sending fallback.");
+        responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
       }
 
-      const combinedMessage = responseMessages.join("\n\n---\n\n");
-      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
-      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-        twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+      for (let i = 0; i < responseMessages.length; i++) {
+        const msgText = responseMessages[i];
+        if (msgText && msgText.trim()) {
+          const maxChunk = 1400;
+          for (let j = 0; j < msgText.length; j += maxChunk) {
+            const chunk = msgText.substring(j, j + maxChunk);
+            twiml += `<Message>`;
+            if (i === 0 && j === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+              twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+            }
+            twiml += `<Body>${escapeXml(chunk)}</Body></Message>`;
+          }
+        }
       }
-      twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
-      console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) ✅`);
+      twiml += `</Response>`;
+      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) ✅`);
       return res.type("text/xml").send(twiml);
     } catch (error: any) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
