@@ -3718,11 +3718,13 @@ Keluarkan output JSON valid:
 });
 
   // Twilio WhatsApp Webhook
-  app.post("/api/webhook/twilio-whatsapp", express.urlencoded({ extended: true }), async (req, res) => {
+  app.post(["/api/webhook/twilio-whatsapp", "/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], express.urlencoded({ extended: true }), express.json(), async (req, res) => {
     console.log(`[${new Date().toISOString()}] Received Twilio WhatsApp Webhook. From: ${req.body?.From}, Body: ${req.body?.Body}`);
     try {
       const { Body, From, NumMedia } = req.body;
-      let userProfile = getUserProfile(From);
+      const rawFrom = From || "";
+      const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
+      let userProfile = (await findUserByPhoneOrId(normFrom)) || getUserProfile(normFrom) || (await getUserProfileFromFirestore(normFrom));
 
       let userText = Body || "";
       let imagePart: any = null;
@@ -3733,10 +3735,15 @@ Keluarkan output JSON valid:
 
         if (mediaUrl) {
           try {
-            const imageRes = await axios.get(mediaUrl, { responseType: "arraybuffer" });
-            const imageBuffer = Buffer.from(imageRes.data, "binary");
-            const base64Image = imageBuffer.toString("base64");
-            imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            const downloaded = await downloadTwilioMedia(mediaUrl);
+            if (downloaded) {
+              imagePart = { inlineData: { data: downloaded.data, mimeType: downloaded.mimeType } };
+            } else {
+              const imageRes = await axios.get(mediaUrl, { responseType: "arraybuffer" });
+              const imageBuffer = Buffer.from(imageRes.data, "binary");
+              const base64Image = imageBuffer.toString("base64");
+              imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            }
           } catch (mediaErr) {
             console.error("Error fetching Twilio media:", mediaErr);
           }
@@ -3748,24 +3755,24 @@ Keluarkan output JSON valid:
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
-      // If not in memory, check Firestore directly
+      // 1. Check if user has onboarding data in latest_onboarding
       if (!userProfile) {
-        userProfile = await getUserProfileFromFirestore(From);
+        const latestOB = dbData.users["latest_onboarding"] as any;
+        if (latestOB && latestOB.weight) {
+          userProfile = saveUserProfile(normFrom, { ...latestOB, phone: normFrom, normalizedPhone: normFrom });
+        }
       }
 
-      // Still null = truly unregistered
-      if (!userProfile && !isWelcomeMessage) {
-        const twiml = new TwilioPackage.twiml.MessagingResponse();
-        twiml.message(
-          `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
-          `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
-          `https://gymbuddygroup.com`
-        );
-        return res.type('text/xml').send(twiml.toString());
+      // 2. Auto-create user if not found so no user is EVER rejected
+      if (!userProfile) {
+        userProfile = getOrCreateUserProfile(normFrom, userText);
+        userProfile.phone = normFrom;
+        userProfile.normalizedPhone = normFrom;
+        if (!userProfile.name || userProfile.name === "Member") {
+          userProfile.name = "Bibi";
+        }
+        saveUserProfile(normFrom, userProfile);
       }
-
-      if (!userProfile) userProfile = getOrCreateUserProfile(From, userText);
       const userData = calculateUserData(userProfile);
 
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") ||
@@ -3989,9 +3996,6 @@ Keluarkan output JSON valid:
           `💬 *${coachName}*:\n"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! 💪🔥"`
         ];
       } else if (getAi()) {
-        // Send immediate progress notification via Twilio REST API if available
-        await sendTwilioWhatsappMessage(From, "sedang berpikir... 💭\n\nHampir selesai mengecek inputmu... 📊");
-
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia
           ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
@@ -4094,7 +4098,7 @@ Keluarkan output JSON valid:
             lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
 
           if (parsed.isFood) {
-            addMealLog(From, {
+            addMealLog(normFrom, {
               id: `m-${Date.now()}`,
               foodName: parsed.foodName || "Makanan",
               calories: Number(parsed.calories) || 0,
@@ -4105,7 +4109,7 @@ Keluarkan output JSON valid:
               mealType: parsed.mealType || getMealTypeByHour(),
               timestamp: new Date().toISOString()
             });
-            const dailyTotals = getDailyTotals(From);
+            const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
           } else if (isEquipmentMatch) {

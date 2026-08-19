@@ -46228,21 +46228,6 @@ async function sendMetaWhatsappMessage(to, bodyText) {
     console.error("Error sending Meta WhatsApp message:", err);
   }
 }
-async function sendTwilioWhatsappMessage(to, bodyText) {
-  const client2 = getTwilio();
-  if (!client2) return;
-  try {
-    const toNum = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
-    const fromNum = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
-    await client2.messages.create({
-      from: fromNum,
-      to: toNum,
-      body: bodyText
-    });
-  } catch (err) {
-    console.error("Error sending Twilio WhatsApp message:", err);
-  }
-}
 function makeProgressBar(current, target, length = 10) {
   if (!target || target <= 0) return "\u2591".repeat(length);
   const percent = Math.min(100, Math.max(0, Math.round(current / target * 100)));
@@ -47972,11 +47957,13 @@ Keluarkan output JSON valid:
       res.sendStatus(500);
     }
   });
-  app.post("/api/webhook/twilio-whatsapp", import_express.default.urlencoded({ extended: true }), async (req, res) => {
+  app.post(["/api/webhook/twilio-whatsapp", "/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
     console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] Received Twilio WhatsApp Webhook. From: ${req.body?.From}, Body: ${req.body?.Body}`);
     try {
       const { Body, From, NumMedia } = req.body;
-      let userProfile = getUserProfile(From);
+      const rawFrom = From || "";
+      const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
+      let userProfile = await findUserByPhoneOrId(normFrom) || getUserProfile(normFrom) || await getUserProfileFromFirestore(normFrom);
       let userText = Body || "";
       let imagePart = null;
       if (NumMedia && parseInt(NumMedia) > 0) {
@@ -47984,10 +47971,15 @@ Keluarkan output JSON valid:
         const mediaContentType = req.body.MediaContentType0;
         if (mediaUrl) {
           try {
-            const imageRes = await import_axios.default.get(mediaUrl, { responseType: "arraybuffer" });
-            const imageBuffer = Buffer.from(imageRes.data, "binary");
-            const base64Image = imageBuffer.toString("base64");
-            imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            const downloaded = await downloadTwilioMedia(mediaUrl);
+            if (downloaded) {
+              imagePart = { inlineData: { data: downloaded.data, mimeType: downloaded.mimeType } };
+            } else {
+              const imageRes = await import_axios.default.get(mediaUrl, { responseType: "arraybuffer" });
+              const imageBuffer = Buffer.from(imageRes.data, "binary");
+              const base64Image = imageBuffer.toString("base64");
+              imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            }
           } catch (mediaErr) {
             console.error("Error fetching Twilio media:", mediaErr);
           }
@@ -47996,21 +47988,20 @@ Keluarkan output JSON valid:
       const lowerText = userText.toLowerCase();
       const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
       if (!userProfile) {
-        userProfile = await getUserProfileFromFirestore(From);
+        const latestOB = dbData.users["latest_onboarding"];
+        if (latestOB && latestOB.weight) {
+          userProfile = saveUserProfile(normFrom, { ...latestOB, phone: normFrom, normalizedPhone: normFrom });
+        }
       }
-      if (!userProfile && !isWelcomeMessage) {
-        const twiml2 = new import_twilio.default.twiml.MessagingResponse();
-        twiml2.message(
-          `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar.
-
-Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
-https://gymbuddygroup.com`
-        );
-        return res.type("text/xml").send(twiml2.toString());
+      if (!userProfile) {
+        userProfile = getOrCreateUserProfile(normFrom, userText);
+        userProfile.phone = normFrom;
+        userProfile.normalizedPhone = normFrom;
+        if (!userProfile.name || userProfile.name === "Member") {
+          userProfile.name = "Bibi";
+        }
+        saveUserProfile(normFrom, userProfile);
       }
-      if (!userProfile) userProfile = getOrCreateUserProfile(From, userText);
       const userData = calculateUserData(userProfile);
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
@@ -48174,7 +48165,6 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
 "Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
         ];
       } else if (getAi()) {
-        await sendTwilioWhatsappMessage(From, "sedang berpikir... \u{1F4AD}\n\nHampir selesai mengecek inputmu... \u{1F4CA}");
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.` : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
         const activeService = userData.activeService || "both";
@@ -48265,7 +48255,7 @@ Keluarkan output JSON valid:
           }
           const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
           if (parsed.isFood) {
-            addMealLog(From, {
+            addMealLog(normFrom, {
               id: `m-${Date.now()}`,
               foodName: parsed.foodName || "Makanan",
               calories: Number(parsed.calories) || 0,
@@ -48276,7 +48266,7 @@ Keluarkan output JSON valid:
               mealType: parsed.mealType || getMealTypeByHour(),
               timestamp: (/* @__PURE__ */ new Date()).toISOString()
             });
-            const dailyTotals = getDailyTotals(From);
+            const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
           } else if (isEquipmentMatch) {
