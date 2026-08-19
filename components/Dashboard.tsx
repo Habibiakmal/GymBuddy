@@ -311,16 +311,16 @@ const isLegacyMockMeal = (item: MealItem): boolean => {
 const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   if (!Array.isArray(rawLogs)) return [];
   const result: MealItem[] = [];
-  const seenSignatures = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of rawLogs) {
-    if (!item.foodName || isLegacyMockMeal(item)) continue;
+    if (!item || !item.foodName || isLegacyMockMeal(item)) continue;
 
-    // Deduplication signature: combine foodName, calories, and protein (purges all identical duplicate logs)
-    const signature = `${(item.foodName || "").toLowerCase().trim()}_${item.calories || 0}_${item.protein || 0}`;
-    
-    if (seenSignatures.has(signature)) continue;
-    seenSignatures.add(signature);
+    // Deduplicate by unique item.id so identical auto-polling payloads are ignored,
+    // but ALL real distinct meal inputs are ALWAYS recorded & displayed!
+    const uniqueId = item.id || `${item.foodName}_${item.calories}_${item.timestamp || Date.now()}`;
+    if (seenIds.has(uniqueId)) continue;
+    seenIds.add(uniqueId);
 
     if (isLiquidName(item.foodName) || item.isHydration) {
       result.push({

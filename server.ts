@@ -1211,18 +1211,16 @@ function calculateUserData(profile: any) {
 
 function deduplicateMealLogs(logs: any[]): any[] {
   if (!Array.isArray(logs)) return [];
-  const seenSignatures = new Set<string>();
+  const seenIds = new Set<string>();
   const cleanLogs: any[] = [];
 
   for (const log of logs) {
     if (!log || !log.foodName) continue;
-    const normName = String(log.foodName).toLowerCase().trim();
-    const cal = Number(log.calories) || 0;
     
-    // Strict Signature = foodName + calories (purges all identical duplicate logs on same date)
-    const signature = `${normName}_${cal}`;
-    if (seenSignatures.has(signature)) continue;
-    seenSignatures.add(signature);
+    // Deduplicate by unique log.id so all distinct meal entries are ALWAYS recorded
+    const uniqueId = log.id || `${log.foodName}_${log.calories}_${log.timestamp || Date.now()}`;
+    if (seenIds.has(uniqueId)) continue;
+    seenIds.add(uniqueId);
     cleanLogs.push(log);
   }
 
