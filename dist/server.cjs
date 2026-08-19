@@ -44938,14 +44938,6 @@ function normalizePhone(phone) {
   }
   return cleaned;
 }
-function unescapeHtmlEntities(text) {
-  if (!text) return "";
-  return String(text).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-}
-function escapeXml(unsafe) {
-  const clean = unescapeHtmlEntities(unsafe);
-  return clean.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
 function extractAndParseJson(text) {
   if (!text) return null;
   let trimmed = String(text).trim();
@@ -47889,12 +47881,12 @@ Keluarkan output JSON valid:
       res.sendStatus(500);
     }
   });
+  function escapeXml(unsafe) {
+    return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  }
   app.post(["/api/webhook/twilio-whatsapp", "/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
     console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] Received Twilio WhatsApp Webhook. From: ${req.body?.From}, Body: ${req.body?.Body}`);
     try {
-      let escapeXml2 = function(unsafe) {
-        return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-      };
       const { Body, From, NumMedia } = req.body;
       const rawFrom = From || "";
       const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
@@ -47936,6 +47928,30 @@ Keluarkan output JSON valid:
       }
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(normFrom, userText);
+      }
+      if (!userProfile) {
+        userProfile = {
+          name: "Bibi",
+          phone: normFrom,
+          normalizedPhone: normFrom,
+          weight: 65,
+          startWeight: 65,
+          targetWeight: 60,
+          targetCalories: 2e3,
+          proteinGrams: 140,
+          carbGrams: 200,
+          fatGrams: 60,
+          fiberGrams: 30,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          persona: "max",
+          activeService: "both",
+          gender: "male",
+          height: 170,
+          activityLevel: "moderate"
+        };
+        saveUserProfile(normFrom, userProfile);
+      } else {
         userProfile.phone = normFrom;
         userProfile.normalizedPhone = normFrom;
         if (!userProfile.name || userProfile.name === "Member") {
@@ -48239,9 +48255,9 @@ Keluarkan output JSON valid:
       const combinedMessage = responseMessages.join("\n\n---\n\n");
       let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
       if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-        twiml += `<Media>${escapeXml2(mediaUrlToSend)}</Media>`;
+        twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
       }
-      twiml += `<Body>${escapeXml2(combinedMessage)}</Body></Message></Response>`;
+      twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
       console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) \u2705`);
       return res.type("text/xml").send(twiml);
     } catch (error) {

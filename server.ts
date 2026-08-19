@@ -3738,6 +3738,15 @@ Keluarkan output JSON valid:
   }
 });
 
+function escapeXml(unsafe: string): string {
+  return (unsafe || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
   // Twilio WhatsApp Webhook
   app.post(["/api/webhook/twilio-whatsapp", "/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], express.urlencoded({ extended: true }), express.json(), async (req, res) => {
     console.log(`[${new Date().toISOString()}] Received Twilio WhatsApp Webhook. From: ${req.body?.From}, Body: ${req.body?.Body}`);
@@ -3793,6 +3802,30 @@ Keluarkan output JSON valid:
       // 2. Auto-create user if not found so no user is EVER rejected
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(normFrom, userText);
+      }
+      if (!userProfile) {
+        userProfile = {
+          name: "Bibi",
+          phone: normFrom,
+          normalizedPhone: normFrom,
+          weight: 65,
+          startWeight: 65,
+          targetWeight: 60,
+          targetCalories: 2000,
+          proteinGrams: 140,
+          carbGrams: 200,
+          fatGrams: 60,
+          fiberGrams: 30,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          persona: "max",
+          activeService: "both",
+          gender: "male",
+          height: 170,
+          activityLevel: "moderate"
+        };
+        saveUserProfile(normFrom, userProfile);
+      } else {
         userProfile.phone = normFrom;
         userProfile.normalizedPhone = normFrom;
         if (!userProfile.name || userProfile.name === "Member") {
@@ -4158,15 +4191,6 @@ Keluarkan output JSON valid:
         }
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
-      }
-
-      function escapeXml(unsafe: string): string {
-        return (unsafe || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&apos;");
       }
 
       // Last-resort fallback: jika responseMessages masih kosong setelah semua branch
