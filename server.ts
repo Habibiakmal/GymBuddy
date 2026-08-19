@@ -3378,15 +3378,27 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             const totals = getDailyTotals(from, parsedDate.dateStr);
             responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
           } else if (getAi()) {
-            // Immediate Status notification: "sedang berpikir..."
-            await sendMetaWhatsappMessage(from, "sedang berpikir... 💭\n\nHampir selesai mengecek inputmu... 📊");
+            // Check if user sent a generic photo caption like "aku makan ini" without image binary
+            const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
+            
+            if (isGenericImageCaption && !imagePart) {
+              const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
+              responseMessages = [
+                `📸 *FOTO BELUM BERHASIL DIPROSES*\n-----------------------------\n` +
+                `Halo ${userData.name}! Fotonya belum berhasil terunduh oleh sistem WhatsApp Meta.\n\n` +
+                `💡 *Solusi Cepat*:\n` +
+                `Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! 🥗✨`
+              ];
+            } else {
+              // Immediate Status notification: "sedang berpikir..."
+              await sendMetaWhatsappMessage(from, "sedang berpikir... 💭\n\nHampir selesai mengecek inputmu... 📊");
 
-            const isMia = userData.persona === "mia" || userData.persona === "nikita";
-            const personaInstruction = isMia
-              ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
-              : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
+              const isMia = userData.persona === "mia" || userData.persona === "nikita";
+              const personaInstruction = isMia
+                ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
+                : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
 
-            const prompt = `INFORMASI PENGGUNA:
+              const prompt = `INFORMASI PENGGUNA:
 - Nama: ${userData.name}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
@@ -3397,9 +3409,11 @@ ${personaInstruction}
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
+${imagePart ? "CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto (nasi, lauk, sayur, buah, dll.) dan SELALU set \"isFood\": true." : ""}
 
-Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
+Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", "aku makan ini", dll)
 PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber).
+
 Keluarkan output JSON valid:
 {
   "isFood": true,
