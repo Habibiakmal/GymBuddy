@@ -112,6 +112,9 @@ async function runFullSuite() {
   const del = await req('DELETE', '/api/user/' + testPhone);
   console.log('Result:', del.status === 200 && del.body?.success ? 'PASS (Account wiped)' : 'FAIL');
 
+  // Small delay for async Firestore batch propagation
+  await new Promise(r => setTimeout(r, 1500));
+
   // 9. Post-Deletion Verification
   console.log('\n[TEST 9] Verifying 404 Not Found & Empty Database after deletion...');
   const v1 = await req('GET', '/api/user/' + testPhone);
