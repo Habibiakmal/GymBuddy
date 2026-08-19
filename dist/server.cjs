@@ -46775,6 +46775,61 @@ async function startServer() {
       waterCups
     });
   });
+  app.get("/api/admin/users-list", async (req, res) => {
+    try {
+      const usersList = [];
+      const seenPhones = /* @__PURE__ */ new Set();
+      if (dbData && dbData.users) {
+        for (const [phone, u] of Object.entries(dbData.users)) {
+          if (!seenPhones.has(phone)) {
+            seenPhones.add(phone);
+            usersList.push({
+              phone,
+              name: u?.name || "Member",
+              goal: u?.goalTitle || u?.goal || "Healthy & Fit",
+              weight: u?.weight || 0,
+              targetWeight: u?.targetWeight || 0,
+              targetCalories: u?.targetCalories || 2e3,
+              persona: u?.persona || "max",
+              source: "Memory/Main Snapshot"
+            });
+          }
+        }
+      }
+      const firestore = getFirestore();
+      if (firestore) {
+        try {
+          const snapshot = await firestore.collection("users").get();
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const phone = data.phone || doc.id;
+            if (!seenPhones.has(phone)) {
+              seenPhones.add(phone);
+              usersList.push({
+                phone,
+                name: data.name || "Member",
+                goal: data.goal || "Healthy & Fit",
+                weight: data.weight || 0,
+                targetWeight: data.targetWeight || 0,
+                targetCalories: data.dailyTargetCalories || 2e3,
+                persona: data.persona || "max",
+                source: "Firestore Collection"
+              });
+            }
+          });
+        } catch (fErr) {
+          console.warn("[Admin Users] Firestore fetch note:", fErr?.message);
+        }
+      }
+      res.json({
+        success: true,
+        totalUsers: usersList.length,
+        users: usersList
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e?.message });
+    }
+  });
   app.get("/api/user-profile/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const profile = await findUserByPhoneOrId(phone) || getUserProfile(phone);

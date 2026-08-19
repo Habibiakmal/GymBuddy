@@ -2426,6 +2426,68 @@ async function startServer() {
     });
   });
 
+  // Admin endpoint: List all registered users in database
+  app.get("/api/admin/users-list", async (req, res) => {
+    try {
+      const usersList: any[] = [];
+      const seenPhones = new Set<string>();
+
+      // 1. From Memory dbData.users
+      if (dbData && dbData.users) {
+        for (const [phone, u] of Object.entries(dbData.users)) {
+          if (!seenPhones.has(phone)) {
+            seenPhones.add(phone);
+            usersList.push({
+              phone,
+              name: (u as any)?.name || "Member",
+              goal: (u as any)?.goalTitle || (u as any)?.goal || "Healthy & Fit",
+              weight: (u as any)?.weight || 0,
+              targetWeight: (u as any)?.targetWeight || 0,
+              targetCalories: (u as any)?.targetCalories || 2000,
+              persona: (u as any)?.persona || "max",
+              source: "Memory/Main Snapshot"
+            });
+          }
+        }
+      }
+
+      // 2. From Firestore Collection
+      const firestore = getFirestore();
+      if (firestore) {
+        try {
+          const snapshot = await firestore.collection("users").get();
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const phone = data.phone || doc.id;
+            if (!seenPhones.has(phone)) {
+              seenPhones.add(phone);
+              usersList.push({
+                phone,
+                name: data.name || "Member",
+                goal: data.goal || "Healthy & Fit",
+                weight: data.weight || 0,
+                targetWeight: data.targetWeight || 0,
+                targetCalories: data.dailyTargetCalories || 2000,
+                persona: data.persona || "max",
+                source: "Firestore Collection"
+              });
+            }
+          });
+        } catch (fErr: any) {
+          console.warn("[Admin Users] Firestore fetch note:", fErr?.message);
+        }
+      }
+
+      res.json({
+        success: true,
+        totalUsers: usersList.length,
+        users: usersList
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e?.message });
+    }
+  });
+
   app.get("/api/user-profile/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const profile = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
