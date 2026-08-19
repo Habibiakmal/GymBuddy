@@ -4133,48 +4133,30 @@ Keluarkan output JSON valid:
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar."];
       }
 
-      const twiml = new TwilioPackage.twiml.MessagingResponse();
-      if (responseMessages.length > 0) {
-        const combinedMessage = responseMessages.join("\n\n---\n\n");
-        const msgNode = twiml.message();
-        msgNode.body(combinedMessage);
-        if (mediaUrlToSend) {
-          msgNode.media(mediaUrlToSend);
-        }
+      function escapeXml(unsafe: string): string {
+        return (unsafe || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&apos;");
       }
 
-      // If Twilio REST API client is configured, also push via REST API for 100% guaranteed delivery
-      if (getTwilio() && responseMessages.length > 0) {
-        (async () => {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = From.startsWith("whatsapp:") ? From : `whatsapp:${From}`;
-            for (const msgText of responseMessages) {
-              const payload: any = {
-                body: msgText,
-                from: fromNum,
-                to: toNum
-              };
-              if (mediaUrlToSend) {
-                payload.mediaUrl = [mediaUrlToSend];
-              }
-              await getTwilio().messages.create(payload);
-              await new Promise((r) => setTimeout(r, 600));
-            }
-            console.log("Successfully delivered message via Twilio REST API to:", toNum);
-          } catch (restErr: any) {
-            console.error("Twilio REST API send error:", restErr?.message || restErr);
-          }
-        })();
+      if (responseMessages.length > 0) {
+        const combinedMessage = responseMessages.join("\n\n---\n\n");
+        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
+        if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+        }
+        twiml += `<Body>${escapeXml(combinedMessage)}</Body></Message></Response>`;
+        console.log(`[Twilio WA] Sending TwiML XML response (${combinedMessage.length} chars) ✅`);
+        return res.type("text/xml").send(twiml);
+      } else {
+        return res.type("text/xml").send("<Response></Response>");
       }
-      
-      const xmlOutput = twiml.toString();
-      console.log(`[${new Date().toISOString()}] Sending TwiML XML response to Twilio:\n${xmlOutput}`);
-      res.type('text/xml').send(xmlOutput);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error);
-      res.sendStatus(500);
+      return res.type("text/xml").send("<Response></Response>");
     }
   });
 
