@@ -46241,13 +46241,17 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const healthScore = Math.min(10, Math.max(1, Number(parsedAi?.healthScore) || 8));
   let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
   satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
+  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
   let portionDetailText = "";
-  if (parsedAi?.portionDetail) {
-    portionDetailText = String(parsedAi.portionDetail).trim();
-  } else if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates.map((p) => typeof p === "string" ? p : JSON.stringify(p)).join("\n");
+  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates.map((p) => {
+      const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
+      return line.startsWith("\u2022") ? line : `\u2022 ${line}`;
+    }).join("\n");
+  } else if (parsedAi?.portionDetail) {
+    portionDetailText = `\u2022 ${String(parsedAi.portionDetail).trim()}`;
   } else {
-    portionDetailText = portionStr;
+    portionDetailText = `\u2022 1 Porsi Standar (~${calories} kcal)`;
   }
   let insightsFormatted = "";
   if (Array.isArray(parsedAi?.keyInsights) && parsedAi.keyInsights.length > 0) {
@@ -46260,8 +46264,8 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
       return `\u{1F7E2} ${cleanInsight}`;
     }).filter(Boolean).join("\n");
   } else {
-    insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung aktivitas harian
-\u{1F7E2} Kandungan makro terdistribusi dengan baik`;
+    insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung target kamu
+\u{1F7E2} Distribusi makronutrisi sesuai target harian`;
   }
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
   const wibIso = wibNow.toISOString();
@@ -46273,59 +46277,60 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
   const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
-  const foodTitleWithEmoji = rawFoodName.startsWith("\u{1F95C}") ? rawFoodName : `\u{1F95C} ${rawFoodName}`;
-  return `${foodTitleWithEmoji} \u2014 ${portionStr}
+  const totalTodayCal = dailyTotals.calories;
+  const targetCal = userData.targetCalories || 2e3;
+  const calPercent = Math.min(100, Math.round(totalTodayCal / targetCal * 100));
+  return `\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
-\u{1F552} ${dateStr}, ${timeStr}
+\u{1F552} ${dateStr}, ${timeStr} WIB
 \u{1F916} GymBuddy AI Analysis : ${confidenceScore}%
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4CA} REKAP NUTRISI
+\u{1F4CA} *REKAP NUTRISI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F525} *${calories} kcal*
 
-\u{1F525} ${calories} kcal
-
-\u{1F356} Protein: ${protein}g \u2014 ${protPercent}%
-\u{1F35A} Karbo: ${carbs}g \u2014 ${carbPercent}%
-\u{1F953} Lemak: ${fat}g \u2014 ${fatPercent}%
-\u{1F96C} Serat: ${fiber}g
-\u{1F36F} Gula: ${sugar}g
-
-Kalori dari makro:
-Protein ${protKcal} kcal \u2022 Karbo ${carbKcal} kcal \u2022 Lemak ${fatKcal} kcal
-
+\u{1F356} *Protein*: ${protein}g (${protPercent}%)
+\u{1F35A} *Karbo*: ${carbs}g (${carbPercent}%)
+\u{1F953} *Lemak*: ${fat}g (${fatPercent}%)
+\u{1F96C} *Serat*: ${fiber}g
+${sugar > 0 ? `\u{1F36F} *Gula*: ${sugar}g
+` : ""}
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2B50 SCORE
+\u{1F37D}\uFE0F *ESTIMASI PORSI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
-\u{1F963} Satiety: ${satietyScore}/10
-${satietyExplanation}
-
-\u{1F4AF} Health: ${healthScore}/10
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F37D}\uFE0F PORSI
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
 ${portionDetailText}
 
-\u{1F4A1} KEY INSIGHTS
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2B50 *SCORE & KENYANG*
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F963} *Satiety (Kenyang)*: ${satietyScore}/10
+${satietyExplanation}
 
+\u{1F4AF} *Health Score*: ${healthScore}/10
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4A1} *KEY INSIGHTS*
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 ${insightsFormatted}
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F916} ${coachHeader}
+\u{1F916} *${coachHeader}*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
 "${coachComment}"
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2699\uFE0F AKSI CEPAT
+\u{1F4C8} *STATUS HARI INI*
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F525} Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
+\u{1F356} Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2699\uFE0F *AKSI CEPAT*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u270F\uFE0F Koreksi porsi? Balas:
-   _koreksi: [detail baru]_
-   contoh: "koreksi: nasinya 1 piring, ayam 2 potong"
-\u274C Hapus entry ini? Balas:
+   _koreksi: [detail baru]_ (contoh: "koreksi: 1 porsi sedang")
+\u274C Hapus log ini? Balas:
    _hapus log terakhir_`;
 }
 function generateWelcomeMessages(userData) {

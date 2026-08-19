@@ -1810,13 +1810,20 @@ function formatNutritionCard(
   let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
   satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
 
+  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
+  
   let portionDetailText = "";
-  if (parsedAi?.portionDetail) {
-    portionDetailText = String(parsedAi.portionDetail).trim();
-  } else if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates.map((p: any) => typeof p === "string" ? p : JSON.stringify(p)).join("\n");
+  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates
+      .map((p: any) => {
+        const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
+        return line.startsWith("•") ? line : `• ${line}`;
+      })
+      .join("\n");
+  } else if (parsedAi?.portionDetail) {
+    portionDetailText = `• ${String(parsedAi.portionDetail).trim()}`;
   } else {
-    portionDetailText = portionStr;
+    portionDetailText = `• 1 Porsi Standar (~${calories} kcal)`;
   }
 
   let insightsFormatted = "";
@@ -1830,7 +1837,7 @@ function formatNutritionCard(
       return `🟢 ${cleanInsight}`;
     }).filter(Boolean).join("\n");
   } else {
-    insightsFormatted = `🟢 Asupan nutrisi seimbang untuk mendukung aktivitas harian\n🟢 Kandungan makro terdistribusi dengan baik`;
+    insightsFormatted = `🟢 Asupan nutrisi seimbang untuk mendukung target kamu\n🟢 Distribusi makronutrisi sesuai target harian`;
   }
 
   // Always display time in WIB (UTC+7)
@@ -1846,60 +1853,60 @@ function formatNutritionCard(
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
   const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨" : "Mantap bro! Jaga terus disiplin makro lo! 💪")).replace(/^["“]|["”]$/g, "").trim();
 
-  const foodTitleWithEmoji = rawFoodName.startsWith("🥜") ? rawFoodName : `🥜 ${rawFoodName}`;
+  const totalTodayCal = dailyTotals.calories;
+  const targetCal = userData.targetCalories || 2000;
+  const calPercent = Math.min(100, Math.round((totalTodayCal / targetCal) * 100));
 
-  return `${foodTitleWithEmoji} — ${portionStr}
+  return `🍽️ *${cleanFoodName.toUpperCase()}*
 
-🕒 ${dateStr}, ${timeStr}
+🕒 ${dateStr}, ${timeStr} WIB
 🤖 GymBuddy AI Analysis : ${confidenceScore}%
 
 ━━━━━━━━━━━━━━
-📊 REKAP NUTRISI
+📊 *REKAP NUTRISI*
 ━━━━━━━━━━━━━━
+🔥 *${calories} kcal*
 
-🔥 ${calories} kcal
-
-🍖 Protein: ${protein}g — ${protPercent}%
-🍚 Karbo: ${carbs}g — ${carbPercent}%
-🥓 Lemak: ${fat}g — ${fatPercent}%
-🥬 Serat: ${fiber}g
-🍯 Gula: ${sugar}g
-
-Kalori dari makro:
-Protein ${protKcal} kcal • Karbo ${carbKcal} kcal • Lemak ${fatKcal} kcal
-
+🍖 *Protein*: ${protein}g (${protPercent}%)
+🍚 *Karbo*: ${carbs}g (${carbPercent}%)
+🥓 *Lemak*: ${fat}g (${fatPercent}%)
+🥬 *Serat*: ${fiber}g
+${sugar > 0 ? `🍯 *Gula*: ${sugar}g\n` : ""}
 ━━━━━━━━━━━━━━
-⭐ SCORE
+🍽️ *ESTIMASI PORSI*
 ━━━━━━━━━━━━━━
-
-🥣 Satiety: ${satietyScore}/10
-${satietyExplanation}
-
-💯 Health: ${healthScore}/10
-
-━━━━━━━━━━━━━━
-🍽️ PORSI
-━━━━━━━━━━━━━━
-
 ${portionDetailText}
 
-💡 KEY INSIGHTS
+━━━━━━━━━━━━━━
+⭐ *SCORE & KENYANG*
+━━━━━━━━━━━━━━
+🥣 *Satiety (Kenyang)*: ${satietyScore}/10
+${satietyExplanation}
 
+💯 *Health Score*: ${healthScore}/10
+
+━━━━━━━━━━━━━━
+💡 *KEY INSIGHTS*
+━━━━━━━━━━━━━━
 ${insightsFormatted}
 
 ━━━━━━━━━━━━━━
-🤖 ${coachHeader}
+🤖 *${coachHeader}*
 ━━━━━━━━━━━━━━
-
 "${coachComment}"
 
 ━━━━━━━━━━━━━━
-⚙️ AKSI CEPAT
+📈 *STATUS HARI INI*
+━━━━━━━━━━━━━━
+🔥 Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
+🍖 Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
+
+━━━━━━━━━━━━━━
+⚙️ *AKSI CEPAT*
 ━━━━━━━━━━━━━━
 ✏️ Koreksi porsi? Balas:
-   _koreksi: [detail baru]_
-   contoh: "koreksi: nasinya 1 piring, ayam 2 potong"
-❌ Hapus entry ini? Balas:
+   _koreksi: [detail baru]_ (contoh: "koreksi: 1 porsi sedang")
+❌ Hapus log ini? Balas:
    _hapus log terakhir_`;
 }
 
