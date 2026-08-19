@@ -4319,13 +4319,25 @@ Keluarkan output JSON valid:
     try {
       // @ts-ignore
       const { Resvg } = await import("@resvg/resvg-js");
-      const resvg = new Resvg(svgStr, {
+      const fontPath = path.join(process.cwd(), "fonts", "arial.ttf");
+      let fontBuffer: Buffer | null = null;
+      if (fs.existsSync(fontPath)) {
+        try { fontBuffer = fs.readFileSync(fontPath); } catch (fe) {}
+      }
+
+      const resvgOptions: any = {
         fitTo: { mode: "width", value: 600 },
         font: {
           loadSystemFonts: true,
-          defaultFontFamily: "sans-serif"
+          defaultFontFamily: "Arial"
         }
-      });
+      };
+
+      if (fontBuffer) {
+        resvgOptions.font.fontBuffers = [fontBuffer];
+      }
+
+      const resvg = new Resvg(svgStr, resvgOptions);
       const pngData = resvg.render();
       const pngBuffer = pngData.asPng();
       res.setHeader("Content-Type", "image/png");
