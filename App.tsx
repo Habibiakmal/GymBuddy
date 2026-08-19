@@ -130,6 +130,19 @@ export default function App() {
               headers: { "Accept": "application/json" }
             }).catch(() => null);
 
+            if (res && res.status === 404) {
+              console.warn("[SessionGuard] User no longer exists on server database. Purging stale local session...");
+              Object.keys(localStorage).forEach((key) => {
+                if (key.startsWith("gymbuddy")) {
+                  localStorage.removeItem(key);
+                }
+              });
+              setCurrentUser(null);
+              setIsLoggedIn(false);
+              setViewMode("landing");
+              return;
+            }
+
             if (res && res.ok) {
               const data = await res.json().catch(() => null);
               if (data && (data.user || data.profile)) {
