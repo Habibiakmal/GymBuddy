@@ -4196,22 +4196,22 @@ Keluarkan output JSON valid:
   </g>
 
   <!-- Brand Typography -->
-  <text x="80" y="55" font-size="16" font-weight="900" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.5">GYMBUDDY</text>
-  <text x="175" y="55" font-size="12" font-weight="800" fill="#D4FF00" font-family="system-ui, sans-serif" letter-spacing="1">VISION AI</text>
+  <text x="80" y="55" font-size="16" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="0.5">GYMBUDDY</text>
+  <text x="175" y="55" font-size="12" font-weight="800" fill="#D4FF00" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="1">VISION AI</text>
 
   <!-- Day Badge (Top Right) -->
   <rect x="444" y="32" width="120" height="34" rx="17" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.08"/>
-  <text x="504" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">${esc(dayLabel || "Hari Ini")}</text>
+  <text x="504" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(dayLabel || "Hari Ini")}</text>
 
   <!-- FOOD TITLE (Crisp, modern line wrapping) -->
-  <text x="36" y="${nameLine2 ? 104 : 116}" font-size="${nameLine2 ? 26 : 28}" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine1)}</text>
-  ${nameLine2 ? `<text x="36" y="138" font-size="24" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine2)}</text>` : ""}
+  <text x="36" y="${nameLine2 ? 104 : 116}" font-size="${nameLine2 ? 26 : 28}" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(nameLine1)}</text>
+  ${nameLine2 ? `<text x="36" y="138" font-size="24" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(nameLine2)}</text>` : ""}
 
   <!-- HEALTH SCORE PILL (Clean, zero overlap) -->
   <rect x="36" y="${nameLine2 ? 152 : 142}" width="220" height="32" rx="16" fill="#141C2B" stroke="#D4FF00" stroke-opacity="0.3" stroke-width="1"/>
-  <text x="48" y="${nameLine2 ? 173 : 163}" font-size="14" fill="#D4FF00" font-family="sans-serif">★</text>
-  <text x="66" y="${nameLine2 ? 173 : 163}" font-size="12" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${scoreFormatted} / 5.0</text>
-  <text x="130" y="${nameLine2 ? 173 : 163}" font-size="11" font-weight="600" fill="#94A3B8" font-family="system-ui, sans-serif">• ${scoreRatingText}</text>
+  <text x="48" y="${nameLine2 ? 173 : 163}" font-size="14" fill="#D4FF00" font-family="DejaVu Sans, Arial, sans-serif">★</text>
+  <text x="66" y="${nameLine2 ? 173 : 163}" font-size="12" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${scoreFormatted} / 5.0</text>
+  <text x="130" y="${nameLine2 ? 173 : 163}" font-size="11" font-weight="600" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">• ${scoreRatingText}</text>
 
   <!-- FOOD PHOTO -->
   ${imgContent}
@@ -4219,45 +4219,45 @@ Keluarkan output JSON valid:
 
   <!-- HERO CALORIE BAR -->
   <rect x="36" y="510" width="528" height="68" rx="20" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.06"/>
-  <text x="56" y="552" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">🔥 ${calories}</text>
-  <text x="175" y="550" font-size="14" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">TOTAL KALORI (kcal)</text>
-  <text x="544" y="550" text-anchor="end" font-size="12" font-weight="700" fill="#D4FF00" font-family="system-ui, sans-serif">Padat Energi</text>
+  <text x="56" y="552" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">🔥 ${calories}</text>
+  <text x="175" y="550" font-size="14" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">TOTAL KALORI (kcal)</text>
+  <text x="544" y="550" text-anchor="end" font-size="12" font-weight="700" fill="#D4FF00" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Padat Energi</text>
 
   <!-- 4 BALANCED MACRO CARDS -->
   <!-- 1. Protein Card -->
   <rect x="36" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="48" y="602" width="8" height="8" rx="4" fill="#10B981"/>
-  <text x="62" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Protein</text>
-  <text x="98" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${protein}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="62" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Protein</text>
+  <text x="98" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${protein}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="48" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="48" y="676" width="${Math.min(100, Math.round(protein * 2.5))}" height="5" rx="2.5" fill="#10B981"/>
 
   <!-- 2. Karbohidrat Card -->
   <rect x="170" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="182" y="602" width="8" height="8" rx="4" fill="#F59E0B"/>
-  <text x="196" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Karbo</text>
-  <text x="232" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${carbs}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="196" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Karbo</text>
+  <text x="232" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${carbs}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="182" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="182" y="676" width="${Math.min(100, Math.round(carbs * 1.5))}" height="5" rx="2.5" fill="#F59E0B"/>
 
   <!-- 3. Lemak Card -->
   <rect x="304" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="316" y="602" width="8" height="8" rx="4" fill="#8B5CF6"/>
-  <text x="330" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Lemak</text>
-  <text x="366" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fat}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="330" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Lemak</text>
+  <text x="366" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${fat}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="316" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="316" y="676" width="${Math.min(100, Math.round(fat * 2.2))}" height="5" rx="2.5" fill="#8B5CF6"/>
 
   <!-- 4. Serat Card -->
   <rect x="440" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="452" y="602" width="8" height="8" rx="4" fill="#06B6D4"/>
-  <text x="466" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Serat</text>
-  <text x="502" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fiber}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="466" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Serat</text>
+  <text x="502" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${fiber}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="452" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="452" y="676" width="${Math.min(100, Math.round(fiber * 8))}" height="5" rx="2.5" fill="#06B6D4"/>
 
   <!-- FOOTER BRANDING -->
-  <text x="300" y="745" text-anchor="middle" font-size="11" font-weight="700" fill="#475569" font-family="system-ui, sans-serif" letter-spacing="1">GYMBUDDY · AI NUTRITION ENGINE</text>
+  <text x="300" y="745" text-anchor="middle" font-size="11" font-weight="700" fill="#475569" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="1">GYMBUDDY · AI NUTRITION ENGINE</text>
 </svg>`;
   }
 
@@ -4280,7 +4280,13 @@ Keluarkan output JSON valid:
     try {
       // @ts-ignore
       const { Resvg } = await import("@resvg/resvg-js");
-      const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 600 } });
+      const resvg = new Resvg(svgStr, {
+        fitTo: { mode: "width", value: 600 },
+        font: {
+          loadSystemFonts: true,
+          defaultFontFamily: "sans-serif"
+        }
+      });
       const pngData = resvg.render();
       const pngBuffer = pngData.asPng();
       res.setHeader("Content-Type", "image/png");
@@ -4292,6 +4298,7 @@ Keluarkan output JSON valid:
       return res.send(svgStr);
     }
   });
+
 
 
   app.get(["/api/generated-image/:id.jpg", "/api/generated-image/:id.png"], async (req, res) => {
