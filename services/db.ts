@@ -58,6 +58,7 @@ export interface FoodLogDocument {
   fat: number;
   fiber?: number;
   sugar?: number;
+  sodium?: number;
   time?: string;
   isHydration?: boolean;
   volumeMl?: number;

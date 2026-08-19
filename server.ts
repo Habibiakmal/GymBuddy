@@ -411,6 +411,7 @@ interface MealLog {
   fat: number;
   fiber?: number;
   sugar?: number;
+  sodium?: number;
   isHydration?: boolean;
   volumeMl?: number;
   timestamp: string;
@@ -1271,6 +1272,7 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
   let carbs = 0;
   let fat = 0;
   let fiber = 0;
+  let sodium = 0;
 
   for (const log of logs) {
     calories += Number(log.calories) || 0;
@@ -1278,6 +1280,7 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
     carbs += Number(log.carbs) || 0;
     fat += Number(log.fat) || 0;
     fiber += Number(log.fiber) || 0;
+    sodium += Number((log as any).sodium) || 0;
   }
 
   return {
@@ -1286,6 +1289,7 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
     carbs: Math.round(carbs),
     fat: Math.round(fat),
     fiber: Math.round(fiber),
+    sodium: Math.round(sodium),
     logCount: logs.length,
     date: targetDate,
     logs
@@ -1853,6 +1857,8 @@ function formatNutritionCard(
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
   const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨" : "Mantap bro! Jaga terus disiplin makro lo! 💪")).replace(/^["“]|["”]$/g, "").trim();
 
+  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
+
   const totalTodayCal = dailyTotals.calories;
   const targetCal = userData.targetCalories || 2000;
   const calPercent = Math.min(100, Math.round((totalTodayCal / targetCal) * 100));
@@ -1871,6 +1877,7 @@ function formatNutritionCard(
 🍚 *Karbo*: ${carbs}g (${carbPercent}%)
 🥓 *Lemak*: ${fat}g (${fatPercent}%)
 🥬 *Serat*: ${fiber}g
+🧂 *Natrium*: ${sodium} mg
 ${sugar > 0 ? `🍯 *Gula*: ${sugar}g\n` : ""}
 ━━━━━━━━━━━━━━
 🍽️ *ESTIMASI PORSI*
@@ -1900,6 +1907,7 @@ ${insightsFormatted}
 ━━━━━━━━━━━━━━
 🔥 Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
 🍖 Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
+🧂 Natrium: ${dailyTotals.sodium || 0}/2000 mg
 
 ━━━━━━━━━━━━━━
 ⚙️ *AKSI CEPAT*
@@ -2042,18 +2050,21 @@ function generateDailySummaryCard(
   const carbPercent = userData.carbGrams > 0 ? Math.min(100, Math.round((dailyTotals.carbs / userData.carbGrams) * 100)) : 0;
   const fatPercent = userData.fatGrams > 0 ? Math.min(100, Math.round((dailyTotals.fat / userData.fatGrams) * 100)) : 0;
   const fiberPercent = userData.fiberGrams > 0 ? Math.min(100, Math.round((dailyTotals.fiber / userData.fiberGrams) * 100)) : 0;
+  const sodiumVal = (dailyTotals as any).sodium || 0;
+  const sodPercent = Math.min(100, Math.round((sodiumVal / 2000) * 100));
 
   const calBar = makeProgressBar(dailyTotals.calories, userData.targetCalories);
   const protBar = makeProgressBar(dailyTotals.protein, userData.proteinGrams);
   const carbBar = makeProgressBar(dailyTotals.carbs, userData.carbGrams);
   const fatBar = makeProgressBar(dailyTotals.fat, userData.fatGrams);
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
+  const sodBar = makeProgressBar(sodiumVal, 2000);
 
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
     mealListStr = "_Belum ada makanan yang dicatat pada tanggal ini._";
   } else {
-    mealListStr = dailyTotals.logs.map((m, idx) => `• ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n");
+    mealListStr = dailyTotals.logs.map((m, idx) => `• ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${(m as any).sodium ? ` Na:${(m as any).sodium}mg` : ""})`).join("\n");
   }
 
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -2076,6 +2087,8 @@ ${carbBar}
 ${fatBar}
 🥬 *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g (${fiberPercent}%)
 ${fiberBar}
+🧂 *Natrium*: ${sodiumVal}/2000mg (${sodPercent}%)
+${sodBar}
 
 🍽️ *Makanan Terdaftar*:
 ${mealListStr}
@@ -2857,6 +2870,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       fat: Number(meal.fat) || 0,
       fiber: Number(meal.fiber) || 0,
       sugar: Number(meal.sugar) || 0,
+      sodium: Number(meal.sodium) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
       timestamp: meal.timestamp || new Date().toISOString(),
       isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : (meal.isHydration === false || meal.isHydration === "false" ? false : undefined),
@@ -2887,6 +2901,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         fat: mealObj.fat,
         fiber: mealObj.fiber,
         sugar: mealObj.sugar,
+        sodium: mealObj.sodium,
         isHydration: mealObj.isHydration,
         volumeMl: mealObj.volumeMl,
         itemType: mealObj.isHydration ? "water" : "food",
@@ -4095,7 +4110,7 @@ TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
-PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber).
+PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber, sodium dalam mg).
 Keluarkan output JSON valid:
 {
   "isFood": true,
@@ -4107,6 +4122,7 @@ Keluarkan output JSON valid:
   "fat": 5,
   "fiber": 2,
   "sugar": 4,
+  "sodium": 350,
   "satietyScore": 7,
   "satietyExplanation": "Penjelasan singkat efek kenyang makanan ini",
   "healthScore": 8,
@@ -4173,6 +4189,8 @@ Keluarkan output JSON valid:
               carbs: Number(parsed.carbs) || 0,
               fat: Number(parsed.fat) || 0,
               fiber: Number(parsed.fiber) || 0,
+              sugar: Number(parsed.sugar) || 0,
+              sodium: Number(parsed.sodium) || 0,
               mealType: parsed.mealType || getMealTypeByHour(),
               timestamp: new Date().toISOString()
             });

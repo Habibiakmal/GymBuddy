@@ -27,6 +27,7 @@ export interface FoodItemNutrition {
   fat: number;
   fiber: number;
   sugar: number;
+  sodium?: number;
   is_hydration?: boolean;
   volume_ml?: number;
   data_source: "USDA" | "TKPI" | "verified_nutrition_database" | "ai_estimation";
@@ -42,6 +43,7 @@ export interface MealNutritionResult {
   fat: number;
   fiber: number;
   sugar: number;
+  sodium?: number;
   isHydration: boolean;
   volumeMl: number;
   mealType: "breakfast" | "lunch" | "dinner" | "snack";
