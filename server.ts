@@ -39,6 +39,7 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 import {
   findUserByPhoneOrId,
   saveUserDocument,
+  deleteUserDocument,
   getUserSubscription,
   saveUserSubscription,
   getFoodLogsForDate,
@@ -2433,7 +2434,7 @@ async function startServer() {
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     console.log(`[DELETE Account] Permanently wiping user: ${phone} (${rawPhone})`);
 
-    // 1. Delete from Server Memory
+    // 1. Delete from Server Memory & memCache
     delete dbData.users[phone];
     delete dbData.users[altPhone];
     delete dbData.users[rawPhone];
@@ -2443,6 +2444,12 @@ async function startServer() {
     delete dbData.weeklyProgress[phone];
     delete dbData.weeklyProgress[altPhone];
     delete dbData.weeklyProgress[rawPhone];
+
+    await deleteUserDocument(phone);
+    await deleteUserDocument(altPhone);
+    await deleteUserDocument(rawPhone);
+    await deleteUserDocument(`usr_${phone}`);
+    await deleteUserDocument(`usr_${altPhone}`);
 
     // Delete all daily logs for this user
     Object.keys(dbData.dailyLogs).forEach(key => {

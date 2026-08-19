@@ -44461,6 +44461,25 @@ async function findUserByPhoneOrId(identifier) {
   }
   return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
 }
+async function deleteUserDocument(phone) {
+  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const variations = [phone, clean, `usr_${phone}`, `usr_${clean}`];
+  for (const v of variations) {
+    memCache.users.delete(v);
+    memCache.subscriptions.delete(v);
+    memCache.foodLogs.delete(v);
+    memCache.waterLogs.delete(v);
+  }
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("users").deleteMany({ $or: [{ phone }, { phone: clean }, { userId: `usr_${clean}` }] });
+      }
+    } catch (e) {
+    }
+  }
+}
 async function saveUserDocument(doc) {
   const userId = doc.userId || `usr_${doc.phone}`;
   const completeDoc = {
@@ -46788,6 +46807,11 @@ async function startServer() {
     delete dbData.weeklyProgress[phone];
     delete dbData.weeklyProgress[altPhone];
     delete dbData.weeklyProgress[rawPhone];
+    await deleteUserDocument(phone);
+    await deleteUserDocument(altPhone);
+    await deleteUserDocument(rawPhone);
+    await deleteUserDocument(`usr_${phone}`);
+    await deleteUserDocument(`usr_${altPhone}`);
     Object.keys(dbData.dailyLogs).forEach((key) => {
       if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
         delete dbData.dailyLogs[key];
