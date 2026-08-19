@@ -62,19 +62,41 @@ async function downloadTwilioMedia(mediaUrl: string): Promise<{ data: string; mi
   const authHeader = sid && token ? "Basic " + Buffer.from(`${sid}:${token}`).toString("base64") : "";
 
   try {
-    const headers: Record<string, string> = {};
-    if (authHeader) headers["Authorization"] = authHeader;
+    let targetUrl = mediaUrl;
+    let reqHeaders: Record<string, string> = {};
 
-    // First attempt: Axios with Twilio Basic Auth
-    const res = await axios.get(mediaUrl, {
-      headers,
+    // Step 1: Resolve Twilio 302 redirect URL to AWS S3 signed URL if authHeader is used
+    if (mediaUrl.includes("twilio.com") && authHeader) {
+      try {
+        const headRes = await axios.get(mediaUrl, {
+          headers: { Authorization: authHeader },
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 200 && status < 400
+        });
+        if (headRes.headers && headRes.headers.location) {
+          targetUrl = headRes.headers.location;
+          console.log("[Twilio WA] Resolved media redirect location:", targetUrl.substring(0, 90));
+        }
+      } catch (headErr: any) {
+        if (headErr?.response?.headers?.location) {
+          targetUrl = headErr.response.headers.location;
+          console.log("[Twilio WA] Resolved media redirect via catch:", targetUrl.substring(0, 90));
+        }
+      }
+    }
+
+    // Step 2: Strip Twilio Authorization header when fetching AWS S3 (S3 rejects Basic Auth)
+    if (!targetUrl.includes("twilio.com")) {
+      reqHeaders = {};
+    } else if (authHeader) {
+      reqHeaders["Authorization"] = authHeader;
+    }
+
+    const res = await axios.get(targetUrl, {
+      headers: reqHeaders,
       responseType: "arraybuffer",
-      timeout: 12000,
+      timeout: 15000,
       maxRedirects: 5
-    }).catch(async (err) => {
-      // Fallback attempt: fetch without Auth header if AWS S3 redirect rejected Auth header
-      console.warn("[Twilio WA] Auth download retry without header:", err?.message || err);
-      return await axios.get(mediaUrl, { responseType: "arraybuffer", timeout: 12000, maxRedirects: 5 }).catch(() => null);
     });
 
     if (res && res.status === 200 && res.data) {
@@ -86,6 +108,18 @@ async function downloadTwilioMedia(mediaUrl: string): Promise<{ data: string; mi
   } catch (err: any) {
     console.error("[Twilio WA] downloadTwilioMedia error:", err?.message || err);
   }
+
+  // Step 3: Direct fallback fetch
+  try {
+    const fallbackRes = await axios.get(mediaUrl, { responseType: "arraybuffer", timeout: 15000, maxRedirects: 5 });
+    if (fallbackRes && fallbackRes.status === 200 && fallbackRes.data) {
+      const mimeType = String(fallbackRes.headers["content-type"] || "image/jpeg").split(";")[0];
+      const base64 = Buffer.from(fallbackRes.data).toString("base64");
+      console.log(`[Twilio WA] Successfully downloaded media via fallback (${base64.length} chars) ✅`);
+      return { data: base64, mimeType };
+    }
+  } catch (fbErr: any) {}
+
   return null;
 }
 
@@ -1184,10 +1218,9 @@ function deduplicateMealLogs(logs: any[]): any[] {
     if (!log || !log.foodName) continue;
     const normName = String(log.foodName).toLowerCase().trim();
     const cal = Number(log.calories) || 0;
-    const timeMinute = log.timestamp ? String(log.timestamp).substring(0, 16) : "";
     
-    // Signature = foodName + calories + timestamp minute
-    const signature = `${normName}_${cal}_${timeMinute}`;
+    // Strict Signature = foodName + calories (purges all identical duplicate logs on same date)
+    const signature = `${normName}_${cal}`;
     if (seenSignatures.has(signature)) continue;
     seenSignatures.add(signature);
     cleanLogs.push(log);
@@ -4817,9 +4850,8 @@ Keluarkan output JSON valid:
             }
           }
 
-          // Anti-silent fallback: If user sent generic caption like "aku makan ini" but imagePart failed to download
-          const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
-          if ((isGenericImageCaption || mediaUrl) && !imagePart && !userText.trim()) {
+          // Anti-silent fallback: If user sent photo but imagePart failed to download
+          if (mediaUrl && !imagePart) {
             const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
             const guideMsg = `📸 *FOTO MAKANAN DITERIMA*\n-----------------------------\n` +
               `Halo ${userData.name}! Fotonya sedang diproses oleh gateway Twilio.\n\n` +

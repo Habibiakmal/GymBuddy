@@ -316,9 +316,8 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
   for (const item of rawLogs) {
     if (!item.foodName || isLegacyMockMeal(item)) continue;
 
-    // Deduplication signature: combine foodName, calories, protein, and timestamp minute if available
-    const timeSig = item.timestamp ? item.timestamp.substring(0, 16) : "";
-    const signature = `${(item.foodName || "").toLowerCase().trim()}_${item.calories || 0}_${item.protein || 0}_${timeSig}`;
+    // Deduplication signature: combine foodName, calories, and protein (purges all identical duplicate logs)
+    const signature = `${(item.foodName || "").toLowerCase().trim()}_${item.calories || 0}_${item.protein || 0}`;
     
     if (seenSignatures.has(signature)) continue;
     seenSignatures.add(signature);
