@@ -47992,7 +47992,7 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
           updatedProfileNeeded = true;
         }
         if (updatedProfileNeeded) {
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
         }
         if (userProfile.hasReceivedWelcome) {
           const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -48004,7 +48004,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           responseMessages = [shortWelcome];
         } else {
           userProfile.hasReceivedWelcome = true;
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
           const currentCalculated = calculateUserData(userProfile);
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
@@ -48020,8 +48020,8 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           actualMl = Math.round(rawAmount) * 250;
         }
         const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-        const currentCups = getWaterCups(From);
-        const newTotalCups = setWaterCups(From, currentCups + cupsToAdd);
+        const currentCups = getWaterCups(normFrom);
+        const newTotalCups = setWaterCups(normFrom, currentCups + cupsToAdd);
         const liters = (newTotalCups * 0.25).toFixed(1);
         const waterEntry = {
           id: `wa-water-${Date.now()}`,
@@ -48035,7 +48035,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           mealType: getMealTypeByHour()
         };
-        addMealLog(From, waterEntry);
+        addMealLog(normFrom, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         const comment = userData.persona === "max" ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
         responseMessages = [
@@ -48050,7 +48050,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
       } else if (weightMatch) {
         const newW = parseFloat(weightMatch[1].replace(",", "."));
         if (!isNaN(newW) && newW > 30 && newW < 300) {
-          const resProg = addWeeklyProgress(From, newW, "Update via WhatsApp");
+          const resProg = addWeeklyProgress(normFrom, newW, "Update via WhatsApp");
           if (resProg) {
             responseMessages = [formatWeeklyProgressCard(resProg)];
           } else {
@@ -48058,20 +48058,20 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           }
         }
       } else if (isProgressHistoryMessage) {
-        responseMessages = [formatProgressHistoryCard(From)];
+        responseMessages = [formatProgressHistoryCard(normFrom)];
       } else if (isWorkoutReqMessage) {
         responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isRecommendationMessage) {
         responseMessages = [generateMealRecommendations(userData)];
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
-        const totals = getDailyTotals(From, parsedDate.dateStr);
+        const totals = getDailyTotals(normFrom, parsedDate.dateStr);
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-      } else if (handleReminderCommand(userText, userProfile, From, userData)) {
-        responseMessages = handleReminderCommand(userText, userProfile, From, userData);
+      } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
+        responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
       } else if (!userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) && !userText.includes("?") && userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)) {
         const todayStr = getLocalDateStr();
-        const workoutKey = `gymbuddy_exercises_${From}_${todayStr}`;
+        const workoutKey = `gymbuddy_exercises_${normFrom}_${todayStr}`;
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
         saveDb();

@@ -3899,7 +3899,7 @@ Keluarkan output JSON valid:
         }
 
         if (updatedProfileNeeded) {
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
         }
 
         if (userProfile.hasReceivedWelcome) {
@@ -3912,14 +3912,13 @@ Keluarkan output JSON valid:
           responseMessages = [shortWelcome];
         } else {
           userProfile.hasReceivedWelcome = true;
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
           const currentCalculated = calculateUserData(userProfile);
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
       } else if (waterMatch) {
         const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
         const unit = (waterMatch[2] || "gelas").toLowerCase();
-        // Bug 4 Fix: compute actual ml accurately (no rounding loss)
         let actualMl: number;
         if (unit === "ml") {
           actualMl = rawAmount;
@@ -3929,10 +3928,9 @@ Keluarkan output JSON valid:
           actualMl = Math.round(rawAmount) * 250;
         }
         const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-        const currentCups = getWaterCups(From);
-        const newTotalCups = setWaterCups(From, currentCups + cupsToAdd);
+        const currentCups = getWaterCups(normFrom);
+        const newTotalCups = setWaterCups(normFrom, currentCups + cupsToAdd);
         const liters = (newTotalCups * 0.25).toFixed(1);
-        // Bug 4 Fix: also add entry to dailyLogs so dashboard shows it
         const waterEntry: MealLog = {
           id: `wa-water-${Date.now()}`,
           foodName: `Air Putih ${actualMl} ml`,
@@ -3945,7 +3943,7 @@ Keluarkan output JSON valid:
           timestamp: new Date().toISOString(),
           mealType: getMealTypeByHour()
         };
-        addMealLog(From, waterEntry);
+        addMealLog(normFrom, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         const comment = userData.persona === "max" 
           ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥"
@@ -3959,7 +3957,7 @@ Keluarkan output JSON valid:
       } else if (weightMatch) {
         const newW = parseFloat(weightMatch[1].replace(',', '.'));
         if (!isNaN(newW) && newW > 30 && newW < 300) {
-          const resProg = addWeeklyProgress(From, newW, "Update via WhatsApp");
+          const resProg = addWeeklyProgress(normFrom, newW, "Update via WhatsApp");
           if (resProg) {
             responseMessages = [formatWeeklyProgressCard(resProg)];
           } else {
@@ -3967,24 +3965,24 @@ Keluarkan output JSON valid:
           }
         }
       } else if (isProgressHistoryMessage) {
-        responseMessages = [formatProgressHistoryCard(From)];
+        responseMessages = [formatProgressHistoryCard(normFrom)];
       } else if (isWorkoutReqMessage) {
         responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isRecommendationMessage) {
         responseMessages = [generateMealRecommendations(userData)];
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
-        const totals = getDailyTotals(From, parsedDate.dateStr);
+        const totals = getDailyTotals(normFrom, parsedDate.dateStr);
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-      } else if (handleReminderCommand(userText, userProfile, From, userData)) {
-        responseMessages = handleReminderCommand(userText, userProfile, From, userData)!;
+      } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
+        responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData)!;
       } else if (
         !userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) &&
         !userText.includes("?") &&
         userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)
       ) {
         const todayStr = getLocalDateStr();
-        const workoutKey = `gymbuddy_exercises_${From}_${todayStr}`;
+        const workoutKey = `gymbuddy_exercises_${normFrom}_${todayStr}`;
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
         dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: new Date().toISOString() }];
