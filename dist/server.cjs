@@ -47198,7 +47198,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     }
     res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
   });
-  app.delete("/api/user/:phone/meals", (req, res) => {
+  app.delete("/api/user/:phone/meals", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
@@ -47207,6 +47207,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[key] = [];
     dbData.dailyLogs[altKey] = [];
     saveDb();
+    try {
+      await deleteAllFoodLogsForDate(phone, targetDate);
+    } catch (e) {
+      console.warn("[Meals API] deleteAllFoodLogsForDate note:", e?.message || e);
+    }
     res.json({ success: true, phone, date: targetDate, logs: [] });
   });
   app.put("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {

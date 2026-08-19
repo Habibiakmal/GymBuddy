@@ -304,6 +304,28 @@ export async function deleteFoodLogFromFirestore(id: string): Promise<void> {
   }
 }
 
+export async function deleteAllFoodLogsForDateFromFirestore(phone: string, date: string): Promise<void> {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+
+    const snap1 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).get();
+    const batch = db.batch();
+    snap1.docs.forEach(d => batch.delete(d.ref));
+
+    if (altPhone !== normPhone) {
+      const snap2 = await db.collection("foodLogs").where("phone", "==", altPhone).where("date", "==", date).get();
+      snap2.docs.forEach(d => batch.delete(d.ref));
+    }
+    await batch.commit();
+  } catch (e: any) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
+  }
+}
+
 export async function getWaterLogFromFirestore(phone: string, date: string): Promise<WaterLogDocument | null> {
   try {
     const db = getFirestore();

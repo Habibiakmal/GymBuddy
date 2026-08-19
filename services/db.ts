@@ -578,6 +578,16 @@ export async function deleteFoodLog(id: string): Promise<void> {
   }
 }
 
+export async function deleteAllFoodLogsForDate(phone: string, date: string): Promise<void> {
+  try {
+    if (getFirestore()) {
+      await deleteAllFoodLogsForDateFromFirestore(phone, date);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
+  }
+}
+
 export async function getWaterLog(phone: string, date: string): Promise<WaterLogDocument | null> {
   try {
     if (getFirestore()) {
