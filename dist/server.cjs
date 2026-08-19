@@ -46775,6 +46775,62 @@ async function startServer() {
       waterCups
     });
   });
+  app.delete("/api/user/:phone", async (req, res) => {
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    console.log(`[DELETE Account] Permanently wiping user: ${phone} (${rawPhone})`);
+    delete dbData.users[phone];
+    delete dbData.users[altPhone];
+    delete dbData.users[rawPhone];
+    delete dbData.users[`usr_${phone}`];
+    delete dbData.users[`usr_${altPhone}`];
+    delete dbData.weeklyProgress[phone];
+    delete dbData.weeklyProgress[altPhone];
+    delete dbData.weeklyProgress[rawPhone];
+    Object.keys(dbData.dailyLogs).forEach((key) => {
+      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+        delete dbData.dailyLogs[key];
+      }
+    });
+    Object.keys(dbData.waterLogs).forEach((key) => {
+      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+        delete dbData.waterLogs[key];
+      }
+    });
+    saveDb();
+    const firestore = getFirestore();
+    if (firestore) {
+      try {
+        const batch = firestore.batch();
+        const variations = [phone, altPhone, rawPhone, `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`];
+        for (const v of variations) {
+          batch.delete(firestore.collection("users").doc(v));
+          batch.delete(firestore.collection("subscriptions").doc(v));
+        }
+        const foodSnap1 = await firestore.collection("foodLogs").where("phone", "==", phone).get();
+        foodSnap1.forEach((d) => batch.delete(d.ref));
+        const foodSnap2 = await firestore.collection("foodLogs").where("phone", "==", altPhone).get();
+        foodSnap2.forEach((d) => batch.delete(d.ref));
+        const foodSnap3 = await firestore.collection("foodLogs").where("userId", "==", `usr_${phone}`).get();
+        foodSnap3.forEach((d) => batch.delete(d.ref));
+        const waterSnap1 = await firestore.collection("waterLogs").where("phone", "==", phone).get();
+        waterSnap1.forEach((d) => batch.delete(d.ref));
+        const waterSnap2 = await firestore.collection("waterLogs").where("phone", "==", altPhone).get();
+        waterSnap2.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        console.log(`[Firestore] User ${phone} and all related documents permanently wiped \u2705`);
+      } catch (fErr) {
+        console.warn("[Firestore] User delete warning:", fErr?.message || fErr);
+      }
+    }
+    saveToFirestore();
+    res.json({
+      success: true,
+      message: `Akun dan seluruh data untuk ${phone} berhasil dihapus permanen dari database.`,
+      phone
+    });
+  });
   app.get("/api/admin/users-list", async (req, res) => {
     try {
       const usersList = [];
