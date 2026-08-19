@@ -44767,6 +44767,22 @@ var authRateLimiter = (0, import_express_rate_limit.default)({
 });
 
 // server.ts
+process.on("unhandledRejection", (reason) => {
+  const msg = reason?.message || String(reason);
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning") || msg.includes("All promises were rejected")) {
+    console.warn("[unhandledRejection] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[unhandledRejection] Unhandled async error:", msg.substring(0, 200));
+});
+process.on("uncaughtException", (err) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning")) {
+    console.warn("[uncaughtException] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[uncaughtException] Critical error:", msg.substring(0, 200));
+});
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 var twilioClient = null;

@@ -3,6 +3,27 @@ import fs from "fs";
 import path from "path";
 import cors from "cors";
 import "dotenv/config";
+
+// ─── GLOBAL ERROR GUARDS: prevent unhandled async errors from crashing process ─
+process.on("unhandledRejection", (reason: any) => {
+  const msg = reason?.message || String(reason);
+  // Suppress known non-fatal Firestore/GCP auth errors in Cloud Run
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning") || msg.includes("All promises were rejected")) {
+    console.warn("[unhandledRejection] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[unhandledRejection] Unhandled async error:", msg.substring(0, 200));
+});
+process.on("uncaughtException", (err: any) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning")) {
+    console.warn("[uncaughtException] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[uncaughtException] Critical error:", msg.substring(0, 200));
+  // Don't exit - keep server alive
+});
+
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
