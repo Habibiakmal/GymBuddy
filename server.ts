@@ -4517,41 +4517,20 @@ Keluarkan output JSON valid:
         }
       }
 
-      // 2. If not in memory, check MongoDB directly (handles Render restart race condition)
+      // 2. If not in memory, check MongoDB directly
       if (!userProfile) {
         userProfile = await getUserProfileFromMongo(from);
       }
 
-      // 3. If STILL null (truly unregistered number) & not an onboarding welcome message
-      if (!userProfile && !isWelcomeMessage) {
-        const reply = `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
-          `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
-          `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
-          `https://gymbuddygroup.com`;
-        
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(reply)}</Body></Message></Response>`;
-        res.type("text/xml").send(twiml);
-
-        // Also send direct via Twilio API if configured
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({
-              body: reply,
-              from: fromNum,
-              to: toNum
-            });
-          } catch (twErr: any) {
-            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
-          }
-        }
-        return;
-      }
-
+      // 3. Auto-Create & Save active user profile if not in database (never block any incoming WhatsApp user)
       if (!userProfile) {
         userProfile = getOrCreateUserProfile(from, userText);
+        userProfile.phone = from;
+        userProfile.normalizedPhone = from;
+        if (!userProfile.name || userProfile.name === "Member") {
+          userProfile.name = "Bibi";
+        }
+        saveUserProfile(from, userProfile);
       }
       const userData = calculateUserData(userProfile);
 
