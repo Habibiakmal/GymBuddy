@@ -855,17 +855,20 @@ export function splitFoodItems(rawInput: string): string[] {
   for (const part of rawParts) {
     const lowerPart = part.toLowerCase();
     
-    // Check if the part starts with "nasi" but is NOT a single unified dish (like "nasi goreng", "nasi uduk", "nasi kuning", "nasi liwet", "nasi padang", "nasi merah", "nasi putih")
-    const isUnifiedRiceDish = /^(nasi\s+goreng|nasi\s+uduk|nasi\s+kuning|nasi\s+liwet|nasi\s+padang|nasi\s+merah|nasi\s+putih)\b/i.test(lowerPart);
-    
-    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish) {
-      // E.g. "Nasi ayam goreng" -> "Nasi putih" and "Ayam goreng"
-      // E.g. "Nasi rendang" -> "Nasi putih" and "Rendang"
-      const lauk = part.replace(/^nasi\s+/i, "").trim();
-      finalItems.push("Nasi putih");
-      if (lauk.length > 0) {
-        finalItems.push(lauk);
-      }
+    // Comprehensive list of Indonesian rice dishes that are UNIFIED dishes (should NOT be split into "nasi putih + lauk")
+    // This covers restaurant-style dishes, regional specialties, and named combo dishes
+    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug)/i.test(lowerPart);
+
+    // Also treat any "Nasi [Proper Brand/Place Name]" as a unified dish
+    // e.g. "Nasi Ayam Pak Gembus", "Nasi Bebek Mas Wahid", "Nasi Hainam Abang", etc.
+    // Heuristic: if the word after "nasi" is immediately followed by 2+ more words, it's a named dish
+    const nasiWordCount = part.trim().split(/\s+/).length;
+    const isNamedDish = /^nasi\s+/i.test(part) && nasiWordCount >= 3;
+
+    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish && !isNamedDish) {
+      // Only split simple 2-word "Nasi X" patterns when X is a lauk (single word), e.g. "Nasi Rendang"
+      // Even then, keep original name intact to preserve user intent
+      finalItems.push(part); // Preserve original name — never forcibly split
     } else {
       finalItems.push(part);
     }
@@ -1099,7 +1102,9 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
   const dynamicPortionNote = items.length === 1 ? "1 detected food item" : `${items.length} detected food items`;
 
   return {
-    foodName: cleanTitle,
+    // IMPORTANT: Preserve original user input as foodName — do NOT replace with catalog/AI-generated name
+    // cleanTitle is kept as internal reference only and passed as normalizedFoodName for preview
+    foodName: input.trim() || cleanTitle,
     calories: validatedCalories,
     protein: validatedProtein,
     carbs: validatedCarbs,

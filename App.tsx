@@ -505,6 +505,7 @@ export default function App() {
             setShowcaseVariant(null);
             setIsAppOnboarding(true);
           }}
+          userPhone={currentUser?.phone || currentUser?.normalizedPhone || ""} // Bug #9 fix
         />
       </>
     );

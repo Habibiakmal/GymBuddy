@@ -858,19 +858,19 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
 
   // 1. Direct match on ID or Name
   const directMatch = EXERCISE_DATABASE.find(
-    (item) => item.id.toLowerCase() === q || item.name.toLowerCase() === q || item.indonesianName.toLowerCase() === q
+    (item) => item.id.toLowerCase() === q || item.name.toLowerCase() === q || (item.indonesianName || "").toLowerCase() === q
   );
   if (directMatch) return directMatch;
 
-  // 2. Exact match on aliases
+  // 2. Exact match on aliases (safety: use array fallback to prevent crash on undefined)
   const aliasMatch = EXERCISE_DATABASE.find((item) =>
-    item.aliases.some((alias) => q === alias.toLowerCase())
+    (item.aliases || []).some((alias) => q === alias.toLowerCase())
   );
   if (aliasMatch) return aliasMatch;
 
   // 3. Substring match on name / aliases
   const substrMatch = EXERCISE_DATABASE.find((item) =>
-    item.name.toLowerCase().includes(q) || item.aliases.some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
+    item.name.toLowerCase().includes(q) || (item.aliases || []).some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
   );
   if (substrMatch) return substrMatch;
 
@@ -881,7 +881,10 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
 
   for (const item of EXERCISE_DATABASE) {
     let score = 0;
-    const searchable = `${item.name} ${item.indonesianName} ${item.aliases.join(" ")} ${item.equipmentName} ${item.targetMuscles.join(" ")}`.toLowerCase();
+    // Safety: guard all array joins against undefined
+    const safeAliases = (item.aliases || []).join(" ");
+    const safeMuscles = (item.targetMuscles || []).join(" ");
+    const searchable = `${item.name} ${item.indonesianName || ""} ${safeAliases} ${item.equipmentName || ""} ${safeMuscles}`.toLowerCase();
 
     for (const token of tokens) {
       if (searchable.includes(token)) {

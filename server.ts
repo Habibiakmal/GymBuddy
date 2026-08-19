@@ -2480,10 +2480,14 @@ PENTING:
       const deterministicResult = estimateMealNutritionDeterministic(cleanText);
       console.log(`[analyze-food] Deterministic base: ${deterministicResult.calories} kcal (P:${deterministicResult.protein}g, C:${deterministicResult.carbs}g, F:${deterministicResult.fat}g, Fib:${deterministicResult.fiber}g, Sug:${deterministicResult.sugar}g) [${deterministicResult.items.length} items]`);
 
+      // ALWAYS preserve user's original input as foodName — AI/catalog names go into items[].normalized_food_name
+      const userInputFoodName = cleanText;
+
       if (!getAi()) {
         return res.json({
           success: true,
           ...deterministicResult,
+          foodName: userInputFoodName, // Override with original user input
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -2495,7 +2499,6 @@ PENTING:
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed: any = extractAndParseJson(textOutput) || {};
         
-        parsed.foodName = parsed.foodName || deterministicResult.foodName;
         const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
 
         // Strict Requirement: Total Calories & Macros MUST ALWAYS BE SUM(items)
@@ -2520,7 +2523,8 @@ PENTING:
 
         res.json({
           success: true,
-          foodName: parsed.foodName,
+          // CRITICAL: Always use original user input as foodName — never AI/catalog name
+          foodName: userInputFoodName,
           calories,
           protein,
           carbs,
@@ -2539,6 +2543,7 @@ PENTING:
         res.json({
           success: true,
           ...deterministicResult,
+          foodName: userInputFoodName, // Override with original user input
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -2547,6 +2552,7 @@ PENTING:
       res.status(500).json({ success: false, error: err.message || "Failed to analyze food" });
     }
   });
+
 
   // REST API: AI Vision Meal Image Analysis
   app.post("/api/ai/analyze-meal-image", express.json({ limit: "25mb" }), async (req, res) => {
@@ -2841,22 +2847,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, phone, date: targetDate, cups: updatedCups, liters: Number((updatedCups * 0.25).toFixed(1)) });
   });
 
-  // REST API: Get user profile by phone
-  app.get("/api/user/:phone", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const user = getUserProfile(phone);
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found in database" });
-    }
-    const calculated = calculateUserData(user);
-    return res.json({
-      success: true,
-      user,
-      profile: user,
-      userData: calculated,
-      calculated
-    });
-  });
+  // Note: GET /api/user/:phone is already registered at the top of routes (async version with MongoDB lookup).
+  // The duplicate sync-only version has been removed to prevent route conflicts.
+
 
   // Delete user profile endpoint (Purge user, logs, and progress)
   app.delete("/api/user/:phone", (req, res) => {
@@ -3042,7 +3035,13 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.post("/api/midtrans/create-transaction", express.json(), async (req, res) => {
     try {
       const { phone, plan = "advanced", activeService = "both", amount, customerName } = req.body;
-      const orderId = `GYMBUDDY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const normPhone = normalizePhone(phone || "");
+      
+      if (!normPhone) {
+        return res.status(400).json({ success: false, error: "Phone number is required for payment" });
+      }
+      
+      const orderId = `GYMBUDDY-${normPhone}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const grossAmount = Number(amount) || (plan === "premium" ? 139000 : 79000);
 
       const parameter = {
@@ -3059,11 +3058,17 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         customer_details: req.body.customerDetails || {
           first_name: customerName || "Member GymBuddy",
           email: "member@gymbuddy.app",
-          phone: phone || "08123456789"
-        }
+          phone: normPhone
+        },
+        // Bug #6 FIX: Add custom_fields so Midtrans webhook can identify user & plan
+        // These fields are returned back in the notification payload
+        custom_field1: normPhone,        // User phone (primary identifier)
+        custom_field2: plan,             // Subscription plan tier
+        custom_field3: activeService     // Active service (nutrition/coach/both)
       };
 
       const transaction = await snap.createTransaction(parameter);
+      console.log(`[Midtrans] Created transaction ${orderId} for user ${normPhone}, plan: ${plan}, service: ${activeService}`);
       res.json({
         success: true,
         orderId,
@@ -3072,6 +3077,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       });
     } catch (error: any) {
       console.error("Midtrans Transaction Error:", error);
+
       res.status(500).json({ success: false, error: error.message || "Failed to create transaction" });
     }
   });

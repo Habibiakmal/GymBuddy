@@ -34,6 +34,7 @@ interface FeatureShowcaseProps {
   onBack: () => void;
   onSwitchVariant: (variant: "workout" | "nutrition") => void;
   onOnboardingRequest: () => void;
+  userPhone?: string; // Bug #9 fix: real user phone for Midtrans payment
 }
 
 interface ChatMessage {
@@ -62,13 +63,14 @@ interface ChatMessage {
   };
 }
 
-export default function FeatureShowcase({
-  variant,
-  language,
-  onBack,
-  onSwitchVariant,
-  onOnboardingRequest,
-}: FeatureShowcaseProps) {
+const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ 
+  variant, 
+  language, 
+  onBack, 
+  onSwitchVariant, 
+  onOnboardingRequest, 
+  userPhone 
+}) => {
   const [activeHoverCallout, setActiveHoverCallout] = useState<number | null>(null);
   const [inputMessage, setInputMessage] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -251,9 +253,13 @@ export default function FeatureShowcase({
 
   useEffect(() => {
     const clientKey = (import.meta as any).env.VITE_MIDTRANS_CLIENT_KEY;
+    // Bug #10 fix: Use production URL when VITE_MIDTRANS_IS_PRODUCTION is 'true'
+    const isProduction = (import.meta as any).env.VITE_MIDTRANS_IS_PRODUCTION === "true";
     if (clientKey) {
       const script = document.createElement("script");
-      script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+      script.src = isProduction
+        ? "https://app.midtrans.com/snap/snap.js"       // Production
+        : "https://app.sandbox.midtrans.com/snap/snap.js"; // Sandbox
       script.setAttribute("data-client-key", clientKey);
       script.async = true;
       document.body.appendChild(script);
@@ -266,15 +272,29 @@ export default function FeatureShowcase({
   const handleSubscribe = async () => {
     try {
       setIsProcessingPayment(true);
-      
+
+      // Bug #9 fix: Use real user phone (passed as prop) — never hardcoded dummy
+      const paymentPhone = userPhone || "";
+      if (!paymentPhone) {
+        alert(language === "EN"
+          ? "Please complete your profile registration before subscribing."
+          : "Silakan lengkapi pendaftaran profil Anda terlebih dahulu sebelum berlangganan."
+        );
+        setIsProcessingPayment(false);
+        return;
+      }
+
       const amount = selectedPlan === "monthly" ? 49000 : 380000;
+      const plan = selectedPlan === "monthly" ? "premium" : "advanced";
       
       const res = await fetch("/api/midtrans/create-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: "81234567890", // Example phone, normally from auth state
+          phone: paymentPhone, // Bug #9 fix: real user phone
           planId: selectedPlan,
+          plan,
+          activeService: "both",
           amount: amount,
           customerName: "GymBuddy Member"
         })
@@ -1137,3 +1157,5 @@ export default function FeatureShowcase({
     </motion.div>
   );
 }
+
+export default FeatureShowcase;

@@ -712,7 +712,8 @@ export default function Dashboard({
 
   useEffect(() => {
     const fetchLiveUser = async () => {
-      const phoneToUse = initialUser?.phone || safeUser?.phone || "085156919826";
+      const phoneToUse = initialUser?.phone || safeUser?.phone || safeUser?.normalizedPhone || "";
+      if (!phoneToUse) return; // No phone = no fetch, prevent fetching other user's data
       const norm = normalizePhone(phoneToUse);
       const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
       try {
@@ -730,16 +731,18 @@ export default function Dashboard({
     fetchLiveUser();
   }, [initialUser?.phone]);
 
-  // Robust Local Storage Meal Retrieval with Multiple Phone Format Fallbacks
+  // Robust Local Storage Meal Retrieval — ONLY reads user-specific keys (Bug #3/#4 fix)
   const getLocalMeals = (phone: string, dateStr: string): MealItem[] => {
-    const norm = normalizePhone(phone || "085156919826");
+    if (!phone) return []; // Bug #4 fix: never read without a known user phone
+    const norm = normalizePhone(phone);
+    if (!norm) return [];
     const alt = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
+    // Bug #4 fix: REMOVED generic keys 'gymbuddy_meals_user_*' and 'gymbuddy_meals_*'
+    // These caused cross-contamination: logs from other users would leak into current user's view
     const candidateKeys = [
       `gymbuddy_meals_${norm}_${dateStr}`,
       `gymbuddy_meals_${alt}_${dateStr}`,
-      `gymbuddy_meals_${phone}_${dateStr}`,
-      `gymbuddy_meals_user_${dateStr}`,
-      `gymbuddy_meals_${dateStr}`
+      `gymbuddy_meals_${phone}_${dateStr}`
     ];
     for (const k of candidateKeys) {
       try {
@@ -756,7 +759,10 @@ export default function Dashboard({
   };
 
   const [allLogs, setAllLogs] = useState<MealItem[]>(() => {
-    return getLocalMeals(safeUser.phone || "085156919826", todayDateStr);
+    // Bug #3 fix: Only read meals for current user — never use hardcoded phone fallback
+    const userPhone = safeUser.phone || safeUser.normalizedPhone || "";
+    if (!userPhone) return [];
+    return getLocalMeals(userPhone, todayDateStr);
   });
   const [showFullWeeklyOverview, setShowFullWeeklyOverview] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -809,8 +815,11 @@ export default function Dashboard({
   // Notification Scheduler Settings
   const [showNotifSettingsModal, setShowNotifSettingsModal] = useState(false);
   const [notifSettings, setNotifSettings] = useState(() => {
+    // Bug #5 fix: notif settings are per-user, not global
+    const _normPhone = normalizePhone(safeUser.phone || safeUser.normalizedPhone || "");
+    const notifKey = _normPhone ? `gymbuddy_notif_settings_${_normPhone}` : "gymbuddy_notif_settings";
     try {
-      const stored = localStorage.getItem("gymbuddy_notif_settings");
+      const stored = localStorage.getItem(notifKey);
       if (stored) return JSON.parse(stored);
     } catch {}
     return {
@@ -826,7 +835,10 @@ export default function Dashboard({
 
   const saveNotifSettings = (updated: typeof notifSettings) => {
     setNotifSettings(updated);
-    try { localStorage.setItem("gymbuddy_notif_settings", JSON.stringify(updated)); } catch {}
+    // Bug #5 fix: save per-user notif settings key
+    const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    const notifKey = _normPhone ? `gymbuddy_notif_settings_${_normPhone}` : "gymbuddy_notif_settings";
+    try { localStorage.setItem(notifKey, JSON.stringify(updated)); } catch {}
   };
 
   const applyNotifSchedulers = (settings: typeof notifSettings) => {
@@ -853,8 +865,11 @@ export default function Dashboard({
   const DEFAULT_CARD_ORDER: CardId[] = ["hero", "feel_coach", "workout", "food", "hydration"];
 
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => {
+    // Bug #5 fix: card order is per-user, not global
+    const _normPhone = normalizePhone(safeUser.phone || safeUser.normalizedPhone || "");
+    const cardKey = _normPhone ? `gymbuddy_dashboard_card_order_${_normPhone}` : "gymbuddy_dashboard_card_order";
     try {
-      const stored = localStorage.getItem("gymbuddy_dashboard_card_order");
+      const stored = localStorage.getItem(cardKey);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -865,8 +880,11 @@ export default function Dashboard({
 
   const saveCardOrder = (newOrder: CardId[]) => {
     setCardOrder(newOrder);
+    // Bug #5 fix: save per-user card order
+    const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    const cardKey = _normPhone ? `gymbuddy_dashboard_card_order_${_normPhone}` : "gymbuddy_dashboard_card_order";
     try {
-      localStorage.setItem("gymbuddy_dashboard_card_order", JSON.stringify(newOrder));
+      localStorage.setItem(cardKey, JSON.stringify(newOrder));
     } catch (e) {}
   };
 
@@ -1211,7 +1229,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     const updated = [newMeal, ...allLogs];
     setAllLogs(updated);
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) return; // Guard: don't save without a valid user phone
     const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
       localStorage.setItem(localKey, JSON.stringify(updated));
@@ -1263,7 +1282,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   // Exercises State per date
   const [exercises, setExercises] = useState<WorkoutExercise[]>(() => {
     try {
-      const stored = localStorage.getItem(`gymbuddy_exercises_${safeUser.phone || "user"}_${selectedDate}`);
+      const _ePhone = normalizePhone(safeUser.phone || safeUser.normalizedPhone || "");
+      const stored = _ePhone ? localStorage.getItem(`gymbuddy_exercises_${_ePhone}_${selectedDate}`) : null;
       if (stored) return JSON.parse(stored);
     } catch (e) {}
     return todayScheduleObj.exercises;
@@ -1297,6 +1317,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [showManualInputs, setShowManualInputs] = useState(false);
   const [aiPreview, setAiPreview] = useState<any>(null);
   const [aiConfirmStep, setAiConfirmStep] = useState(false); // Feature 1: two-step confirm
+  const [userOriginalFoodInput, setUserOriginalFoodInput] = useState(""); // Bug #8 fix: preserve original user input
   const [coachTip, setCoachTip] = useState<string | null>(null); // Coach next-step bubble
   const [showCoachTip, setShowCoachTip] = useState(false);
 
@@ -1310,6 +1331,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemSugarInput("0");
     setAiPreview(null);
     setAiConfirmStep(false);
+    setUserOriginalFoodInput(""); // Bug #8 fix
     setShowManualInputs(false);
     setShowAddDrinkModal(false);
     setShowAddFoodModal(true);
@@ -1325,12 +1347,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemSugarInput("0");
     setAiPreview(null);
     setAiConfirmStep(false);
+    setUserOriginalFoodInput(""); // Bug #8 fix
     setShowManualInputs(false);
     setShowAddFoodModal(false);
     setShowAddDrinkModal(true);
   };
 
-  const normPhone = normalizePhone(activeUser.phone || "085156919826");
+  const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
 
   const weight = Number(activeUser.weight) || 70;
   const startWeight = Number(activeUser.startWeight) || weight;
@@ -1480,7 +1503,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   const handleSaveEditMeal = () => {
     if (!editingMeal) return;
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     const cal = Math.max(0, Number(editMealCal) || 0);
     const prot = Math.max(0, Number(editMealProt) || 0);
     const carb = Math.max(0, Number(editMealCarb) || 0);
@@ -1666,7 +1689,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   // Fetch & Auto-Split Combo Logs with Stale-While-Revalidate & Server Priority
   const fetchLogsForDate = async (dateStr: string, silent = false) => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) { if (!silent) setIsSyncing(false); return; } // Guard: no phone = no fetch
     const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
     // 1. Immediate Display from local cache (fast initial render, no flicker)
@@ -1748,12 +1772,18 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     fetchLogsForDate(selectedDate, false);
 
     try {
-      const storedFeel = localStorage.getItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`);
+      const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+      const storedFeel = _normPhone
+        ? localStorage.getItem(`gymbuddy_feel_${_normPhone}_${selectedDate}`)
+        : null;
       if (storedFeel) setFeelState(storedFeel as FeelState);
     } catch (e) {}
 
     try {
-      const storedEx = localStorage.getItem(`gymbuddy_exercises_${activeUser.phone || "user"}_${selectedDate}`);
+      const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+      const storedEx = _normPhone
+        ? localStorage.getItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`)
+        : null;
       if (storedEx) {
         setExercises(JSON.parse(storedEx));
       } else {
@@ -1798,8 +1828,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   const saveExercisesState = (updatedEx: WorkoutExercise[]) => {
     setExercises(updatedEx);
+    const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!_normPhone) return;
     try {
-      localStorage.setItem(`gymbuddy_exercises_${activeUser.phone || "user"}_${selectedDate}`, JSON.stringify(updatedEx));
+      localStorage.setItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`, JSON.stringify(updatedEx));
     } catch (e) {}
   };
 
@@ -1833,9 +1865,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   const handleSelectFeel = (state: FeelState) => {
     setFeelState(state);
-    try {
-      localStorage.setItem(`gymbuddy_feel_${activeUser.phone || "user"}_${selectedDate}`, state);
-    } catch (e) {}
+    const _normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (_normPhone) {
+      try {
+        localStorage.setItem(`gymbuddy_feel_${_normPhone}_${selectedDate}`, state);
+      } catch (e) {}
+    }
 
     // Coach mood popup messages
     const coachMessages: Record<string, { icon: string; title: string; message: string; tips: string[]; color: string }> = {
@@ -1903,7 +1938,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   const handleSetReminderTime = async () => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
       await fetch(`${API_BASE_URL}/api/user/${normPhone}/reminder`, {
@@ -1949,6 +1984,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const rawQuery = (textToAnalyze || itemNameInput).trim();
     if (!rawQuery) return null;
 
+    // Bug #8 FIX: Save original user input BEFORE any AI analysis modifies the state
+    // This raw input is what will be stored as foodName — never the AI/catalog result
+    const originalUserInput = rawQuery;
+    setUserOriginalFoodInput(originalUserInput);
+
     const queryText = cleanIndonesianFoodSentence(rawQuery);
     setIsAnalyzingAi(true);
 
@@ -1966,6 +2006,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
     let resultItems: FoodItemNutrition[] = baseEstimation.items || [];
+    // Bug #8: resultFoodName is ONLY used for AI preview display — NOT for saving
     let resultFoodName = baseEstimation.foodName;
     let isHydration = Boolean(baseEstimation.isHydration);
     let volumeMl = Number(baseEstimation.volumeMl) || 0;
@@ -1993,6 +2034,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           if (Array.isArray(bData.items) && bData.items.length > 0) {
             resultItems = bData.items;
           }
+          // Bug #8: DO NOT use bData.foodName as display — keep original user input
+          // resultFoodName is only shown as AI preview label
           resultFoodName = bData.foodName || baseEstimation.foodName;
           isHydration = Boolean(bData.isHydration || baseEstimation.isHydration);
           volumeMl = Number(bData.volumeMl) || baseEstimation.volumeMl || 0;
@@ -2022,7 +2065,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const calories = Math.round(sumCal);
 
     const validatedResult: MealNutritionResult = {
-      foodName: resultFoodName,
+      // Bug #8: Always use original user input as foodName
+      foodName: originalUserInput,
       calories,
       protein,
       carbs,
@@ -2037,7 +2081,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       calculatedFromItems: true
     };
 
-    setItemNameInput(resultFoodName);
+    // Bug #8 FIX: DO NOT call setItemNameInput(resultFoodName)!
+    // The input field keeps the user's original typing — we only update nutrition numbers
+    // setItemNameInput(resultFoodName); // ← REMOVED: This was the root cause of the food name bug
     setItemCalInput(String(calories));
     setItemProteinInput(String(protein));
     setItemCarbsInput(String(carbs));
@@ -2076,16 +2122,22 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   // Step 2: User confirmed — actually save to log
   const handleConfirmSave = async () => {
-    if (!itemNameInput.trim()) return;
+    if (!itemNameInput.trim() && !userOriginalFoodInput.trim()) return;
 
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) {
+      console.warn("[Dashboard] handleConfirmSave: No active user phone, cannot save log");
+      return;
+    }
+    // Bug #8 FIX: Always use original user input as food name — never the AI-generated name
+    const foodNameToSave = userOriginalFoodInput.trim() || itemNameInput.trim();
     const cal = Number(itemCalInput) || 0;
     const prot = Number(itemProteinInput) || 0;
     const carb = Number(itemCarbsInput) || 0;
     const fat = Number(itemFatInput) || 0;
 
     const { foods, drinks } = splitAndCategorizeComboText(
-      itemNameInput,
+      foodNameToSave,
       cal,
       prot,
       carb,
@@ -2125,6 +2177,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemFatInput("");
     setAiPreview(null);
     setAiConfirmStep(false);
+    setUserOriginalFoodInput(""); // Bug #8 fix: clear original input
     setShowManualInputs(false);
     setShowAddFoodModal(false);
     setShowAddDrinkModal(false);
@@ -2152,7 +2205,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           goal: activeUser.goal || "maintain",
           persona: activeUser.persona || "max",
           name: activeUser.name || "Member",
-          mealName: itemNameInput || foods[0]?.foodName || "Makanan"
+          mealName: foodNameToSave || foods[0]?.foodName || "Makanan"
         })
       });
       if (tipRes.ok) {
@@ -2180,7 +2233,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const handleSaveLogItem = handleAnalyzeAndPreview;
 
   const handleQuickAddWater = (ml: number) => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) {
+      console.warn("[Dashboard] handleQuickAddWater: No active user phone, cannot sync water log");
+      return;
+    }
     const newItem: MealItem = {
       id: `m-drink-${Date.now()}`,
       foodName: `Air Putih ${ml} ml`,
@@ -2210,7 +2267,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   const handleSaveCustomDrink = () => {
-    const normPhone = normalizePhone(activeUser.phone || "085156919826");
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) {
+      console.warn("[Dashboard] handleDeleteMeal: No active user phone, cannot sync delete");
+      return;
+    }
     const vol = Math.max(50, Number(customDrinkMl) || 250);
     const dName = (customDrinkName || "Air Mineral").trim();
     let cal = 0, prot = 0, carb = 0, fat = 0;
@@ -5642,7 +5703,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !isAnalyzingAi) {
-                          handleSaveLogItem();
+                          // Bug #2 fix: If AI preview is ready and waiting for confirmation,
+                          // pressing Enter should CONFIRM SAVE, not re-trigger analysis
+                          if (aiConfirmStep) {
+                            e.preventDefault();
+                            handleConfirmSave();
+                          } else {
+                            handleSaveLogItem();
+                          }
                         }
                       }}
                       placeholder={showAddDrinkModal ? "misal: Air Putih 500ml, Kopi Kenangan Mantan, Jus Alpukat" : "misal: Nasi Padang Rendang + Es Teh Manis"}
