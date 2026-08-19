@@ -1305,6 +1305,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [itemFatInput, setItemFatInput] = useState("");
   const [itemFiberInput, setItemFiberInput] = useState("0");
   const [itemSugarInput, setItemSugarInput] = useState("0");
+  const [itemSodiumInput, setItemSodiumInput] = useState("0");
   const [itemVolumeInput, setItemVolumeInput] = useState("250");
   const [newWeightInput, setNewWeightInput] = useState(String(safeUser.weight || 70));
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
@@ -1323,6 +1324,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemFatInput("");
     setItemFiberInput("0");
     setItemSugarInput("0");
+    setItemSodiumInput("0");
     setAiPreview(null);
     setAiConfirmStep(false);
     setUserOriginalFoodInput(""); // Bug #8 fix
@@ -1339,6 +1341,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemFatInput("");
     setItemFiberInput("0");
     setItemSugarInput("0");
+    setItemSodiumInput("0");
     setAiPreview(null);
     setAiConfirmStep(false);
     setUserOriginalFoodInput(""); // Bug #8 fix
@@ -1498,6 +1501,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [editMealFat, setEditMealFat] = useState("");
   const [editMealFib, setEditMealFib] = useState("0");
   const [editMealSug, setEditMealSug] = useState("0");
+  const [editMealSod, setEditMealSod] = useState("0");
 
   const handleOpenEditMeal = (meal: MealItem) => {
     setEditingMeal(meal);
@@ -1509,6 +1513,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setEditMealFat(String(meal.fat || 0));
     setEditMealFib(String(meal.fiber || 0));
     setEditMealSug(String(meal.sugar || 0));
+    setEditMealSod(String((meal as any).sodium || 0));
   };
 
   const handleSaveEditMeal = () => {
@@ -1520,6 +1525,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const fat = Math.max(0, Number(editMealFat) || 0);
     const fib = Math.max(0, Number(editMealFib) || 0);
     const sug = Math.max(0, Number(editMealSug) || 0);
+    const sod = Math.max(0, Number(editMealSod) || 0);
 
     const updatedMeal: MealItem = {
       ...editingMeal,
@@ -1530,7 +1536,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       carbs: carb,
       fat: fat,
       fiber: fib,
-      sugar: sug
+      sugar: sug,
+      sodium: sod
     };
 
     const updated = allLogs.map((item) => (item.id === editingMeal.id ? updatedMeal : item));
@@ -2097,7 +2104,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     }
 
     // STRICT REQUIREMENT: Summary values MUST ALWAYS be calculated directly from SUM(current detected items)
-    let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
+    let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0, sumSod = 0;
     for (const it of resultItems) {
       sumCal += Number(it.calories) || 0;
       sumProt += Number(it.protein) || 0;
@@ -2105,6 +2112,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       sumFat += Number(it.fat) || 0;
       sumFib += Number(it.fiber) || 0;
       sumSug += Number(it.sugar) || 0;
+      sumSod += Number((it as any).sodium) || 0;
     }
 
     const protein = Math.round(sumProt * 10) / 10;
@@ -2112,6 +2120,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const fat = Math.round(sumFat * 10) / 10;
     const fiber = Math.round(sumFib * 10) / 10;
     const sugar = Math.round(sumSug * 10) / 10;
+    const sodium = Math.round(sumSod);
     const calories = Math.round(sumCal);
 
     const validatedResult: MealNutritionResult = {
@@ -2123,6 +2132,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       fat,
       fiber,
       sugar,
+      sodium,
       items: resultItems,
       portionNote: portionNote || `${resultItems.length} detected food items`,
       isHydration,
@@ -2133,13 +2143,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     // Bug #8 FIX: DO NOT call setItemNameInput(resultFoodName)!
     // The input field keeps the user's original typing — we only update nutrition numbers
-    // setItemNameInput(resultFoodName); // ← REMOVED: This was the root cause of the food name bug
     setItemCalInput(String(calories));
     setItemProteinInput(String(protein));
     setItemCarbsInput(String(carbs));
     setItemFatInput(String(fat));
     setItemFiberInput(String(fiber));
     setItemSugarInput(String(sugar));
+    setItemSodiumInput(String(sodium));
 
     setAiPreview(validatedResult);
     setIsAnalyzingAi(false);
@@ -2160,6 +2170,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setItemFatInput("");
     setItemFiberInput("");
     setItemSugarInput("");
+    setItemSodiumInput("");
 
     // Calculate via AI & estimation engine (single source of truth = detected items)
     const aiRes = await handleAnalyzeAiFoodText(itemNameInput);
@@ -2185,6 +2196,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const prot = Number(itemProteinInput) || 0;
     const carb = Number(itemCarbsInput) || 0;
     const fat = Number(itemFatInput) || 0;
+    const fib = Number(itemFiberInput) || 0;
+    const sug = Number(itemSugarInput) || 0;
+    const sod = Number(itemSodiumInput) || 0;
 
     const { foods, drinks } = splitAndCategorizeComboText(
       foodNameToSave,
@@ -2194,7 +2208,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       fat
     );
 
-    const newItems = [...foods, ...drinks];
+    const newItems = [...foods, ...drinks].map(item => ({
+      ...item,
+      fiber: fib,
+      sugar: sug,
+      sodium: sod
+    }));
 
     // CRITICAL: Update localStorage IMMEDIATELY before the server call.
     const updated = [...allLogs, ...newItems];
@@ -5857,12 +5876,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                     {it.calories} kcal
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5">
+                                <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5 flex-wrap">
                                   <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
                                   <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
                                   <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
                                   {it.fiber !== undefined && it.fiber > 0 && (
                                     <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                                  )}
+                                  {(it as any).sodium !== undefined && Number((it as any).sodium) > 0 && (
+                                    <span>Na: <strong className="text-purple-400">{(it as any).sodium}mg</strong></span>
                                   )}
                                 </div>
                               </div>
@@ -5872,7 +5894,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </div>
                     )}
 
-                    {/* 5-Metric Total Macro Grid */}
+                    {/* 6-Metric Total Macro Grid */}
                     {(() => {
                       const displayProtein = aiPreview.items?.length
                         ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.protein) || 0), 0) * 10) / 10
@@ -5889,9 +5911,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       const displaySugar = aiPreview.items?.length
                         ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.sugar) || 0), 0) * 10) / 10
                         : (Number(itemSugarInput) || 0);
+                      const displaySodium = aiPreview.items?.length
+                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number((it as any).sodium) || 0), 0))
+                        : (Number(itemSodiumInput) || 0);
 
                       return (
-                        <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
                           <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
                             <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
                             <span className="font-black text-white">{displayProtein}g</span>
@@ -5911,6 +5936,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
                             <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Gula</span>
                             <span className="font-black text-white">{displaySugar}g</span>
+                          </div>
+                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                            <span className="block text-[9px] sm:text-[10px] text-purple-400 font-bold">{isEN ? "Sodium" : "Natrium"}</span>
+                            <span className="font-black text-white">{displaySodium}mg</span>
                           </div>
                         </div>
                       );
@@ -5994,6 +6023,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-cyan-400"
                         />
                       </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-purple-400">Natrium (Sodium, mg)</label>
+                        <input
+                          type="number"
+                          value={itemSodiumInput}
+                          onChange={(e) => setItemSodiumInput(e.target.value)}
+                          placeholder="350"
+                          className="w-full mt-1 px-3 py-2 bg-[#161C28] border border-white/10 rounded-xl text-xs font-black text-white focus:outline-none focus:border-purple-400"
+                        />
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -6010,7 +6049,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         Ready to save
                       </span>
                       <span className="text-[11px] font-black text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-1 rounded-lg border border-[#D4FF00]/20">
-                        ~{Number(itemCalInput || 0).toLocaleString()} kcal · {itemProteinInput || "0"}P · {itemCarbsInput || "0"}C · {itemFatInput || "0"}F
+                        ~{Number(itemCalInput || 0).toLocaleString()} kcal · {itemProteinInput || "0"}P · {itemCarbsInput || "0"}C · {itemFatInput || "0"}F{itemSodiumInput ? ` · ${itemSodiumInput}mg Na` : ""}
                       </span>
                     </div>
 
@@ -7002,7 +7041,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   </span>
                 </div>
 
-                <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold">
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
                     <span className="block text-[9px] text-indigo-400 font-bold">Protein</span>
                     <span className="text-white font-black">{selectedMealDetail.protein || 0}g</span>
@@ -7022,6 +7061,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
                     <span className="block text-[9px] text-cyan-400 font-bold">{isEN ? "Sugar" : "Gula"}</span>
                     <span className="text-white font-black">{selectedMealDetail.sugar || 0}g</span>
+                  </div>
+                  <div className="bg-[#111620] rounded-xl p-2 border border-white/5">
+                    <span className="block text-[9px] text-purple-400 font-bold">{isEN ? "Sodium" : "Natrium"}</span>
+                    <span className="text-white font-black">{(selectedMealDetail as any).sodium || 0}mg</span>
                   </div>
                 </div>
               </div>
