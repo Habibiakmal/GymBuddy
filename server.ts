@@ -1175,6 +1175,27 @@ function calculateUserData(profile: any) {
   };
 }
 
+function deduplicateMealLogs(logs: any[]): any[] {
+  if (!Array.isArray(logs)) return [];
+  const seenSignatures = new Set<string>();
+  const cleanLogs: any[] = [];
+
+  for (const log of logs) {
+    if (!log || !log.foodName) continue;
+    const normName = String(log.foodName).toLowerCase().trim();
+    const cal = Number(log.calories) || 0;
+    const timeMinute = log.timestamp ? String(log.timestamp).substring(0, 16) : "";
+    
+    // Signature = foodName + calories + timestamp minute
+    const signature = `${normName}_${cal}_${timeMinute}`;
+    if (seenSignatures.has(signature)) continue;
+    seenSignatures.add(signature);
+    cleanLogs.push(log);
+  }
+
+  return cleanLogs;
+}
+
 function getDailyTotals(rawPhone: string, targetDateStr?: string) {
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
@@ -1183,9 +1204,19 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
   const altKey = `${altPhone}_${targetDate}`;
 
   // Prioritize primary key (even if empty array [ ]); fallback to altKey only if key is undefined
-  const logs = (dbData.dailyLogs[key] !== undefined)
+  const rawLogs = (dbData.dailyLogs[key] !== undefined)
     ? dbData.dailyLogs[key]
     : (dbData.dailyLogs[altKey] !== undefined ? dbData.dailyLogs[altKey] : []);
+
+  // Strict Deduplication: clean out any duplicated entries
+  const logs = deduplicateMealLogs(rawLogs);
+
+  // Auto-clean database in-place if duplicates were found
+  if (logs.length < rawLogs.length) {
+    if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = logs;
+    if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = logs;
+    saveDb();
+  }
 
   let calories = 0;
   let protein = 0;
@@ -2667,15 +2698,15 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
     let logs: MealLog[] = [];
     if (dbData.dailyLogs[key] !== undefined && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
-      logs = dbData.dailyLogs[key].filter(m => !isLegacyMockMeal(m));
+      logs = deduplicateMealLogs(dbData.dailyLogs[key].filter(m => !isLegacyMockMeal(m)));
     } else if (dbData.dailyLogs[altKey] !== undefined && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
-      logs = dbData.dailyLogs[altKey].filter(m => !isLegacyMockMeal(m));
+      logs = deduplicateMealLogs(dbData.dailyLogs[altKey].filter(m => !isLegacyMockMeal(m)));
     } else {
       // Query persistent database layer (Firestore / MongoDB / memory)
       try {
         const dbLogs = await getFoodLogsForDate(phone, targetDate);
         if (dbLogs && dbLogs.length > 0) {
-          logs = dbLogs as unknown as MealLog[];
+          logs = deduplicateMealLogs(dbLogs as unknown as MealLog[]);
           dbData.dailyLogs[key] = logs;
           saveDb();
         }
@@ -2683,6 +2714,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         console.warn("[Meals API] Database fetch note:", e?.message || e);
       }
     }
+
+    // Persist cleaned deduplicated list back to server memory
+    if (logs.length > 0) {
+      dbData.dailyLogs[key] = logs;
+      if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = logs;
+      saveDb();
+    }
+
 
     res.json({ success: true, phone, date: targetDate, logs });
   });

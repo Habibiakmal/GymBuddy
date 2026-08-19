@@ -3107,6 +3107,35 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {foodMeals.length > 3 && (
+                          <button
+                            onClick={() => {
+                              const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+                              if (!normPhone) return;
+                              const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+                              const currentLocal = getLocalMeals(activeUser.phone, selectedDate);
+                              const clean = sanitizeAndSplitComboLogs(currentLocal);
+                              setAllLogs(clean);
+                              try {
+                                localStorage.setItem(localKey, JSON.stringify(clean));
+                              } catch (e) {}
+                              fetch(`/api/user/${normPhone}/meals?date=${selectedDate}`)
+                                .then(res => res.json())
+                                .then(data => {
+                                  if (data && data.logs) {
+                                    const cleanServer = sanitizeAndSplitComboLogs(data.logs);
+                                    setAllLogs(cleanServer);
+                                    try { localStorage.setItem(localKey, JSON.stringify(cleanServer)); } catch (e) {}
+                                  }
+                                }).catch(() => {});
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                            title="Bersihkan entri makanan duplikat"
+                          >
+                            <Trash2 size={14} />
+                            <span>{isEN ? "Clean Duplicates" : "Bersihkan Duplikat"}</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => setShowScanModal(true)}
                           className="px-3.5 py-1.5 rounded-xl bg-[#18202E] border border-white/[0.08] text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
