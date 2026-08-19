@@ -47882,7 +47882,13 @@ Keluarkan output JSON valid:
       const { Body, From, NumMedia } = req.body;
       const rawFrom = From || "";
       const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
-      let userProfile = await findUserByPhoneOrId(normFrom) || getUserProfile(normFrom) || await getUserProfileFromFirestore(normFrom);
+      let userProfile = null;
+      try {
+        userProfile = await findUserByPhoneOrId(normFrom) || getUserProfile(normFrom) || await getUserProfileFromFirestore(normFrom);
+      } catch (profileErr) {
+        console.warn("[Twilio WA] User profile lookup error (non-fatal):", profileErr?.message || profileErr);
+        userProfile = getUserProfile(normFrom) || null;
+      }
       let userText = Body || "";
       let imagePart = null;
       if (NumMedia && parseInt(NumMedia) > 0) {
@@ -47922,6 +47928,7 @@ Keluarkan output JSON valid:
         saveUserProfile(normFrom, userProfile);
       }
       const userData = calculateUserData(userProfile);
+      console.log(`[Twilio WA] \u2705 Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
       const isCheckSummaryMessage = lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("makan apa");
@@ -47936,8 +47943,9 @@ Keluarkan output JSON valid:
       const isExerciseInquiry = Boolean(
         matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
+      console.log(`[Twilio WA] \u2705 Step: routing. isReset=${isResetMessage}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
       if (isResetMessage) {
-        const normPhone = normalizePhone(From);
+        const normPhone = normalizePhone(normFrom);
         if (dbData.users[normPhone]) {
           delete dbData.users[normPhone];
         }
