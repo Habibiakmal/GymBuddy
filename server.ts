@@ -4895,7 +4895,7 @@ Keluarkan output JSON valid:
         ];
       } else {
         // 100% PURE AI MESSAGING — ALL messages processed dynamically by Gemini AI
-        if (USER_GEMINI_KEY) {
+        if (getAi()) {
           let imagePart: any = null;
           if (mediaUrl) {
             try {

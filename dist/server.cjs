@@ -48940,7 +48940,7 @@ Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untu
 "Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
         ];
       } else {
-        if (USER_GEMINI_KEY) {
+        if (getAi()) {
           let imagePart = null;
           if (mediaUrl) {
             try {
