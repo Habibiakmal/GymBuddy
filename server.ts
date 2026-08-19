@@ -542,11 +542,28 @@ async function loadFromFirestore(): Promise<boolean> {
   try {
     const doc = await loadAppDataFromFirestore();
     if (doc) {
-      if (doc.users) dbData.users = { ...dbData.users, ...doc.users };
-      if (doc.dailyLogs) dbData.dailyLogs = { ...dbData.dailyLogs, ...doc.dailyLogs };
-      if (doc.weeklyProgress) dbData.weeklyProgress = { ...dbData.weeklyProgress, ...doc.weeklyProgress };
-      if (doc.waterLogs) dbData.waterLogs = { ...dbData.waterLogs, ...doc.waterLogs };
-      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users from Firestore ✅`);
+      if (doc.users && Object.keys(doc.users).length > 0) {
+        dbData.users = { ...doc.users, ...dbData.users };
+      }
+      if (doc.dailyLogs && Object.keys(doc.dailyLogs).length > 0) {
+        // Merge daily logs array by ID
+        for (const [k, v] of Object.entries(doc.dailyLogs)) {
+          if (Array.isArray(v) && v.length > 0) {
+            const existing = dbData.dailyLogs[k] || [];
+            const mergedMap = new Map<string, any>();
+            for (const item of existing) { if (item.id) mergedMap.set(item.id, item); }
+            for (const item of v) { if (item.id) mergedMap.set(item.id, item); }
+            dbData.dailyLogs[k] = Array.from(mergedMap.values());
+          }
+        }
+      }
+      if (doc.weeklyProgress) {
+        dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+      }
+      if (doc.waterLogs) {
+        dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+      }
+      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users and ${Object.keys(dbData.dailyLogs).length} log dates from Firestore ✅`);
       return true;
     }
     return false;
@@ -594,7 +611,10 @@ async function getUserProfileFromFirestore(rawPhone: string): Promise<any | null
 
 async function saveToFirestore(): Promise<void> {
   try {
-    await saveAppDataToFirestore(dbData);
+    // Only save if dbData contains actual users/logs (never overwrite with empty data)
+    if (Object.keys(dbData.users).length > 0 || Object.keys(dbData.dailyLogs).length > 0) {
+      await saveAppDataToFirestore(dbData);
+    }
   } catch (e) {
     console.error("[Firestore] Save error:", e);
   }
@@ -643,46 +663,11 @@ function initDb() {
     } catch (e) {
       console.error("Error reading db.json, starting fresh", e);
     }
-  } else {
-    saveDb();
-  }
-
-  // Purge any legacy mock logs
-  purgeLegacyMockLogs();
-
-  // Ensure default profile for primary user Bibi (085156919826) is accurately seeded with real biometrics
-  const bibiPhone = "085156919826";
-  const bibiAlt = "6285156919826";
-  if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
-    const bibiProfile = {
-      name: "Bibi",
-      phone: bibiPhone,
-      normalizedPhone: bibiPhone,
-      goal: "health",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 78,
-      startWeight: 78,
-      targetWeight: 78,
-      height: 177,
-      age: 24,
-      gender: "pria",
-      persona: "mia",
-      activityLevel: "light",
-      targetCalories: 2435,
-      proteinGrams: 140,
-      carbGrams: 316,
-      fatGrams: 68,
-      fiberGrams: 32,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    dbData.users[bibiPhone] = bibiProfile;
-    dbData.users[bibiAlt] = bibiProfile;
   }
 
   // Load from Firestore asynchronously (authoritative cloud store)
   loadFromFirestore().then(loaded => {
-    if (!loaded) console.log("[Firestore] No existing cloud snapshot found, will create on first save");
+    if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
   });
 }

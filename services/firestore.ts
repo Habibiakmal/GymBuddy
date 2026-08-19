@@ -210,14 +210,62 @@ export async function getFoodLogsFromFirestore(phone: string, date: string): Pro
   try {
     const db = getFirestore();
     if (!db) return [];
-    const variations = getPhoneVariations(phone).slice(0, 10);
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
 
-    const snap = await db.collection("foodLogs")
-      .where("phone", "in", variations)
-      .where("date", "==", date)
-      .get();
+    // Use single equality queries to avoid requiring composite indexes in Firestore
+    const resultsMap = new Map<string, FoodLogDocument>();
 
-    const results = snap.docs.map(d => d.data() as FoodLogDocument);
+    // 1. Query for normPhone ("08xxx")
+    try {
+      const snap1 = await db.collection("foodLogs")
+        .where("phone", "==", normPhone)
+        .where("date", "==", date)
+        .get();
+      snap1.docs.forEach(d => {
+        const data = d.data() as FoodLogDocument;
+        if (data.id) resultsMap.set(data.id, data);
+      });
+    } catch (err1: any) {
+      console.warn("[Firestore] Query 1 note:", err1?.message);
+    }
+
+    // 2. Query for altPhone ("628xxx") if different
+    if (altPhone !== normPhone) {
+      try {
+        const snap2 = await db.collection("foodLogs")
+          .where("phone", "==", altPhone)
+          .where("date", "==", date)
+          .get();
+        snap2.docs.forEach(d => {
+          const data = d.data() as FoodLogDocument;
+          if (data.id) resultsMap.set(data.id, data);
+        });
+      } catch (err2: any) {
+        console.warn("[Firestore] Query 2 note:", err2?.message);
+      }
+    }
+
+    // 3. Fallback: Query by date only and filter by phone in memory if indexed query had 0 results
+    if (resultsMap.size === 0) {
+      try {
+        const snapDate = await db.collection("foodLogs")
+          .where("date", "==", date)
+          .limit(100)
+          .get();
+        snapDate.docs.forEach(d => {
+          const data = d.data() as FoodLogDocument;
+          const dClean = (data.phone || "").replace(/\D/g, "");
+          const dNorm = dClean.startsWith("62") ? "0" + dClean.substring(2) : (dClean.startsWith("8") ? "0" + dClean : dClean);
+          if (dNorm === normPhone && data.id) {
+            resultsMap.set(data.id, data);
+          }
+        });
+      } catch (dateErr: any) {}
+    }
+
+    const results = Array.from(resultsMap.values());
     return results.sort((a, b) => {
       const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;

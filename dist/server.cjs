@@ -44090,9 +44090,45 @@ async function getFoodLogsFromFirestore(phone, date) {
   try {
     const db = getFirestore();
     if (!db) return [];
-    const variations = getPhoneVariations(phone).slice(0, 10);
-    const snap2 = await db.collection("foodLogs").where("phone", "in", variations).where("date", "==", date).get();
-    const results = snap2.docs.map((d) => d.data());
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+    const resultsMap = /* @__PURE__ */ new Map();
+    try {
+      const snap1 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).get();
+      snap1.docs.forEach((d) => {
+        const data = d.data();
+        if (data.id) resultsMap.set(data.id, data);
+      });
+    } catch (err1) {
+      console.warn("[Firestore] Query 1 note:", err1?.message);
+    }
+    if (altPhone !== normPhone) {
+      try {
+        const snap2 = await db.collection("foodLogs").where("phone", "==", altPhone).where("date", "==", date).get();
+        snap2.docs.forEach((d) => {
+          const data = d.data();
+          if (data.id) resultsMap.set(data.id, data);
+        });
+      } catch (err2) {
+        console.warn("[Firestore] Query 2 note:", err2?.message);
+      }
+    }
+    if (resultsMap.size === 0) {
+      try {
+        const snapDate = await db.collection("foodLogs").where("date", "==", date).limit(100).get();
+        snapDate.docs.forEach((d) => {
+          const data = d.data();
+          const dClean = (data.phone || "").replace(/\D/g, "");
+          const dNorm = dClean.startsWith("62") ? "0" + dClean.substring(2) : dClean.startsWith("8") ? "0" + dClean : dClean;
+          if (dNorm === normPhone && data.id) {
+            resultsMap.set(data.id, data);
+          }
+        });
+      } catch (dateErr) {
+      }
+    }
+    const results = Array.from(resultsMap.values());
     return results.sort((a, b) => {
       const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -45043,11 +45079,31 @@ async function loadFromFirestore() {
   try {
     const doc = await loadAppDataFromFirestore();
     if (doc) {
-      if (doc.users) dbData.users = { ...dbData.users, ...doc.users };
-      if (doc.dailyLogs) dbData.dailyLogs = { ...dbData.dailyLogs, ...doc.dailyLogs };
-      if (doc.weeklyProgress) dbData.weeklyProgress = { ...dbData.weeklyProgress, ...doc.weeklyProgress };
-      if (doc.waterLogs) dbData.waterLogs = { ...dbData.waterLogs, ...doc.waterLogs };
-      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users from Firestore \u2705`);
+      if (doc.users && Object.keys(doc.users).length > 0) {
+        dbData.users = { ...doc.users, ...dbData.users };
+      }
+      if (doc.dailyLogs && Object.keys(doc.dailyLogs).length > 0) {
+        for (const [k, v] of Object.entries(doc.dailyLogs)) {
+          if (Array.isArray(v) && v.length > 0) {
+            const existing = dbData.dailyLogs[k] || [];
+            const mergedMap = /* @__PURE__ */ new Map();
+            for (const item of existing) {
+              if (item.id) mergedMap.set(item.id, item);
+            }
+            for (const item of v) {
+              if (item.id) mergedMap.set(item.id, item);
+            }
+            dbData.dailyLogs[k] = Array.from(mergedMap.values());
+          }
+        }
+      }
+      if (doc.weeklyProgress) {
+        dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+      }
+      if (doc.waterLogs) {
+        dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+      }
+      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users and ${Object.keys(dbData.dailyLogs).length} log dates from Firestore \u2705`);
       return true;
     }
     return false;
@@ -45088,7 +45144,9 @@ async function getUserProfileFromFirestore(rawPhone) {
 }
 async function saveToFirestore() {
   try {
-    await saveAppDataToFirestore(dbData);
+    if (Object.keys(dbData.users).length > 0 || Object.keys(dbData.dailyLogs).length > 0) {
+      await saveAppDataToFirestore(dbData);
+    }
   } catch (e) {
     console.error("[Firestore] Save error:", e);
   }
@@ -45134,40 +45192,9 @@ function initDb() {
     } catch (e) {
       console.error("Error reading db.json, starting fresh", e);
     }
-  } else {
-    saveDb();
-  }
-  purgeLegacyMockLogs();
-  const bibiPhone = "085156919826";
-  const bibiAlt = "6285156919826";
-  if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
-    const bibiProfile = {
-      name: "Bibi",
-      phone: bibiPhone,
-      normalizedPhone: bibiPhone,
-      goal: "health",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 78,
-      startWeight: 78,
-      targetWeight: 78,
-      height: 177,
-      age: 24,
-      gender: "pria",
-      persona: "mia",
-      activityLevel: "light",
-      targetCalories: 2435,
-      proteinGrams: 140,
-      carbGrams: 316,
-      fatGrams: 68,
-      fiberGrams: 32,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    dbData.users[bibiPhone] = bibiProfile;
-    dbData.users[bibiAlt] = bibiProfile;
   }
   loadFromFirestore().then((loaded) => {
-    if (!loaded) console.log("[Firestore] No existing cloud snapshot found, will create on first save");
+    if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
   });
 }
