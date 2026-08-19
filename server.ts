@@ -3067,6 +3067,32 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, schedule: calculated.workoutSchedule });
   });
 
+  // REST API: Get/Update Daily Exercise Checklist (Cross-Device Sync)
+  app.get("/api/user/:phone/exercises", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const targetDate = (req.query.date as string) || getLocalDateStr();
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const exercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+    res.json({ success: true, phone, date: targetDate, exercises });
+  });
+
+  app.post("/api/user/:phone/exercises", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const targetDate = req.body?.date || (req.query.date as string) || getLocalDateStr();
+    const { exercises } = req.body;
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    if (Array.isArray(exercises)) {
+      dbData.dailyLogs[key] = exercises;
+      dbData.dailyLogs[altKey] = exercises;
+      saveDb();
+    }
+    res.json({ success: true, phone, date: targetDate, exercises: dbData.dailyLogs[key] || [] });
+  });
+
   // REST API: Update Reminder Settings for Dashboard & WhatsApp Sync
   app.post("/api/user/:phone/reminder", express.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -3086,21 +3112,23 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     });
   });
 
-  // REST API: Update Goals for Dashboard
+  // REST API: Update Goals & Custom Targets for Dashboard (Cross-Device Sync)
   app.post("/api/user/:phone/goals", express.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const user = getUserProfile(phone);
     if (!user) {
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
-    const { targetWeight, targetCalories, goal, goalTitle } = req.body;
+    const { targetWeight, targetCalories, goal, goalTitle, customTargets, customGoals } = req.body;
     if (targetWeight) user.targetWeight = Number(targetWeight);
     if (targetCalories) user.targetCalories = Number(targetCalories);
     if (goal) user.goal = goal;
     if (goalTitle) user.goalTitle = goalTitle;
+    if (customTargets) user.customTargets = customTargets;
+    if (customGoals) user.customGoals = customGoals;
     saveUserProfile(phone, user);
     const calculated = calculateUserData(user);
-    res.json({ success: true, user, profile: user, userData: calculated, calculated });
+    res.json({ success: true, user, profile: user, userData: calculated, calculated, customTargets: user.customTargets });
   });
 
   // REST API: ExerciseDB Endpoints (Full Library & Query Search)

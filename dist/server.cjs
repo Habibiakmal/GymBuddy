@@ -43970,80 +43970,182 @@ function getFirestore() {
     }
   }
 }
+function getPhoneVariations(input) {
+  if (!input) return [];
+  const clean = input.replace(/[^\d+a-zA-Z_]/g, "");
+  const digits = input.replace(/\D/g, "");
+  const variations = /* @__PURE__ */ new Set([input, clean]);
+  if (digits) {
+    variations.add(digits);
+    if (digits.startsWith("0")) {
+      const w62 = "62" + digits.substring(1);
+      variations.add(w62);
+      variations.add("+" + w62);
+      variations.add(`usr_${digits}`);
+      variations.add(`usr_${w62}`);
+    } else if (digits.startsWith("62")) {
+      const w0 = "0" + digits.substring(2);
+      variations.add(w0);
+      variations.add("+" + digits);
+      variations.add(`usr_${digits}`);
+      variations.add(`usr_${w0}`);
+    } else if (digits.startsWith("8")) {
+      const w0 = "0" + digits;
+      const w62 = "62" + digits;
+      variations.add(w0);
+      variations.add(w62);
+      variations.add("+" + w62);
+      variations.add(`usr_${w0}`);
+      variations.add(`usr_${w62}`);
+    }
+  }
+  return Array.from(variations).filter(Boolean);
+}
 async function findUserInFirestore(identifier) {
-  const db = getFirestore();
-  if (!db) return null;
-  const cleanPhone = identifier.replace(/[^\d+a-zA-Z_]/g, "");
-  const directDoc = await db.collection("users").doc(identifier).get();
-  if (directDoc.exists) {
-    return directDoc.data();
+  try {
+    const db = getFirestore();
+    if (!db) return null;
+    const directDoc = await db.collection("users").doc(identifier).get();
+    if (directDoc.exists) {
+      return directDoc.data();
+    }
+    const variations = getPhoneVariations(identifier);
+    for (const v of variations) {
+      if (v !== identifier) {
+        const d = await db.collection("users").doc(v).get();
+        if (d.exists) return d.data();
+      }
+    }
+    const chunkedVariations = variations.slice(0, 10);
+    const querySnap = await db.collection("users").where("phone", "in", chunkedVariations).limit(1).get();
+    if (!querySnap.empty) {
+      return querySnap.docs[0].data();
+    }
+    return null;
+  } catch (e) {
+    console.warn("[Firestore] findUser warning:", e?.message || e);
+    return null;
   }
-  const querySnap = await db.collection("users").where("phone", "in", [identifier, cleanPhone, `usr_${cleanPhone}`]).limit(1).get();
-  if (!querySnap.empty) {
-    return querySnap.docs[0].data();
-  }
-  return null;
 }
 async function saveUserToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  const userId = doc.userId || `usr_${doc.phone}`;
-  const now = /* @__PURE__ */ new Date();
-  await db.collection("users").doc(userId).set({
-    ...doc,
-    userId,
-    updatedAt: now,
-    createdAt: doc.createdAt || now
-  }, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const userId = doc.userId || `usr_${normPhone}`;
+    const now = /* @__PURE__ */ new Date();
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId,
+      updatedAt: now,
+      createdAt: doc.createdAt || now
+    };
+    await db.collection("users").doc(userId).set(payload, { merge: true });
+    await db.collection("users").doc(normPhone).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] saveUser warning:", e?.message || e);
+  }
 }
 async function getSubscriptionFromFirestore(userIdOrPhone) {
-  const db = getFirestore();
-  if (!db) return null;
-  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
-  const doc = await db.collection("subscriptions").doc(userIdOrPhone).get();
-  if (doc.exists) return doc.data();
-  const snap2 = await db.collection("subscriptions").where("phone", "in", [userIdOrPhone, clean]).limit(1).get();
-  if (!snap2.empty) {
-    return snap2.docs[0].data();
+  try {
+    const db = getFirestore();
+    if (!db) return null;
+    const variations = getPhoneVariations(userIdOrPhone);
+    for (const v of variations) {
+      const doc = await db.collection("subscriptions").doc(v).get();
+      if (doc.exists) return doc.data();
+    }
+    const snap2 = await db.collection("subscriptions").where("phone", "in", variations.slice(0, 10)).limit(1).get();
+    if (!snap2.empty) {
+      return snap2.docs[0].data();
+    }
+    return null;
+  } catch (e) {
+    console.warn("[Firestore] getSubscription warning:", e?.message || e);
+    return null;
   }
-  return null;
 }
 async function saveSubscriptionToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  const docId = doc.userId || `usr_${doc.phone}`;
-  await db.collection("subscriptions").doc(docId).set({
-    ...doc,
-    updatedAt: /* @__PURE__ */ new Date()
-  }, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const docId = doc.userId || `usr_${normPhone}`;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: docId,
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    await db.collection("subscriptions").doc(docId).set(payload, { merge: true });
+    await db.collection("subscriptions").doc(normPhone).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] saveSubscription warning:", e?.message || e);
+  }
 }
 async function getFoodLogsFromFirestore(phone, date) {
-  const db = getFirestore();
-  if (!db) return [];
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const snap2 = await db.collection("foodLogs").where("phone", "in", [phone, clean]).where("date", "==", date).get();
-  const results = snap2.docs.map((d) => d.data());
-  return results.sort((a, b) => {
-    const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return tA - tB;
-  });
+  try {
+    const db = getFirestore();
+    if (!db) return [];
+    const variations = getPhoneVariations(phone).slice(0, 10);
+    const snap2 = await db.collection("foodLogs").where("phone", "in", variations).where("date", "==", date).get();
+    const results = snap2.docs.map((d) => d.data());
+    return results.sort((a, b) => {
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tA - tB;
+    });
+  } catch (e) {
+    console.warn("[Firestore] getFoodLogs warning:", e?.message || e);
+    return [];
+  }
 }
 async function insertFoodLogToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  await db.collection("foodLogs").doc(doc.id).set(doc, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: doc.userId || `usr_${normPhone}`
+    };
+    await db.collection("foodLogs").doc(doc.id).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
+  }
 }
 async function deleteFoodLogFromFirestore(id) {
-  const db = getFirestore();
-  if (!db) return;
-  await db.collection("foodLogs").doc(id).delete();
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    await db.collection("foodLogs").doc(id).delete();
+  } catch (e) {
+    console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
+  }
 }
 async function saveWaterLogToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  const docId = `${doc.phone}_${doc.date}`;
-  await db.collection("waterLogs").doc(docId).set(doc, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: doc.userId || `usr_${normPhone}`
+    };
+    await db.collection("waterLogs").doc(`${normPhone}_${doc.date}`).set(payload, { merge: true });
+    if (doc.phone !== normPhone) {
+      await db.collection("waterLogs").doc(`${doc.phone}_${doc.date}`).set(payload, { merge: true });
+    }
+  } catch (e) {
+    console.warn("[Firestore] saveWaterLog warning:", e?.message || e);
+  }
 }
 async function saveAppDataToFirestore(appData) {
   const db = getFirestore();
@@ -47225,6 +47327,29 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const calculated = calculateUserData(user);
     res.json({ success: true, schedule: calculated.workoutSchedule });
   });
+  app.get("/api/user/:phone/exercises", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const exercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+    res.json({ success: true, phone, date: targetDate, exercises });
+  });
+  app.post("/api/user/:phone/exercises", import_express.default.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.body?.date || req.query.date || getLocalDateStr();
+    const { exercises } = req.body;
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    if (Array.isArray(exercises)) {
+      dbData.dailyLogs[key] = exercises;
+      dbData.dailyLogs[altKey] = exercises;
+      saveDb();
+    }
+    res.json({ success: true, phone, date: targetDate, exercises: dbData.dailyLogs[key] || [] });
+  });
   app.post("/api/user/:phone/reminder", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const user = getUserProfile(phone);
@@ -47248,14 +47373,16 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     if (!user) {
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
-    const { targetWeight, targetCalories, goal, goalTitle } = req.body;
+    const { targetWeight, targetCalories, goal, goalTitle, customTargets, customGoals } = req.body;
     if (targetWeight) user.targetWeight = Number(targetWeight);
     if (targetCalories) user.targetCalories = Number(targetCalories);
     if (goal) user.goal = goal;
     if (goalTitle) user.goalTitle = goalTitle;
+    if (customTargets) user.customTargets = customTargets;
+    if (customGoals) user.customGoals = customGoals;
     saveUserProfile(phone, user);
     const calculated = calculateUserData(user);
-    res.json({ success: true, user, profile: user, userData: calculated, calculated });
+    res.json({ success: true, user, profile: user, userData: calculated, calculated, customTargets: user.customTargets });
   });
   app.get("/api/exercises", (req, res) => {
     res.json({ success: true, count: EXERCISE_DATABASE.length, exercises: EXERCISE_DATABASE });

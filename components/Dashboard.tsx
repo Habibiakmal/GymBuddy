@@ -1442,6 +1442,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     try {
       localStorage.setItem(`gymbuddy_custom_targets_${normPhone}`, JSON.stringify(newTargets));
     } catch (e) {}
+
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customTargets: newTargets, targetCalories: newTargets.calories })
+    }).catch(() => {});
+
     setShowCustomTargetsModal(false);
     setReminderNotificationMsg(isEN ? "Custom nutrition targets saved! 🎯" : "Target nutrisi kustom berhasil disimpan! 🎯");
     setTimeout(() => setReminderNotificationMsg(null), 3500);
@@ -1452,6 +1460,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     try {
       localStorage.removeItem(`gymbuddy_custom_targets_${normPhone}`);
     } catch (e) {}
+
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customTargets: null })
+    }).catch(() => {});
+
     setShowCustomTargetsModal(false);
     setReminderNotificationMsg(isEN ? "Reset to AI recommended targets! ✨" : "Target dikembalikan ke hitungan otomatis AI! ✨");
     setTimeout(() => setReminderNotificationMsg(null), 3500);
@@ -1801,6 +1817,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       } else {
         setExercises(todayScheduleObj.exercises);
       }
+
+      // Query server for latest checklist state (cross-device sync)
+      if (_normPhone) {
+        const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+        fetch(`${API_BASE_URL}/api/user/${_normPhone}/exercises?date=${selectedDate}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data && Array.isArray(data.exercises) && data.exercises.length > 0) {
+              setExercises(data.exercises);
+              localStorage.setItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`, JSON.stringify(data.exercises));
+            }
+          })
+          .catch(() => {});
+      }
     } catch (e) {
       setExercises(todayScheduleObj.exercises);
     }
@@ -1845,6 +1875,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     try {
       localStorage.setItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`, JSON.stringify(updatedEx));
     } catch (e) {}
+
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    fetch(`${API_BASE_URL}/api/user/${_normPhone}/exercises`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exercises: updatedEx, date: selectedDate })
+    }).catch(() => {});
   };
 
   const handleToggleSet = (exerciseId: string, setIndex: number) => {
