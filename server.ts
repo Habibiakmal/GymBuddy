@@ -5152,11 +5152,30 @@ CATATAN:
         }
       }
 
-      // Send instant native TwiML WhatsApp response (Guaranteed 100% reply delivery)
+      // Send instant native TwiML & direct REST API WhatsApp response (Guaranteed 100% reply delivery)
       if (responseMessages.length > 0) {
         const combinedReply = responseMessages.join("\n\n");
+
+        // 1. Fail-safe Direct REST API Delivery via Twilio Client
+        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
+          try {
+            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+            await getTwilio().messages.create({
+              body: combinedReply,
+              from: fromNum,
+              to: toNum
+            });
+            console.log(`[Twilio WA] Direct REST API message sent to ${rawFrom} ✅`);
+          } catch (twErr: any) {
+            console.log("[Twilio WA] Direct REST API note:", twErr?.message || twErr);
+          }
+        }
+
+        // 2. TwiML HTTP Response (with HTTPS media check)
         let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
-        if (mediaUrlToSend) {
+        if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
           twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
         }
         twiml += `<Body>${escapeXml(combinedReply)}</Body></Message></Response>`;
@@ -5165,6 +5184,7 @@ CATATAN:
       } else {
         return res.type("text/xml").send("<Response></Response>");
       }
+
     } catch (error) {
       console.error("[Twilio WA] Webhook error:", error);
       res.type("text/xml").send("<Response></Response>");
