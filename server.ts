@@ -3,7 +3,6 @@ import fs from "fs";
 import path from "path";
 import cors from "cors";
 import "dotenv/config";
-import { MongoClient } from "mongodb";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
@@ -17,7 +16,6 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 
 import {
-  getDatabase,
   findUserByPhoneOrId,
   saveUserDocument,
   getUserSubscription,
@@ -27,9 +25,14 @@ import {
   deleteFoodLog,
   getWaterLog,
   saveWaterLog,
-  recordAiTelemetry
+  recordAiTelemetry,
+  saveAppDataToFirestore,
+  loadAppDataFromFirestore,
+  getAllUsersFromFirestore,
+  findUserInFirestore,
+  saveUserToFirestore,
+  getFirestore
 } from "./services/db";
-import { getFirestore } from "./services/firestore";
 import {
   hashPassword,
   comparePassword,
@@ -499,6 +502,15 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   dbData.waterLogs[`${altPhone}_${targetDate}`] = newCups;
 
+  saveWaterLog({
+    userId: `usr_${phone}`,
+    phone,
+    date: targetDate,
+    cups: newCups,
+    totalMl: newCups * 250,
+    updatedAt: new Date()
+  }).catch((e: any) => console.warn("[Firestore] saveWaterLog note:", e?.message || e));
+
   saveDb();
   return newCups;
 }
@@ -525,94 +537,69 @@ function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
   }
 }
 
-// ─── MongoDB Persistent Storage ──────────────────────────────────────────────
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://bibi:bibi123@gymbuddy.wb3i2.mongodb.net/gymbuddy?retryWrites=true&w=majority";
-let mongoClient: MongoClient | null = null;
-let mongoConnected = false;
-
-async function getMongoDb() {
-  if (!MONGODB_URI) return null;
+// ─── Firestore Persistent Storage (Dedicated Cloud Store) ─────────────────────
+async function loadFromFirestore(): Promise<boolean> {
   try {
-    if (!mongoClient) {
-      mongoClient = new MongoClient(MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 10000,
-      });
-    }
-    if (!mongoConnected) {
-      await mongoClient.connect();
-      mongoConnected = true;
-      console.log("[MongoDB] Connected to Atlas ✅");
-    }
-    return mongoClient.db("gymbuddy");
-  } catch (err: any) {
-    mongoClient = null;
-    mongoConnected = false;
-    console.error("[MongoDB] Connection error (check Atlas Network Access 0.0.0.0/0 IP whitelist):", err?.message || err);
-    return null;
-  }
-}
-
-async function loadFromMongo(): Promise<boolean> {
-  try {
-    const db = await getMongoDb();
-    if (!db) return false;
-    const doc = await db.collection("appdata").findOne({ _id: "main" as any });
+    const doc = await loadAppDataFromFirestore();
     if (doc) {
-      dbData.users = doc.users || {};
-      dbData.dailyLogs = doc.dailyLogs || {};
-      dbData.weeklyProgress = doc.weeklyProgress || {};
-      dbData.waterLogs = doc.waterLogs || {};
-      console.log(`[MongoDB] Loaded ${Object.keys(dbData.users).length} users from Atlas`);
+      if (doc.users) dbData.users = { ...dbData.users, ...doc.users };
+      if (doc.dailyLogs) dbData.dailyLogs = { ...dbData.dailyLogs, ...doc.dailyLogs };
+      if (doc.weeklyProgress) dbData.weeklyProgress = { ...dbData.weeklyProgress, ...doc.weeklyProgress };
+      if (doc.waterLogs) dbData.waterLogs = { ...dbData.waterLogs, ...doc.waterLogs };
+      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users from Firestore ✅`);
       return true;
     }
     return false;
   } catch (e) {
-    console.error("[MongoDB] Load error:", e);
+    console.error("[Firestore] Load error:", e);
     return false;
   }
 }
 
-// Directly fetch a specific user from MongoDB by phone (bypasses in-memory cache)
-async function getUserProfileFromMongo(rawPhone: string): Promise<any | null> {
+// Directly fetch a specific user from Firestore by phone (bypasses in-memory cache)
+async function getUserProfileFromFirestore(rawPhone: string): Promise<any | null> {
   try {
-    const db = await getMongoDb();
-    if (!db) return null;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
-    const doc = await db.collection("appdata").findOne({ _id: "main" as any });
-    if (!doc || !doc.users) return null;
-    const users = doc.users as Record<string, any>;
-    const found = users[phone] || users[altPhone] || null;
-    if (found) {
-      // Sync back to in-memory so future calls are instant
-      dbData.users[phone] = found;
-      dbData.users[altPhone] = found;
-      if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
-      if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
-      if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
-      console.log(`[MongoDB] Restored profile for ${phone} from Atlas ✅`);
+
+    // 1. Check direct user document in Firestore users collection
+    const userDoc = await findUserInFirestore(phone) || await findUserInFirestore(altPhone);
+    if (userDoc) {
+      dbData.users[phone] = userDoc;
+      dbData.users[altPhone] = userDoc;
+      console.log(`[Firestore] Restored profile for ${phone} from users collection ✅`);
+      return userDoc;
     }
-    return found;
+
+    // 2. Check appdata snapshot in Firestore
+    const doc = await loadAppDataFromFirestore();
+    if (doc && doc.users) {
+      const found = doc.users[phone] || doc.users[altPhone] || null;
+      if (found) {
+        dbData.users[phone] = found;
+        dbData.users[altPhone] = found;
+        if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
+        if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+        if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+        console.log(`[Firestore] Restored profile for ${phone} from appdata snapshot ✅`);
+        return found;
+      }
+    }
+    return null;
   } catch (e) {
-    console.error("[MongoDB] getUserProfileFromMongo error:", e);
+    console.error("[Firestore] getUserProfileFromFirestore error:", e);
     return null;
   }
 }
 
-async function saveToMongo(): Promise<void> {
+async function saveToFirestore(): Promise<void> {
   try {
-    const db = await getMongoDb();
-    if (!db) return;
-    await db.collection("appdata").replaceOne(
-      { _id: "main" as any },
-      { _id: "main" as any, ...dbData, updatedAt: new Date() },
-      { upsert: true }
-    );
+    await saveAppDataToFirestore(dbData);
   } catch (e) {
-    console.error("[MongoDB] Save error:", e);
+    console.error("[Firestore] Save error:", e);
   }
 }
+
 function isLegacyMockMeal(m: any): boolean {
   if (!m) return true;
   const idStr = String(m.id || "");
@@ -693,13 +680,11 @@ function initDb() {
     dbData.users[bibiAlt] = bibiProfile;
   }
 
-  // Also load from MongoDB if configured (runs async, overrides file data)
-  if (MONGODB_URI) {
-    loadFromMongo().then(loaded => {
-      if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
-      purgeLegacyMockLogs();
-    });
-  }
+  // Load from Firestore asynchronously (authoritative cloud store)
+  loadFromFirestore().then(loaded => {
+    if (!loaded) console.log("[Firestore] No existing cloud snapshot found, will create on first save");
+    purgeLegacyMockLogs();
+  });
 }
 
 function saveDb() {
@@ -712,10 +697,8 @@ function saveDb() {
   } catch (e) {
     console.error("Error saving db.json", e);
   }
-  // Save to MongoDB (persistent)
-  if (MONGODB_URI) {
-    saveToMongo();
-  }
+  // Save to Firestore (persistent cloud database)
+  saveToFirestore();
 }
 
 // Helper to send direct WhatsApp message
@@ -997,6 +980,34 @@ function saveUserProfile(rawPhone: string, profile: any) {
   dbData.users[phone] = updated;
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   dbData.users[altPhone] = updated;
+
+  // Persist directly to Firestore users collection
+  saveUserDocument({
+    userId: `usr_${phone}`,
+    phone,
+    name: updated.name || "User",
+    gender: updated.gender,
+    age: updated.age ? Number(updated.age) : undefined,
+    weight: updated.weight ? Number(updated.weight) : undefined,
+    height: updated.height ? Number(updated.height) : undefined,
+    targetWeight: updated.targetWeight ? Number(updated.targetWeight) : undefined,
+    startWeight: updated.startWeight ? Number(updated.startWeight) : undefined,
+    goal: updated.goal,
+    activityLevel: updated.activityLevel,
+    dietPreference: updated.dietPreference,
+    experienceLevel: updated.experienceLevel,
+    persona: updated.persona,
+    selectedFeature: updated.selectedFeature || updated.activeService,
+    activeService: updated.activeService,
+    dailyTargetCalories: updated.targetCalories || updated.dailyTargetCalories,
+    dailyTargetProtein: updated.proteinGrams || updated.dailyTargetProtein,
+    dailyTargetCarbs: updated.carbGrams || updated.dailyTargetCarbs,
+    dailyTargetFat: updated.fatGrams || updated.dailyTargetFat,
+    customSchedule: updated.workoutSchedule || updated.customSchedule,
+    customGoals: updated.customGoals,
+    reminderTime: updated.reminderTime,
+    updatedAt: new Date()
+  }).catch((e: any) => console.warn("[Firestore] saveUserDocument note:", e?.message || e));
 
   // Initialize Week 0 baseline if no progress history exists yet
   if (!dbData.weeklyProgress[phone] || dbData.weeklyProgress[phone].length === 0) {
@@ -1442,6 +1453,31 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
       dbData.dailyLogs[altKey].push(itemMeal);
     }
 
+    // Persist directly to Firestore foodLogs collection
+    insertFoodLog({
+      id: String(itemMeal.id || `m-${Date.now()}`),
+      userId: `usr_${phone}`,
+      phone: phone,
+      date: targetDate,
+      foodName: itemMeal.foodName,
+      calories: Number(itemMeal.calories) || 0,
+      protein: Number(itemMeal.protein) || 0,
+      carbs: Number(itemMeal.carbs) || 0,
+      fat: Number(itemMeal.fat) || 0,
+      fiber: Number(itemMeal.fiber) || 0,
+      sugar: Number((itemMeal as any).sugar) || 0,
+      time: (itemMeal as any).time || new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
+      isHydration: Boolean(itemMeal.isHydration),
+      volumeMl: itemMeal.volumeMl,
+      displayUnit: (itemMeal as any).displayUnit,
+      portionType: (itemMeal as any).portionType || "estimated",
+      itemType: itemMeal.isHydration ? "water" : "food",
+      source: (itemMeal as any).source || "WhatsApp",
+      items: (itemMeal as any).items || [],
+      imageUrl: (itemMeal as any).imageUrl,
+      createdAt: new Date()
+    }).catch((e: any) => console.warn("[Firestore] insertFoodLog note:", e?.message || e));
+
     if (isPlainWaterName(itemMeal.foodName) && !itemMeal.id?.startsWith("wa-water-")) {
       const vol = itemMeal.volumeMl || 250;
       const cupsToAdd = Math.max(1, Math.round(vol / 250));
@@ -1470,6 +1506,10 @@ function deleteLastMealLog(rawPhone: string, targetDateStr?: string): MealLog | 
 
   if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
   if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
+
+  if (deletedItem && deletedItem.id) {
+    deleteFoodLog(deletedItem.id).catch((e: any) => console.warn("[Firestore] deleteFoodLog note:", e?.message || e));
+  }
 
   saveDb();
   return deletedItem;
@@ -1500,6 +1540,10 @@ function deleteMealLogByName(rawPhone: string, foodNameQuery: string, targetDate
 
   if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
   if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
+
+  if (deletedItem && deletedItem.id) {
+    deleteFoodLog(deletedItem.id).catch((e: any) => console.warn("[Firestore] deleteFoodLog note:", e?.message || e));
+  }
 
   saveDb();
   return deletedItem;
@@ -2184,9 +2228,8 @@ async function startServer() {
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
 
-  // Initialize Database Layers (Firestore Primary & MongoDB Atlas Rollback)
+  // Initialize Database Layers (Firestore Primary)
   getFirestore();
-  getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
 
   // ── Health Check Endpoints (Google Cloud Run liveness/readiness) ─────────
   app.get(["/health", "/api/health"], (req, res) => {
@@ -2199,8 +2242,8 @@ async function startServer() {
       environment: process.env.NODE_ENV || "development",
       cloudRun: Boolean(process.env.K_SERVICE),
       database: {
-        firestoreAvailable: Boolean(getFirestore()),
-        mongoConfigured: Boolean(process.env.MONGODB_URI)
+        engine: "Firestore",
+        firestoreAvailable: Boolean(getFirestore())
       }
     });
   });
@@ -2942,7 +2985,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     return res.status(404).json({ success: false, error: "User profile not found" });
   });
 
-  // Reset all database data endpoint (Local & MongoDB Atlas)
+  // Reset all database data endpoint (Local & Firestore)
   app.all(["/api/user/reset", "/api/admin/reset-db"], async (req, res) => {
     dbData = {
       users: {},
@@ -2953,24 +2996,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       generatedImages: {}
     };
     saveDb();
-    if (MONGODB_URI) {
-      try {
-        const db = await getMongoDb();
-        if (db) {
-          await db.collection("appdata").deleteMany({});
-          await db.collection("appdata").replaceOne(
-            { _id: "main" as any },
-            { _id: "main" as any, users: {}, dailyLogs: {}, weeklyProgress: {}, waterLogs: {}, updatedAt: new Date() },
-            { upsert: true }
-          );
-          console.log("[MongoDB] Collection reset successfully ✅");
-        }
-      } catch (err: any) {
-        console.error("[MongoDB] Reset error:", err?.message || err);
-      }
+    try {
+      await saveAppDataToFirestore(dbData);
+      console.log("[Firestore] Global appdata reset successfully ✅");
+    } catch (err: any) {
+      console.error("[Firestore] Reset error:", err?.message || err);
     }
     console.log("All user database data reset successfully.");
-    return res.json({ success: true, message: "Semua data database (lokal & MongoDB) berhasil dihapus 100%." });
+    return res.json({ success: true, message: "Semua data database (lokal & Firestore) berhasil dihapus 100%." });
   });
 
   // Weekly Progress Endpoint for API / Dashboard
@@ -3289,9 +3322,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                    (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
-          // If not in memory, check MongoDB directly (handles Render restart race condition)
+          // If not in memory, check Firestore directly
           if (!userProfile) {
-            userProfile = await getUserProfileFromMongo(from);
+            userProfile = await getUserProfileFromFirestore(from);
           }
 
           // Still null = truly unregistered
@@ -3618,23 +3651,24 @@ Keluarkan output JSON valid:
               responseMessages = [card];
             }
           }
+        }
 
-          if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && responseMessages.length > 0) {
-            for (const msgText of responseMessages) {
-              await sendMetaWhatsappMessage(from, msgText);
-              await new Promise(r => setTimeout(r, 800));
-            }
+        if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && responseMessages.length > 0) {
+          for (const msgText of responseMessages) {
+            await sendMetaWhatsappMessage(from, msgText);
+            await new Promise(r => setTimeout(r, 800));
           }
         }
-        res.sendStatus(200);
-      } else {
-        res.sendStatus(404);
       }
-    } catch (error) {
-      console.error("Error processing webhook:", error);
-      res.sendStatus(500);
+      res.sendStatus(200);
+    } else {
+      res.sendStatus(404);
     }
-  });
+  } catch (error) {
+    console.error("Error processing webhook:", error);
+    res.sendStatus(500);
+  }
+});
 
   // Twilio WhatsApp Webhook
   app.post("/api/webhook/twilio-whatsapp", express.urlencoded({ extended: true }), async (req, res) => {
@@ -3667,9 +3701,9 @@ Keluarkan output JSON valid:
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
-      // If not in memory, check MongoDB directly (handles Render restart race condition)
+      // If not in memory, check Firestore directly
       if (!userProfile) {
-        userProfile = await getUserProfileFromMongo(From);
+        userProfile = await getUserProfileFromFirestore(From);
       }
 
       // Still null = truly unregistered
@@ -4515,9 +4549,9 @@ Keluarkan output JSON valid:
         }
       }
 
-      // 2. If not in memory, check MongoDB directly
+      // 2. If not in memory, check Firestore directly
       if (!userProfile) {
-        userProfile = await getUserProfileFromMongo(from);
+        userProfile = await getUserProfileFromFirestore(from);
       }
 
       // 3. Auto-Create & Save active user profile if not in database (never block any incoming WhatsApp user)

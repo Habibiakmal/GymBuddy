@@ -193,3 +193,48 @@ export async function recordAiTelemetryToFirestore(entry: AiUsageDocument): Prom
     console.warn("[Telemetry] Firestore write note:", e?.message || e);
   }
 }
+
+// ─── App Data Global Snapshot Methods (Firestore Primary) ──────────────────────────
+
+export async function saveAppDataToFirestore(appData: any): Promise<void> {
+  const db = getFirestore();
+  if (!db) return;
+  try {
+    const cleanData = JSON.parse(JSON.stringify(appData));
+    await db.collection("appdata").doc("main").set({
+      ...cleanData,
+      updatedAt: new Date()
+    }, { merge: true });
+    console.log("[Firestore] Global appdata snapshot saved ✅");
+  } catch (e: any) {
+    console.error("[Firestore] saveAppData error:", e?.message || e);
+  }
+}
+
+export async function loadAppDataFromFirestore(): Promise<any | null> {
+  const db = getFirestore();
+  if (!db) return null;
+  try {
+    const doc = await db.collection("appdata").doc("main").get();
+    if (doc.exists) {
+      console.log("[Firestore] Global appdata snapshot loaded ✅");
+      return doc.data();
+    }
+    return null;
+  } catch (e: any) {
+    console.error("[Firestore] loadAppData error:", e?.message || e);
+    return null;
+  }
+}
+
+export async function getAllUsersFromFirestore(): Promise<UserDocument[]> {
+  const db = getFirestore();
+  if (!db) return [];
+  try {
+    const snap = await db.collection("users").get();
+    return snap.docs.map(d => d.data() as UserDocument);
+  } catch (e: any) {
+    console.error("[Firestore] getAllUsers error:", e?.message || e);
+    return [];
+  }
+}

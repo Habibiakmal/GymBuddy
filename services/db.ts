@@ -307,8 +307,6 @@ async function migrateLegacyAppData(db: Db) {
   }
 }
 
-// ─── Direct DB Access Methods (Firestore Primary + MongoDB Dual-Write + Local Cache) ────
-
 import {
   findUserInFirestore,
   saveUserToFirestore,
@@ -320,8 +318,28 @@ import {
   getWaterLogFromFirestore,
   saveWaterLogToFirestore,
   recordAiTelemetryToFirestore,
+  saveAppDataToFirestore,
+  loadAppDataFromFirestore,
+  getAllUsersFromFirestore,
   getFirestore
 } from "./firestore";
+
+export {
+  saveAppDataToFirestore,
+  loadAppDataFromFirestore,
+  getAllUsersFromFirestore,
+  findUserInFirestore,
+  saveUserToFirestore,
+  getSubscriptionFromFirestore,
+  saveSubscriptionToFirestore,
+  getFoodLogsFromFirestore,
+  insertFoodLogToFirestore,
+  deleteFoodLogFromFirestore,
+  getWaterLogFromFirestore,
+  saveWaterLogToFirestore,
+  recordAiTelemetryToFirestore,
+  getFirestore
+};
 
 // Local development fallback cache
 const memCache = {
