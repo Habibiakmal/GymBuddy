@@ -1722,27 +1722,45 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
-        if (serverLogs.length > 0) {
-          const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
-          const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
-          setAllLogs(sanitized);
-          try {
-            localStorage.setItem(localKey, JSON.stringify(sanitized));
-          } catch (e) {}
-        } else {
-          // If server returned 0 logs, check if browser has local logs to preserve & backfill
-          const currentLocal = getLocalMeals(activeUser.phone, dateStr);
-          if (currentLocal.length > 0) {
-            setAllLogs(currentLocal);
-            // Auto-sync backfill to server
+        const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
+        const currentLocal = getLocalMeals(activeUser.phone, dateStr);
+
+        // MERGE CRITICAL FIX: Combine server logs with local browser logs by ID
+        // This ensures items added locally (e.g. manual inputs) are NEVER wiped out when server polling runs!
+        const mergedMap = new Map<string, MealItem>();
+
+        // 1. Add server logs
+        for (const item of cleanServerLogs) {
+          if (item.id) mergedMap.set(item.id, item);
+        }
+
+        // 2. Preserve any locally created items that server doesn't have yet
+        for (const item of currentLocal) {
+          if (item.id && !mergedMap.has(item.id)) {
+            mergedMap.set(item.id, item);
+            // Auto-backfill missing local item to server in background
+            const syncPayload = JSON.stringify({ ...item, date: dateStr });
             fetch(`/api/user/${normPhone}/meals`, {
-              method: "PUT",
+              method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ meals: currentLocal, date: dateStr })
+              body: syncPayload
+            }).catch(() => {});
+            fetch(`${primaryUrl}/api/user/${normPhone}/meals`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: syncPayload
             }).catch(() => {});
           }
         }
+
+        const mergedList = Array.from(mergedMap.values());
+        const sanitized = sanitizeAndSplitComboLogs(mergedList);
+        setAllLogs(sanitized);
+        try {
+          localStorage.setItem(localKey, JSON.stringify(sanitized));
+        } catch (e) {}
       }
+
 
       // Also refresh live user profile in background (for streaks, live target, & weight sync)
       try {
