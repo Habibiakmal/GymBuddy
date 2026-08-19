@@ -1399,14 +1399,22 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   if (liquidParts.length > 0) {
     liquidParts.forEach((lPart, idx) => {
       const detectedVolumeMl = extractVolumeMlFromName(lPart);
+      const isMilky = /(susu|milk|latte|whey|protein|gainer|yogurt|shake)/i.test(lPart);
+      const isSweet = /(manis|sweet|gula|sugar|sirup|syrup|boba|jus|juice|soda|coca|cola|sprite|fanta)/i.test(lPart);
+
+      const cal = isMilky ? 120 : (isSweet ? 65 : 2);
+      const prot = isMilky ? 6 : 0;
+      const carb = isMilky ? 10 : (isSweet ? 16 : 0);
+      const fat = isMilky ? 4 : 0;
+
       mealsToInsert.push({
         ...meal,
         id: `${meal.id || Date.now()}-drink-${idx}`,
         foodName: lPart,
-        calories: Math.round(50 / liquidParts.length),
-        protein: 1,
-        carbs: 5,
-        fat: 0,
+        calories: cal,
+        protein: prot,
+        carbs: carb,
+        fat: fat,
         isHydration: true,
         volumeMl: detectedVolumeMl
       } as any);
