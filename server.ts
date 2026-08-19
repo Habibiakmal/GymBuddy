@@ -65,26 +65,21 @@ async function downloadTwilioMedia(mediaUrl: string): Promise<{ data: string; mi
     const headers: Record<string, string> = {};
     if (authHeader) headers["Authorization"] = authHeader;
 
-    const initialRes = await fetch(mediaUrl, {
-      method: "GET",
+    // First attempt: Axios with Twilio Basic Auth
+    const res = await axios.get(mediaUrl, {
       headers,
-      redirect: "manual"
+      responseType: "arraybuffer",
+      timeout: 12000,
+      maxRedirects: 5
+    }).catch(async (err) => {
+      // Fallback attempt: fetch without Auth header if AWS S3 redirect rejected Auth header
+      console.warn("[Twilio WA] Auth download retry without header:", err?.message || err);
+      return await axios.get(mediaUrl, { responseType: "arraybuffer", timeout: 12000, maxRedirects: 5 }).catch(() => null);
     });
 
-    let targetUrl = mediaUrl;
-    if (initialRes.status >= 300 && initialRes.status < 400) {
-      const redirectLoc = initialRes.headers.get("location");
-      if (redirectLoc) targetUrl = redirectLoc;
-    }
-
-    const imgRes = await fetch(targetUrl, {
-      headers: targetUrl === mediaUrl && authHeader ? { Authorization: authHeader } : {}
-    });
-
-    if (imgRes.ok) {
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const mimeType = (imgRes.headers.get("content-type") || "image/jpeg").split(";")[0];
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
+    if (res && res.status === 200 && res.data) {
+      const mimeType = String(res.headers["content-type"] || "image/jpeg").split(";")[0];
+      const base64 = Buffer.from(res.data).toString("base64");
       console.log(`[Twilio WA] Successfully downloaded media image (${base64.length} chars, mime: ${mimeType}) ✅`);
       return { data: base64, mimeType };
     }
@@ -4762,6 +4757,18 @@ Keluarkan output JSON valid:
             } catch (imgErr: any) {
               console.error("[Twilio WA] Image processing note:", imgErr?.message || imgErr);
             }
+          }
+
+          // Anti-silent fallback: If user sent generic caption like "aku makan ini" but imagePart failed to download
+          const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
+          if ((isGenericImageCaption || mediaUrl) && !imagePart && !userText.trim()) {
+            const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
+            const guideMsg = `📸 *FOTO MAKANAN DITERIMA*\n-----------------------------\n` +
+              `Halo ${userData.name}! Fotonya sedang diproses oleh gateway Twilio.\n\n` +
+              `💡 *Solusi Cepat*:\n` +
+              `Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! 🥗✨`;
+            const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(guideMsg)}</Message></Response>`;
+            return res.type("text/xml").send(twiml);
           }
 
           const isMia = userData.persona === "mia" || userData.persona === "nikita";
