@@ -1618,7 +1618,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   // Progress Tab Timeframe State
   const [chartTimeframe, setChartTimeframe] = useState<"7d" | "30d">("7d");
 
-  const isMaxPersona = (activeUser.persona || "max").toLowerCase() === "max";
+  const isMaxPersona = (activeUser.persona || "max").toLowerCase().includes("max");
   const coachName = isMaxPersona ? "Coach Max" : "Coach Mia";
 
   // STATIC 7-DAY RIBBON STRIP ENDING AT TODAY (NEVER SHIFTS POSITION WHEN CLICKING)

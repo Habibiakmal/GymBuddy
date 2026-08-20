@@ -44190,7 +44190,7 @@ async function saveUserToFirestore(doc) {
     console.warn("[Firestore] saveUser warning:", e?.message || e);
   }
 }
-async function deleteUserFromFirestore(phone) {
+async function deleteUserFromFirestore2(phone) {
   try {
     const db = getFirestore();
     if (!db) return;
@@ -44686,7 +44686,7 @@ async function deleteUserDocument(phone) {
   }
   try {
     if (getFirestore()) {
-      await deleteUserFromFirestore(phone);
+      await deleteUserFromFirestore2(phone);
     }
   } catch (e) {
     console.warn("[Firestore] deleteUser warning:", e?.message || e);
@@ -48438,6 +48438,10 @@ Keluarkan output JSON valid:
           }
         });
         saveDb();
+        deleteUserDocument(normPhone).catch(() => {
+        });
+        deleteUserFromFirestore(normPhone).catch(() => {
+        });
         console.log(`[Reset Command] Deleted profile and data for ${normPhone}`);
         responseMessages = [
           `\u{1F5D1}\uFE0F *AKUN & DATA KAMU BERHASIL DIHAPUS!*

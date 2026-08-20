@@ -4161,6 +4161,8 @@ function escapeXml(unsafe: string): string {
           }
         });
         saveDb();
+        deleteUserDocument(normPhone).catch(() => {});
+        deleteUserFromFirestore(normPhone).catch(() => {});
         console.log(`[Reset Command] Deleted profile and data for ${normPhone}`);
         responseMessages = [
           `🗑️ *AKUN & DATA KAMU BERHASIL DIHAPUS!*\n-----------------------------\n` +
