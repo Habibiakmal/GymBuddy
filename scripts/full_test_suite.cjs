@@ -30,7 +30,7 @@ function req(method, path, data, isForm = false) {
 }
 
 async function runFullSuite() {
-  const testPhone = '081299998888';
+  const testPhone = '080000000000_DUMMY_TEST_ONLY';
   console.log('========================================================');
   console.log('  STARTING COMPREHENSIVE END-TO-END SYSTEM TEST SUITE  ');
   console.log('========================================================\n');
