@@ -539,8 +539,16 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
   return newCups;
 }
 
-// Helper to determine meal type by hour — always computed in WIB (UTC+7)
-function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
+// Helper to determine meal type by keyword or hour — always computed in WIB (UTC+7)
+function getMealTypeByHour(userText?: string): "breakfast" | "lunch" | "snack" | "dinner" {
+  if (userText) {
+    const lower = String(userText).toLowerCase();
+    if (/(?:sarapan|pagi|breakfast|sahur)/i.test(lower)) return "breakfast";
+    if (/(?:siang|lunch|makan siang|tadi siang)/i.test(lower)) return "lunch";
+    if (/(?:sore|snack|ngemil|camilan|cemilan|tadi sore)/i.test(lower)) return "snack";
+    if (/(?:malam|dinner|makan malam|tadi malam)/i.test(lower)) return "dinner";
+  }
+
   // Use Intl.DateTimeFormat to get the current hour in WIB timezone reliably
   try {
     const wibHour = parseInt(
@@ -4234,7 +4242,7 @@ function escapeXml(unsafe: string): string {
           isHydration: true,
           volumeMl: actualMl,
           timestamp: new Date().toISOString(),
-          mealType: getMealTypeByHour()
+          mealType: getMealTypeByHour(userText)
         };
         addMealLog(normFrom, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -4400,7 +4408,7 @@ Keluarkan output JSON valid:
               fiber: Number(parsed.fiber) || 0,
               sugar: Number(parsed.sugar) || 0,
               sodium: Number(parsed.sodium) || 0,
-              mealType: parsed.mealType || getMealTypeByHour(),
+              mealType: getMealTypeByHour(userText || parsed.mealType),
               timestamp: new Date().toISOString()
             });
             const dailyTotals = getDailyTotals(normFrom);

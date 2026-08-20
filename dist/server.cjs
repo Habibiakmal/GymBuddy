@@ -45282,7 +45282,14 @@ function setWaterCups(rawPhone, cups, dateStr) {
   saveDb();
   return newCups;
 }
-function getMealTypeByHour() {
+function getMealTypeByHour(userText) {
+  if (userText) {
+    const lower = String(userText).toLowerCase();
+    if (/(?:sarapan|pagi|breakfast|sahur)/i.test(lower)) return "breakfast";
+    if (/(?:siang|lunch|makan siang|tadi siang)/i.test(lower)) return "lunch";
+    if (/(?:sore|snack|ngemil|camilan|cemilan|tadi sore)/i.test(lower)) return "snack";
+    if (/(?:malam|dinner|makan malam|tadi malam)/i.test(lower)) return "dinner";
+  }
   try {
     const wibHour = parseInt(
       new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()),
@@ -48477,7 +48484,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           isHydration: true,
           volumeMl: actualMl,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          mealType: getMealTypeByHour()
+          mealType: getMealTypeByHour(userText)
         };
         addMealLog(normFrom, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -48629,7 +48636,7 @@ Keluarkan output JSON valid:
               fiber: Number(parsed.fiber) || 0,
               sugar: Number(parsed.sugar) || 0,
               sodium: Number(parsed.sodium) || 0,
-              mealType: parsed.mealType || getMealTypeByHour(),
+              mealType: getMealTypeByHour(userText || parsed.mealType),
               timestamp: (/* @__PURE__ */ new Date()).toISOString()
             });
             const dailyTotals = getDailyTotals(normFrom);
