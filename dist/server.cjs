@@ -48642,9 +48642,6 @@ Keluarkan output JSON valid:
             const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
-            if (imagePart && req.body.MediaUrl0) {
-              mediaUrlToSend = req.body.MediaUrl0;
-            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;
