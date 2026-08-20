@@ -574,6 +574,7 @@ function getMealTypeByHour(userText?: string): "breakfast" | "lunch" | "snack" |
 // ─── Firestore Persistent Storage (Dedicated Cloud Store) ─────────────────────
 async function loadFromFirestore(): Promise<boolean> {
   try {
+    let hasLoaded = false;
     const doc = await loadAppDataFromFirestore();
     if (doc) {
       if (doc.users && Object.keys(doc.users).length > 0) {
@@ -597,10 +598,33 @@ async function loadFromFirestore(): Promise<boolean> {
       if (doc.waterLogs) {
         dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
       }
-      console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users and ${Object.keys(dbData.dailyLogs).length} log dates from Firestore ✅`);
-      return true;
+      hasLoaded = true;
     }
-    return false;
+
+    // 2. Also load all user documents directly from Firestore users collection
+    try {
+      const allUsers = await getAllUsersFromFirestore();
+      if (allUsers && allUsers.length > 0) {
+        for (const u of allUsers) {
+          if (u && u.phone) {
+            const norm = normalizePhone(u.phone);
+            const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
+            if (!dbData.users[norm] || !dbData.users[norm].weight) {
+              dbData.users[norm] = u;
+            }
+            if (!dbData.users[altNorm] || !dbData.users[altNorm].weight) {
+              dbData.users[altNorm] = u;
+            }
+          }
+        }
+        hasLoaded = true;
+      }
+    } catch (uErr) {
+      console.warn("[Firestore] Error loading users collection on boot:", uErr);
+    }
+
+    console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users and ${Object.keys(dbData.dailyLogs).length} log dates from Firestore ✅`);
+    return hasLoaded;
   } catch (e) {
     console.error("[Firestore] Load error:", e);
     return false;
@@ -2426,13 +2450,18 @@ async function startServer() {
         const saved = saveUserProfile(norm, profile);
         saveDb();
 
-        // Also persist to MongoDB collections
-        saveUserDocument({
-          userId: `usr_${norm}`,
-          phone: norm,
-          ...profile,
-          updatedAt: new Date()
-        }).catch((err) => console.warn("[MongoDB] User doc save warning:", err?.message || err));
+        // Also persist directly to Firestore collections and await completion
+        try {
+          await saveUserDocument({
+            userId: `usr_${norm}`,
+            phone: norm,
+            ...profile,
+            updatedAt: new Date()
+          });
+          await saveAppDataToFirestore(dbData);
+        } catch (fErr: any) {
+          console.warn("[Firestore] User onboarding sync note:", fErr?.message || fErr);
+        }
 
         console.log("Saved clean user profile in database for:", norm);
         const token = generateAuthToken({ userId: `usr_${norm}`, phone: norm });
