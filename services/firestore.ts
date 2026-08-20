@@ -201,6 +201,36 @@ export async function deleteUserFromFirestore(phone: string): Promise<void> {
       }
     });
     await Promise.all(waterDeletes).catch(() => {});
+
+    // Also remove user specifically from appdata/main snapshot (never wipe other users)
+    const mainDocRef = db.collection("appdata").doc("main");
+    const mainSnap = await mainDocRef.get().catch(() => null);
+    if (mainSnap && mainSnap.exists) {
+      const mainData = mainSnap.data() || {};
+      if (mainData.users) {
+        for (const v of Array.from(variations)) {
+          delete mainData.users[v];
+        }
+      }
+      if (mainData.dailyLogs) {
+        for (const k of Object.keys(mainData.dailyLogs)) {
+          if (Array.from(variations).some(v => k.startsWith(v))) {
+            delete mainData.dailyLogs[k];
+          }
+        }
+      }
+      if (mainData.weeklyProgress) {
+        for (const v of Array.from(variations)) {
+          delete mainData.weeklyProgress[v];
+        }
+      }
+      if (mainData.waterLogs) {
+        for (const v of Array.from(variations)) {
+          delete mainData.waterLogs[v];
+        }
+      }
+      await mainDocRef.set(mainData);
+    }
   } catch (e: any) {
     console.warn("[Firestore] deleteUser warning:", e?.message || e);
   }
@@ -428,11 +458,21 @@ export async function saveAppDataToFirestore(appData: any): Promise<void> {
   if (!db) return;
   try {
     const cleanData = JSON.parse(JSON.stringify(appData));
-    await db.collection("appdata").doc("main").set({
+    const existingDoc = await db.collection("appdata").doc("main").get().catch(() => null);
+    const existingData = (existingDoc && existingDoc.exists) ? existingDoc.data() || {} : {};
+
+    const mergedData = {
+      ...existingData,
       ...cleanData,
+      users: { ...(existingData.users || {}), ...(cleanData.users || {}) },
+      dailyLogs: { ...(existingData.dailyLogs || {}), ...(cleanData.dailyLogs || {}) },
+      weeklyProgress: { ...(existingData.weeklyProgress || {}), ...(cleanData.weeklyProgress || {}) },
+      waterLogs: { ...(existingData.waterLogs || {}), ...(cleanData.waterLogs || {}) },
       updatedAt: new Date()
-    });
-    console.log("[Firestore] Global appdata snapshot saved ✅");
+    };
+
+    await db.collection("appdata").doc("main").set(mergedData);
+    console.log("[Firestore] Global appdata snapshot safely merged & saved ✅");
   } catch (e: any) {
     console.error("[Firestore] saveAppData error:", e?.message || e);
   }

@@ -44230,6 +44230,34 @@ async function deleteUserFromFirestore(phone) {
     });
     await Promise.all(waterDeletes).catch(() => {
     });
+    const mainDocRef = db.collection("appdata").doc("main");
+    const mainSnap = await mainDocRef.get().catch(() => null);
+    if (mainSnap && mainSnap.exists) {
+      const mainData = mainSnap.data() || {};
+      if (mainData.users) {
+        for (const v of Array.from(variations)) {
+          delete mainData.users[v];
+        }
+      }
+      if (mainData.dailyLogs) {
+        for (const k of Object.keys(mainData.dailyLogs)) {
+          if (Array.from(variations).some((v) => k.startsWith(v))) {
+            delete mainData.dailyLogs[k];
+          }
+        }
+      }
+      if (mainData.weeklyProgress) {
+        for (const v of Array.from(variations)) {
+          delete mainData.weeklyProgress[v];
+        }
+      }
+      if (mainData.waterLogs) {
+        for (const v of Array.from(variations)) {
+          delete mainData.waterLogs[v];
+        }
+      }
+      await mainDocRef.set(mainData);
+    }
   } catch (e) {
     console.warn("[Firestore] deleteUser warning:", e?.message || e);
   }
@@ -44393,11 +44421,19 @@ async function saveAppDataToFirestore(appData) {
   if (!db) return;
   try {
     const cleanData = JSON.parse(JSON.stringify(appData));
-    await db.collection("appdata").doc("main").set({
+    const existingDoc = await db.collection("appdata").doc("main").get().catch(() => null);
+    const existingData = existingDoc && existingDoc.exists ? existingDoc.data() || {} : {};
+    const mergedData = {
+      ...existingData,
       ...cleanData,
+      users: { ...existingData.users || {}, ...cleanData.users || {} },
+      dailyLogs: { ...existingData.dailyLogs || {}, ...cleanData.dailyLogs || {} },
+      weeklyProgress: { ...existingData.weeklyProgress || {}, ...cleanData.weeklyProgress || {} },
+      waterLogs: { ...existingData.waterLogs || {}, ...cleanData.waterLogs || {} },
       updatedAt: /* @__PURE__ */ new Date()
-    });
-    console.log("[Firestore] Global appdata snapshot saved \u2705");
+    };
+    await db.collection("appdata").doc("main").set(mergedData);
+    console.log("[Firestore] Global appdata snapshot safely merged & saved \u2705");
   } catch (e) {
     console.error("[Firestore] saveAppData error:", e?.message || e);
   }
@@ -47093,7 +47129,6 @@ async function startServer() {
         console.warn("[Firestore] User delete warning:", fErr?.message || fErr);
       }
     }
-    saveToFirestore();
     res.json({
       success: true,
       message: `Akun dan seluruh data untuk ${phone} berhasil dihapus permanen dari database.`,

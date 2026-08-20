@@ -2553,9 +2553,6 @@ async function startServer() {
       }
     }
 
-    // 3. Save clean snapshot to appdata/main
-    saveToFirestore();
-
     res.json({
       success: true,
       message: `Akun dan seluruh data untuk ${phone} berhasil dihapus permanen dari database.`,
