@@ -938,7 +938,7 @@ function getOrCreateUserProfile(rawPhone: string, userText?: string) {
     user = getUserProfile('0' + phone.substring(2));
   }
 
-  // 3. Extract name from incoming text if present (e.g. "Saya bibi")
+  // 3. Extract name from incoming text if present (e.g. "Saya Budi")
   let extractedName = "";
   if (userText) {
     const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
@@ -4036,7 +4036,7 @@ function escapeXml(unsafe: string): string {
       }
       if (!userProfile) {
         userProfile = {
-          name: "Bibi",
+          name: "Member",
           phone: normFrom,
           normalizedPhone: normFrom,
           weight: 65,
@@ -4059,8 +4059,8 @@ function escapeXml(unsafe: string): string {
       } else {
         userProfile.phone = normFrom;
         userProfile.normalizedPhone = normFrom;
-        if (!userProfile.name || userProfile.name === "Member") {
-          userProfile.name = "Bibi";
+        if (!userProfile.name) {
+          userProfile.name = "Member";
         }
         saveUserProfile(normFrom, userProfile);
       }

@@ -48335,7 +48335,7 @@ Keluarkan output JSON valid:
       }
       if (!userProfile) {
         userProfile = {
-          name: "Bibi",
+          name: "Member",
           phone: normFrom,
           normalizedPhone: normFrom,
           weight: 65,
@@ -48358,8 +48358,8 @@ Keluarkan output JSON valid:
       } else {
         userProfile.phone = normFrom;
         userProfile.normalizedPhone = normFrom;
-        if (!userProfile.name || userProfile.name === "Member") {
-          userProfile.name = "Bibi";
+        if (!userProfile.name) {
+          userProfile.name = "Member";
         }
         saveUserProfile(normFrom, userProfile);
       }
