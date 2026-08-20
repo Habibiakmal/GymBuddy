@@ -1096,51 +1096,58 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     // Direct Gemini Vision API with dynamic key resolution (Instant, zero backend cold-start)
     try {
       const kPart = atob("QVEuQWI4Uk42SzdueVBVdkNNVnZFR0VGcjJUaFdWbDJCSzNwdFVtVDFqSVpBeE84TkxuWHc=");
-      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${kPart}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: promptText },
-              { inlineData: { mimeType: "image/jpeg", data: cleanData } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json"
-          }
-        })
-      });
-
-      if (gRes.ok) {
-        const gData = await gRes.json();
-        const candidate = gData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidate) {
-          const parsed = JSON.parse(candidate);
-          if (parsed.isFood === false) {
-            setScanNonFoodMessage(parsed.message || (isEN ? "This object is not recognized as food or drink." : "Objek ini bukan makanan atau minuman. Silakan upload foto makanan yang ingin kamu catat."));
-            setScanLoading(false);
-            return;
-          }
-
-          const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-          const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-          const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
-          const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
-          const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
-
-          setScanResult({
-            foodName: parsed.foodName || (isEN ? "Detected Food" : "Makanan Terdeteksi"),
-            calories,
-            protein,
-            carbs,
-            fat,
-            portion: parsed.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar")
+      const models = ["gemini-flash-latest", "gemini-3.5-flash"];
+      for (const mName of models) {
+        try {
+          const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${kPart}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: promptText },
+                  { inlineData: { mimeType: mimeType || "image/jpeg", data: cleanData } }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.2,
+                responseMimeType: "application/json"
+              }
+            })
           });
-          if (parsed.mealType) setScanMealType(parsed.mealType);
-          setScanLoading(false);
-          return;
+
+          if (gRes.ok) {
+            const gData = await gRes.json();
+            const candidate = gData?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (candidate) {
+              const parsed = JSON.parse(candidate);
+              if (parsed.isFood === false) {
+                setScanNonFoodMessage(parsed.message || (isEN ? "This object is not recognized as food or drink." : "Objek ini bukan makanan atau minuman. Silakan upload foto makanan yang ingin kamu catat."));
+                setScanLoading(false);
+                return;
+              }
+
+              const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
+              const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+              const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+              const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
+              const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
+
+              setScanResult({
+                foodName: parsed.foodName || (isEN ? "Detected Food" : "Makanan Terdeteksi"),
+                calories,
+                protein,
+                carbs,
+                fat,
+                portion: parsed.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar")
+              });
+              if (parsed.mealType) setScanMealType(parsed.mealType);
+              setScanLoading(false);
+              return;
+            }
+          }
+        } catch (subErr) {
+          console.warn(`Vision model ${mName} note:`, subErr);
         }
       }
     } catch (gErr) {
