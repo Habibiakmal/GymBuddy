@@ -3027,45 +3027,53 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
 
   // REST API: Get meal logs for specific user and date
+  // REST API: Get meal logs for specific user and date
   app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const user = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
-    if (!user) {
-      return res.json({ success: true, phone, date: (req.query.date as string) || getLocalDateStr(), logs: [] });
-    }
+    const targetDate = (req.query.date as string) || getLocalDateStr();
 
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
-    const targetDate = (req.query.date as string) || getLocalDateStr();
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
 
-    let logs: MealLog[] = [];
-    if (dbData.dailyLogs[key] !== undefined && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
-      logs = deduplicateMealLogs(dbData.dailyLogs[key].filter(m => !isLegacyMockMeal(m)));
-    } else if (dbData.dailyLogs[altKey] !== undefined && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
-      logs = deduplicateMealLogs(dbData.dailyLogs[altKey].filter(m => !isLegacyMockMeal(m)));
-    } else {
-      // Query persistent database layer (Firestore / MongoDB / memory)
-      try {
-        const dbLogs = await getFoodLogsForDate(phone, targetDate);
-        if (dbLogs && dbLogs.length > 0) {
-          logs = deduplicateMealLogs(dbLogs as unknown as MealLog[]);
-          dbData.dailyLogs[key] = logs;
-          saveDb();
-        }
-      } catch (e: any) {
-        console.warn("[Meals API] Database fetch note:", e?.message || e);
+    const mergedMap = new Map<string, MealLog>();
+
+    // 1. In-memory cache
+    const memLogs = [
+      ...(Array.isArray(dbData.dailyLogs[key]) ? dbData.dailyLogs[key] : []),
+      ...(Array.isArray(dbData.dailyLogs[altKey]) ? dbData.dailyLogs[altKey] : [])
+    ];
+    for (const m of memLogs) {
+      if (m && !isLegacyMockMeal(m)) {
+        const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+        mergedMap.set(dedupeKey, m);
       }
     }
 
-    // Persist cleaned deduplicated list back to server memory
-    if (logs.length > 0) {
-      dbData.dailyLogs[key] = logs;
-      if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = logs;
-      saveDb();
+    // 2. Query persistent database layer (Firestore collection)
+    try {
+      const dbLogs = await getFoodLogsForDate(phone, targetDate);
+      if (dbLogs && dbLogs.length > 0) {
+        for (const m of dbLogs) {
+          if (m && !isLegacyMockMeal(m)) {
+            const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+            if (!mergedMap.has(dedupeKey)) {
+              mergedMap.set(dedupeKey, m as unknown as MealLog);
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("[Meals API] Database fetch note:", e?.message || e);
     }
 
+    const logs = deduplicateMealLogs(Array.from(mergedMap.values()));
+
+    // Persist cleaned deduplicated list back to server memory
+    dbData.dailyLogs[key] = logs;
+    dbData.dailyLogs[altKey] = logs;
 
     res.json({ success: true, phone, date: targetDate, logs });
   });

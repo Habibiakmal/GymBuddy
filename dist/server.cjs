@@ -47479,35 +47479,39 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
-    if (!user) {
-      return res.json({ success: true, phone, date: req.query.date || getLocalDateStr(), logs: [] });
-    }
-    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
-    let logs = [];
-    if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
-      logs = deduplicateMealLogs(dbData.dailyLogs[key].filter((m) => !isLegacyMockMeal(m)));
-    } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
-      logs = deduplicateMealLogs(dbData.dailyLogs[altKey].filter((m) => !isLegacyMockMeal(m)));
-    } else {
-      try {
-        const dbLogs = await getFoodLogsForDate(phone, targetDate);
-        if (dbLogs && dbLogs.length > 0) {
-          logs = deduplicateMealLogs(dbLogs);
-          dbData.dailyLogs[key] = logs;
-          saveDb();
-        }
-      } catch (e) {
-        console.warn("[Meals API] Database fetch note:", e?.message || e);
+    const mergedMap = /* @__PURE__ */ new Map();
+    const memLogs = [
+      ...Array.isArray(dbData.dailyLogs[key]) ? dbData.dailyLogs[key] : [],
+      ...Array.isArray(dbData.dailyLogs[altKey]) ? dbData.dailyLogs[altKey] : []
+    ];
+    for (const m of memLogs) {
+      if (m && !isLegacyMockMeal(m)) {
+        const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+        mergedMap.set(dedupeKey, m);
       }
     }
-    if (logs.length > 0) {
-      dbData.dailyLogs[key] = logs;
-      if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = logs;
-      saveDb();
+    try {
+      const dbLogs = await getFoodLogsForDate(phone, targetDate);
+      if (dbLogs && dbLogs.length > 0) {
+        for (const m of dbLogs) {
+          if (m && !isLegacyMockMeal(m)) {
+            const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+            if (!mergedMap.has(dedupeKey)) {
+              mergedMap.set(dedupeKey, m);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Meals API] Database fetch note:", e?.message || e);
     }
+    const logs = deduplicateMealLogs(Array.from(mergedMap.values()));
+    dbData.dailyLogs[key] = logs;
+    dbData.dailyLogs[altKey] = logs;
     res.json({ success: true, phone, date: targetDate, logs });
   });
   app.post("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {
