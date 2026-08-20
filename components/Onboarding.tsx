@@ -2321,6 +2321,15 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           selectedPlan,
                           selectedFeature,
                           phone: norm || phone,
+                          targetCalories: targetCal,
+                          dailyTargetCalories: targetCal,
+                          proteinGrams: proteinGram,
+                          dailyTargetProtein: proteinGram,
+                          carbGrams: carbsGram,
+                          dailyTargetCarbs: carbsGram,
+                          fatGrams: fatGram,
+                          dailyTargetFat: fatGram,
+                          fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
                           activeService: "both"
                         };
 
@@ -2359,8 +2368,8 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         } catch (e) {}
 
                         try {
-                          // Launch WhatsApp to Twilio Sandbox (+14155238886) with initial greeting
-                          const welcomeMsg = `Halo GymBuddy AI! Nama saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya! 🎯`;
+                          // Launch WhatsApp to Twilio Sandbox (+14155238886) with clean initial greeting
+                          const welcomeMsg = `Halo GymBuddy AI! Saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya.`;
                           const waUrl = `https://wa.me/14155238886?text=${encodeURIComponent(welcomeMsg)}`;
                           window.open(waUrl, "_blank", "noopener,noreferrer");
                         } catch (e) {

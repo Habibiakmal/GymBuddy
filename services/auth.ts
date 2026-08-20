@@ -40,10 +40,10 @@ import admin from "firebase-admin";
 export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPayload }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    // If no Bearer token, check for legacy phone param or header during transition
-    const legacyPhone = req.params.phone || req.headers["x-user-phone"] as string;
+    const legacyHeader = Array.isArray(req.headers["x-user-phone"]) ? req.headers["x-user-phone"][0] : req.headers["x-user-phone"];
+    const legacyPhone = req.params.phone || legacyHeader;
     if (legacyPhone) {
-      const user = await findUserByPhoneOrId(legacyPhone);
+      const user = await findUserByPhoneOrId(String(legacyPhone));
       if (user) {
         req.user = { userId: user.userId, phone: user.phone };
         return next();

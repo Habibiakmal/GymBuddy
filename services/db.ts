@@ -20,9 +20,14 @@ export interface UserDocument {
   selectedFeature?: "nutrition" | "coach" | "both";
   activeService?: "nutrition" | "coach" | "both";
   dailyTargetCalories?: number;
+  targetCalories?: number;
   dailyTargetProtein?: number;
+  proteinGrams?: number;
   dailyTargetCarbs?: number;
+  carbGrams?: number;
   dailyTargetFat?: number;
+  fatGrams?: number;
+  fiberGrams?: number;
   customSchedule?: any;
   customGoals?: any;
   reminderTime?: string;
@@ -311,11 +316,13 @@ async function migrateLegacyAppData(db: Db) {
 import {
   findUserInFirestore,
   saveUserToFirestore,
+  deleteUserFromFirestore,
   getSubscriptionFromFirestore,
   saveSubscriptionToFirestore,
   getFoodLogsFromFirestore,
   insertFoodLogToFirestore,
   deleteFoodLogFromFirestore,
+  deleteAllFoodLogsForDateFromFirestore,
   getWaterLogFromFirestore,
   saveWaterLogToFirestore,
   recordAiTelemetryToFirestore,
@@ -381,13 +388,37 @@ export async function findUserByPhoneOrId(identifier: string): Promise<UserDocum
 }
 
 export async function deleteUserDocument(phone: string): Promise<void> {
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const variations = [phone, clean, `usr_${phone}`, `usr_${clean}`];
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+
+  const variations = Array.from(new Set([
+    phone, normPhone, altPhone, cleanPhone, `+${cleanPhone}`,
+    `usr_${phone}`, `usr_${normPhone}`, `usr_${altPhone}`
+  ])).filter(Boolean);
+
   for (const v of variations) {
     memCache.users.delete(v);
     memCache.subscriptions.delete(v);
-    memCache.foodLogs.delete(v);
     memCache.waterLogs.delete(v);
+  }
+  for (const k of Array.from(memCache.foodLogs.keys())) {
+    const kClean = k.replace(/\D/g, "");
+    if (
+      (cleanPhone && kClean.includes(cleanPhone)) ||
+      (normPhone && kClean.includes(normPhone)) ||
+      (altPhone && kClean.includes(altPhone)) ||
+      variations.some(v => k.includes(v))
+    ) {
+      memCache.foodLogs.delete(k);
+    }
+  }
+  try {
+    if (getFirestore()) {
+      await deleteUserFromFirestore(phone);
+    }
+  } catch (e: any) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
   }
   if (isMongoDualWriteEnabled()) {
     try {

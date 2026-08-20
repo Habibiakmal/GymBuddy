@@ -42965,6 +42965,51 @@ var NUTRITION_DATABASE = [
     source: "TKPI"
   },
   {
+    keywords: ["rice bowl ayam", "nasi bowl ayam", "chicken rice bowl", "ricebowl ayam", "nasi rice bowl ayam", "rice bowl chicken"],
+    normalizedName: "Rice Bowl Ayam (Chicken Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 165, protein: 9.7, carbs: 19.4, fat: 5.1, fiber: 0.9, sugar: 0.8 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl sapi", "nasi bowl sapi", "beef rice bowl", "ricebowl sapi", "nasi rice bowl sapi", "rice bowl beef", "gyudon"],
+    normalizedName: "Rice Bowl Sapi (Beef Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 177, protein: 9.1, carbs: 18.5, fat: 6.8, fiber: 0.7, sugar: 1.1 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl teriyaki", "nasi bowl teriyaki", "chicken teriyaki rice bowl"],
+    normalizedName: "Rice Bowl Teriyaki",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 160, protein: 8.5, carbs: 20, fat: 4.8, fiber: 0.7, sugar: 2.2 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl katsu", "nasi bowl katsu", "katsu rice bowl", "chicken katsu rice bowl"],
+    normalizedName: "Rice Bowl Chicken Katsu",
+    category: "grain",
+    defaultServingGrams: 380,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 178, protein: 7.3, carbs: 20, fat: 7.3, fiber: 0.8, sugar: 1.3 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl", "nasi bowl", "ricebowl", "donburi", "poke bowl", "pokebowl"],
+    normalizedName: "Rice Bowl Combo",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 157, protein: 7.4, carbs: 18.5, fat: 5.1, fiber: 0.8, sugar: 0.9 },
+    source: "USDA"
+  },
+  {
     keywords: ["nasi padang", "nasi ramas"],
     normalizedName: "Nasi Padang Komplit",
     category: "grain",
@@ -43615,7 +43660,7 @@ function splitFoodItems(rawInput) {
   const finalItems = [];
   for (const part of rawParts) {
     const lowerPart = part.toLowerCase();
-    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug)/i.test(lowerPart);
+    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug|bowl)/i.test(lowerPart) || lowerPart.includes("rice bowl") || lowerPart.includes("donburi");
     const nasiWordCount = part.trim().split(/\s+/).length;
     const isNamedDish = /^nasi\s+/i.test(part) && nasiWordCount >= 3;
     if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish && !isNamedDish) {
@@ -43638,6 +43683,23 @@ function calculateSingleItemNutrition(rawItemText) {
         if (score > bestScore) {
           bestScore = score;
           matchedRef = ref;
+        }
+      }
+    }
+  }
+  let secondaryProteinRef = null;
+  if (matchedRef && (matchedRef.normalizedName.includes("Nasi Putih") || matchedRef.normalizedName.includes("Nasi Merah"))) {
+    const proteinKeywords = ["ayam", "chicken", "sapi", "beef", "daging", "telur", "egg", "katsu", "teriyaki", "ikan", "fish"];
+    if (proteinKeywords.some((pk) => lower.includes(pk))) {
+      for (const ref of NUTRITION_DATABASE) {
+        if (ref.category === "protein" || ref.normalizedName.includes("Ayam") || ref.normalizedName.includes("Sapi")) {
+          for (const kw of ref.keywords) {
+            if (lower.includes(kw)) {
+              secondaryProteinRef = ref;
+              break;
+            }
+          }
+          if (secondaryProteinRef) break;
         }
       }
     }
@@ -43693,18 +43755,28 @@ function calculateSingleItemNutrition(rawItemText) {
     } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
       per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
     }
-    const factor = targetGrams2 / 100;
-    const protein = Math.round(per100g.protein * factor * 10) / 10;
-    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
-    const fat2 = Math.round(per100g.fat * factor * 10) / 10;
-    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
-    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    let factor = targetGrams2 / 100;
+    let protein = Math.round(per100g.protein * factor * 10) / 10;
+    let carbs = Math.round(per100g.carbs * factor * 10) / 10;
+    let fat2 = Math.round(per100g.fat * factor * 10) / 10;
+    let fiber = Math.round(per100g.fiber * factor * 10) / 10;
+    let sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    if (secondaryProteinRef) {
+      const pGrams = secondaryProteinRef.defaultServingGrams || 100;
+      const pFactor = pGrams / 100;
+      protein = Math.round((protein + secondaryProteinRef.per100g.protein * pFactor) * 10) / 10;
+      carbs = Math.round((carbs + secondaryProteinRef.per100g.carbs * pFactor) * 10) / 10;
+      fat2 = Math.round((fat2 + secondaryProteinRef.per100g.fat * pFactor) * 10) / 10;
+      fiber = Math.round((fiber + secondaryProteinRef.per100g.fiber * pFactor) * 10) / 10;
+      sugar = Math.round((sugar + secondaryProteinRef.per100g.sugar * pFactor) * 10) / 10;
+      targetGrams2 += pGrams;
+    }
     const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
-    const rawCal = Math.round(per100g.calories * factor);
+    const rawCal = Math.round(per100g.calories * factor + (secondaryProteinRef ? secondaryProteinRef.per100g.calories * (secondaryProteinRef.defaultServingGrams / 100) : 0));
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
     return {
       food_name: rawItemText.trim(),
-      normalized_food_name: matchedRef.normalizedName,
+      normalized_food_name: secondaryProteinRef ? `${matchedRef.normalizedName} + ${secondaryProteinRef.normalizedName}` : matchedRef.normalizedName,
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams2),
@@ -43785,13 +43857,35 @@ function calculateSingleItemNutrition(rawItemText) {
     notes: "Estimasi generik"
   };
 }
+function isGenericMealInput(text) {
+  const lower = (text || "").trim().toLowerCase();
+  const genericPatterns = [
+    { pattern: /^(?:rice\s*bowl|nasi\s*bowl|bowl|poke\s*bowl)$/i, mealType: "rice bowl" },
+    { pattern: /^(?:salad|salad\s*sayur|salad\s*bowl)$/i, mealType: "salad" },
+    { pattern: /^(?:sandwich|roti\s*isi)$/i, mealType: "sandwich" },
+    { pattern: /^(?:noodles|mie|mi|ramen|pasta|spaghetti)$/i, mealType: "noodles" },
+    { pattern: /^(?:soup|sup|soto)$/i, mealType: "soup" },
+    { pattern: /^(?:smoothie|smoothie\s*bowl|jus)$/i, mealType: "smoothie" },
+    { pattern: /^(?:wrap|burrito|taco)$/i, mealType: "wrap" }
+  ];
+  for (const { pattern, mealType } of genericPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        isGeneric: true,
+        mealType,
+        suggestedOptions: ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"]
+      };
+    }
+  }
+  return { isGeneric: false, mealType: "", suggestedOptions: [] };
+}
 function estimateMealNutritionDeterministic(input) {
   const debugLogs = [];
   debugLogs.push(`[NutritionEngine] Raw input: "${input}"`);
+  const genericCheck = isGenericMealInput(input);
   const rawItems = splitFoodItems(input);
   debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
   const items = [];
-  let sumCalories = 0;
   let sumProtein = 0;
   let sumCarbs = 0;
   let sumFat = 0;
@@ -43799,10 +43893,13 @@ function estimateMealNutritionDeterministic(input) {
   let sumSugar = 0;
   let totalVolumeMl = 0;
   let isHydration = false;
+  let hasUserProvidedPortion = false;
   for (const rawItem of rawItems) {
     const itemNutr = calculateSingleItemNutrition(rawItem);
     items.push(itemNutr);
-    sumCalories += Number(itemNutr.calories) || 0;
+    if (itemNutr.portion_type === "user_provided") {
+      hasUserProvidedPortion = true;
+    }
     sumProtein += Number(itemNutr.protein) || 0;
     sumCarbs += Number(itemNutr.carbs) || 0;
     sumFat += Number(itemNutr.fat) || 0;
@@ -43816,26 +43913,21 @@ function estimateMealNutritionDeterministic(input) {
       `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.display_unit || itemNutr.estimated_weight_grams + "g"} | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
     );
   }
-  const totalProtein = Math.round(sumProtein * 10) / 10;
-  const totalCarbs = Math.round(sumCarbs * 10) / 10;
-  const totalFat = Math.round(sumFat * 10) / 10;
-  const totalFiber = Math.round(sumFiber * 10) / 10;
-  const totalSugar = Math.round(sumSugar * 10) / 10;
-  const totalCalories = Math.round(sumCalories);
-  const validatedProtein = Math.round(items.reduce((s, it) => s + (Number(it.protein) || 0), 0) * 10) / 10;
-  const validatedCarbs = Math.round(items.reduce((s, it) => s + (Number(it.carbs) || 0), 0) * 10) / 10;
-  const validatedFat = Math.round(items.reduce((s, it) => s + (Number(it.fat) || 0), 0) * 10) / 10;
-  const validatedFiber = Math.round(items.reduce((s, it) => s + (Number(it.fiber) || 0), 0) * 10) / 10;
-  const validatedSugar = Math.round(items.reduce((s, it) => s + (Number(it.sugar) || 0), 0) * 10) / 10;
-  const validatedCalories = Math.round(items.reduce((s, it) => s + (Number(it.calories) || 0), 0));
+  const validatedProtein = Math.round(sumProtein * 10) / 10;
+  const validatedCarbs = Math.round(sumCarbs * 10) / 10;
+  const validatedFat = Math.round(sumFat * 10) / 10;
+  const validatedFiber = Math.round(sumFiber * 10) / 10;
+  const validatedSugar = Math.round(sumSugar * 10) / 10;
+  const validatedCalories = Math.round(validatedProtein * 4 + validatedCarbs * 4 + validatedFat * 9);
   debugLogs.push(
-    `[NutritionEngine] EXACT SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
+    `[NutritionEngine] ATWATER SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
   );
   const cleanTitle = items.length === 1 ? items[0].normalized_food_name : items.map((i) => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
-  const dynamicPortionNote = items.length === 1 ? "1 detected food item" : `${items.length} detected food items`;
+  const dynamicPortionNote = items.length === 1 ? "1 meal detected" : `${items.length} food items detected`;
+  const explicitGramMatch = input.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+  const portionDisplayLabel = explicitGramMatch ? `Portion: ${parseFloat(explicitGramMatch[1].replace(",", "."))} g` : hasUserProvidedPortion ? "Portion: User provided" : "Portion: Estimated";
+  const confidence = genericCheck.isGeneric ? "low" : hasUserProvidedPortion || items.some((i) => i.confidence === "high") ? "high" : "medium";
   return {
-    // IMPORTANT: Preserve original user input as foodName — do NOT replace with catalog/AI-generated name
-    // cleanTitle is kept as internal reference only and passed as normalizedFoodName for preview
     foodName: input.trim() || cleanTitle,
     calories: validatedCalories,
     protein: validatedProtein,
@@ -43843,12 +43935,19 @@ function estimateMealNutritionDeterministic(input) {
     fat: validatedFat,
     fiber: validatedFiber,
     sugar: validatedSugar,
+    sodium: void 0,
+    // Unknown sodium is kept as undefined (rendered as "Not estimated" in UI)
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
     portionNote: dynamicPortionNote,
     items,
     calculatedFromItems: true,
+    confidence,
+    needsClarification: genericCheck.isGeneric,
+    clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : void 0,
+    suggestedOptions: genericCheck.suggestedOptions,
+    portionDisplayLabel,
     debugLog: debugLogs
   };
 }
@@ -44015,9 +44114,9 @@ function getFirestore() {
 }
 function getPhoneVariations(input) {
   if (!input) return [];
-  const clean = input.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean2 = input.replace(/[^\d+a-zA-Z_]/g, "");
   const digits = input.replace(/\D/g, "");
-  const variations = /* @__PURE__ */ new Set([input, clean]);
+  const variations = /* @__PURE__ */ new Set([input, clean2]);
   if (digits) {
     variations.add(digits);
     if (digits.startsWith("0")) {
@@ -44089,6 +44188,50 @@ async function saveUserToFirestore(doc) {
     await db.collection("users").doc(normPhone).set(payload, { merge: true });
   } catch (e) {
     console.warn("[Firestore] saveUser warning:", e?.message || e);
+  }
+}
+async function deleteUserFromFirestore(phone) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const variations = new Set(getPhoneVariations(phone));
+    const batch = db.batch();
+    for (const v of Array.from(variations)) {
+      batch.delete(db.collection("users").doc(v));
+      batch.delete(db.collection("subscriptions").doc(v));
+    }
+    await batch.commit().catch(() => {
+    });
+    const foodSnap = await db.collection("foodLogs").get();
+    const foodDeletes = [];
+    foodSnap.forEach((doc) => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : pClean.startsWith("8") ? "0" + pClean : pClean;
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || data.userId && variations.has(data.userId)) {
+        foodDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(foodDeletes).catch(() => {
+    });
+    const waterSnap = await db.collection("waterLogs").get();
+    const waterDeletes = [];
+    waterSnap.forEach((doc) => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : pClean.startsWith("8") ? "0" + pClean : pClean;
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || data.userId && variations.has(data.userId)) {
+        waterDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(waterDeletes).catch(() => {
+    });
+  } catch (e) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
   }
 }
 async function getSubscriptionFromFirestore(userIdOrPhone) {
@@ -44207,6 +44350,25 @@ async function deleteFoodLogFromFirestore(id) {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
   }
 }
+async function deleteAllFoodLogsForDateFromFirestore(phone, date) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+    const snap1 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).get();
+    const batch = db.batch();
+    snap1.docs.forEach((d) => batch.delete(d.ref));
+    if (altPhone !== normPhone) {
+      const snap2 = await db.collection("foodLogs").where("phone", "==", altPhone).where("date", "==", date).get();
+      snap2.docs.forEach((d) => batch.delete(d.ref));
+    }
+    await batch.commit();
+  } catch (e) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
+  }
+}
 async function saveWaterLogToFirestore(doc) {
   try {
     const db = getFirestore();
@@ -44234,7 +44396,7 @@ async function saveAppDataToFirestore(appData) {
     await db.collection("appdata").doc("main").set({
       ...cleanData,
       updatedAt: /* @__PURE__ */ new Date()
-    }, { merge: true });
+    });
     console.log("[Firestore] Global appdata snapshot saved \u2705");
   } catch (e) {
     console.error("[Firestore] saveAppData error:", e?.message || e);
@@ -44439,7 +44601,7 @@ var memCache = {
   waterLogs: /* @__PURE__ */ new Map()
 };
 async function findUserByPhoneOrId(identifier) {
-  const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean2 = identifier.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
       const firestoreUser = await findUserInFirestore(identifier);
@@ -44452,23 +44614,46 @@ async function findUserByPhoneOrId(identifier) {
     const db = await getDatabase();
     if (db) {
       const found = await db.collection("users").findOne({
-        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
+        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean2 }]
       });
       if (found) return found;
     }
   } catch (e) {
     console.warn("[MongoDB] findUser fallback note:", e?.message || e);
   }
-  return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
+  return memCache.users.get(identifier) || memCache.users.get(clean2) || memCache.users.get(`usr_${clean2}`) || null;
 }
 async function deleteUserDocument(phone) {
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const variations = [phone, clean, `usr_${phone}`, `usr_${clean}`];
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const variations = Array.from(/* @__PURE__ */ new Set([
+    phone,
+    normPhone,
+    altPhone,
+    cleanPhone,
+    `+${cleanPhone}`,
+    `usr_${phone}`,
+    `usr_${normPhone}`,
+    `usr_${altPhone}`
+  ])).filter(Boolean);
   for (const v of variations) {
     memCache.users.delete(v);
     memCache.subscriptions.delete(v);
-    memCache.foodLogs.delete(v);
     memCache.waterLogs.delete(v);
+  }
+  for (const k of Array.from(memCache.foodLogs.keys())) {
+    const kClean = k.replace(/\D/g, "");
+    if (cleanPhone && kClean.includes(cleanPhone) || normPhone && kClean.includes(normPhone) || altPhone && kClean.includes(altPhone) || variations.some((v) => k.includes(v))) {
+      memCache.foodLogs.delete(k);
+    }
+  }
+  try {
+    if (getFirestore()) {
+      await deleteUserFromFirestore(phone);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
   }
   if (isMongoDualWriteEnabled()) {
     try {
@@ -44520,7 +44705,7 @@ async function saveUserDocument(doc) {
   }
 }
 async function getUserSubscription(userIdOrPhone) {
-  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean2 = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
       const firestoreSub = await getSubscriptionFromFirestore(userIdOrPhone);
@@ -44540,7 +44725,7 @@ async function getUserSubscription(userIdOrPhone) {
   } catch (e) {
     console.warn("[MongoDB] getSubscription fallback note:", e?.message || e);
   }
-  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean) || null;
+  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean2) || null;
 }
 async function saveUserSubscription(doc) {
   memCache.subscriptions.set(doc.phone, doc);
@@ -44573,8 +44758,8 @@ async function saveUserSubscription(doc) {
   }
 }
 async function getFoodLogsForDate(phone, date) {
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean}_${date}`;
+  const clean2 = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean2}_${date}`;
   try {
     if (getFirestore()) {
       const firestoreLogs = await getFoodLogsFromFirestore(phone, date);
@@ -44598,8 +44783,8 @@ async function getFoodLogsForDate(phone, date) {
   return memCache.foodLogs.get(cacheKey) || [];
 }
 async function insertFoodLog(doc) {
-  const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean}_${doc.date}`;
+  const clean2 = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean2}_${doc.date}`;
   const existing = memCache.foodLogs.get(cacheKey) || [];
   const idx = existing.findIndex((m) => m.id === doc.id);
   if (idx >= 0) existing[idx] = doc;
@@ -44644,6 +44829,15 @@ async function deleteFoodLog(id) {
     } catch (e) {
       console.warn("[MongoDB] deleteFoodLog warning:", e?.message || e);
     }
+  }
+}
+async function deleteAllFoodLogsForDate(phone, date) {
+  try {
+    if (getFirestore()) {
+      await deleteAllFoodLogsForDateFromFirestore(phone, date);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
   }
 }
 async function saveWaterLog(doc) {
@@ -44698,9 +44892,10 @@ function verifyAuthToken(token) {
 async function requireAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    const legacyPhone = req.params.phone || req.headers["x-user-phone"];
+    const legacyHeader = Array.isArray(req.headers["x-user-phone"]) ? req.headers["x-user-phone"][0] : req.headers["x-user-phone"];
+    const legacyPhone = req.params.phone || legacyHeader;
     if (legacyPhone) {
-      const user = await findUserByPhoneOrId(legacyPhone);
+      const user = await findUserByPhoneOrId(String(legacyPhone));
       if (user) {
         req.user = { userId: user.userId, phone: user.phone };
         return next();
@@ -45476,6 +45671,11 @@ function saveUserProfile(rawPhone, profile) {
   if (!phone) return null;
   const existing = dbData.users[phone] || {};
   const initialW = Math.max(30, Number(profile?.weight) || Number(existing.weight) || 65);
+  const targetCal = Number(profile?.targetCalories || profile?.dailyTargetCalories || existing.targetCalories || existing.dailyTargetCalories) || void 0;
+  const targetProt = Number(profile?.proteinGrams || profile?.dailyTargetProtein || existing.proteinGrams || existing.dailyTargetProtein) || void 0;
+  const targetCarb = Number(profile?.carbGrams || profile?.dailyTargetCarbs || existing.carbGrams || existing.dailyTargetCarbs) || void 0;
+  const targetFatVal = Number(profile?.fatGrams || profile?.dailyTargetFat || existing.fatGrams || existing.dailyTargetFat) || void 0;
+  const targetFib = Number(profile?.fiberGrams || existing.fiberGrams) || void 0;
   const updated = {
     ...existing,
     ...profile,
@@ -45483,6 +45683,15 @@ function saveUserProfile(rawPhone, profile) {
     normalizedPhone: phone,
     startWeight: profile?.startWeight !== void 0 ? Number(profile.startWeight) : existing.startWeight || initialW,
     weight: initialW,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
     createdAt: existing.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
@@ -45506,10 +45715,15 @@ function saveUserProfile(rawPhone, profile) {
     persona: updated.persona,
     selectedFeature: updated.selectedFeature || updated.activeService,
     activeService: updated.activeService,
-    dailyTargetCalories: updated.targetCalories || updated.dailyTargetCalories,
-    dailyTargetProtein: updated.proteinGrams || updated.dailyTargetProtein,
-    dailyTargetCarbs: updated.carbGrams || updated.dailyTargetCarbs,
-    dailyTargetFat: updated.fatGrams || updated.dailyTargetFat,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
     customSchedule: updated.workoutSchedule || updated.customSchedule,
     customGoals: updated.customGoals,
     reminderTime: updated.reminderTime,
@@ -45629,16 +45843,41 @@ function calculateUserData(profile) {
   const activityMultiplier = activityMap[profile?.activityLevel] || 1.375;
   const bmr = Math.round(10 * weight + 6.25 * height - 5 * age + (isMale ? 5 : -161));
   const tdee = Math.round(bmr * activityMultiplier);
-  let targetCalories = tdee;
-  if (goal === "lose") {
-    targetCalories = Math.max(1200, tdee - 500);
-  } else if (goal === "gain") {
-    targetCalories = tdee + 400;
+  let targetCalories = profile?.targetCalories || profile?.dailyTargetCalories || profile?.calories;
+  if (!targetCalories || isNaN(Number(targetCalories)) || Number(targetCalories) < 500) {
+    targetCalories = tdee;
+    if (goal === "lose") {
+      targetCalories = Math.max(1200, tdee - 500);
+    } else if (goal === "gain") {
+      targetCalories = tdee + 400;
+    }
+  } else {
+    targetCalories = Math.round(Number(targetCalories));
   }
-  const proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2 : 1.8));
-  const fatGrams = Math.round(targetCalories * 0.25 / 9);
-  const carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
-  const fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  let proteinGrams = profile?.proteinGrams || profile?.dailyTargetProtein || profile?.protein;
+  if (!proteinGrams || isNaN(Number(proteinGrams)) || Number(proteinGrams) < 10) {
+    proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2 : 1.8));
+  } else {
+    proteinGrams = Math.round(Number(proteinGrams));
+  }
+  let fatGrams = profile?.fatGrams || profile?.dailyTargetFat || profile?.fat;
+  if (!fatGrams || isNaN(Number(fatGrams)) || Number(fatGrams) < 5) {
+    fatGrams = Math.round(targetCalories * 0.25 / 9);
+  } else {
+    fatGrams = Math.round(Number(fatGrams));
+  }
+  let carbGrams = profile?.carbGrams || profile?.dailyTargetCarbs || profile?.carbs;
+  if (!carbGrams || isNaN(Number(carbGrams)) || Number(carbGrams) < 10) {
+    carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
+  } else {
+    carbGrams = Math.round(Number(carbGrams));
+  }
+  let fiberGrams = profile?.fiberGrams || profile?.fiber;
+  if (!fiberGrams || isNaN(Number(fiberGrams)) || Number(fiberGrams) < 5) {
+    fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  } else {
+    fiberGrams = Math.round(Number(fiberGrams));
+  }
   const activeService = profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
   const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
   const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0 ? profile.workoutSchedule : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
@@ -46793,13 +47032,32 @@ async function startServer() {
     await deleteUserDocument(rawPhone);
     await deleteUserDocument(`usr_${phone}`);
     await deleteUserDocument(`usr_${altPhone}`);
+    const variations = Array.from(/* @__PURE__ */ new Set([
+      phone,
+      altPhone,
+      rawPhone,
+      `0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `+62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_${phone}`,
+      `usr_${altPhone}`,
+      `usr_${rawPhone}`,
+      `usr_0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`
+    ])).filter(Boolean);
     Object.keys(dbData.dailyLogs).forEach((key) => {
-      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
         delete dbData.dailyLogs[key];
       }
     });
+    for (const v of variations) {
+      await deleteAllFoodLogsForDate(v, getLocalDateStr()).catch(() => {
+      });
+    }
     Object.keys(dbData.waterLogs).forEach((key) => {
-      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
         delete dbData.waterLogs[key];
       }
     });
@@ -46808,21 +47066,20 @@ async function startServer() {
     if (firestore) {
       try {
         const batch = firestore.batch();
-        const variations = [phone, altPhone, rawPhone, `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`];
         for (const v of variations) {
           batch.delete(firestore.collection("users").doc(v));
           batch.delete(firestore.collection("subscriptions").doc(v));
         }
-        const foodSnap1 = await firestore.collection("foodLogs").where("phone", "==", phone).get();
-        foodSnap1.forEach((d) => batch.delete(d.ref));
-        const foodSnap2 = await firestore.collection("foodLogs").where("phone", "==", altPhone).get();
-        foodSnap2.forEach((d) => batch.delete(d.ref));
-        const foodSnap3 = await firestore.collection("foodLogs").where("userId", "==", `usr_${phone}`).get();
-        foodSnap3.forEach((d) => batch.delete(d.ref));
-        const waterSnap1 = await firestore.collection("waterLogs").where("phone", "==", phone).get();
-        waterSnap1.forEach((d) => batch.delete(d.ref));
-        const waterSnap2 = await firestore.collection("waterLogs").where("phone", "==", altPhone).get();
-        waterSnap2.forEach((d) => batch.delete(d.ref));
+        for (const v of variations) {
+          const fSnap1 = await firestore.collection("foodLogs").where("phone", "==", v).get();
+          fSnap1.forEach((d) => batch.delete(d.ref));
+          const fSnap2 = await firestore.collection("foodLogs").where("userId", "==", v).get();
+          fSnap2.forEach((d) => batch.delete(d.ref));
+          const wSnap1 = await firestore.collection("waterLogs").where("phone", "==", v).get();
+          wSnap1.forEach((d) => batch.delete(d.ref));
+          const wSnap2 = await firestore.collection("waterLogs").where("userId", "==", v).get();
+          wSnap2.forEach((d) => batch.delete(d.ref));
+        }
         await batch.commit();
         console.log(`[Firestore] User ${phone} and all related documents permanently wiped \u2705`);
       } catch (fErr) {
@@ -47069,24 +47326,33 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const fat = Math.round(sumFat * 10) / 10;
         const fiber = Math.round(sumFib * 10) / 10;
         const sugar = Math.round(sumSug * 10) / 10;
-        const calories = Math.round(sumCal);
-        parsed.mealType = parsed.mealType || getMealTypeByHour();
+        const genericCheck = isGenericMealInput(cleanText);
+        const isLowConfidence = genericCheck.isGeneric || parsed.confidence === "low" || deterministicResult.needsClarification;
+        const rawSodium = parsed.sodium !== void 0 && parsed.sodium !== null ? Number(parsed.sodium) : void 0;
+        const sodium = rawSodium !== void 0 && !isNaN(rawSodium) && rawSodium > 0 ? rawSodium : void 0;
+        const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          sugar,
+          calories: isLowConfidence ? void 0 : atwaterCal,
+          protein: isLowConfidence ? void 0 : protein,
+          carbs: isLowConfidence ? void 0 : carbs,
+          fat: isLowConfidence ? void 0 : fat,
+          fiber: isLowConfidence ? void 0 : fiber,
+          sugar: isLowConfidence ? void 0 : sugar,
+          sodium: isLowConfidence ? void 0 : sodium,
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: itemsToUse.length === 1 ? "1 detected food item" : `${itemsToUse.length} detected food items`,
+          portionNote: itemsToUse.length === 1 ? "1 meal detected" : `${itemsToUse.length} food items detected`,
           items: itemsToUse,
+          confidence: isLowConfidence ? "low" : parsed.confidence || deterministicResult.confidence || "medium",
+          needsClarification: isLowConfidence,
+          clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
+          suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
+          portionDisplayLabel: deterministicResult.portionDisplayLabel,
           debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {
@@ -47205,6 +47471,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
+    const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
+    if (!user) {
+      return res.json({ success: true, phone, date: req.query.date || getLocalDateStr(), logs: [] });
+    }
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
     const key = `${phone}_${targetDate}`;
@@ -48135,7 +48405,7 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
-          userData.persona || "mia",
+          userData.persona === "max" || userData.persona === "mia" ? userData.persona : "mia",
           userData.goal || "healthy"
         );
         responseMessages = [guide.text];
@@ -48365,6 +48635,9 @@ Keluarkan output JSON valid:
             const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
+            if (imagePart && req.body.MediaUrl0) {
+              mediaUrlToSend = req.body.MediaUrl0;
+            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;

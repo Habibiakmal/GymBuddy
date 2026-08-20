@@ -79,28 +79,32 @@ export default function LoginModal({
     const normPhone = cleanedPhone.startsWith("62")
       ? "0" + cleanedPhone.substring(2)
       : (cleanedPhone.startsWith("8") ? "0" + cleanedPhone : cleanedPhone);
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+    const phoneVariations = Array.from(new Set([normPhone, altPhone, cleanedPhone, `+${cleanedPhone}`, `usr_${normPhone}`])).filter(Boolean);
 
     const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
 
     let foundProfile: any = null;
     let foundProgress: any = null;
 
-    // Helper to fetch profile from an API base
+    // Helper to fetch profile from an API base trying all phone variations
     const tryFetchProfile = async (baseUrl: string) => {
-      try {
-        const res = await fetch(`${baseUrl}/api/user-profile/${normPhone}`);
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          if (data && data.success && data.profile) return data.profile;
-        }
-        const userRes = await fetch(`${baseUrl}/api/user/${normPhone}`);
-        if (userRes.ok) {
-          const uData = await userRes.json().catch(() => null);
-          if (uData && (uData.user || uData.profile || uData.name)) {
-            return uData.user || uData.profile || uData;
+      for (const p of phoneVariations) {
+        try {
+          const res = await fetch(`${baseUrl}/api/user-profile/${p}`);
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && data.success && data.profile) return data.profile;
           }
-        }
-      } catch (e) {}
+          const userRes = await fetch(`${baseUrl}/api/user/${p}`);
+          if (userRes.ok) {
+            const uData = await userRes.json().catch(() => null);
+            if (uData && (uData.user || uData.profile || uData.name)) {
+              return uData.user || uData.profile || uData;
+            }
+          }
+        } catch (e) {}
+      }
       return null;
     };
 
@@ -116,9 +120,18 @@ export default function LoginModal({
     // 3. Try LocalStorage fallback
     if (!foundProfile) {
       try {
-        const stored = localStorage.getItem(`gymbuddy_user_${normPhone}`) || localStorage.getItem("gymbuddy_last_user") || localStorage.getItem("gymbuddy_active_session");
-        if (stored) {
-          foundProfile = JSON.parse(stored);
+        for (const p of phoneVariations) {
+          const stored = localStorage.getItem(`gymbuddy_user_${p}`);
+          if (stored) {
+            foundProfile = JSON.parse(stored);
+            break;
+          }
+        }
+        if (!foundProfile) {
+          const storedActive = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user");
+          if (storedActive) {
+            foundProfile = JSON.parse(storedActive);
+          }
         }
       } catch (e) {}
     }
@@ -133,6 +146,13 @@ export default function LoginModal({
       setLoading(false);
       return;
     }
+
+    // Persist login session locally for instant cross-tab access
+    try {
+      localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(foundProfile));
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(foundProfile));
+      localStorage.setItem("gymbuddy_last_user", JSON.stringify(foundProfile));
+    } catch (e) {}
 
     setUserProfile(foundProfile);
     if (foundProgress) setProgressData(foundProgress);
@@ -418,7 +438,7 @@ export default function LoginModal({
 
                   <a
                     href={`https://wa.me/${botNumber}?text=${encodeURIComponent(
-                      `Halo GymBuddy AI! 👋 Saya ${userProfile.name}, mau cek rekomendasi nutrisi dan konsultasi latihan hari ini.`
+                      `Halo GymBuddy AI! Saya ${userProfile.name}, mau cek rekomendasi nutrisi dan konsultasi latihan hari ini.`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"

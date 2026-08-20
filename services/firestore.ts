@@ -160,6 +160,52 @@ export async function saveUserToFirestore(doc: Partial<UserDocument> & { phone: 
   }
 }
 
+export async function deleteUserFromFirestore(phone: string): Promise<void> {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+    const variations = new Set(getPhoneVariations(phone));
+
+    const batch = db.batch();
+    for (const v of Array.from(variations)) {
+      batch.delete(db.collection("users").doc(v));
+      batch.delete(db.collection("subscriptions").doc(v));
+    }
+    await batch.commit().catch(() => {});
+
+    // Delete all foodLogs and waterLogs matching user's phone variations
+    const foodSnap = await db.collection("foodLogs").get();
+    const foodDeletes: Promise<any>[] = [];
+    foodSnap.forEach(doc => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : (pClean.startsWith("8") ? "0" + pClean : pClean);
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || (data.userId && variations.has(data.userId))) {
+        foodDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(foodDeletes).catch(() => {});
+
+    const waterSnap = await db.collection("waterLogs").get();
+    const waterDeletes: Promise<any>[] = [];
+    waterSnap.forEach(doc => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : (pClean.startsWith("8") ? "0" + pClean : pClean);
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || (data.userId && variations.has(data.userId))) {
+        waterDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(waterDeletes).catch(() => {});
+  } catch (e: any) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
+  }
+}
+
 export async function getSubscriptionFromFirestore(userIdOrPhone: string): Promise<SubscriptionDocument | null> {
   try {
     const db = getFirestore();
@@ -385,7 +431,7 @@ export async function saveAppDataToFirestore(appData: any): Promise<void> {
     await db.collection("appdata").doc("main").set({
       ...cleanData,
       updatedAt: new Date()
-    }, { merge: true });
+    });
     console.log("[Firestore] Global appdata snapshot saved ✅");
   } catch (e: any) {
     console.error("[Firestore] saveAppData error:", e?.message || e);

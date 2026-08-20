@@ -58,6 +58,7 @@ export interface FoodReference {
   normalizedName: string;
   category: "grain" | "protein" | "vegetable" | "fruit" | "beverage" | "dairy" | "snack" | "fat";
   defaultServingGrams: number;
+  perPieceGrams?: number;
   servingUnit: string;
   per100g: {
     calories: number;
@@ -171,6 +172,51 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     servingUnit: "1 piring komplit",
     per100g: { calories: 195, protein: 6.5, carbs: 25.0, fat: 7.8, fiber: 1.2, sugar: 1.5 },
     source: "TKPI"
+  },
+  {
+    keywords: ["rice bowl ayam", "nasi bowl ayam", "chicken rice bowl", "ricebowl ayam", "nasi rice bowl ayam", "rice bowl chicken"],
+    normalizedName: "Rice Bowl Ayam (Chicken Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 165, protein: 9.7, carbs: 19.4, fat: 5.1, fiber: 0.9, sugar: 0.8 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl sapi", "nasi bowl sapi", "beef rice bowl", "ricebowl sapi", "nasi rice bowl sapi", "rice bowl beef", "gyudon"],
+    normalizedName: "Rice Bowl Sapi (Beef Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 177, protein: 9.1, carbs: 18.5, fat: 6.8, fiber: 0.7, sugar: 1.1 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl teriyaki", "nasi bowl teriyaki", "chicken teriyaki rice bowl"],
+    normalizedName: "Rice Bowl Teriyaki",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 160, protein: 8.5, carbs: 20.0, fat: 4.8, fiber: 0.7, sugar: 2.2 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl katsu", "nasi bowl katsu", "katsu rice bowl", "chicken katsu rice bowl"],
+    normalizedName: "Rice Bowl Chicken Katsu",
+    category: "grain",
+    defaultServingGrams: 380,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 178, protein: 7.3, carbs: 20.0, fat: 7.3, fiber: 0.8, sugar: 1.3 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl", "nasi bowl", "ricebowl", "donburi", "poke bowl", "pokebowl"],
+    normalizedName: "Rice Bowl Combo",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 157, protein: 7.4, carbs: 18.5, fat: 5.1, fiber: 0.8, sugar: 0.9 },
+    source: "USDA"
   },
   {
     keywords: ["nasi padang", "nasi ramas"],
@@ -859,7 +905,7 @@ export function splitFoodItems(rawInput: string): string[] {
     
     // Comprehensive list of Indonesian rice dishes that are UNIFIED dishes (should NOT be split into "nasi putih + lauk")
     // This covers restaurant-style dishes, regional specialties, and named combo dishes
-    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug)/i.test(lowerPart);
+    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug|bowl)/i.test(lowerPart) || lowerPart.includes("rice bowl") || lowerPart.includes("donburi");
 
     // Also treat any "Nasi [Proper Brand/Place Name]" as a unified dish
     // e.g. "Nasi Ayam Pak Gembus", "Nasi Bebek Mas Wahid", "Nasi Hainam Abang", etc.
@@ -897,6 +943,25 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
         if (score > bestScore) {
           bestScore = score;
           matchedRef = ref;
+        }
+      }
+    }
+  }
+
+  // Dual-component compound meal check: If matched reference is plain rice/grain and input also contains a protein keyword, combine both!
+  let secondaryProteinRef: FoodReference | null = null;
+  if (matchedRef && (matchedRef.normalizedName.includes("Nasi Putih") || matchedRef.normalizedName.includes("Nasi Merah"))) {
+    const proteinKeywords = ["ayam", "chicken", "sapi", "beef", "daging", "telur", "egg", "katsu", "teriyaki", "ikan", "fish"];
+    if (proteinKeywords.some(pk => lower.includes(pk))) {
+      for (const ref of NUTRITION_DATABASE) {
+        if (ref.category === "protein" || ref.normalizedName.includes("Ayam") || ref.normalizedName.includes("Sapi")) {
+          for (const kw of ref.keywords) {
+            if (lower.includes(kw)) {
+              secondaryProteinRef = ref;
+              break;
+            }
+          }
+          if (secondaryProteinRef) break;
         }
       }
     }
@@ -959,21 +1024,33 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
       per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
     }
 
-    const factor = targetGrams / 100.0;
-    const protein = Math.round((per100g.protein * factor) * 10) / 10;
-    const carbs = Math.round((per100g.carbs * factor) * 10) / 10;
-    const fat = Math.round((per100g.fat * factor) * 10) / 10;
-    const fiber = Math.round((per100g.fiber * factor) * 10) / 10;
-    const sugar = Math.round((per100g.sugar * factor) * 10) / 10;
+    let factor = targetGrams / 100.0;
+    let protein = Math.round((per100g.protein * factor) * 10) / 10;
+    let carbs = Math.round((per100g.carbs * factor) * 10) / 10;
+    let fat = Math.round((per100g.fat * factor) * 10) / 10;
+    let fiber = Math.round((per100g.fiber * factor) * 10) / 10;
+    let sugar = Math.round((per100g.sugar * factor) * 10) / 10;
     
+    // Add secondary protein component if detected (e.g. Rice + Ayam)
+    if (secondaryProteinRef) {
+      const pGrams = secondaryProteinRef.defaultServingGrams || 100;
+      const pFactor = pGrams / 100.0;
+      protein = Math.round((protein + secondaryProteinRef.per100g.protein * pFactor) * 10) / 10;
+      carbs = Math.round((carbs + secondaryProteinRef.per100g.carbs * pFactor) * 10) / 10;
+      fat = Math.round((fat + secondaryProteinRef.per100g.fat * pFactor) * 10) / 10;
+      fiber = Math.round((fiber + secondaryProteinRef.per100g.fiber * pFactor) * 10) / 10;
+      sugar = Math.round((sugar + secondaryProteinRef.per100g.sugar * pFactor) * 10) / 10;
+      targetGrams += pGrams;
+    }
+
     // Accurate calories derived from item macros
     const atwaterCal = Math.round((protein * 4) + (carbs * 4) + (fat * 9));
-    const rawCal = Math.round(per100g.calories * factor);
+    const rawCal = Math.round(per100g.calories * factor + (secondaryProteinRef ? secondaryProteinRef.per100g.calories * (secondaryProteinRef.defaultServingGrams / 100) : 0));
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
 
     return {
       food_name: rawItemText.trim(),
-      normalized_food_name: matchedRef.normalizedName,
+      normalized_food_name: secondaryProteinRef ? `${matchedRef.normalizedName} + ${secondaryProteinRef.normalizedName}` : matchedRef.normalizedName,
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams),
@@ -1063,18 +1140,57 @@ export function calculateSingleItemNutrition(rawItemText: string): FoodItemNutri
 }
 
 /**
- * Execute the entire bottom-up nutrition pipeline on any food text
- * NOTE: TOTAL CALORIES & MACROS ARE ALWAYS DERIVED 100% FROM THE SUM OF DETECTED ITEMS
+ * Helper to detect generic meal inputs (e.g. "rice bowl", "salad", "sandwich", "noodles")
  */
-export function estimateMealNutritionDeterministic(input: string): MealNutritionResult {
+export function isGenericMealInput(text: string): {
+  isGeneric: boolean;
+  mealType: string;
+  suggestedOptions: string[];
+} {
+  const lower = (text || "").trim().toLowerCase();
+  
+  const genericPatterns: { pattern: RegExp; mealType: string }[] = [
+    { pattern: /^(?:rice\s*bowl|nasi\s*bowl|bowl|poke\s*bowl)$/i, mealType: "rice bowl" },
+    { pattern: /^(?:salad|salad\s*sayur|salad\s*bowl)$/i, mealType: "salad" },
+    { pattern: /^(?:sandwich|roti\s*isi)$/i, mealType: "sandwich" },
+    { pattern: /^(?:noodles|mie|mi|ramen|pasta|spaghetti)$/i, mealType: "noodles" },
+    { pattern: /^(?:soup|sup|soto)$/i, mealType: "soup" },
+    { pattern: /^(?:smoothie|smoothie\s*bowl|jus)$/i, mealType: "smoothie" },
+    { pattern: /^(?:wrap|burrito|taco)$/i, mealType: "wrap" }
+  ];
+
+  for (const { pattern, mealType } of genericPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        isGeneric: true,
+        mealType,
+        suggestedOptions: ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"]
+      };
+    }
+  }
+
+  return { isGeneric: false, mealType: "", suggestedOptions: [] };
+}
+
+/**
+ * Execute the entire bottom-up nutrition pipeline on any food text
+ * NOTE: TOTAL CALORIES ARE DERIVED STRICTLY FROM (PROTEIN * 4 + CARBS * 4 + FAT * 9)
+ */
+export function estimateMealNutritionDeterministic(input: string): MealNutritionResult & {
+  confidence?: "high" | "medium" | "low";
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+  suggestedOptions?: string[];
+  portionDisplayLabel?: string;
+} {
   const debugLogs: string[] = [];
   debugLogs.push(`[NutritionEngine] Raw input: "${input}"`);
 
+  const genericCheck = isGenericMealInput(input);
   const rawItems = splitFoodItems(input);
   debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
 
   const items: FoodItemNutrition[] = [];
-  let sumCalories = 0;
   let sumProtein = 0;
   let sumCarbs = 0;
   let sumFat = 0;
@@ -1082,12 +1198,16 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
   let sumSugar = 0;
   let totalVolumeMl = 0;
   let isHydration = false;
+  let hasUserProvidedPortion = false;
 
   for (const rawItem of rawItems) {
     const itemNutr = calculateSingleItemNutrition(rawItem);
     items.push(itemNutr);
 
-    sumCalories += Number(itemNutr.calories) || 0;
+    if (itemNutr.portion_type === "user_provided") {
+      hasUserProvidedPortion = true;
+    }
+
     sumProtein += Number(itemNutr.protein) || 0;
     sumCarbs += Number(itemNutr.carbs) || 0;
     sumFat += Number(itemNutr.fat) || 0;
@@ -1105,35 +1225,35 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     );
   }
 
-  // TOTALS ARE EXACTLY DERIVED FROM THE ITEMS (Rule 2 & 3)
-  const totalProtein = Math.round(sumProtein * 10) / 10;
-  const totalCarbs = Math.round(sumCarbs * 10) / 10;
-  const totalFat = Math.round(sumFat * 10) / 10;
-  const totalFiber = Math.round(sumFiber * 10) / 10;
-  const totalSugar = Math.round(sumSugar * 10) / 10;
-  const totalCalories = Math.round(sumCalories);
+  // TOTAL MACROS
+  const validatedProtein = Math.round(sumProtein * 10) / 10;
+  const validatedCarbs = Math.round(sumCarbs * 10) / 10;
+  const validatedFat = Math.round(sumFat * 10) / 10;
+  const validatedFiber = Math.round(sumFiber * 10) / 10;
+  const validatedSugar = Math.round(sumSugar * 10) / 10;
 
-  // Strict consistency validation: summary MUST match SUM(items)
-  const validatedProtein = Math.round(items.reduce((s, it) => s + (Number(it.protein) || 0), 0) * 10) / 10;
-  const validatedCarbs = Math.round(items.reduce((s, it) => s + (Number(it.carbs) || 0), 0) * 10) / 10;
-  const validatedFat = Math.round(items.reduce((s, it) => s + (Number(it.fat) || 0), 0) * 10) / 10;
-  const validatedFiber = Math.round(items.reduce((s, it) => s + (Number(it.fiber) || 0), 0) * 10) / 10;
-  const validatedSugar = Math.round(items.reduce((s, it) => s + (Number(it.sugar) || 0), 0) * 10) / 10;
-  const validatedCalories = Math.round(items.reduce((s, it) => s + (Number(it.calories) || 0), 0));
+  // Internal Consistency Rule: Calories are calculated strictly from macronutrients
+  // Protein × 4 + Carbs × 4 + Fat × 9 (Sodium & Minerals contribute 0 kcal)
+  const validatedCalories = Math.round((validatedProtein * 4) + (validatedCarbs * 4) + (validatedFat * 9));
 
   debugLogs.push(
-    `[NutritionEngine] EXACT SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
+    `[NutritionEngine] ATWATER SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
   );
 
   const cleanTitle = items.length === 1 
     ? items[0].normalized_food_name 
     : items.map(i => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
 
-  const dynamicPortionNote = items.length === 1 ? "1 detected food item" : `${items.length} detected food items`;
+  // Terminology: "1 meal detected" when 1 complete meal is identified, "X food items detected" only when multiple individual items exist
+  const dynamicPortionNote = items.length === 1 ? "1 meal detected" : `${items.length} food items detected`;
+
+  // Explicit user portion detection (e.g. "350g rice bowl" or "350 g rice bowl")
+  const explicitGramMatch = input.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+  const portionDisplayLabel = explicitGramMatch ? `Portion: ${parseFloat(explicitGramMatch[1].replace(',', '.'))} g` : (hasUserProvidedPortion ? "Portion: User provided" : "Portion: Estimated");
+
+  const confidence: "high" | "medium" | "low" = genericCheck.isGeneric ? "low" : (hasUserProvidedPortion || items.some(i => i.confidence === "high") ? "high" : "medium");
 
   return {
-    // IMPORTANT: Preserve original user input as foodName — do NOT replace with catalog/AI-generated name
-    // cleanTitle is kept as internal reference only and passed as normalizedFoodName for preview
     foodName: input.trim() || cleanTitle,
     calories: validatedCalories,
     protein: validatedProtein,
@@ -1141,12 +1261,18 @@ export function estimateMealNutritionDeterministic(input: string): MealNutrition
     fat: validatedFat,
     fiber: validatedFiber,
     sugar: validatedSugar,
+    sodium: undefined, // Unknown sodium is kept as undefined (rendered as "Not estimated" in UI)
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
     portionNote: dynamicPortionNote,
     items,
     calculatedFromItems: true,
+    confidence,
+    needsClarification: genericCheck.isGeneric,
+    clarificationQuestion: genericCheck.isGeneric ? `What’s included in your ${genericCheck.mealType}?` : undefined,
+    suggestedOptions: genericCheck.suggestedOptions,
+    portionDisplayLabel,
     debugLog: debugLogs
   };
 }

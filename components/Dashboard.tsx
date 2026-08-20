@@ -62,7 +62,8 @@ import {
   BarChart3,
   CheckCircle,
   HelpCircle,
-  Scale
+  Scale,
+  AlertTriangle
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
@@ -115,6 +116,7 @@ interface UserProfileData {
   fatGrams?: number;
   fiberGrams?: number;
   workoutSchedule?: any[];
+  normalizedPhone?: string;
 }
 
 interface DashboardProps {
@@ -2036,6 +2038,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     let isHydration = Boolean(baseEstimation.isHydration);
     let volumeMl = Number(baseEstimation.volumeMl) || 0;
     let portionNote = baseEstimation.portionNote;
+    let needsClarification = Boolean(baseEstimation.needsClarification);
+    let clarificationQuestion = baseEstimation.clarificationQuestion;
+    let suggestedOptions = baseEstimation.suggestedOptions || [];
+    let confidence: "high" | "medium" | "low" = baseEstimation.confidence || "medium";
 
     // 1. Call Backend AI /api/ai/analyze-food
     try {
@@ -2061,27 +2067,37 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             portionNote = "Bukan Makanan / Minuman (0 kcal)";
           } else if (Array.isArray(bData.items) && bData.items.length > 0) {
             resultItems = bData.items;
-            portionNote = bData.portionNote || `${resultItems.length} detected food items`;
+            portionNote = bData.portionNote || (resultItems.length === 1 ? "1 meal detected" : `${resultItems.length} food items detected`);
           }
           resultFoodName = bData.foodName || baseEstimation.foodName;
           isHydration = Boolean(bData.isHydration || baseEstimation.isHydration);
           volumeMl = Number(bData.volumeMl) || baseEstimation.volumeMl || 0;
+
+          if (bData.needsClarification || bData.confidence === "low") {
+            needsClarification = true;
+            clarificationQuestion = bData.clarificationQuestion;
+            suggestedOptions = bData.suggestedOptions;
+            confidence = "low";
+          }
         }
       }
     } catch (bErr) {
       console.warn("Backend AI Food analysis error:", bErr);
     }
 
-    // STRICT REQUIREMENT: Summary values MUST ALWAYS be calculated directly from SUM(current detected items)
-    let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0, sumSod = 0;
+    let sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0, sumSod = 0;
+    let hasSodiumValue = false;
+
     for (const it of resultItems) {
-      sumCal += Number(it.calories) || 0;
       sumProt += Number(it.protein) || 0;
       sumCarb += Number(it.carbs) || 0;
       sumFat += Number(it.fat) || 0;
       sumFib += Number(it.fiber) || 0;
       sumSug += Number(it.sugar) || 0;
-      sumSod += Number((it as any).sodium) || 0;
+      if ((it as any).sodium !== undefined && (it as any).sodium !== null && Number((it as any).sodium) > 0) {
+        sumSod += Number((it as any).sodium);
+        hasSodiumValue = true;
+      }
     }
 
     const protein = Math.round(sumProt * 10) / 10;
@@ -2089,36 +2105,43 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const fat = Math.round(sumFat * 10) / 10;
     const fiber = Math.round(sumFib * 10) / 10;
     const sugar = Math.round(sumSug * 10) / 10;
-    const sodium = Math.round(sumSod);
-    const calories = Math.round(sumCal);
+    const sodium = hasSodiumValue ? Math.round(sumSod) : undefined;
+    
+    // Atwater Rule: Calories = Protein * 4 + Carbs * 4 + Fat * 9 (Sodium contribute 0 kcal)
+    const calories = needsClarification ? 0 : Math.round((protein * 4) + (carbs * 4) + (fat * 9));
 
-    const validatedResult: MealNutritionResult = {
-      // Bug #8: Always use original user input as foodName
+    const explicitGramMatch = rawQuery.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+    const portionDisplayLabel = explicitGramMatch ? `Portion: ${parseFloat(explicitGramMatch[1].replace(',', '.'))} g` : (resultItems.some(i => i.portion_type === "user_provided") ? "Portion: User provided" : "Portion: Estimated");
+
+    const validatedResult: MealNutritionResult & any = {
       foodName: originalUserInput,
-      calories,
-      protein,
-      carbs,
-      fat,
-      fiber,
-      sugar,
-      sodium,
+      calories: needsClarification ? undefined : calories,
+      protein: needsClarification ? undefined : protein,
+      carbs: needsClarification ? undefined : carbs,
+      fat: needsClarification ? undefined : fat,
+      fiber: needsClarification ? undefined : fiber,
+      sugar: needsClarification ? undefined : sugar,
+      sodium: needsClarification ? undefined : sodium,
       items: resultItems,
-      portionNote: portionNote || `${resultItems.length} detected food items`,
+      portionNote: portionNote || (resultItems.length === 1 ? "1 meal detected" : `${resultItems.length} food items detected`),
       isHydration,
       volumeMl,
       mealType: "lunch",
-      calculatedFromItems: true
+      calculatedFromItems: true,
+      confidence,
+      needsClarification,
+      clarificationQuestion,
+      suggestedOptions,
+      portionDisplayLabel
     };
 
-    // Bug #8 FIX: DO NOT call setItemNameInput(resultFoodName)!
-    // The input field keeps the user's original typing — we only update nutrition numbers
-    setItemCalInput(String(calories));
-    setItemProteinInput(String(protein));
-    setItemCarbsInput(String(carbs));
-    setItemFatInput(String(fat));
-    setItemFiberInput(String(fiber));
-    setItemSugarInput(String(sugar));
-    setItemSodiumInput(String(sodium));
+    setItemCalInput(needsClarification ? "" : String(calories));
+    setItemProteinInput(needsClarification ? "" : String(protein));
+    setItemCarbsInput(needsClarification ? "" : String(carbs));
+    setItemFatInput(needsClarification ? "" : String(fat));
+    setItemFiberInput(needsClarification ? "" : String(fiber));
+    setItemSugarInput(needsClarification ? "" : String(sugar));
+    setItemSodiumInput(sodium !== undefined ? String(sodium) : "");
 
     setAiPreview(validatedResult);
     setIsAnalyzingAi(false);
@@ -5774,145 +5797,188 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 {/* AI Preview Result */}
                 {aiPreview && !isAnalyzingAi && (
                   <div className="p-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-black text-white flex items-center gap-1.5">
-                          <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
-                        </span>
-                        <p className="text-[10px] text-neutral-400 font-medium mt-0.5">
-                          {(() => {
-                            const sources = Array.from(new Set(aiPreview.items?.map((it: any) => it.data_source).filter(Boolean)));
-                            if (sources.length === 1 && sources[0] === "USDA") return "Based on USDA data and estimated portion";
-                            if (sources.length === 1 && sources[0] === "TKPI") return "Based on TKPI data and estimated portion";
-                            if (sources.includes("USDA") && sources.includes("TKPI")) return "Based on USDA & TKPI verified data";
-                            return "AI nutrition estimation";
-                          })()}
-                        </p>
-                        {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
-                          <span className="text-[10px] text-[#D4FF00] font-semibold block mt-0.5">
-                            {aiPreview.items.length === 1 ? "1 detected food item" : `${aiPreview.items.length} detected food items`}
+                    
+                    {/* Low Confidence State for Generic Inputs (e.g. "rice bowl") */}
+                    {(aiPreview as any).needsClarification || (aiPreview as any).confidence === "low" ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-white flex items-center gap-1.5">
+                            <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
                           </span>
-                        )}
-                      </div>
-                      <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
-                        ~{Number(aiPreview.calories ?? itemCalInput ?? 0).toLocaleString()} kcal
-                      </span>
-                    </div>
-
-                    {/* Per-item breakdown list */}
-                    {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
-                      <div className="p-2.5 bg-[#111620]/90 rounded-xl border border-white/5 space-y-2">
-                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-wider flex items-center justify-between">
-                          <span>Food Item Breakdown</span>
-                          <span className="text-neutral-500 font-normal">
-                            {aiPreview.items.every((it: any) => it.portion_type === "user_provided")
-                              ? "USER PROVIDED"
-                              : "ESTIMATED PORTIONS"}
+                          <span className="text-[10px] font-black text-amber-900 bg-amber-400 px-2.5 py-0.5 rounded-lg uppercase shadow-xs flex items-center gap-1">
+                            <AlertTriangle size={11} /> Low confidence
                           </span>
                         </div>
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
-                          {aiPreview.items.map((it: FoodItemNutrition, idx: number) => {
-                            const isLiquidItem = it.item_type === "beverage" || it.item_type === "water" || /(?:americano|kopi|coffee|tea|teh|jus|juice|milk|susu|latte|boba|drink|water|air)/i.test(it.normalized_food_name || it.food_name);
-                            const portionDisplay = it.display_unit || (isLiquidItem ? `${it.volume_ml || it.estimated_weight_grams} ml` : `${it.estimated_weight_grams}g`);
-                            const dbSourceDisplay = it.data_source === "USDA" ? "USDA" : (it.data_source === "TKPI" ? "TKPI" : "AI Estimation");
-                            const foodMatchConfidence = it.data_source === "USDA" || it.data_source === "TKPI" ? "High" : "Medium";
-                            const portionStatus = it.portion_type === "user_provided" ? "User Specified" : "Estimated";
 
-                            return (
-                              <div key={idx} className="p-2 bg-[#161C28]/80 rounded-lg border border-white/5 flex flex-col gap-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-neutral-100 font-bold text-xs leading-tight">
-                                        • {it.normalized_food_name || it.food_name}
-                                      </span>
-                                      {it.item_type && (
-                                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${it.item_type === "water" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : (it.item_type === "beverage" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30")}`}>
-                                          {it.item_type === "water" ? "Water" : (it.item_type === "beverage" ? "Beverage" : "Food Meal")}
+                        <div className="p-3 bg-[#161C28] border border-amber-500/30 rounded-xl space-y-2.5">
+                          <p className="text-xs font-bold text-amber-200 leading-snug">
+                            We need a little more information to estimate this meal accurately.
+                          </p>
+                          <p className="text-[11px] font-medium text-neutral-300">
+                            {(aiPreview as any).clarificationQuestion || `What’s included in your ${itemNameInput || "meal"}?`}
+                          </p>
+
+                          {/* Interactive Clarification Option Chips */}
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                            {((aiPreview as any).suggestedOptions || ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"]).map((opt: string, oIdx: number) => (
+                              <button
+                                key={oIdx}
+                                type="button"
+                                onClick={() => {
+                                  const newQuery = `${itemNameInput.trim()} with ${opt}`;
+                                  setItemNameInput(newQuery);
+                                  handleAnalyzeFood(newQuery);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-[#D4FF00] text-neutral-200 hover:text-black text-[11px] font-extrabold border border-neutral-700 hover:border-[#D4FF00] transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <span>+ {opt}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] font-bold text-neutral-400 px-1">
+                          <span className="capitalize">{itemNameInput || "Generic Meal"}</span>
+                          <span>Food Match: <strong className="text-amber-400">Low</strong> · Portion: <strong>Estimated</strong></span>
+                        </div>
+                      </div>
+                    ) : (
+                      /* High / Medium Confidence Estimation Card */
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-white flex items-center gap-1.5">
+                                <Sparkles size={13} className="text-[#D4FF00]" /> Estimated Nutrition AI
+                              </span>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase ${(aiPreview as any).confidence === "high" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-amber-500/20 text-amber-300 border border-amber-500/40"}`}>
+                                {(aiPreview as any).confidence === "high" ? "High confidence" : "Medium confidence"}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-neutral-400 font-medium mt-0.5">
+                              Nutrition estimate
+                            </p>
+                            {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
+                              <span className="text-[10px] text-[#D4FF00] font-semibold block mt-0.5">
+                                {aiPreview.items.length === 1 ? "1 meal detected" : `${aiPreview.items.length} food items detected`}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-black text-black bg-[#D4FF00] px-2.5 py-0.5 rounded-lg shadow-xs">
+                            ~{Number(aiPreview.calories ?? itemCalInput ?? 0).toLocaleString()} kcal
+                          </span>
+                        </div>
+
+                        {/* Per-item breakdown list */}
+                        {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
+                          <div className="p-2.5 bg-[#111620]/90 rounded-xl border border-white/5 space-y-2">
+                            <div className="text-[10px] font-black text-neutral-400 uppercase tracking-wider flex items-center justify-between">
+                              <span>Food Item Breakdown</span>
+                              <span className="text-neutral-400 font-bold">
+                                {(aiPreview as any).portionDisplayLabel || (aiPreview.items.every((it: any) => it.portion_type === "user_provided") ? "User Provided Portion" : "Portion: Estimated")}
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
+                              {aiPreview.items.map((it: FoodItemNutrition, idx: number) => {
+                                const isLiquidItem = it.item_type === "beverage" || it.item_type === "water" || /(?:americano|kopi|coffee|tea|teh|jus|juice|milk|susu|latte|boba|drink|water|air)/i.test(it.normalized_food_name || it.food_name);
+                                const portionDisplay = it.display_unit || (isLiquidItem ? `${it.volume_ml || it.estimated_weight_grams} ml` : `${it.estimated_weight_grams}g`);
+                                const dbSourceDisplay = it.data_source === "USDA" ? "USDA" : (it.data_source === "TKPI" ? "TKPI" : "AI Estimation");
+                                const foodMatchConfidence = it.data_source === "USDA" || it.data_source === "TKPI" ? "High" : "Medium";
+                                const portionStatus = it.portion_type === "user_provided" ? portionDisplay : "Estimated";
+
+                                return (
+                                  <div key={idx} className="p-2 bg-[#161C28]/80 rounded-lg border border-white/5 flex flex-col gap-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-neutral-100 font-bold text-xs leading-tight">
+                                            • {it.normalized_food_name || it.food_name}
+                                          </span>
+                                        </div>
+                                        <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
+                                          {portionDisplay} · <span className="text-neutral-500">{dbSourceDisplay}</span>
                                         </span>
-                                      )}
+                                        <div className="flex items-center gap-2 text-[9px] text-neutral-400 mt-0.5">
+                                          <span>Food Match: <strong className="text-neutral-200">{foodMatchConfidence}</strong></span>
+                                          <span>•</span>
+                                          <span>Portion: <strong className="text-neutral-200">{portionStatus}</strong></span>
+                                        </div>
+                                      </div>
+                                      <span className="text-xs font-black text-white whitespace-nowrap">
+                                        {it.calories} kcal
+                                      </span>
                                     </div>
-                                    <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">
-                                      {portionDisplay} · <span className="text-neutral-500">{dbSourceDisplay}</span>
-                                    </span>
-                                    <div className="flex items-center gap-2 text-[9px] text-neutral-400 mt-0.5">
-                                      <span>Food Match: <strong className="text-neutral-200">{foodMatchConfidence}</strong></span>
-                                      <span>•</span>
-                                      <span>Portion: <strong className="text-neutral-200">{portionStatus}</strong></span>
+                                    <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5 flex-wrap">
+                                      <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
+                                      <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
+                                      <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                                      {it.fiber !== undefined && it.fiber > 0 && (
+                                        <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                                      )}
+                                      {it.sugar !== undefined && it.sugar > 0 && (
+                                        <span>Sug: <strong className="text-cyan-400">{it.sugar}g</strong></span>
+                                      )}
+                                      <span>Na: <strong className="text-purple-400">{(it as any).sodium !== undefined && Number((it as any).sodium) > 0 ? `${(it as any).sodium}mg` : "Not estimated"}</strong></span>
                                     </div>
                                   </div>
-                                  <span className="text-xs font-black text-white whitespace-nowrap">
-                                    {it.calories} kcal
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/5 flex-wrap">
-                                  <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
-                                  <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
-                                  <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
-                                  {it.fiber !== undefined && it.fiber > 0 && (
-                                    <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
-                                  )}
-                                  {(it as any).sodium !== undefined && Number((it as any).sodium) > 0 && (
-                                    <span>Na: <strong className="text-purple-400">{(it as any).sodium}mg</strong></span>
-                                  )}
-                                </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 6-Metric Total Macro Grid */}
+                        {(() => {
+                          const displayProtein = aiPreview.items?.length
+                            ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.protein) || 0), 0) * 10) / 10
+                            : (Number(itemProteinInput) || 0);
+                          const displayCarbs = aiPreview.items?.length
+                            ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.carbs) || 0), 0) * 10) / 10
+                            : (Number(itemCarbsInput) || 0);
+                          const displayFat = aiPreview.items?.length
+                            ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fat) || 0), 0) * 10) / 10
+                            : (Number(itemFatInput) || 0);
+                          const displayFiber = aiPreview.items?.length
+                            ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fiber) || 0), 0) * 10) / 10
+                            : (Number(itemFiberInput) || 0);
+                          const displaySugar = aiPreview.items?.length
+                            ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.sugar) || 0), 0) * 10) / 10
+                            : (Number(itemSugarInput) || 0);
+
+                          const hasValidSodium = (aiPreview as any).sodium !== undefined && Number((aiPreview as any).sodium) > 0;
+                          const displaySodiumText = hasValidSodium ? `${Math.round(Number((aiPreview as any).sodium))} mg` : "Not estimated";
+
+                          return (
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
+                                <span className="font-black text-white">{displayProtein}g</span>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Carbs</span>
+                                <span className="font-black text-white">{displayCarbs}g</span>
+                              </div>
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Fat</span>
+                                <span className="font-black text-white">{displayFat}g</span>
+                              </div>
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Fiber</span>
+                                <span className="font-black text-white">{displayFiber}g</span>
+                              </div>
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Sugar</span>
+                                <span className="font-black text-white">{displaySugar}g</span>
+                              </div>
+                              <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
+                                <span className="block text-[9px] sm:text-[10px] text-purple-400 font-bold">Sodium</span>
+                                <span className="font-black text-white">{displaySodiumText}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
-
-                    {/* 6-Metric Total Macro Grid */}
-                    {(() => {
-                      const displayProtein = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.protein) || 0), 0) * 10) / 10
-                        : (Number(itemProteinInput) || 0);
-                      const displayCarbs = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.carbs) || 0), 0) * 10) / 10
-                        : (Number(itemCarbsInput) || 0);
-                      const displayFat = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fat) || 0), 0) * 10) / 10
-                        : (Number(itemFatInput) || 0);
-                      const displayFiber = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.fiber) || 0), 0) * 10) / 10
-                        : (Number(itemFiberInput) || 0);
-                      const displaySugar = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number(it.sugar) || 0), 0) * 10) / 10
-                        : (Number(itemSugarInput) || 0);
-                      const displaySodium = aiPreview.items?.length
-                        ? Math.round(aiPreview.items.reduce((s: number, it: any) => s + (Number((it as any).sodium) || 0), 0))
-                        : (Number(itemSodiumInput) || 0);
-
-                      return (
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
-                            <span className="font-black text-white">{displayProtein}g</span>
-                          </div>
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Karbo</span>
-                            <span className="font-black text-white">{displayCarbs}g</span>
-                          </div>
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Lemak</span>
-                            <span className="font-black text-white">{displayFat}g</span>
-                          </div>
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Serat</span>
-                            <span className="font-black text-white">{displayFiber}g</span>
-                          </div>
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Gula</span>
-                            <span className="font-black text-white">{displaySugar}g</span>
-                          </div>
-                          <div className="bg-[#111620] rounded-xl p-1.5 sm:p-2 border border-white/5">
-                            <span className="block text-[9px] sm:text-[10px] text-purple-400 font-bold">{isEN ? "Sodium" : "Natrium"}</span>
-                            <span className="font-black text-white">{displaySodium}mg</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                 )}
 

@@ -30,7 +30,7 @@ import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
-import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt } from "./services/nutritionEngine";
+import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt, isGenericMealInput } from "./services/nutritionEngine";
 
 // Twilio configuration (strictly from environment variables)
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
@@ -45,6 +45,7 @@ import {
   getFoodLogsForDate,
   insertFoodLog,
   deleteFoodLog,
+  deleteAllFoodLogsForDate,
   getWaterLog,
   saveWaterLog,
   recordAiTelemetry,
@@ -974,6 +975,12 @@ function saveUserProfile(rawPhone: string, profile: any) {
   const existing = dbData.users[phone] || {};
   const initialW = Math.max(30, Number(profile?.weight) || Number(existing.weight) || 65);
 
+  const targetCal = Number(profile?.targetCalories || profile?.dailyTargetCalories || existing.targetCalories || existing.dailyTargetCalories) || undefined;
+  const targetProt = Number(profile?.proteinGrams || profile?.dailyTargetProtein || existing.proteinGrams || existing.dailyTargetProtein) || undefined;
+  const targetCarb = Number(profile?.carbGrams || profile?.dailyTargetCarbs || existing.carbGrams || existing.dailyTargetCarbs) || undefined;
+  const targetFatVal = Number(profile?.fatGrams || profile?.dailyTargetFat || existing.fatGrams || existing.dailyTargetFat) || undefined;
+  const targetFib = Number(profile?.fiberGrams || existing.fiberGrams) || undefined;
+
   const updated = {
     ...existing,
     ...profile,
@@ -981,6 +988,15 @@ function saveUserProfile(rawPhone: string, profile: any) {
     normalizedPhone: phone,
     startWeight: profile?.startWeight !== undefined ? Number(profile.startWeight) : (existing.startWeight || initialW),
     weight: initialW,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
     createdAt: existing.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -1007,10 +1023,15 @@ function saveUserProfile(rawPhone: string, profile: any) {
     persona: updated.persona,
     selectedFeature: updated.selectedFeature || updated.activeService,
     activeService: updated.activeService,
-    dailyTargetCalories: updated.targetCalories || updated.dailyTargetCalories,
-    dailyTargetProtein: updated.proteinGrams || updated.dailyTargetProtein,
-    dailyTargetCarbs: updated.carbGrams || updated.dailyTargetCarbs,
-    dailyTargetFat: updated.fatGrams || updated.dailyTargetFat,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
     customSchedule: updated.workoutSchedule || updated.customSchedule,
     customGoals: updated.customGoals,
     reminderTime: updated.reminderTime,
@@ -1172,17 +1193,45 @@ function calculateUserData(profile: any) {
   const bmr = Math.round((10 * weight) + (6.25 * height) - (5 * age) + (isMale ? 5 : -161));
   const tdee = Math.round(bmr * activityMultiplier);
 
-  let targetCalories = tdee;
-  if (goal === "lose") {
-    targetCalories = Math.max(1200, tdee - 500);
-  } else if (goal === "gain") {
-    targetCalories = tdee + 400;
+  let targetCalories = profile?.targetCalories || profile?.dailyTargetCalories || profile?.calories;
+  if (!targetCalories || isNaN(Number(targetCalories)) || Number(targetCalories) < 500) {
+    targetCalories = tdee;
+    if (goal === "lose") {
+      targetCalories = Math.max(1200, tdee - 500);
+    } else if (goal === "gain") {
+      targetCalories = tdee + 400;
+    }
+  } else {
+    targetCalories = Math.round(Number(targetCalories));
   }
 
-  const proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2.0 : 1.8));
-  const fatGrams = Math.round((targetCalories * 0.25) / 9);
-  const carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
-  const fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  let proteinGrams = profile?.proteinGrams || profile?.dailyTargetProtein || profile?.protein;
+  if (!proteinGrams || isNaN(Number(proteinGrams)) || Number(proteinGrams) < 10) {
+    proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2.0 : 1.8));
+  } else {
+    proteinGrams = Math.round(Number(proteinGrams));
+  }
+
+  let fatGrams = profile?.fatGrams || profile?.dailyTargetFat || profile?.fat;
+  if (!fatGrams || isNaN(Number(fatGrams)) || Number(fatGrams) < 5) {
+    fatGrams = Math.round((targetCalories * 0.25) / 9);
+  } else {
+    fatGrams = Math.round(Number(fatGrams));
+  }
+
+  let carbGrams = profile?.carbGrams || profile?.dailyTargetCarbs || profile?.carbs;
+  if (!carbGrams || isNaN(Number(carbGrams)) || Number(carbGrams) < 10) {
+    carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
+  } else {
+    carbGrams = Math.round(Number(carbGrams));
+  }
+
+  let fiberGrams = profile?.fiberGrams || profile?.fiber;
+  if (!fiberGrams || isNaN(Number(fiberGrams)) || Number(fiberGrams) < 5) {
+    fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  } else {
+    fiberGrams = Math.round(Number(fiberGrams));
+  }
 
   // Active AI persona service scope ('nutritionist' | 'workout' | 'both')
   const activeService: "nutritionist" | "workout" | "both" =
@@ -2432,16 +2481,32 @@ async function startServer() {
     await deleteUserDocument(`usr_${phone}`);
     await deleteUserDocument(`usr_${altPhone}`);
 
+    const variations = Array.from(new Set([
+      phone, altPhone, rawPhone,
+      `0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `+62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`,
+      `usr_0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`
+    ])).filter(Boolean);
+
     // Delete all daily logs for this user
     Object.keys(dbData.dailyLogs).forEach(key => {
-      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some(v => key.includes(v))) {
         delete dbData.dailyLogs[key];
       }
     });
 
+    for (const v of variations) {
+      await deleteAllFoodLogsForDate(v, getLocalDateStr()).catch(() => {});
+    }
+
     // Delete all water logs for this user
     Object.keys(dbData.waterLogs).forEach(key => {
-      if (key.startsWith(phone) || key.startsWith(altPhone) || key.startsWith(rawPhone)) {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some(v => key.includes(v))) {
         delete dbData.waterLogs[key];
       }
     });
@@ -2453,27 +2518,25 @@ async function startServer() {
     if (firestore) {
       try {
         const batch = firestore.batch();
-        const variations = [phone, altPhone, rawPhone, `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`];
 
-        // Delete user documents
+        // Delete user and subscription documents
         for (const v of variations) {
           batch.delete(firestore.collection("users").doc(v));
           batch.delete(firestore.collection("subscriptions").doc(v));
         }
 
-        // Delete all foodLogs
-        const foodSnap1 = await firestore.collection("foodLogs").where("phone", "==", phone).get();
-        foodSnap1.forEach(d => batch.delete(d.ref));
-        const foodSnap2 = await firestore.collection("foodLogs").where("phone", "==", altPhone).get();
-        foodSnap2.forEach(d => batch.delete(d.ref));
-        const foodSnap3 = await firestore.collection("foodLogs").where("userId", "==", `usr_${phone}`).get();
-        foodSnap3.forEach(d => batch.delete(d.ref));
+        // Delete all foodLogs matching phone or userId variations
+        for (const v of variations) {
+          const fSnap1 = await firestore.collection("foodLogs").where("phone", "==", v).get();
+          fSnap1.forEach(d => batch.delete(d.ref));
+          const fSnap2 = await firestore.collection("foodLogs").where("userId", "==", v).get();
+          fSnap2.forEach(d => batch.delete(d.ref));
 
-        // Delete all waterLogs
-        const waterSnap1 = await firestore.collection("waterLogs").where("phone", "==", phone).get();
-        waterSnap1.forEach(d => batch.delete(d.ref));
-        const waterSnap2 = await firestore.collection("waterLogs").where("phone", "==", altPhone).get();
-        waterSnap2.forEach(d => batch.delete(d.ref));
+          const wSnap1 = await firestore.collection("waterLogs").where("phone", "==", v).get();
+          wSnap1.forEach(d => batch.delete(d.ref));
+          const wSnap2 = await firestore.collection("waterLogs").where("userId", "==", v).get();
+          wSnap2.forEach(d => batch.delete(d.ref));
+        }
 
         await batch.commit();
         console.log(`[Firestore] User ${phone} and all related documents permanently wiped ✅`);
@@ -2797,26 +2860,39 @@ PENTING:
         const fat = Math.round(sumFat * 10) / 10;
         const fiber = Math.round(sumFib * 10) / 10;
         const sugar = Math.round(sumSug * 10) / 10;
-        const calories = Math.round(sumCal);
 
-        parsed.mealType = parsed.mealType || getMealTypeByHour();
+        const genericCheck = isGenericMealInput(cleanText);
+        const isLowConfidence = genericCheck.isGeneric || parsed.confidence === "low" || deterministicResult.needsClarification;
+
+        // Sodium handling: preserve null/undefined when unestimated (never convert unknown to 0)
+        const rawSodium = parsed.sodium !== undefined && parsed.sodium !== null ? Number(parsed.sodium) : undefined;
+        const sodium = (rawSodium !== undefined && !isNaN(rawSodium) && rawSodium > 0) ? rawSodium : undefined;
+
+        // Atwater Macro Calorie Rule: Calories = Protein * 4 + Carbs * 4 + Fat * 9 (Sodium/Electrolytes = 0 kcal)
+        const atwaterCal = Math.round((protein * 4) + (carbs * 4) + (fat * 9));
 
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          sugar,
+          calories: isLowConfidence ? undefined : atwaterCal,
+          protein: isLowConfidence ? undefined : protein,
+          carbs: isLowConfidence ? undefined : carbs,
+          fat: isLowConfidence ? undefined : fat,
+          fiber: isLowConfidence ? undefined : fiber,
+          sugar: isLowConfidence ? undefined : sugar,
+          sodium: isLowConfidence ? undefined : sodium,
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: itemsToUse.length === 1 ? "1 detected food item" : `${itemsToUse.length} detected food items`,
+          portionNote: itemsToUse.length === 1 ? "1 meal detected" : `${itemsToUse.length} food items detected`,
           items: itemsToUse,
+          confidence: isLowConfidence ? "low" : (parsed.confidence || deterministicResult.confidence || "medium"),
+          needsClarification: isLowConfidence,
+          clarificationQuestion: genericCheck.isGeneric ? `What’s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
+          suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
+          portionDisplayLabel: deterministicResult.portionDisplayLabel,
           debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {
@@ -2946,6 +3022,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
+    const user = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
+    if (!user) {
+      return res.json({ success: true, phone, date: (req.query.date as string) || getLocalDateStr(), logs: [] });
+    }
+
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
     const key = `${phone}_${targetDate}`;
@@ -4078,7 +4159,7 @@ function escapeXml(unsafe: string): string {
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
-          userData.persona || "mia",
+          (userData.persona === "max" || userData.persona === "mia") ? userData.persona : "mia",
           userData.goal || "healthy"
         );
         responseMessages = [guide.text];
@@ -4325,6 +4406,9 @@ Keluarkan output JSON valid:
             const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
+            if (imagePart && req.body.MediaUrl0) {
+              mediaUrlToSend = req.body.MediaUrl0;
+            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;
