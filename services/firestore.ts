@@ -1,5 +1,7 @@
 import { Firestore, Timestamp } from "@google-cloud/firestore";
 import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
 import {
   UserDocument,
   SubscriptionDocument,
@@ -18,7 +20,29 @@ export function getFirestore(): Firestore | null {
   try {
     const firebaseAdmin: any = typeof admin === "function" ? admin : (admin as any)?.default || admin;
     const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "gen-lang-client-0130714675";
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    
+    let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    
+    // Check if service-account.json exists in project root or path
+    if (!serviceAccountJson) {
+      const candidates = [
+        path.join(process.cwd(), "service-account.json"),
+        path.join(process.cwd(), "serviceAccountKey.json"),
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ? path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS) : ""
+      ].filter(Boolean);
+
+      for (const p of candidates) {
+        if (p && fs.existsSync(p)) {
+          try {
+            serviceAccountJson = fs.readFileSync(p, "utf8");
+            console.log(`[Firestore] Loaded Service Account JSON from: ${p} ✅`);
+            break;
+          } catch (e) {}
+        }
+      }
+    }
+
+    const databaseId = process.env.FIRESTORE_DATABASE_ID || "gymbuddy";
 
     if (serviceAccountJson) {
       const parsedCredentials = typeof serviceAccountJson === "string" && serviceAccountJson.startsWith("{")
@@ -32,22 +56,18 @@ export function getFirestore(): Firestore | null {
         });
         isFirebaseInitialized = true;
       }
-      firestoreInstance = (firebaseAdmin.firestore() || new Firestore({ projectId: projectId || parsedCredentials.project_id })) as unknown as Firestore;
-      console.log("[Firestore] Initialized via Service Account credentials ✅");
+      firestoreInstance = new Firestore({
+        projectId: projectId || parsedCredentials.project_id,
+        databaseId: databaseId,
+        credentials: parsedCredentials
+      });
+      console.log(`[Firestore] Initialized & authenticated via Service Account for DB: "${databaseId}" ✅`);
       return firestoreInstance;
     }
 
     if (projectId) {
-      if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
-        try {
-          firebaseAdmin.initializeApp({ projectId });
-          isFirebaseInitialized = true;
-        } catch (e) {
-          // Ignore if already initialized
-        }
-      }
-      firestoreInstance = new Firestore({ projectId });
-      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} ✅`);
+      firestoreInstance = new Firestore({ projectId, databaseId });
+      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") ✅`);
       return firestoreInstance;
     }
 

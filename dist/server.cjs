@@ -23,8 +23,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_config = require("dotenv/config");
 var import_vite = require("vite");
@@ -44174,6 +44174,8 @@ var import_mongodb = require("mongodb");
 // services/firestore.ts
 var import_firestore = require("@google-cloud/firestore");
 var import_firebase_admin = __toESM(require("firebase-admin"), 1);
+var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"), 1);
 var firestoreInstance = null;
 var isFirebaseInitialized = false;
 function getFirestore() {
@@ -44181,7 +44183,25 @@ function getFirestore() {
   try {
     const firebaseAdmin = typeof import_firebase_admin.default === "function" ? import_firebase_admin.default : import_firebase_admin.default?.default || import_firebase_admin.default;
     const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "gen-lang-client-0130714675";
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    if (!serviceAccountJson) {
+      const candidates = [
+        import_path.default.join(process.cwd(), "service-account.json"),
+        import_path.default.join(process.cwd(), "serviceAccountKey.json"),
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ? import_path.default.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS) : ""
+      ].filter(Boolean);
+      for (const p of candidates) {
+        if (p && import_fs.default.existsSync(p)) {
+          try {
+            serviceAccountJson = import_fs.default.readFileSync(p, "utf8");
+            console.log(`[Firestore] Loaded Service Account JSON from: ${p} \u2705`);
+            break;
+          } catch (e) {
+          }
+        }
+      }
+    }
+    const databaseId = process.env.FIRESTORE_DATABASE_ID || "gymbuddy";
     if (serviceAccountJson) {
       const parsedCredentials = typeof serviceAccountJson === "string" && serviceAccountJson.startsWith("{") ? JSON.parse(serviceAccountJson) : serviceAccountJson;
       if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
@@ -44191,20 +44211,17 @@ function getFirestore() {
         });
         isFirebaseInitialized = true;
       }
-      firestoreInstance = firebaseAdmin.firestore() || new import_firestore.Firestore({ projectId: projectId || parsedCredentials.project_id });
-      console.log("[Firestore] Initialized via Service Account credentials \u2705");
+      firestoreInstance = new import_firestore.Firestore({
+        projectId: projectId || parsedCredentials.project_id,
+        databaseId,
+        credentials: parsedCredentials
+      });
+      console.log(`[Firestore] Initialized & authenticated via Service Account for DB: "${databaseId}" \u2705`);
       return firestoreInstance;
     }
     if (projectId) {
-      if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
-        try {
-          firebaseAdmin.initializeApp({ projectId });
-          isFirebaseInitialized = true;
-        } catch (e) {
-        }
-      }
-      firestoreInstance = new import_firestore.Firestore({ projectId });
-      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} \u2705`);
+      firestoreInstance = new import_firestore.Firestore({ projectId, databaseId });
+      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") \u2705`);
       return firestoreInstance;
     }
     firestoreInstance = new import_firestore.Firestore();
@@ -45357,8 +45374,8 @@ function extractAndParseJson(text) {
   }
   return null;
 }
-var DATA_DIR = import_path.default.join(process.cwd(), "data");
-var DB_FILE = import_path.default.join(DATA_DIR, "db.json");
+var DATA_DIR = import_path2.default.join(process.cwd(), "data");
+var DB_FILE = import_path2.default.join(DATA_DIR, "db.json");
 var dbData = {
   users: {},
   dailyLogs: {},
@@ -45586,12 +45603,12 @@ function purgeLegacyMockLogs() {
   }
 }
 async function initDb() {
-  if (!import_fs.default.existsSync(DATA_DIR)) {
-    import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+  if (!import_fs2.default.existsSync(DATA_DIR)) {
+    import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
   }
-  if (import_fs.default.existsSync(DB_FILE)) {
+  if (import_fs2.default.existsSync(DB_FILE)) {
     try {
-      const raw = import_fs.default.readFileSync(DB_FILE, "utf-8");
+      const raw = import_fs2.default.readFileSync(DB_FILE, "utf-8");
       dbData = JSON.parse(raw);
       if (!dbData.users) dbData.users = {};
       if (!dbData.dailyLogs) dbData.dailyLogs = {};
@@ -45612,10 +45629,10 @@ async function initDb() {
 }
 function saveDb() {
   try {
-    if (!import_fs.default.existsSync(DATA_DIR)) {
-      import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+    if (!import_fs2.default.existsSync(DATA_DIR)) {
+      import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
     }
-    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
+    import_fs2.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
   } catch (e) {
     console.error("Error saving db.json", e);
   }
@@ -49166,11 +49183,11 @@ Keluarkan output JSON valid:
     );
     try {
       const { Resvg } = await import("@resvg/resvg-js");
-      const fontPath = import_path.default.join(process.cwd(), "fonts", "arial.ttf");
+      const fontPath = import_path2.default.join(process.cwd(), "fonts", "arial.ttf");
       let fontBuffer = null;
-      if (import_fs.default.existsSync(fontPath)) {
+      if (import_fs2.default.existsSync(fontPath)) {
         try {
-          fontBuffer = import_fs.default.readFileSync(fontPath);
+          fontBuffer = import_fs2.default.readFileSync(fontPath);
         } catch (fe) {
         }
       }
@@ -49276,17 +49293,17 @@ ${mistakes}
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
-    const distIndex = import_path.default.join(distPath, "index.html");
-    const rootIndex = import_path.default.join(process.cwd(), "index.html");
-    if (import_fs.default.existsSync(distPath)) {
+    const distPath = import_path2.default.join(process.cwd(), "dist");
+    const distIndex = import_path2.default.join(distPath, "index.html");
+    const rootIndex = import_path2.default.join(process.cwd(), "index.html");
+    if (import_fs2.default.existsSync(distPath)) {
       app.use(import_express.default.static(distPath));
     }
     app.use(import_express.default.static(process.cwd()));
     app.use((req, res) => {
-      if (import_fs.default.existsSync(distIndex)) {
+      if (import_fs2.default.existsSync(distIndex)) {
         res.sendFile(distIndex);
-      } else if (import_fs.default.existsSync(rootIndex)) {
+      } else if (import_fs2.default.existsSync(rootIndex)) {
         res.sendFile(rootIndex);
       } else {
         res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
