@@ -1,43 +1,22 @@
-import fs from "fs";
-import path from "path";
-import { Resvg } from "@resvg/resvg-js";
+const fs = require('fs');
+const path = require('path');
+const { Resvg } = require('@resvg/resvg-js');
 
-export interface NutritionCardData {
-  foodName: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  sodium?: number;
-  fiber?: number;
-  sugar?: number;
-  insight?: string;
-  mealType?: string;
-  dateStr?: string;
-  dailyTargetCalories?: number;
-  consumedTodayCalories?: number;
-  dailyTargetProtein?: number;
-  dailyTargetCarbs?: number;
-  dailyTargetFat?: number;
-  imageBufferOrBase64?: string; // Data URI (data:image/jpeg;base64,...) or image URL
-}
-
-// Pre-load bundled TrueType fonts so Resvg renders text 100% reliably in Docker / Linux / Cloud Run
-const fontFiles = ["arial.ttf", "arialbd.ttf", "segoeui.ttf", "seguisb.ttf"];
-const cachedFontBuffers: Buffer[] = [];
-
+// Load font buffers
+const fontFiles = ['arial.ttf', 'arialbd.ttf', 'segoeui.ttf', 'seguisb.ttf'];
+const fontBuffers = [];
 for (const f of fontFiles) {
-  const p = path.join(process.cwd(), "fonts", f);
+  const p = path.join(__dirname, '..', 'fonts', f);
   if (fs.existsSync(p)) {
     try {
-      cachedFontBuffers.push(fs.readFileSync(p));
-    } catch (e) {
-      console.warn(`[CardGenerator] Note: could not load font ${f}:`, e);
-    }
+      fontBuffers.push(fs.readFileSync(p));
+    } catch (e) {}
   }
 }
 
-function escapeXml(unsafe: string): string {
+console.log(`Loaded ${fontBuffers.length} font buffers.`);
+
+function escapeXml(unsafe) {
   return (unsafe || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -46,12 +25,11 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export function generateNutritionCardSvg(data: NutritionCardData): string {
+function generateNutritionCardSvg(data) {
   const rawTitle = (data.foodName || "MAKANAN BERGIZI").trim().toUpperCase();
 
-  // Multi-line wrap for bold athletic header title (max 25 chars per line)
   const words = rawTitle.split(/\s+/);
-  const titleLines: string[] = [];
+  const titleLines = [];
   let currentLine = "";
 
   for (const word of words) {
@@ -70,12 +48,11 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
   const carbs = Math.round(Number(data.carbs) || 0);
   const fat = Math.round(Number(data.fat) || 0);
 
-  // Exact 4-4-9 macro energy: Calorie = (P * 4) + (C * 4) + (F * 9)
   const macroCalcCalories = (protein * 4) + (carbs * 4) + (fat * 9);
   const calories = macroCalcCalories > 0 ? macroCalcCalories : (Math.round(Number(data.calories)) || 0);
 
   const mealType = data.mealType || "Lunch";
-  const dateStr = data.dateStr || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+  const dateStr = data.dateStr || "Kam, 20 Agu";
 
   const targetCal = Math.round(Number(data.dailyTargetCalories) || 2054);
   const consumedCal = Math.round(Number(data.consumedTodayCalories) || calories);
@@ -95,18 +72,8 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
   const carbPercentage = Math.min(100, Math.max(0, Math.round((carbs / targetCarb) * 100)));
   const fatPercentage = Math.min(100, Math.max(0, Math.round((fat / targetFat) * 100)));
 
-  let coachMessage = (data.insight || "").trim();
-  if (!coachMessage || coachMessage.length < 5) {
-    if (calories <= targetCal * 0.45 && protein >= 25) {
-      coachMessage = "Pilihan bagus! Asupan protein solid untuk pemulihan otot.";
-    } else if (calories > 800) {
-      coachMessage = "Porsi cukup besar, seimbangkan dengan makan malam yang lebih ringan.";
-    } else {
-      coachMessage = "Konsistensi kecil, hasil besar.";
-    }
-  }
+  let coachMessage = (data.insight || "").trim() || "Konsistensi kecil, hasil besar.";
 
-  // Dimensions & Coordinates
   const canvasWidth = 720;
   const contentWidth = 640;
   const paddingX = 40;
@@ -132,10 +99,7 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
   const footerY = coachCardY + coachCardHeight + 24;
   const canvasHeight = footerY + 38;
 
-  let photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&amp;auto=format&amp;fit=crop&amp;q=80";
-  if (photoHref.includes("&") && !photoHref.includes("&amp;")) {
-    photoHref = photoHref.replace(/&/g, "&amp;");
-  }
+  const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&amp;auto=format&amp;fit=crop&amp;q=80";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
@@ -148,7 +112,7 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
   <!-- Canvas Background (Pure Pitch Black) -->
   <rect width="${canvasWidth}" height="${canvasHeight}" fill="#000000"/>
 
-  <!-- 1. TOP HEADER: Official Logo + GYM BUDDY AI | Meal Type and Date -->
+  <!-- 1. TOP HEADER: Official Logo + GYM BUDDY AI | Meal Type & Date -->
   <g id="topHeader" transform="translate(${paddingX}, ${headerY})">
     <!-- Official GymBuddy Logo Icon -->
     <g transform="translate(0, -10) scale(0.62)">
@@ -331,23 +295,31 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
 </svg>`;
 }
 
-export async function generateNutritionCardPng(data: NutritionCardData): Promise<Buffer> {
-  const svg = generateNutritionCardSvg(data);
-  try {
-    const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: "width",
-        value: 720
-      },
-      font: {
-        fontBuffers: cachedFontBuffers,
-        defaultFontFamily: "Arial",
-        loadSystemFonts: false // Ensures Cloud Run container uses bundled fontBuffers!
-      }
-    });
-    return resvg.render().asPng();
-  } catch (e) {
-    console.error("[CardGenerator] Error rendering PNG via Resvg:", e);
-    return Buffer.from(svg);
+const cardData = {
+  foodName: "NASI KOTAK: AYAM SUWIR BUMBU KUNING, TUMIS BUNGA PEPAYA, DLL",
+  calories: 785,
+  protein: 38,
+  carbs: 95,
+  fat: 28,
+  mealType: "Lunch",
+  dateStr: "Kam, 20 Agu",
+  dailyTargetCalories: 2054,
+  consumedTodayCalories: 785,
+  dailyTargetProtein: 150,
+  dailyTargetCarbs: 275,
+  dailyTargetFat: 67,
+  insight: "Konsistensi kecil, hasil besar."
+};
+
+const svg = generateNutritionCardSvg(cardData);
+const resvg = new Resvg(svg, {
+  fitTo: { mode: "width", value: 720 },
+  font: {
+    fontBuffers,
+    defaultFontFamily: "Arial",
+    loadSystemFonts: false // ensure container always uses bundled fontBuffers!
   }
-}
+});
+const png = resvg.render().asPng();
+fs.writeFileSync('full_card_test.png', png);
+console.log('FULL CARD GENERATED! PNG SIZE:', png.length);

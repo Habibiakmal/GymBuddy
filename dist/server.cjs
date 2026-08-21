@@ -23,8 +23,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_fs2 = __toESM(require("fs"), 1);
-var import_path2 = __toESM(require("path"), 1);
+var import_fs3 = __toESM(require("fs"), 1);
+var import_path3 = __toESM(require("path"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_config = require("dotenv/config");
 var import_vite = require("vite");
@@ -44062,7 +44062,21 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 }
 
 // services/cardGenerator.ts
+var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"), 1);
 var import_resvg_js = require("@resvg/resvg-js");
+var fontFiles = ["arial.ttf", "arialbd.ttf", "segoeui.ttf", "seguisb.ttf"];
+var cachedFontBuffers = [];
+for (const f of fontFiles) {
+  const p = import_path.default.join(process.cwd(), "fonts", f);
+  if (import_fs.default.existsSync(p)) {
+    try {
+      cachedFontBuffers.push(import_fs.default.readFileSync(p));
+    } catch (e) {
+      console.warn(`[CardGenerator] Note: could not load font ${f}:`, e);
+    }
+  }
+}
 function escapeXml(unsafe) {
   return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
@@ -44128,17 +44142,13 @@ function generateNutritionCardSvg(data) {
   const coachCardHeight = 88;
   const footerY = coachCardY + coachCardHeight + 24;
   const canvasHeight = footerY + 38;
-  const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&auto=format&fit=crop&q=80";
+  let photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&amp;auto=format&amp;fit=crop&amp;q=80";
+  if (photoHref.includes("&") && !photoHref.includes("&amp;")) {
+    photoHref = photoHref.replace(/&/g, "&amp;");
+  }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
   <defs>
-    <style type="text/css">
-      .brand-font { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-      .bold-athletic { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Arial Black', Impact, sans-serif; font-weight: 900; }
-      .inter-ui { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-      .num-bold { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 900; }
-    </style>
-
     <clipPath id="foodPhotoClip">
       <rect x="${paddingX}" y="${photoY}" width="${contentWidth}" height="${photoHeight}" rx="20" ry="20"/>
     </clipPath>
@@ -44147,7 +44157,7 @@ function generateNutritionCardSvg(data) {
   <!-- Canvas Background (Pure Pitch Black) -->
   <rect width="${canvasWidth}" height="${canvasHeight}" fill="#000000"/>
 
-  <!-- 1. TOP HEADER: Official Logo + GYM BUDDY AI | Meal Type & Date -->
+  <!-- 1. TOP HEADER: Official Logo + GYM BUDDY AI | Meal Type and Date -->
   <g id="topHeader" transform="translate(${paddingX}, ${headerY})">
     <!-- Official GymBuddy Logo Icon -->
     <g transform="translate(0, -10) scale(0.62)">
@@ -44156,24 +44166,24 @@ function generateNutritionCardSvg(data) {
     </g>
 
     <!-- Brand Name -->
-    <text x="42" y="11" fill="#FFFFFF" font-size="14" font-weight="900" class="brand-font" letter-spacing="1.5">GYM BUDDY AI</text>
+    <text x="42" y="11" fill="#FFFFFF" font-family="Arial" font-size="14" font-weight="bold" letter-spacing="1.5">GYM BUDDY AI</text>
 
-    <!-- Right Header Metadata: Fork & Knife Icon + Meal Type | Date -->
+    <!-- Right Header Metadata: Fork and Knife Icon + Meal Type | Date -->
     <g transform="translate(${contentWidth - 170}, 0)">
-      <!-- Fork & Knife Icon in Lime -->
+      <!-- Fork and Knife Icon in Lime -->
       <g transform="translate(0, -2) scale(0.75)">
         <path d="M4 2v7c0 1.5 1 2.5 2.5 2.5V20M8 2v7c0 1.5-1 2.5-2.5 2.5M6 2v7M16 2c-1.5 0-2.5 1-2.5 3v6c0 1.5 1 2.5 2.5 2.5V20" fill="none" stroke="#D4FF00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
       </g>
-      <text x="22" y="11" fill="#D4FF00" font-size="14" font-weight="700" class="inter-ui">${escapeXml(mealType)}</text>
-      <text x="76" y="11" fill="#3E4756" font-size="14" class="inter-ui">|</text>
-      <text x="90" y="11" fill="#8E95A5" font-size="13" font-weight="600" class="inter-ui">${escapeXml(dateStr)}</text>
+      <text x="22" y="11" fill="#D4FF00" font-family="Arial" font-size="14" font-weight="bold">${escapeXml(mealType)}</text>
+      <text x="76" y="11" fill="#3E4756" font-family="Arial" font-size="14">|</text>
+      <text x="90" y="11" fill="#8E95A5" font-family="Arial" font-size="13" font-weight="bold">${escapeXml(dateStr)}</text>
     </g>
   </g>
 
   <!-- 2. BOLD ATHLETIC MEAL TITLE -->
   <g id="mealTitle" transform="translate(${paddingX}, ${titleY})">
     ${displayTitleLines.map((line, idx) => `
-      <text x="0" y="${idx * titleLineHeight + 26}" fill="#FFFFFF" font-size="28" font-weight="900" class="bold-athletic" letter-spacing="0.5">${escapeXml(line)}</text>
+      <text x="0" y="${idx * titleLineHeight + 26}" fill="#FFFFFF" font-family="Arial" font-size="28" font-weight="bold" letter-spacing="0.5">${escapeXml(line)}</text>
     `).join("")}
   </g>
 
@@ -44184,12 +44194,12 @@ function generateNutritionCardSvg(data) {
     <circle cx="20" cy="17" r="9" fill="#D4FF00"/>
     <path d="M16.5 17l2.5 2.5 4.5-5" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
     
-    <text x="36" y="22" fill="#D4FF00" font-size="13" font-weight="800" class="inter-ui">On track</text>
-    <text x="96" y="21" fill="#3A4454" font-size="13" class="inter-ui">|</text>
-    <text x="108" y="22" fill="#8E95A5" font-size="12.5" font-weight="600" class="inter-ui">${escapeXml(statusPillText)}</text>
+    <text x="36" y="22" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">On track</text>
+    <text x="96" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
+    <text x="108" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">${escapeXml(statusPillText)}</text>
   </g>
 
-  <!-- 4. FOOD PHOTO CONTAINER (Clean 20px Rounded Corner, Dark Border) -->
+  <!-- 4. FOOD PHOTO CONTAINER -->
   <g id="foodPhotoContainer">
     <rect x="${paddingX}" y="${photoY}" width="${contentWidth}" height="${photoHeight}" rx="20" ry="20" fill="#0E121A" stroke="#1F2530" stroke-width="1.5"/>
     <image href="${photoHref}" xlink:href="${photoHref}" x="${paddingX}" y="${photoY}" width="${contentWidth}" height="${photoHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
@@ -44201,15 +44211,15 @@ function generateNutritionCardSvg(data) {
 
     <!-- Left Column: Meal Calories -->
     <g transform="translate(24, 22)">
-      <text x="0" y="8" fill="#717C91" font-size="11" font-weight="800" letter-spacing="1.2" class="inter-ui">KALORI</text>
+      <text x="0" y="8" fill="#717C91" font-family="Arial" font-size="11" font-weight="bold" letter-spacing="1.2">KALORI</text>
       
       <!-- Big Bold Calorie Number in Neon Lime Green -->
-      <text x="0" y="58" fill="#D4FF00" font-size="48" class="num-bold" letter-spacing="-0.5">${calories.toLocaleString("id-ID")}</text>
-      <text x="${String(calories).length > 3 ? 120 : 96}" y="56" fill="#FFFFFF" font-size="20" font-weight="800" class="inter-ui">kcal</text>
+      <text x="0" y="58" fill="#D4FF00" font-family="Arial" font-size="48" font-weight="bold" letter-spacing="-0.5">${calories.toLocaleString("id-ID")}</text>
+      <text x="${String(calories).length > 3 ? 120 : 96}" y="56" fill="#FFFFFF" font-family="Arial" font-size="20" font-weight="bold">kcal</text>
 
       <!-- Percentage subtext -->
-      <text x="0" y="82" fill="#D4FF00" font-size="13" font-weight="800" class="inter-ui">${calPercentage}%</text>
-      <text x="34" y="82" fill="#717C91" font-size="13" font-weight="600" class="inter-ui">dari target harian</text>
+      <text x="0" y="82" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">${calPercentage}%</text>
+      <text x="34" y="82" fill="#717C91" font-family="Arial" font-size="13" font-weight="bold">dari target harian</text>
 
       <!-- Progress Bar (Left) -->
       <rect x="0" y="96" width="240" height="8" rx="4" fill="#1C2330"/>
@@ -44221,17 +44231,17 @@ function generateNutritionCardSvg(data) {
 
     <!-- Right Column: Daily Target -->
     <g transform="translate(334, 22)">
-      <text x="0" y="8" fill="#717C91" font-size="11" font-weight="800" letter-spacing="1.2" class="inter-ui">TARGET HARIAN</text>
+      <text x="0" y="8" fill="#717C91" font-family="Arial" font-size="11" font-weight="bold" letter-spacing="1.2">TARGET HARIAN</text>
       
       <!-- Target Calories Number -->
-      <text x="0" y="56" fill="#FFFFFF" font-size="36" class="num-bold" letter-spacing="-0.5">${targetCal.toLocaleString("id-ID")}</text>
-      <text x="${String(targetCal).length > 4 ? 120 : 100}" y="54" fill="#8E95A5" font-size="18" font-weight="700" class="inter-ui">kcal</text>
+      <text x="0" y="56" fill="#FFFFFF" font-family="Arial" font-size="36" font-weight="bold" letter-spacing="-0.5">${targetCal.toLocaleString("id-ID")}</text>
+      <text x="${String(targetCal).length > 4 ? 120 : 100}" y="54" fill="#8E95A5" font-family="Arial" font-size="18" font-weight="bold">kcal</text>
 
       <!-- Progress Bar (Right) + Percentage Label -->
       <g transform="translate(0, 84)">
         <rect x="0" y="10" width="220" height="8" rx="4" fill="#1C2330"/>
         <rect x="0" y="10" width="${Math.round(220 * (calPercentage / 100))}" height="8" rx="4" fill="#D4FF00"/>
-        <text x="236" y="18" fill="#D4FF00" font-size="14" font-weight="800" class="inter-ui">${calPercentage}%</text>
+        <text x="236" y="18" fill="#D4FF00" font-family="Arial" font-size="14" font-weight="bold">${calPercentage}%</text>
       </g>
     </g>
   </g>
@@ -44248,12 +44258,12 @@ function generateNutritionCardSvg(data) {
       </g>
       
       <g transform="translate(48, 0)">
-        <text x="0" y="18" fill="#FFFFFF" font-size="20" class="num-bold">${protein}</text>
-        <text x="${String(protein).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-size="14" font-weight="700" class="inter-ui">g</text>
-        <text x="0" y="32" fill="#717C91" font-size="10" font-weight="800" letter-spacing="0.8" class="inter-ui">PROTEIN</text>
+        <text x="0" y="18" fill="#FFFFFF" font-family="Arial" font-size="20" font-weight="bold">${protein}</text>
+        <text x="${String(protein).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-family="Arial" font-size="14" font-weight="bold">g</text>
+        <text x="0" y="32" fill="#717C91" font-family="Arial" font-size="10" font-weight="bold" letter-spacing="0.8">PROTEIN</text>
       </g>
       
-      <text x="0" y="50" fill="#5A6578" font-size="10.5" font-weight="600" class="inter-ui">Target ${targetProt}g</text>
+      <text x="0" y="50" fill="#5A6578" font-family="Arial" font-size="10.5" font-weight="bold">Target ${targetProt}g</text>
       <rect x="0" y="56" width="160" height="5" rx="2.5" fill="#1C2330"/>
       <rect x="0" y="56" width="${Math.round(160 * (protPercentage / 100))}" height="5" rx="2.5" fill="#D4FF00"/>
     </g>
@@ -44266,12 +44276,12 @@ function generateNutritionCardSvg(data) {
       </g>
 
       <g transform="translate(48, 0)">
-        <text x="0" y="18" fill="#FFFFFF" font-size="20" class="num-bold">${carbs}</text>
-        <text x="${String(carbs).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-size="14" font-weight="700" class="inter-ui">g</text>
-        <text x="0" y="32" fill="#717C91" font-size="10" font-weight="800" letter-spacing="0.8" class="inter-ui">KARBO</text>
+        <text x="0" y="18" fill="#FFFFFF" font-family="Arial" font-size="20" font-weight="bold">${carbs}</text>
+        <text x="${String(carbs).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-family="Arial" font-size="14" font-weight="bold">g</text>
+        <text x="0" y="32" fill="#717C91" font-family="Arial" font-size="10" font-weight="bold" letter-spacing="0.8">KARBO</text>
       </g>
 
-      <text x="0" y="50" fill="#5A6578" font-size="10.5" font-weight="600" class="inter-ui">Target ${targetCarb}g</text>
+      <text x="0" y="50" fill="#5A6578" font-family="Arial" font-size="10.5" font-weight="bold">Target ${targetCarb}g</text>
       <rect x="0" y="56" width="160" height="5" rx="2.5" fill="#1C2330"/>
       <rect x="0" y="56" width="${Math.round(160 * (carbPercentage / 100))}" height="5" rx="2.5" fill="#D4FF00"/>
     </g>
@@ -44284,12 +44294,12 @@ function generateNutritionCardSvg(data) {
       </g>
 
       <g transform="translate(48, 0)">
-        <text x="0" y="18" fill="#FFFFFF" font-size="20" class="num-bold">${fat}</text>
-        <text x="${String(fat).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-size="14" font-weight="700" class="inter-ui">g</text>
-        <text x="0" y="32" fill="#717C91" font-size="10" font-weight="800" letter-spacing="0.8" class="inter-ui">LEMAK</text>
+        <text x="0" y="18" fill="#FFFFFF" font-family="Arial" font-size="20" font-weight="bold">${fat}</text>
+        <text x="${String(fat).length > 2 ? 38 : 28}" y="18" fill="#8E95A5" font-family="Arial" font-size="14" font-weight="bold">g</text>
+        <text x="0" y="32" fill="#717C91" font-family="Arial" font-size="10" font-weight="bold" letter-spacing="0.8">LEMAK</text>
       </g>
 
-      <text x="0" y="50" fill="#5A6578" font-size="10.5" font-weight="600" class="inter-ui">Target ${targetFat}g</text>
+      <text x="0" y="50" fill="#5A6578" font-family="Arial" font-size="10.5" font-weight="bold">Target ${targetFat}g</text>
       <rect x="0" y="56" width="160" height="5" rx="2.5" fill="#1C2330"/>
       <rect x="0" y="56" width="${Math.round(160 * (fatPercentage / 100))}" height="5" rx="2.5" fill="#D4FF00"/>
     </g>
@@ -44306,13 +44316,13 @@ function generateNutritionCardSvg(data) {
         <path d="M51 17H27C25.9333 17 23.4 17.775 21.8 20.875C20.2 23.975 15.2667 34.5093 13 39.3889H25L21 48L23.4 46.7083L32.6 34.2222H22.6C22.0667 34.3657 21.24 34.1361 22.2 32.0694C23.16 30.0028 25 25.7546 25.8 23.8889C26.0667 23.3148 26.84 22.1667 27.8 22.1667H38.6L35.8 26.0417H43.4L51 17Z" fill="#FFFFFF" />
       </g>
       <rect x="34" y="38" width="18" height="12" rx="3" fill="#D4FF00"/>
-      <text x="37" y="47" fill="#000000" font-size="8.5" font-weight="900" class="bold-athletic">AI</text>
+      <text x="37" y="47" fill="#000000" font-family="Arial" font-size="8.5" font-weight="bold">AI</text>
     </g>
 
     <g transform="translate(86, 22)">
-      <text x="0" y="8" fill="#D4FF00" font-size="11" font-weight="800" letter-spacing="1" class="inter-ui">GYM BUDDY AI</text>
-      <text x="0" y="28" fill="#FFFFFF" font-size="16" font-weight="800" class="inter-ui">You&apos;re on track! \u{1F4AA}</text>
-      <text x="0" y="46" fill="#8E95A5" font-size="12.5" font-weight="500" class="inter-ui">${escapeXml(coachMessage)}</text>
+      <text x="0" y="8" fill="#D4FF00" font-family="Arial" font-size="11" font-weight="bold" letter-spacing="1">GYM BUDDY AI</text>
+      <text x="0" y="28" fill="#FFFFFF" font-family="Arial" font-size="16" font-weight="bold">You&apos;re on track!</text>
+      <text x="0" y="46" fill="#8E95A5" font-family="Arial" font-size="12.5">${escapeXml(coachMessage)}</text>
     </g>
 
     <g transform="translate(${contentWidth - 46}, 28)">
@@ -44324,8 +44334,8 @@ function generateNutritionCardSvg(data) {
   <!-- 8. FOOTER DISCLAIMER -->
   <g id="footerDisclaimer" transform="translate(${canvasWidth / 2 - 170}, ${footerY})">
     <circle cx="8" cy="8" r="7" fill="none" stroke="#4A5568" stroke-width="1.2"/>
-    <text x="8" y="11.5" text-anchor="middle" fill="#4A5568" font-size="9" font-weight="bold" class="inter-ui">i</text>
-    <text x="22" y="12" fill="#5A6578" font-size="11.5" font-weight="500" class="inter-ui">Nilai gizi merupakan estimasi berdasarkan analisis AI.</text>
+    <text x="8" y="11.5" text-anchor="middle" fill="#4A5568" font-family="Arial" font-size="9" font-weight="bold">i</text>
+    <text x="22" y="12" fill="#5A6578" font-family="Arial" font-size="11.5">Nilai gizi merupakan estimasi berdasarkan analisis AI.</text>
   </g>
 </svg>`;
 }
@@ -44338,7 +44348,10 @@ async function generateNutritionCardPng(data) {
         value: 720
       },
       font: {
-        loadSystemFonts: true
+        fontBuffers: cachedFontBuffers,
+        defaultFontFamily: "Arial",
+        loadSystemFonts: false
+        // Ensures Cloud Run container uses bundled fontBuffers!
       }
     });
     return resvg.render().asPng();
@@ -44354,8 +44367,8 @@ var import_mongodb = require("mongodb");
 // services/firestore.ts
 var import_firestore = require("@google-cloud/firestore");
 var import_firebase_admin = __toESM(require("firebase-admin"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var firestoreInstance = null;
 var isFirebaseInitialized = false;
 function getFirestore() {
@@ -44366,14 +44379,14 @@ function getFirestore() {
     let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
     if (!serviceAccountJson) {
       const candidates = [
-        import_path.default.join(process.cwd(), "service-account.json"),
-        import_path.default.join(process.cwd(), "serviceAccountKey.json"),
-        process.env.GOOGLE_APPLICATION_CREDENTIALS ? import_path.default.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS) : ""
+        import_path2.default.join(process.cwd(), "service-account.json"),
+        import_path2.default.join(process.cwd(), "serviceAccountKey.json"),
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ? import_path2.default.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS) : ""
       ].filter(Boolean);
       for (const p of candidates) {
-        if (p && import_fs.default.existsSync(p)) {
+        if (p && import_fs2.default.existsSync(p)) {
           try {
-            serviceAccountJson = import_fs.default.readFileSync(p, "utf8");
+            serviceAccountJson = import_fs2.default.readFileSync(p, "utf8");
             console.log(`[Firestore] Loaded Service Account JSON from: ${p} \u2705`);
             break;
           } catch (e) {
@@ -45578,8 +45591,8 @@ function extractAndParseJson(text) {
   }
   return null;
 }
-var DATA_DIR = import_path2.default.join(process.cwd(), "data");
-var DB_FILE = import_path2.default.join(DATA_DIR, "db.json");
+var DATA_DIR = import_path3.default.join(process.cwd(), "data");
+var DB_FILE = import_path3.default.join(DATA_DIR, "db.json");
 var dbData = {
   users: {},
   dailyLogs: {},
@@ -45807,12 +45820,12 @@ function purgeLegacyMockLogs() {
   }
 }
 async function initDb() {
-  if (!import_fs2.default.existsSync(DATA_DIR)) {
-    import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
+  if (!import_fs3.default.existsSync(DATA_DIR)) {
+    import_fs3.default.mkdirSync(DATA_DIR, { recursive: true });
   }
-  if (import_fs2.default.existsSync(DB_FILE)) {
+  if (import_fs3.default.existsSync(DB_FILE)) {
     try {
-      const raw = import_fs2.default.readFileSync(DB_FILE, "utf-8");
+      const raw = import_fs3.default.readFileSync(DB_FILE, "utf-8");
       dbData = JSON.parse(raw);
       if (!dbData.users) dbData.users = {};
       if (!dbData.dailyLogs) dbData.dailyLogs = {};
@@ -45833,10 +45846,10 @@ async function initDb() {
 }
 function saveDb() {
   try {
-    if (!import_fs2.default.existsSync(DATA_DIR)) {
-      import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
+    if (!import_fs3.default.existsSync(DATA_DIR)) {
+      import_fs3.default.mkdirSync(DATA_DIR, { recursive: true });
     }
-    import_fs2.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
+    import_fs3.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
   } catch (e) {
     console.error("Error saving db.json", e);
   }
@@ -49419,11 +49432,11 @@ Keluarkan output JSON valid:
     );
     try {
       const { Resvg: Resvg2 } = await import("@resvg/resvg-js");
-      const fontPath = import_path2.default.join(process.cwd(), "fonts", "arial.ttf");
+      const fontPath = import_path3.default.join(process.cwd(), "fonts", "arial.ttf");
       let fontBuffer = null;
-      if (import_fs2.default.existsSync(fontPath)) {
+      if (import_fs3.default.existsSync(fontPath)) {
         try {
-          fontBuffer = import_fs2.default.readFileSync(fontPath);
+          fontBuffer = import_fs3.default.readFileSync(fontPath);
         } catch (fe) {
         }
       }
@@ -49529,17 +49542,17 @@ ${mistakes}
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path2.default.join(process.cwd(), "dist");
-    const distIndex = import_path2.default.join(distPath, "index.html");
-    const rootIndex = import_path2.default.join(process.cwd(), "index.html");
-    if (import_fs2.default.existsSync(distPath)) {
+    const distPath = import_path3.default.join(process.cwd(), "dist");
+    const distIndex = import_path3.default.join(distPath, "index.html");
+    const rootIndex = import_path3.default.join(process.cwd(), "index.html");
+    if (import_fs3.default.existsSync(distPath)) {
       app.use(import_express.default.static(distPath));
     }
     app.use(import_express.default.static(process.cwd()));
     app.use((req, res) => {
-      if (import_fs2.default.existsSync(distIndex)) {
+      if (import_fs3.default.existsSync(distIndex)) {
         res.sendFile(distIndex);
-      } else if (import_fs2.default.existsSync(rootIndex)) {
+      } else if (import_fs3.default.existsSync(rootIndex)) {
         res.sendFile(rootIndex);
       } else {
         res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
