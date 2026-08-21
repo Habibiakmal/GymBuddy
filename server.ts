@@ -2749,17 +2749,7 @@ async function startServer() {
         imageBufferOrBase64
       };
 
-      // 1. If user uploaded a photo, deliver the photo cleanly as binary JPEG / PNG to WhatsApp
-      if (imageBufferOrBase64 && imageBufferOrBase64.startsWith("data:")) {
-        const base64Data = imageBufferOrBase64.replace(/^data:image\/\w+;base64,/, "");
-        const rawBuf = Buffer.from(base64Data, "base64");
-        const mime = imageBufferOrBase64.match(/^data:(image\/\w+);base64,/)?.[1] || "image/jpeg";
-        res.setHeader("Content-Type", mime);
-        res.setHeader("Cache-Control", "public, max-age=86400");
-        return res.send(rawBuf);
-      }
-
-      // 2. If client requests SVG explicitly
+      // 1. If client requests SVG explicitly
       if (req.path.endsWith(".svg")) {
         const svg = generateNutritionCardSvg(cardPayload);
         res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
@@ -2767,7 +2757,7 @@ async function startServer() {
         return res.send(svg);
       }
 
-      // 3. Otherwise try generating true raster PNG
+      // 2. Generate high-resolution GymBuddy AI Nutrition Infographic Card (PNG)
       try {
         const pngBuf = await generateNutritionCardPng(cardPayload);
         if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 0x89 && pngBuf[1] === 0x50) {
