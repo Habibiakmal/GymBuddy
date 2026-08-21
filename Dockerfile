@@ -29,6 +29,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
+# Copy runtime assets needed by server (fonts for card generator, exercise data)
+COPY --from=builder /app/fonts ./fonts
+COPY --from=builder /app/data ./data
 
 # Cloud Run listens on $PORT (defaults to 8080)
 EXPOSE 8080
