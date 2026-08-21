@@ -1,6 +1,5 @@
-import fs from "fs";
-import path from "path";
 import { Resvg } from "@resvg/resvg-js";
+import { getFontFaceDefs } from "./embeddedFonts";
 
 export interface NutritionCardData {
   foodName: string;
@@ -22,40 +21,8 @@ export interface NutritionCardData {
   imageBufferOrBase64?: string; // Data URI (data:image/jpeg;base64,...) or image URL
 }
 
-// Pre-load bundled TrueType fonts so Resvg renders text 100% reliably in Docker / Linux / Cloud Run
-const fontFiles = ["arial.ttf", "arialbd.ttf", "segoeui.ttf", "seguisb.ttf"];
-const cachedFontBuffers: Buffer[] = [];
 
-// Try multiple possible base paths to find fonts (handles different CWDs in Cloud Run)
-const possibleFontDirs = [
-  path.join(process.cwd(), "fonts"),                           // root/fonts
-  path.join(process.cwd(), "..", "fonts"),                     // up one level
-  path.join(__dirname, "fonts"),                               // relative to this file
-  path.join(__dirname, "..", "fonts"),                         // parent of services/
-  path.join(__dirname, "..", "..", "fonts"),                   // two levels up
-  "/app/fonts",                                                // Cloud Run /app root
-  "/app/dist/../fonts",                                        // Cloud Run dist sibling
-];
 
-for (const f of fontFiles) {
-  let loaded = false;
-  for (const dir of possibleFontDirs) {
-    const p = path.join(dir, f);
-    if (fs.existsSync(p)) {
-      try {
-        cachedFontBuffers.push(fs.readFileSync(p));
-        console.log(`[CardGenerator] Loaded font: ${p}`);
-        loaded = true;
-        break;
-      } catch (e) {
-        // continue trying next dir
-      }
-    }
-  }
-  if (!loaded) {
-    console.warn(`[CardGenerator] Font not found in any path: ${f}`);
-  }
-}
 
 function escapeXml(unsafe: string): string {
   return (unsafe || "")
@@ -157,9 +124,12 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
     photoHref = photoHref.replace(/&/g, "&amp;");
   }
 
+  const fontFaceDefs = getFontFaceDefs();
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
   <defs>
+    ${fontFaceDefs}
     <clipPath id="foodPhotoClip">
       <rect x="${paddingX}" y="${photoY}" width="${contentWidth}" height="${photoHeight}" rx="20" ry="20"/>
     </clipPath>
@@ -354,15 +324,15 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
 export async function generateNutritionCardPng(data: NutritionCardData): Promise<Buffer> {
   const svg = generateNutritionCardSvg(data);
   try {
+    // Fonts are embedded directly in the SVG <defs> as @font-face data URIs
+    // No external font files or fontBuffers needed — works on any environment
     const resvg = new Resvg(svg, {
       fitTo: {
         mode: "width",
         value: 720
       },
       font: {
-        fontBuffers: cachedFontBuffers,
-        defaultFontFamily: "Arial",
-        loadSystemFonts: false // Ensures Cloud Run container uses bundled fontBuffers!
+        loadSystemFonts: false
       }
     });
     return resvg.render().asPng();
