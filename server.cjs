@@ -23,11 +23,10 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_config = require("dotenv/config");
-var import_mongodb2 = require("mongodb");
 var import_vite = require("vite");
 var import_genai = require("@google/genai");
 var import_axios = __toESM(require("axios"), 1);
@@ -42704,15 +42703,15 @@ function findExerciseOrEquipment(query) {
   if (!query) return null;
   const q = query.toLowerCase().trim();
   const directMatch = EXERCISE_DATABASE.find(
-    (item) => item.id.toLowerCase() === q || item.name.toLowerCase() === q || item.indonesianName.toLowerCase() === q
+    (item) => item.id.toLowerCase() === q || item.name.toLowerCase() === q || (item.indonesianName || "").toLowerCase() === q
   );
   if (directMatch) return directMatch;
   const aliasMatch = EXERCISE_DATABASE.find(
-    (item) => item.aliases.some((alias) => q === alias.toLowerCase())
+    (item) => (item.aliases || []).some((alias) => q === alias.toLowerCase())
   );
   if (aliasMatch) return aliasMatch;
   const substrMatch = EXERCISE_DATABASE.find(
-    (item) => item.name.toLowerCase().includes(q) || item.aliases.some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
+    (item) => item.name.toLowerCase().includes(q) || (item.aliases || []).some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
   );
   if (substrMatch) return substrMatch;
   const tokens = q.split(/[\s,+/_-]+/).filter((t) => t.length > 2);
@@ -42720,7 +42719,9 @@ function findExerciseOrEquipment(query) {
   let maxScore = 0;
   for (const item of EXERCISE_DATABASE) {
     let score = 0;
-    const searchable = `${item.name} ${item.indonesianName} ${item.aliases.join(" ")} ${item.equipmentName} ${item.targetMuscles.join(" ")}`.toLowerCase();
+    const safeAliases = (item.aliases || []).join(" ");
+    const safeMuscles = (item.targetMuscles || []).join(" ");
+    const searchable = `${item.name} ${item.indonesianName || ""} ${safeAliases} ${item.equipmentName || ""} ${safeMuscles}`.toLowerCase();
     for (const token of tokens) {
       if (searchable.includes(token)) {
         score += 2;
@@ -42962,6 +42963,51 @@ var NUTRITION_DATABASE = [
     servingUnit: "1 piring komplit",
     per100g: { calories: 195, protein: 6.5, carbs: 25, fat: 7.8, fiber: 1.2, sugar: 1.5 },
     source: "TKPI"
+  },
+  {
+    keywords: ["rice bowl ayam", "nasi bowl ayam", "chicken rice bowl", "ricebowl ayam", "nasi rice bowl ayam", "rice bowl chicken"],
+    normalizedName: "Rice Bowl Ayam (Chicken Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 165, protein: 9.7, carbs: 19.4, fat: 5.1, fiber: 0.9, sugar: 0.8 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl sapi", "nasi bowl sapi", "beef rice bowl", "ricebowl sapi", "nasi rice bowl sapi", "rice bowl beef", "gyudon"],
+    normalizedName: "Rice Bowl Sapi (Beef Rice Bowl)",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 177, protein: 9.1, carbs: 18.5, fat: 6.8, fiber: 0.7, sugar: 1.1 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl teriyaki", "nasi bowl teriyaki", "chicken teriyaki rice bowl"],
+    normalizedName: "Rice Bowl Teriyaki",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 160, protein: 8.5, carbs: 20, fat: 4.8, fiber: 0.7, sugar: 2.2 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl katsu", "nasi bowl katsu", "katsu rice bowl", "chicken katsu rice bowl"],
+    normalizedName: "Rice Bowl Chicken Katsu",
+    category: "grain",
+    defaultServingGrams: 380,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 178, protein: 7.3, carbs: 20, fat: 7.3, fiber: 0.8, sugar: 1.3 },
+    source: "USDA"
+  },
+  {
+    keywords: ["rice bowl", "nasi bowl", "ricebowl", "donburi", "poke bowl", "pokebowl"],
+    normalizedName: "Rice Bowl Combo",
+    category: "grain",
+    defaultServingGrams: 350,
+    servingUnit: "1 rice bowl",
+    per100g: { calories: 157, protein: 7.4, carbs: 18.5, fat: 5.1, fiber: 0.8, sugar: 0.9 },
+    source: "USDA"
   },
   {
     keywords: ["nasi padang", "nasi ramas"],
@@ -43614,13 +43660,11 @@ function splitFoodItems(rawInput) {
   const finalItems = [];
   for (const part of rawParts) {
     const lowerPart = part.toLowerCase();
-    const isUnifiedRiceDish = /^(nasi\s+goreng|nasi\s+uduk|nasi\s+kuning|nasi\s+liwet|nasi\s+padang|nasi\s+merah|nasi\s+putih)\b/i.test(lowerPart);
-    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish) {
-      const lauk = part.replace(/^nasi\s+/i, "").trim();
-      finalItems.push("Nasi putih");
-      if (lauk.length > 0) {
-        finalItems.push(lauk);
-      }
+    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug|bowl)/i.test(lowerPart) || lowerPart.includes("rice bowl") || lowerPart.includes("donburi");
+    const nasiWordCount = part.trim().split(/\s+/).length;
+    const isNamedDish = /^nasi\s+/i.test(part) && nasiWordCount >= 3;
+    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish && !isNamedDish) {
+      finalItems.push(part);
     } else {
       finalItems.push(part);
     }
@@ -43639,6 +43683,23 @@ function calculateSingleItemNutrition(rawItemText) {
         if (score > bestScore) {
           bestScore = score;
           matchedRef = ref;
+        }
+      }
+    }
+  }
+  let secondaryProteinRef = null;
+  if (matchedRef && (matchedRef.normalizedName.includes("Nasi Putih") || matchedRef.normalizedName.includes("Nasi Merah"))) {
+    const proteinKeywords = ["ayam", "chicken", "sapi", "beef", "daging", "telur", "egg", "katsu", "teriyaki", "ikan", "fish"];
+    if (proteinKeywords.some((pk) => lower.includes(pk))) {
+      for (const ref of NUTRITION_DATABASE) {
+        if (ref.category === "protein" || ref.normalizedName.includes("Ayam") || ref.normalizedName.includes("Sapi")) {
+          for (const kw of ref.keywords) {
+            if (lower.includes(kw)) {
+              secondaryProteinRef = ref;
+              break;
+            }
+          }
+          if (secondaryProteinRef) break;
         }
       }
     }
@@ -43694,18 +43755,28 @@ function calculateSingleItemNutrition(rawItemText) {
     } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
       per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
     }
-    const factor = targetGrams2 / 100;
-    const protein = Math.round(per100g.protein * factor * 10) / 10;
-    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
-    const fat2 = Math.round(per100g.fat * factor * 10) / 10;
-    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
-    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    let factor = targetGrams2 / 100;
+    let protein = Math.round(per100g.protein * factor * 10) / 10;
+    let carbs = Math.round(per100g.carbs * factor * 10) / 10;
+    let fat2 = Math.round(per100g.fat * factor * 10) / 10;
+    let fiber = Math.round(per100g.fiber * factor * 10) / 10;
+    let sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    if (secondaryProteinRef) {
+      const pGrams = secondaryProteinRef.defaultServingGrams || 100;
+      const pFactor = pGrams / 100;
+      protein = Math.round((protein + secondaryProteinRef.per100g.protein * pFactor) * 10) / 10;
+      carbs = Math.round((carbs + secondaryProteinRef.per100g.carbs * pFactor) * 10) / 10;
+      fat2 = Math.round((fat2 + secondaryProteinRef.per100g.fat * pFactor) * 10) / 10;
+      fiber = Math.round((fiber + secondaryProteinRef.per100g.fiber * pFactor) * 10) / 10;
+      sugar = Math.round((sugar + secondaryProteinRef.per100g.sugar * pFactor) * 10) / 10;
+      targetGrams2 += pGrams;
+    }
     const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
-    const rawCal = Math.round(per100g.calories * factor);
+    const rawCal = Math.round(per100g.calories * factor + (secondaryProteinRef ? secondaryProteinRef.per100g.calories * (secondaryProteinRef.defaultServingGrams / 100) : 0));
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
     return {
       food_name: rawItemText.trim(),
-      normalized_food_name: matchedRef.normalizedName,
+      normalized_food_name: secondaryProteinRef ? `${matchedRef.normalizedName} + ${secondaryProteinRef.normalizedName}` : matchedRef.normalizedName,
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams2),
@@ -43727,6 +43798,31 @@ function calculateSingleItemNutrition(rawItemText) {
       notes: `${displayUnit2} (${matchedRef.source})`
     };
   }
+  const nonFoodPattern = /\b(?:laptop|notebook|macbook|komputer|computer|pc|mouse|keyboard|monitor|cpu|printer|gadget|hp|handphone|smartphone|iphone|android|samsung|xiaomi|oppo|vivo|ipad|tablet|charger|kabel|headphone|earphone|headset|powerbank|baterai|batre|tws|airpods|speaker|tv|televisi|kamera|camera|tripod|flashdisk|harddisk|ssd|ram|flashdrive|modem|router|meja|kursi|lemari|pintu|jendela|kasur|bantal|guling|selimut|karpet|lantai|tembok|dinding|atap|genteng|lampu|kipas|ac|kulkas|mesin\s*cuci|setrika|sapu|pel|ember|gayung|sikat|odol|pasta\s*gigi|sabun|shampoo|sampo|parfum|handuk|sisir|cermin|kaca|baju|kaos|kemeja|celana|rok|jaket|hoodie|sweater|jas|gamis|jilbab|hijab|topi|helm|sepatu|sandal|kaos\s*kaki|tas|ransel|dompet|koper|ikat\s*pinggang|sabuk|jam\s*tangan|gelang|kalung|cincin|anting|kacamata|mobil|motor|sepeda|skuter|truk|bus|angkot|becak|helm|kunci|gembok|buku|novel|komik|majalah|koran|pulpen|bolpoin|pensil|penghapus|penggaris|gunting|cutter|kertas|karton|kardus|plastik|besi|baja|kayu|batu|pasir|semen|tanah|kucing|anjing|kelinci|hamster|burung|ikan\s*cupang|hewan|binatang|manusia|orang|teman|pacar|anak|gedung|rumah|kantor|toko|jalan|jembatan|uang|duit|koin|kartu|atm|ktp|sim|paspor|rokok|vape|pod|liquid|korek)\b/i;
+  if (nonFoodPattern.test(cleanedText)) {
+    return {
+      food_name: rawItemText.trim(),
+      normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      cooking_method: void 0,
+      estimated_quantity: quantity,
+      estimated_weight_grams: 0,
+      serving_unit: "-",
+      display_unit: "-",
+      item_type: "food",
+      portion_type: "estimated",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+      sugar: 0,
+      is_hydration: false,
+      volume_ml: 0,
+      data_source: "verified_nutrition_database",
+      confidence: "high",
+      notes: "Objek ini bukan makanan atau minuman"
+    };
+  }
   const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
   const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
   const itemType = isWaterGuess ? "water" : isBeverageGuess ? "beverage" : "food";
@@ -43734,9 +43830,9 @@ function calculateSingleItemNutrition(rawItemText) {
   let targetVolumeMl = isBeverageGuess ? targetGrams : void 0;
   let portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
   let displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
-  const prot = Math.round((isBeverageGuess ? 1 : 5) * (targetGrams / 100) * 10) / 10;
-  const carb = Math.round((isBeverageGuess ? 5 : 18) * (targetGrams / 100) * 10) / 10;
-  const fat = Math.round((isBeverageGuess ? 0.5 : 4) * (targetGrams / 100) * 10) / 10;
+  const prot = Math.round((isBeverageGuess ? 0 : 4) * (targetGrams / 100) * 10) / 10;
+  const carb = Math.round((isBeverageGuess ? 5 : 15) * (targetGrams / 100) * 10) / 10;
+  const fat = Math.round((isBeverageGuess ? 0 : 3) * (targetGrams / 100) * 10) / 10;
   const cal = Math.round(prot * 4 + carb * 4 + fat * 9);
   return {
     food_name: rawItemText.trim(),
@@ -43761,13 +43857,35 @@ function calculateSingleItemNutrition(rawItemText) {
     notes: "Estimasi generik"
   };
 }
+function isGenericMealInput(text) {
+  const lower = (text || "").trim().toLowerCase();
+  const genericPatterns = [
+    { pattern: /^(?:rice\s*bowl|nasi\s*bowl|bowl|poke\s*bowl)$/i, mealType: "rice bowl" },
+    { pattern: /^(?:salad|salad\s*sayur|salad\s*bowl)$/i, mealType: "salad" },
+    { pattern: /^(?:sandwich|roti\s*isi)$/i, mealType: "sandwich" },
+    { pattern: /^(?:noodles|mie|mi|ramen|pasta|spaghetti)$/i, mealType: "noodles" },
+    { pattern: /^(?:soup|sup|soto)$/i, mealType: "soup" },
+    { pattern: /^(?:smoothie|smoothie\s*bowl|jus)$/i, mealType: "smoothie" },
+    { pattern: /^(?:wrap|burrito|taco)$/i, mealType: "wrap" }
+  ];
+  for (const { pattern, mealType } of genericPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        isGeneric: true,
+        mealType,
+        suggestedOptions: ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"]
+      };
+    }
+  }
+  return { isGeneric: false, mealType: "", suggestedOptions: [] };
+}
 function estimateMealNutritionDeterministic(input) {
   const debugLogs = [];
   debugLogs.push(`[NutritionEngine] Raw input: "${input}"`);
+  const genericCheck = isGenericMealInput(input);
   const rawItems = splitFoodItems(input);
   debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
   const items = [];
-  let sumCalories = 0;
   let sumProtein = 0;
   let sumCarbs = 0;
   let sumFat = 0;
@@ -43775,10 +43893,13 @@ function estimateMealNutritionDeterministic(input) {
   let sumSugar = 0;
   let totalVolumeMl = 0;
   let isHydration = false;
+  let hasUserProvidedPortion = false;
   for (const rawItem of rawItems) {
     const itemNutr = calculateSingleItemNutrition(rawItem);
     items.push(itemNutr);
-    sumCalories += Number(itemNutr.calories) || 0;
+    if (itemNutr.portion_type === "user_provided") {
+      hasUserProvidedPortion = true;
+    }
     sumProtein += Number(itemNutr.protein) || 0;
     sumCarbs += Number(itemNutr.carbs) || 0;
     sumFat += Number(itemNutr.fat) || 0;
@@ -43792,37 +43913,41 @@ function estimateMealNutritionDeterministic(input) {
       `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.display_unit || itemNutr.estimated_weight_grams + "g"} | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
     );
   }
-  const totalProtein = Math.round(sumProtein * 10) / 10;
-  const totalCarbs = Math.round(sumCarbs * 10) / 10;
-  const totalFat = Math.round(sumFat * 10) / 10;
-  const totalFiber = Math.round(sumFiber * 10) / 10;
-  const totalSugar = Math.round(sumSugar * 10) / 10;
-  const totalCalories = Math.round(sumCalories);
-  const validatedProtein = Math.round(items.reduce((s, it) => s + (Number(it.protein) || 0), 0) * 10) / 10;
-  const validatedCarbs = Math.round(items.reduce((s, it) => s + (Number(it.carbs) || 0), 0) * 10) / 10;
-  const validatedFat = Math.round(items.reduce((s, it) => s + (Number(it.fat) || 0), 0) * 10) / 10;
-  const validatedFiber = Math.round(items.reduce((s, it) => s + (Number(it.fiber) || 0), 0) * 10) / 10;
-  const validatedSugar = Math.round(items.reduce((s, it) => s + (Number(it.sugar) || 0), 0) * 10) / 10;
-  const validatedCalories = Math.round(items.reduce((s, it) => s + (Number(it.calories) || 0), 0));
+  const validatedProtein = Math.round(sumProtein * 10) / 10;
+  const validatedCarbs = Math.round(sumCarbs * 10) / 10;
+  const validatedFat = Math.round(sumFat * 10) / 10;
+  const validatedFiber = Math.round(sumFiber * 10) / 10;
+  const validatedSugar = Math.round(sumSugar * 10) / 10;
+  const validatedCalories = Math.round(validatedProtein * 4 + validatedCarbs * 4 + validatedFat * 9);
   debugLogs.push(
-    `[NutritionEngine] EXACT SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
+    `[NutritionEngine] ATWATER SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
   );
   const cleanTitle = items.length === 1 ? items[0].normalized_food_name : items.map((i) => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
-  const dynamicPortionNote = items.length === 1 ? "1 detected food item" : `${items.length} detected food items`;
+  const dynamicPortionNote = items.length === 1 ? "1 meal detected" : `${items.length} food items detected`;
+  const explicitGramMatch = input.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
+  const portionDisplayLabel = explicitGramMatch ? `Portion: ${parseFloat(explicitGramMatch[1].replace(",", "."))} g` : hasUserProvidedPortion ? "Portion: User provided" : "Portion: Estimated";
+  const confidence = genericCheck.isGeneric ? "low" : hasUserProvidedPortion || items.some((i) => i.confidence === "high") ? "high" : "medium";
   return {
-    foodName: cleanTitle,
+    foodName: input.trim() || cleanTitle,
     calories: validatedCalories,
     protein: validatedProtein,
     carbs: validatedCarbs,
     fat: validatedFat,
     fiber: validatedFiber,
     sugar: validatedSugar,
+    sodium: void 0,
+    // Unknown sodium is kept as undefined (rendered as "Not estimated" in UI)
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
     portionNote: dynamicPortionNote,
     items,
     calculatedFromItems: true,
+    confidence,
+    needsClarification: genericCheck.isGeneric,
+    clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : void 0,
+    suggestedOptions: genericCheck.suggestedOptions,
+    portionDisplayLabel,
     debugLog: debugLogs
   };
 }
@@ -43831,7 +43956,25 @@ function buildGeminiNutritionPrompt(cleanText) {
 TUGAS WAJIB: Lakukan analisis Bottom-Up Nutrition Estimation untuk input makanan/minuman berikut:
 "${cleanText}"
 
-IKUTI 6 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
+0. PERIKSA APAKAH INI MAKANAN/MINUMAN:
+   - Jika input adalah barang elektronik (laptop, komputer, hp, mouse), perabotan (meja, kursi), kendaraan, pakaian, atau hal lain yang BUKAN MAKANAN/MINUMAN:
+     Keluarkan JSON:
+     {
+       "isFood": false,
+       "foodName": "${cleanText}",
+       "calories": 0,
+       "protein": 0,
+       "carbs": 0,
+       "fat": 0,
+       "fiber": 0,
+       "sugar": 0,
+       "isHydration": false,
+       "volumeMl": 0,
+       "mealType": "snack",
+       "portionNote": "Bukan makanan atau minuman",
+       "items": []
+     }
 1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
    Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
@@ -43918,12 +44061,328 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 }`;
 }
 
+// services/cardGenerator.ts
+var GYMBUDDY_LOGO_SVG = `
+<g transform="scale(0.55)">
+  <path d="M30.6 32.0694L34.2 27.7639H46.6L39.8 38.0972L26.6 44.9861L36.6 32.0694H30.6Z" fill="#C1F617" />
+  <path d="M51 17H27C25.9333 17 23.4 17.775 21.8 20.875C20.2 23.975 15.2667 34.5093 13 39.3889H25L21 48L23.4 46.7083L32.6 34.2222H22.6C22.0667 34.3657 21.24 34.1361 22.2 32.0694C23.16 30.0028 25 25.7546 25.8 23.8889C26.0667 23.3148 26.84 22.1667 27.8 22.1667H38.6L35.8 26.0417H43.4L51 17Z" fill="white" />
+</g>
+`;
+var INTER_GLYPHS = {
+  // Numbers
+  "0": "M 50 12 C 24 12 12 32 12 60 C 12 88 24 108 50 108 C 76 108 88 88 88 60 C 88 32 76 12 50 12 Z M 50 28 C 66 28 70 44 70 60 C 70 76 66 92 50 92 C 34 92 30 76 30 60 C 30 44 34 28 50 28 Z",
+  "1": "M 32 12 L 56 12 L 56 108 L 32 108 Z M 16 34 L 32 12 L 56 12 L 16 34 Z",
+  "2": "M 14 36 C 14 18 30 12 50 12 C 72 12 86 24 86 42 C 86 60 62 76 40 92 L 86 92 L 86 108 L 14 108 L 14 92 L 48 58 C 62 46 68 40 68 34 C 68 26 60 24 50 24 C 40 24 32 30 32 38 Z",
+  "3": "M 16 12 L 84 12 L 84 28 L 48 50 C 54 48 60 48 66 48 C 82 48 88 60 88 78 C 88 96 74 108 50 108 C 24 108 12 94 12 76 L 30 76 C 30 88 38 94 50 94 C 60 94 68 88 68 78 C 68 66 60 62 48 62 L 34 62 L 34 46 L 58 26 L 16 26 Z",
+  "4": "M 58 12 L 78 12 L 78 108 L 58 108 L 58 84 L 10 84 L 10 68 L 54 12 L 58 12 Z M 30 68 L 58 68 L 58 32 Z",
+  "5": "M 18 12 L 82 12 L 82 28 L 36 28 L 36 46 C 44 42 52 42 62 42 C 78 42 88 54 88 76 C 88 96 76 108 50 108 C 24 108 14 94 14 76 L 32 76 C 32 88 40 94 50 94 C 60 94 68 86 68 76 C 68 64 60 58 48 58 C 40 58 32 62 26 66 L 18 56 Z",
+  "6": "M 50 12 C 72 12 84 28 86 42 L 68 42 C 66 30 60 26 50 26 C 36 26 30 40 30 60 C 36 50 46 44 58 44 C 76 44 88 58 88 78 C 88 96 76 108 50 108 C 24 108 12 90 12 60 C 12 30 26 12 50 12 Z M 50 60 C 40 60 30 68 30 78 C 30 88 40 94 50 94 C 60 94 68 88 68 78 C 68 68 60 60 50 60 Z",
+  "7": "M 14 12 L 86 12 L 86 28 L 46 108 L 24 108 L 64 28 L 14 28 Z",
+  "8": "M 50 12 C 68 12 82 24 82 38 C 82 50 72 58 62 62 C 74 66 86 76 86 90 C 86 102 72 108 50 108 C 28 108 14 102 14 90 C 14 76 26 66 38 62 C 28 58 18 50 18 38 C 18 24 32 12 50 12 Z M 50 26 C 38 26 34 32 34 38 C 34 44 38 50 50 50 C 62 50 66 44 66 38 C 66 32 62 26 50 26 Z M 50 62 C 36 62 32 68 32 78 C 32 86 38 94 50 94 C 62 94 68 86 68 78 C 68 68 64 62 50 62 Z",
+  "9": "M 50 108 C 28 108 16 92 14 78 L 32 78 C 34 90 40 94 50 94 C 64 94 70 80 70 60 C 64 70 54 76 42 76 C 24 76 12 62 12 42 C 12 24 24 12 50 12 C 76 12 88 30 88 60 C 88 90 74 108 50 108 Z M 50 26 C 40 26 32 34 32 44 C 32 54 40 60 50 60 C 60 60 68 54 68 44 C 68 34 60 26 50 26 Z",
+  // Uppercase Letters
+  "A": "M 50 12 L 88 108 L 66 108 L 56 80 L 44 80 L 34 108 L 12 108 Z M 50 36 L 42 66 L 58 66 Z",
+  "B": "M 18 12 L 56 12 C 74 12 84 22 84 38 C 84 48 78 56 66 60 C 80 64 88 74 88 88 C 88 102 76 108 56 108 L 18 108 Z M 38 28 L 38 52 L 54 52 C 62 52 66 46 66 38 C 66 30 62 28 54 28 Z M 38 66 L 38 92 L 56 92 C 64 92 68 86 68 78 C 68 70 64 66 56 66 Z",
+  "C": "M 80 34 C 74 20 64 12 48 12 C 24 12 14 32 14 60 C 14 88 24 108 48 108 C 64 108 74 100 80 86 L 64 78 C 60 88 56 92 48 92 C 34 92 30 76 30 60 C 30 44 34 28 48 28 C 56 28 60 32 64 42 Z",
+  "D": "M 18 12 L 52 12 C 74 12 86 32 86 60 C 86 88 74 108 52 108 L 18 108 Z M 38 28 L 38 92 L 50 92 C 64 92 68 76 68 60 C 68 44 64 28 50 28 Z",
+  "E": "M 18 12 L 82 12 L 82 28 L 38 28 L 38 52 L 76 52 L 76 68 L 38 68 L 38 92 L 82 92 L 82 108 L 18 108 Z",
+  "F": "M 18 12 L 82 12 L 82 28 L 38 28 L 38 52 L 76 52 L 76 68 L 38 68 L 38 108 L 18 108 Z",
+  "G": "M 80 34 C 74 20 64 12 48 12 C 24 12 14 32 14 60 C 14 88 24 108 48 108 C 68 108 80 96 84 76 L 48 76 L 48 60 L 86 60 L 86 92 C 78 102 66 108 48 108 C 24 108 14 88 14 60 C 14 32 24 12 48 12 C 64 12 74 20 80 34 Z",
+  "H": "M 18 12 L 38 12 L 38 52 L 62 52 L 62 12 L 82 12 L 82 108 L 62 108 L 62 68 L 38 68 L 38 108 L 18 108 Z",
+  "I": "M 24 12 L 44 12 L 44 108 L 24 108 Z",
+  "J": "M 58 12 L 78 12 L 78 84 C 78 100 68 108 48 108 C 28 108 18 100 16 86 L 34 80 C 36 88 40 92 48 92 C 56 92 60 88 60 80 Z",
+  "K": "M 18 12 L 38 12 L 38 54 L 62 12 L 86 12 L 50 58 L 88 108 L 64 108 L 38 70 L 38 108 L 18 108 Z",
+  "L": "M 18 12 L 38 12 L 38 92 L 82 92 L 82 108 L 18 108 Z",
+  "M": "M 16 12 L 38 12 L 50 60 L 62 12 L 84 12 L 84 108 L 66 108 L 66 42 L 54 88 L 46 88 L 34 42 L 34 108 L 16 108 Z",
+  "N": "M 18 12 L 38 12 L 64 74 L 64 12 L 82 12 L 82 108 L 62 108 L 36 46 L 36 108 L 18 108 Z",
+  "O": "M 50 12 C 24 12 14 32 14 60 C 14 88 24 108 50 108 C 76 108 86 88 86 60 C 86 32 76 12 50 12 Z M 50 28 C 64 28 68 44 68 60 C 68 76 64 92 50 92 C 36 92 32 76 32 60 C 32 44 36 28 50 28 Z",
+  "P": "M 18 12 L 54 12 C 74 12 84 24 84 44 C 84 64 74 74 54 74 L 38 74 L 38 108 L 18 108 Z M 38 28 L 38 58 L 52 58 C 62 58 66 52 66 44 C 66 36 62 28 52 28 Z",
+  "Q": "M 50 12 C 24 12 14 32 14 60 C 14 88 24 108 50 108 C 62 108 72 102 78 92 L 68 80 C 64 88 58 92 50 92 C 36 92 32 76 32 60 C 32 44 36 28 50 28 C 64 28 68 44 68 60 C 68 66 66 72 62 78 L 78 94 C 84 84 86 72 86 60 C 86 32 76 12 50 12 Z M 66 84 L 84 108 L 72 114 L 56 90 Z",
+  "R": "M 18 12 L 54 12 C 74 12 84 24 84 42 C 84 56 76 66 60 70 L 88 108 L 64 108 L 42 74 L 38 74 L 38 108 L 18 108 Z M 38 28 L 38 58 L 52 58 C 62 58 66 52 66 42 C 66 32 62 28 52 28 Z",
+  "S": "M 78 36 C 72 20 62 12 48 12 C 28 12 18 22 18 36 C 18 50 28 58 48 64 C 64 68 70 74 70 82 C 70 92 60 94 50 94 C 38 94 30 88 26 78 L 10 86 C 16 102 30 108 50 108 C 72 108 86 98 86 82 C 86 68 74 58 54 52 C 38 48 34 44 34 36 C 34 28 40 24 48 24 C 56 24 64 28 68 38 Z",
+  "T": "M 10 12 L 90 12 L 90 28 L 58 28 L 58 108 L 42 108 L 42 28 L 10 28 Z",
+  "U": "M 18 12 L 38 12 L 38 76 C 38 88 42 92 50 92 C 58 92 62 88 62 76 L 62 12 L 82 12 L 82 76 C 82 98 72 108 50 108 C 28 108 18 98 18 76 Z",
+  "V": "M 14 12 L 34 12 L 50 82 L 66 12 L 86 12 L 60 108 L 40 108 Z",
+  "W": "M 12 12 L 30 12 L 42 74 L 50 30 L 58 74 L 70 12 L 88 12 L 76 108 L 60 108 L 50 62 L 40 108 L 24 108 Z",
+  "X": "M 16 12 L 38 12 L 50 48 L 62 12 L 84 12 L 62 58 L 86 108 L 64 108 L 50 72 L 36 108 L 14 108 L 38 58 Z",
+  "Y": "M 14 12 L 36 12 L 50 50 L 64 12 L 86 12 L 58 66 L 58 108 L 42 108 L 42 66 Z",
+  "Z": "M 18 12 L 82 12 L 82 28 L 38 92 L 82 92 L 82 108 L 18 108 L 18 92 L 62 28 L 18 28 Z",
+  // Lowercase Letters
+  "a": "M 48 42 C 28 42 16 54 16 76 C 16 98 28 108 48 108 C 58 108 66 104 70 96 L 70 108 L 86 108 L 86 42 L 70 42 L 70 54 C 66 46 58 42 48 42 Z M 52 56 C 64 56 70 64 70 76 C 70 86 64 94 52 94 C 40 94 32 86 32 76 C 32 64 40 56 52 56 Z",
+  "b": "M 18 12 L 34 12 L 34 54 C 40 46 48 42 58 42 C 76 42 86 56 86 76 C 86 98 76 108 58 108 C 48 108 40 104 34 96 L 34 108 L 18 108 Z M 52 56 C 40 56 34 64 34 76 C 34 86 40 94 52 94 C 64 94 70 86 70 76 C 70 64 64 56 52 56 Z",
+  "c": "M 74 58 C 70 48 62 42 50 42 C 28 42 16 54 16 76 C 16 98 28 108 50 108 C 62 108 70 102 74 92 L 60 86 C 58 92 54 94 48 94 C 38 94 32 86 32 76 C 32 64 38 56 48 56 C 54 56 58 60 60 66 Z",
+  "d": "M 70 12 L 86 12 L 86 108 L 70 108 L 70 96 C 66 104 58 108 48 108 C 28 108 16 98 16 76 C 16 56 28 42 48 42 C 58 42 66 46 70 54 Z M 52 56 C 40 56 32 64 32 76 C 32 86 40 94 52 94 C 64 94 70 86 70 76 C 70 64 64 56 52 56 Z",
+  "e": "M 50 42 C 26 42 16 54 16 76 C 16 98 28 108 50 108 C 66 108 74 100 78 88 L 64 82 C 60 88 56 94 48 94 C 38 94 32 86 32 74 L 80 74 C 80 54 70 42 50 42 Z M 32 62 C 34 52 40 48 48 48 C 56 48 64 52 64 62 Z",
+  "f": "M 40 12 C 26 12 18 20 18 34 L 18 42 L 8 42 L 8 56 L 18 56 L 18 108 L 34 108 L 34 56 L 48 56 L 48 42 L 34 42 L 34 32 C 34 26 36 24 42 24 L 48 24 L 48 12 Z",
+  "g": "M 70 42 L 86 42 L 86 98 C 86 118 74 126 54 126 C 36 126 24 118 20 106 L 34 100 C 38 108 44 112 52 112 C 64 112 70 106 70 96 L 70 92 C 66 98 58 102 48 102 C 28 102 16 90 16 72 C 16 54 28 42 48 42 C 58 42 66 46 70 54 Z M 52 56 C 40 56 32 64 32 72 C 32 82 40 88 52 88 C 64 88 70 82 70 72 C 70 64 64 56 52 56 Z",
+  "h": "M 18 12 L 34 12 L 34 54 C 40 46 48 42 58 42 C 74 42 82 52 82 68 L 82 108 L 66 108 L 66 70 C 66 60 62 56 52 56 C 42 56 36 62 34 70 L 34 108 L 18 108 Z",
+  "i": "M 18 12 L 34 12 L 34 26 L 18 26 Z M 18 42 L 34 42 L 34 108 L 18 108 Z",
+  "j": "M 32 12 L 48 12 L 48 26 L 32 26 Z M 32 42 L 48 42 L 48 102 C 48 116 40 126 22 126 C 14 126 6 122 2 114 L 16 106 C 20 110 24 112 28 112 C 34 112 36 108 36 100 L 36 42 Z",
+  "k": "M 18 12 L 34 12 L 34 68 L 60 42 L 80 42 L 46 72 L 82 108 L 60 108 L 34 78 L 34 108 L 18 108 Z",
+  "l": "M 18 12 L 34 12 L 34 108 L 18 108 Z",
+  "m": "M 14 42 L 30 42 L 30 54 C 34 46 40 42 48 42 C 58 42 64 48 68 56 C 72 48 80 42 88 42 C 104 42 110 52 110 68 L 110 108 L 94 108 L 94 70 C 94 60 90 56 82 56 C 74 56 70 62 66 70 L 66 108 L 50 108 L 50 70 C 50 60 46 56 38 56 C 34 56 30 60 30 70 L 30 108 L 14 108 Z",
+  "n": "M 18 42 L 34 42 L 34 54 C 40 46 48 42 58 42 C 74 42 82 52 82 68 L 82 108 L 66 108 L 66 70 C 66 60 62 56 52 56 C 42 56 36 62 34 70 L 34 108 L 18 108 Z",
+  "o": "M 50 42 C 26 42 16 54 16 76 C 16 98 26 108 50 108 C 72 108 82 98 82 76 C 82 54 72 42 50 42 Z M 50 56 C 62 56 66 64 66 76 C 66 86 62 94 50 94 C 38 94 34 86 34 76 C 34 64 38 56 50 56 Z",
+  "p": "M 18 42 L 34 42 L 34 54 C 40 46 48 42 58 42 C 76 42 86 56 86 76 C 86 98 76 108 58 108 C 48 108 40 104 34 96 L 34 126 L 18 126 Z M 52 56 C 40 56 34 64 34 76 C 34 86 40 94 52 94 C 64 94 70 86 70 76 C 70 64 64 56 52 56 Z",
+  "q": "M 70 42 L 86 42 L 86 126 L 70 126 L 70 96 C 66 104 58 108 48 108 C 28 108 16 98 16 76 C 16 56 28 42 48 42 C 58 42 66 46 70 54 Z M 52 56 C 40 56 32 64 32 76 C 32 86 40 94 52 94 C 64 94 70 86 70 76 C 70 64 64 56 52 56 Z",
+  "r": "M 18 42 L 34 42 L 34 58 C 38 48 46 42 56 42 L 64 42 L 64 58 L 52 58 C 42 58 36 64 34 74 L 34 108 L 18 108 Z",
+  "s": "M 70 56 C 64 46 56 42 46 42 C 30 42 20 50 20 62 C 20 72 28 78 44 82 C 58 86 64 90 64 96 C 64 102 56 106 48 106 C 36 106 30 100 26 92 L 12 98 C 16 110 28 116 48 116 C 68 116 80 108 80 94 C 80 82 72 74 54 70 C 40 66 34 62 34 56 C 34 50 40 46 48 46 C 54 46 60 50 64 58 Z",
+  "t": "M 18 22 L 34 22 L 34 42 L 48 42 L 48 56 L 34 56 L 34 94 C 34 98 36 100 42 100 L 48 100 L 48 112 C 40 114 32 114 26 110 C 20 104 18 98 18 90 L 18 56 L 8 56 L 8 42 L 18 42 Z",
+  "u": "M 18 42 L 34 42 L 34 80 C 34 90 38 94 48 94 C 58 94 64 90 68 80 L 68 42 L 84 42 L 84 108 L 68 108 L 68 96 C 64 104 56 108 46 108 C 26 108 18 98 18 80 Z",
+  "v": "M 12 42 L 30 42 L 48 92 L 66 42 L 84 42 L 56 108 L 40 108 Z",
+  "w": "M 10 42 L 26 42 L 38 90 L 48 52 L 58 90 L 70 42 L 86 42 L 74 108 L 60 108 L 50 72 L 40 108 L 26 108 Z",
+  "x": "M 12 42 L 30 42 L 48 66 L 66 42 L 84 42 L 58 74 L 84 108 L 66 108 L 48 82 L 30 108 L 12 108 L 38 74 Z",
+  "y": "M 12 42 L 30 42 L 48 80 L 66 42 L 84 42 L 56 102 C 50 116 42 126 24 126 C 14 126 8 122 2 118 L 12 106 C 16 110 20 112 26 112 C 34 112 40 106 44 98 L 12 42 Z",
+  "z": "M 16 42 L 78 42 L 78 56 L 36 94 L 80 94 L 80 108 L 16 108 L 16 94 L 58 56 L 16 56 Z",
+  // Punctuation & Symbols
+  ".": "M 0 94 L 16 94 L 16 108 L 0 108 Z",
+  ",": "M 4 94 L 18 94 L 10 118 L 0 110 Z",
+  ":": "M 0 46 L 16 46 L 16 60 L 0 60 Z M 0 94 L 16 94 L 16 108 L 0 108 Z",
+  "\xB7": "M 0 52 L 16 52 L 16 68 L 0 68 Z",
+  "-": "M 0 58 L 44 58 L 44 70 L 0 70 Z",
+  "+": "M 24 30 L 42 30 L 42 50 L 62 50 L 62 68 L 42 68 L 42 88 L 24 88 L 24 68 L 4 68 L 4 50 L 24 50 Z",
+  "%": "M 18 18 C 28 18 28 36 18 36 C 8 36 8 18 18 18 Z M 54 68 C 64 68 64 86 54 86 C 44 86 44 68 54 68 Z M 62 14 L 72 20 L 18 92 L 8 86 Z",
+  "/": "M 54 12 L 72 12 L 18 108 L 0 108 Z",
+  "(": "M 36 12 C 12 44 12 76 36 108 L 20 108 C -4 76 -4 44 20 12 Z",
+  ")": "M 0 12 C 24 44 24 76 0 108 L 16 108 C 40 76 40 44 16 12 Z",
+  "'": "M 8 12 L 22 12 L 14 34 L 4 28 Z",
+  '"': "M 4 12 L 18 12 L 12 34 L 0 28 Z M 24 12 L 38 12 L 32 34 L 20 28 Z",
+  "!": "M 6 12 L 20 12 L 16 70 L 8 70 Z M 6 94 L 20 94 L 20 108 L 6 108 Z",
+  " ": " "
+};
+function renderInterVectorText(text, x, y, height, fill = "#FFFFFF", letterSpacing = 0.08) {
+  const str = String(text || "");
+  const scale = height / 120;
+  const standardWidth = 74 * scale;
+  let currentX = x;
+  let paths = "";
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === " ") {
+      currentX += standardWidth * 0.45;
+      continue;
+    }
+    const glyph = INTER_GLYPHS[char];
+    let glyphWidth = standardWidth;
+    if (char === "i" || char === "l" || char === "." || char === ":" || char === "\xB7" || char === "," || char === "!" || char === "'") {
+      glyphWidth = 22 * scale;
+    } else if (char === "m" || char === "w" || char === "M" || char === "W") {
+      glyphWidth = 100 * scale;
+    } else if (char === "r" || char === "t" || char === "f" || char === "j") {
+      glyphWidth = 46 * scale;
+    } else if (char >= "a" && char <= "z") {
+      glyphWidth = 66 * scale;
+    } else if (char >= "A" && char <= "Z") {
+      glyphWidth = 76 * scale;
+    }
+    if (glyph && glyph.trim()) {
+      paths += `<path d="${glyph}" transform="translate(${currentX.toFixed(1)}, ${y.toFixed(1)}) scale(${scale.toFixed(4)})" fill="${fill}"/>
+`;
+    }
+    currentX += glyphWidth + standardWidth * letterSpacing;
+  }
+  return paths;
+}
+function calculateInterTextWidth(text, height, letterSpacing = 0.08) {
+  const str = String(text || "");
+  const scale = height / 120;
+  const standardWidth = 74 * scale;
+  let w = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === " ") {
+      w += standardWidth * 0.45;
+      continue;
+    }
+    let glyphWidth = standardWidth;
+    if (char === "i" || char === "l" || char === "." || char === ":" || char === "\xB7" || char === "," || char === "!" || char === "'") {
+      glyphWidth = 22 * scale;
+    } else if (char === "m" || char === "w" || char === "M" || char === "W") {
+      glyphWidth = 100 * scale;
+    } else if (char === "r" || char === "t" || char === "f" || char === "j") {
+      glyphWidth = 46 * scale;
+    } else if (char >= "a" && char <= "z") {
+      glyphWidth = 66 * scale;
+    } else if (char >= "A" && char <= "Z") {
+      glyphWidth = 76 * scale;
+    }
+    w += glyphWidth + standardWidth * letterSpacing;
+  }
+  return w;
+}
+function generateNutritionCardSvg(data) {
+  const rawTitle = (data.foodName || "Cheetos Rasa Jagung Bakar Keju (1 Bungkus)").trim();
+  const maxCharsPerLine = 34;
+  let titleLine1 = rawTitle;
+  let titleLine2 = "";
+  if (rawTitle.length > maxCharsPerLine) {
+    const words = rawTitle.split(/\s+/);
+    titleLine1 = "";
+    titleLine2 = "";
+    for (const w of words) {
+      if ((titleLine1 + " " + w).trim().length <= maxCharsPerLine && !titleLine2) {
+        titleLine1 = (titleLine1 + " " + w).trim();
+      } else {
+        titleLine2 = (titleLine2 + " " + w).trim();
+      }
+    }
+  }
+  const hasLine2 = Boolean(titleLine2);
+  const protein = Math.round(Number(data.protein) || 0);
+  const carbs = Math.round(Number(data.carbs) || 0);
+  const fat = Math.round(Number(data.fat) || 0);
+  const sodium = Math.round(Number(data.sodium) || 0);
+  const macroCalcCalories = protein * 4 + carbs * 4 + fat * 9;
+  const calories = macroCalcCalories > 0 ? macroCalcCalories : Math.round(Number(data.calories)) || 0;
+  const mealType = data.mealType || "Lunch";
+  const dateStr = data.dateStr || (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const targetCal = Math.round(Number(data.dailyTargetCalories) || 1966);
+  const consumedCal = Math.round(Number(data.consumedTodayCalories) || calories);
+  const remainingCal = targetCal - consumedCal;
+  const isOver = remainingCal < 0;
+  const statusText = isOver ? `${Math.abs(remainingCal).toLocaleString("en-US")} kcal over your goal today` : `${remainingCal.toLocaleString("en-US")} kcal remaining today`;
+  const statusColor = isOver ? "#F87171" : "#4ADE80";
+  const statusDotColor = isOver ? "#EF4444" : "#22C55E";
+  let insightText = (data.insight || "").trim();
+  if (!insightText) {
+    if (protein >= 25) {
+      insightText = "Great protein boost! Excellent for muscle recovery and satiety.";
+    } else if (carbs >= 50) {
+      insightText = "High in carbs. Consider pairing with protein for a balanced day.";
+    } else if (fat >= 20) {
+      insightText = "Rich in healthy energy. Balance with light fiber for dinner.";
+    } else {
+      insightText = "Well balanced meal. Keep staying on track with your water and daily goal.";
+    }
+  }
+  const headerY = 38;
+  const titleY = headerY + 44;
+  const titleHeight = hasLine2 ? 58 : 32;
+  const photoY = titleY + titleHeight + 14;
+  const photoHeight = 460;
+  const calorieY = photoY + photoHeight + 28;
+  const macroY = calorieY + 86;
+  const sodiumY = macroY + 74;
+  const insightY = sodiumY + 54;
+  const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="720" height="1140" viewBox="0 0 720 1140">
+  <defs>
+    <!-- Deep Obsidian Slate Canvas -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="50%" stop-color="#070A0F"/>
+      <stop offset="100%" stop-color="#030508"/>
+    </linearGradient>
+
+    <!-- Subtle Container Gradient -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <clipPath id="foodPhotoClip">
+      <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="16" ry="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="720" height="1140" fill="url(#bgGrad)"/>
+
+  <!-- 1. Header: Official GymBuddy Logo & Metadata -->
+  <g id="header" transform="translate(40, ${headerY})">
+    <!-- Official GymBuddy Logo (Clean, subtle, no pill/badge) -->
+    <g transform="translate(0, -6)">
+      ${GYMBUDDY_LOGO_SVG}
+    </g>
+    ${renderInterVectorText("GymBuddy", 44, 2, 16, "#F8FAFC")}
+
+    <!-- Meal Metadata on Right: Lunch \xB7 Jun 21 -->
+    ${renderInterVectorText(`${mealType} \xB7 ${dateStr}`, 680 - 40 - calculateInterTextWidth(`${mealType} \xB7 ${dateStr}`, 14), 4, 14, "#64748B")}
+  </g>
+
+  <!-- 2. Meal Title (Inter SemiBold, Multi-line support) -->
+  <g id="mealTitle">
+    ${renderInterVectorText(titleLine1, 40, titleY, 24, "#F8FAFC")}
+    ${hasLine2 ? renderInterVectorText(titleLine2, 40, titleY + 28, 22, "#CBD5E1") : ""}
+  </g>
+
+  <!-- 3. Food Photo (Portrait ~9:16, 16px Rounded Corners, Focal Point) -->
+  <g id="foodPhoto">
+    <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="16" ry="16" fill="#1E293B"/>
+    <image href="${photoHref}" xlink:href="${photoHref}" x="40" y="${photoY}" width="640" height="${photoHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
+  </g>
+
+  <!-- 4. Calorie Section (Primary Hero Number in Orange Accent + Goal Context + Status) -->
+  <g id="calorieSection" transform="translate(40, ${calorieY})">
+    <!-- Primary Calorie Number -->
+    ${renderInterVectorText(`${calories}`, 0, 0, 48, "#FF6B00")}
+    ${renderInterVectorText("kcal", calculateInterTextWidth(`${calories}`, 48) + 8, 14, 24, "#94A3B8")}
+
+    <!-- Goal Context Subtitle -->
+    ${renderInterVectorText(`of your ${targetCal.toLocaleString("en-US")} kcal daily goal`, 0, 52, 14, "#64748B")}
+
+    <!-- Subtle Daily Calorie Status Indicator on the Right -->
+    <g transform="translate(360, 10)">
+      <circle cx="8" cy="14" r="4" fill="${statusDotColor}"/>
+      ${renderInterVectorText(statusText, 20, 4, 13, statusColor)}
+    </g>
+  </g>
+
+  <!-- Subtle Thin Divider Line -->
+  <line x1="40" y1="${calorieY + 76}" x2="680" y2="${calorieY + 76}" stroke="#1E293B" stroke-width="1"/>
+
+  <!-- 5. Macronutrients (Clean 3-column horizontal layout, Color Indicators) -->
+  <g id="macroSection" transform="translate(40, ${macroY})">
+    <!-- Protein -->
+    <g transform="translate(0, 0)">
+      <circle cx="6" cy="9" r="4" fill="#F59E0B"/>
+      ${renderInterVectorText("Protein", 18, 0, 14, "#94A3B8")}
+      ${renderInterVectorText(`${protein} g`, 18, 22, 24, "#F8FAFC")}
+    </g>
+
+    <!-- Carbs -->
+    <g transform="translate(240, 0)">
+      <circle cx="6" cy="9" r="4" fill="#EC4899"/>
+      ${renderInterVectorText("Carbs", 18, 0, 14, "#94A3B8")}
+      ${renderInterVectorText(`${carbs} g`, 18, 22, 24, "#F8FAFC")}
+    </g>
+
+    <!-- Fat -->
+    <g transform="translate(480, 0)">
+      <circle cx="6" cy="9" r="4" fill="#06B6D4"/>
+      ${renderInterVectorText("Fat", 18, 0, 14, "#94A3B8")}
+      ${renderInterVectorText(`${fat} g`, 18, 22, 24, "#F8FAFC")}
+    </g>
+  </g>
+
+  <!-- 6. Sodium (Compact, Secondary, Visually Quiet) -->
+  <g id="sodiumSection" transform="translate(40, ${sodiumY})">
+    <rect x="0" y="0" width="640" height="40" rx="10" fill="url(#cardGrad)"/>
+    <circle cx="18" cy="20" r="3" fill="#64748B"/>
+    ${renderInterVectorText("Sodium", 28, 11, 13, "#94A3B8")}
+    ${renderInterVectorText(`${sodium || 230} mg`, 90, 10, 14, "#CBD5E1")}
+    ${renderInterVectorText("2,300 mg daily limit", 476, 11, 12, "#64748B")}
+  </g>
+
+  <!-- 7. GymBuddy Insight (Human, Actionable Coaching, Subtle) -->
+  <g id="insightSection" transform="translate(40, ${insightY})">
+    <rect x="0" y="0" width="640" height="62" rx="12" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+    <!-- Clean coaching tip bullet -->
+    <circle cx="24" cy="31" r="5" fill="#C1F617"/>
+    ${renderInterVectorText(insightText, 42, 21, 13, "#94A3B8")}
+  </g>
+</svg>`;
+}
+
 // services/db.ts
 var import_mongodb = require("mongodb");
 
 // services/firestore.ts
 var import_firestore = require("@google-cloud/firestore");
 var import_firebase_admin = __toESM(require("firebase-admin"), 1);
+var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"), 1);
 var firestoreInstance = null;
 var isFirebaseInitialized = false;
 function getFirestore() {
@@ -43931,7 +44390,25 @@ function getFirestore() {
   try {
     const firebaseAdmin = typeof import_firebase_admin.default === "function" ? import_firebase_admin.default : import_firebase_admin.default?.default || import_firebase_admin.default;
     const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "gen-lang-client-0130714675";
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    if (!serviceAccountJson) {
+      const candidates = [
+        import_path.default.join(process.cwd(), "service-account.json"),
+        import_path.default.join(process.cwd(), "serviceAccountKey.json"),
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ? import_path.default.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS) : ""
+      ].filter(Boolean);
+      for (const p of candidates) {
+        if (p && import_fs.default.existsSync(p)) {
+          try {
+            serviceAccountJson = import_fs.default.readFileSync(p, "utf8");
+            console.log(`[Firestore] Loaded Service Account JSON from: ${p} \u2705`);
+            break;
+          } catch (e) {
+          }
+        }
+      }
+    }
+    const databaseId = process.env.FIRESTORE_DATABASE_ID || "gymbuddy";
     if (serviceAccountJson) {
       const parsedCredentials = typeof serviceAccountJson === "string" && serviceAccountJson.startsWith("{") ? JSON.parse(serviceAccountJson) : serviceAccountJson;
       if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
@@ -43941,20 +44418,17 @@ function getFirestore() {
         });
         isFirebaseInitialized = true;
       }
-      firestoreInstance = firebaseAdmin.firestore() || new import_firestore.Firestore({ projectId: projectId || parsedCredentials.project_id });
-      console.log("[Firestore] Initialized via Service Account credentials \u2705");
+      firestoreInstance = new import_firestore.Firestore({
+        projectId: projectId || parsedCredentials.project_id,
+        databaseId,
+        credentials: parsedCredentials
+      });
+      console.log(`[Firestore] Initialized & authenticated via Service Account for DB: "${databaseId}" \u2705`);
       return firestoreInstance;
     }
     if (projectId) {
-      if (!isFirebaseInitialized && firebaseAdmin?.apps && firebaseAdmin.apps.length === 0) {
-        try {
-          firebaseAdmin.initializeApp({ projectId });
-          isFirebaseInitialized = true;
-        } catch (e) {
-        }
-      }
-      firestoreInstance = new import_firestore.Firestore({ projectId });
-      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} \u2705`);
+      firestoreInstance = new import_firestore.Firestore({ projectId, databaseId });
+      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") \u2705`);
       return firestoreInstance;
     }
     firestoreInstance = new import_firestore.Firestore();
@@ -43969,74 +44443,357 @@ function getFirestore() {
     }
   }
 }
+function getPhoneVariations(input) {
+  if (!input) return [];
+  const clean2 = input.replace(/[^\d+a-zA-Z_]/g, "");
+  const digits = input.replace(/\D/g, "");
+  const variations = /* @__PURE__ */ new Set([input, clean2]);
+  if (digits) {
+    variations.add(digits);
+    if (digits.startsWith("0")) {
+      const w62 = "62" + digits.substring(1);
+      variations.add(w62);
+      variations.add("+" + w62);
+      variations.add(`usr_${digits}`);
+      variations.add(`usr_${w62}`);
+    } else if (digits.startsWith("62")) {
+      const w0 = "0" + digits.substring(2);
+      variations.add(w0);
+      variations.add("+" + digits);
+      variations.add(`usr_${digits}`);
+      variations.add(`usr_${w0}`);
+    } else if (digits.startsWith("8")) {
+      const w0 = "0" + digits;
+      const w62 = "62" + digits;
+      variations.add(w0);
+      variations.add(w62);
+      variations.add("+" + w62);
+      variations.add(`usr_${w0}`);
+      variations.add(`usr_${w62}`);
+    }
+  }
+  return Array.from(variations).filter(Boolean);
+}
 async function findUserInFirestore(identifier) {
-  const db = getFirestore();
-  if (!db) return null;
-  const cleanPhone = identifier.replace(/[^\d+a-zA-Z_]/g, "");
-  const directDoc = await db.collection("users").doc(identifier).get();
-  if (directDoc.exists) {
-    return directDoc.data();
+  try {
+    const db = getFirestore();
+    if (!db) return null;
+    const directDoc = await db.collection("users").doc(identifier).get();
+    if (directDoc.exists) {
+      return directDoc.data();
+    }
+    const variations = getPhoneVariations(identifier);
+    for (const v of variations) {
+      if (v !== identifier) {
+        const d = await db.collection("users").doc(v).get();
+        if (d.exists) return d.data();
+      }
+    }
+    const chunkedVariations = variations.slice(0, 10);
+    const querySnap = await db.collection("users").where("phone", "in", chunkedVariations).limit(1).get();
+    if (!querySnap.empty) {
+      return querySnap.docs[0].data();
+    }
+    return null;
+  } catch (e) {
+    console.warn("[Firestore] findUser warning:", e?.message || e);
+    return null;
   }
-  const querySnap = await db.collection("users").where("phone", "in", [identifier, cleanPhone, `usr_${cleanPhone}`]).limit(1).get();
-  if (!querySnap.empty) {
-    return querySnap.docs[0].data();
-  }
-  return null;
 }
 async function saveUserToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  const userId = doc.userId || `usr_${doc.phone}`;
-  const now = /* @__PURE__ */ new Date();
-  await db.collection("users").doc(userId).set({
-    ...doc,
-    userId,
-    updatedAt: now,
-    createdAt: doc.createdAt || now
-  }, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const userId = doc.userId || `usr_${normPhone}`;
+    const now = /* @__PURE__ */ new Date();
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId,
+      updatedAt: now,
+      createdAt: doc.createdAt || now
+    };
+    await db.collection("users").doc(userId).set(payload, { merge: true });
+    await db.collection("users").doc(normPhone).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] saveUser warning:", e?.message || e);
+  }
+}
+async function deleteUserFromFirestore2(phone) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const variations = new Set(getPhoneVariations(phone));
+    const batch = db.batch();
+    for (const v of Array.from(variations)) {
+      batch.delete(db.collection("users").doc(v));
+      batch.delete(db.collection("subscriptions").doc(v));
+    }
+    await batch.commit().catch(() => {
+    });
+    const foodSnap = await db.collection("foodLogs").get();
+    const foodDeletes = [];
+    foodSnap.forEach((doc) => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : pClean.startsWith("8") ? "0" + pClean : pClean;
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || data.userId && variations.has(data.userId)) {
+        foodDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(foodDeletes).catch(() => {
+    });
+    const waterSnap = await db.collection("waterLogs").get();
+    const waterDeletes = [];
+    waterSnap.forEach((doc) => {
+      const data = doc.data();
+      const p = data.phone || "";
+      const pClean = p.replace(/\D/g, "");
+      const pNorm = pClean.startsWith("62") ? "0" + pClean.substring(2) : pClean.startsWith("8") ? "0" + pClean : pClean;
+      if (variations.has(p) || variations.has(pNorm) || pNorm === normPhone || data.userId && variations.has(data.userId)) {
+        waterDeletes.push(doc.ref.delete());
+      }
+    });
+    await Promise.all(waterDeletes).catch(() => {
+    });
+    const mainDocRef = db.collection("appdata").doc("main");
+    const mainSnap = await mainDocRef.get().catch(() => null);
+    if (mainSnap && mainSnap.exists) {
+      const mainData = mainSnap.data() || {};
+      if (mainData.users) {
+        for (const v of Array.from(variations)) {
+          delete mainData.users[v];
+        }
+      }
+      if (mainData.dailyLogs) {
+        for (const k of Object.keys(mainData.dailyLogs)) {
+          if (Array.from(variations).some((v) => k.startsWith(v))) {
+            delete mainData.dailyLogs[k];
+          }
+        }
+      }
+      if (mainData.weeklyProgress) {
+        for (const v of Array.from(variations)) {
+          delete mainData.weeklyProgress[v];
+        }
+      }
+      if (mainData.waterLogs) {
+        for (const v of Array.from(variations)) {
+          delete mainData.waterLogs[v];
+        }
+      }
+      await mainDocRef.set(mainData);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
+  }
 }
 async function getSubscriptionFromFirestore(userIdOrPhone) {
-  const db = getFirestore();
-  if (!db) return null;
-  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
-  const doc = await db.collection("subscriptions").doc(userIdOrPhone).get();
-  if (doc.exists) return doc.data();
-  const snap2 = await db.collection("subscriptions").where("phone", "in", [userIdOrPhone, clean]).limit(1).get();
-  if (!snap2.empty) {
-    return snap2.docs[0].data();
+  try {
+    const db = getFirestore();
+    if (!db) return null;
+    const variations = getPhoneVariations(userIdOrPhone);
+    for (const v of variations) {
+      const doc = await db.collection("subscriptions").doc(v).get();
+      if (doc.exists) return doc.data();
+    }
+    const snap2 = await db.collection("subscriptions").where("phone", "in", variations.slice(0, 10)).limit(1).get();
+    if (!snap2.empty) {
+      return snap2.docs[0].data();
+    }
+    return null;
+  } catch (e) {
+    console.warn("[Firestore] getSubscription warning:", e?.message || e);
+    return null;
   }
-  return null;
 }
 async function saveSubscriptionToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  const docId = doc.userId || `usr_${doc.phone}`;
-  await db.collection("subscriptions").doc(docId).set({
-    ...doc,
-    updatedAt: /* @__PURE__ */ new Date()
-  }, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const docId = doc.userId || `usr_${normPhone}`;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: docId,
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    await db.collection("subscriptions").doc(docId).set(payload, { merge: true });
+    await db.collection("subscriptions").doc(normPhone).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] saveSubscription warning:", e?.message || e);
+  }
 }
 async function getFoodLogsFromFirestore(phone, date) {
-  const db = getFirestore();
-  if (!db) return [];
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const snap2 = await db.collection("foodLogs").where("phone", "in", [phone, clean]).where("date", "==", date).get();
-  const results = snap2.docs.map((d) => d.data());
-  return results.sort((a, b) => {
-    const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return tA - tB;
-  });
+  try {
+    const db = getFirestore();
+    if (!db) return [];
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+    const resultsMap = /* @__PURE__ */ new Map();
+    try {
+      const snap1 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).get();
+      snap1.docs.forEach((d) => {
+        const data = d.data();
+        if (data.id) resultsMap.set(data.id, data);
+      });
+    } catch (err1) {
+      console.warn("[Firestore] Query 1 note:", err1?.message);
+    }
+    if (altPhone !== normPhone) {
+      try {
+        const snap2 = await db.collection("foodLogs").where("phone", "==", altPhone).where("date", "==", date).get();
+        snap2.docs.forEach((d) => {
+          const data = d.data();
+          if (data.id) resultsMap.set(data.id, data);
+        });
+      } catch (err2) {
+        console.warn("[Firestore] Query 2 note:", err2?.message);
+      }
+    }
+    if (resultsMap.size === 0) {
+      try {
+        const snapDate = await db.collection("foodLogs").where("date", "==", date).limit(100).get();
+        snapDate.docs.forEach((d) => {
+          const data = d.data();
+          const dClean = (data.phone || "").replace(/\D/g, "");
+          const dNorm = dClean.startsWith("62") ? "0" + dClean.substring(2) : dClean.startsWith("8") ? "0" + dClean : dClean;
+          if (dNorm === normPhone && data.id) {
+            resultsMap.set(data.id, data);
+          }
+        });
+      } catch (dateErr) {
+      }
+    }
+    const results = Array.from(resultsMap.values());
+    return results.sort((a, b) => {
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tA - tB;
+    });
+  } catch (e) {
+    console.warn("[Firestore] getFoodLogs warning:", e?.message || e);
+    return [];
+  }
 }
 async function insertFoodLogToFirestore(doc) {
-  const db = getFirestore();
-  if (!db) return;
-  await db.collection("foodLogs").doc(doc.id).set(doc, { merge: true });
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: doc.userId || `usr_${normPhone}`
+    };
+    await db.collection("foodLogs").doc(doc.id).set(payload, { merge: true });
+  } catch (e) {
+    console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
+  }
 }
 async function deleteFoodLogFromFirestore(id) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    await db.collection("foodLogs").doc(id).delete();
+  } catch (e) {
+    console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
+  }
+}
+async function deleteAllFoodLogsForDateFromFirestore(phone, date) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+    const snap1 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).get();
+    const batch = db.batch();
+    snap1.docs.forEach((d) => batch.delete(d.ref));
+    if (altPhone !== normPhone) {
+      const snap2 = await db.collection("foodLogs").where("phone", "==", altPhone).where("date", "==", date).get();
+      snap2.docs.forEach((d) => batch.delete(d.ref));
+    }
+    await batch.commit();
+  } catch (e) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
+  }
+}
+async function saveWaterLogToFirestore(doc) {
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const cleanPhone = doc.phone.replace(/\D/g, "");
+    const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+    const payload = {
+      ...doc,
+      phone: normPhone,
+      userId: doc.userId || `usr_${normPhone}`
+    };
+    await db.collection("waterLogs").doc(`${normPhone}_${doc.date}`).set(payload, { merge: true });
+    if (doc.phone !== normPhone) {
+      await db.collection("waterLogs").doc(`${doc.phone}_${doc.date}`).set(payload, { merge: true });
+    }
+  } catch (e) {
+    console.warn("[Firestore] saveWaterLog warning:", e?.message || e);
+  }
+}
+async function saveAppDataToFirestore(appData) {
   const db = getFirestore();
   if (!db) return;
-  await db.collection("foodLogs").doc(id).delete();
+  try {
+    const cleanData = JSON.parse(JSON.stringify(appData));
+    const existingDoc = await db.collection("appdata").doc("main").get().catch(() => null);
+    const existingData = existingDoc && existingDoc.exists ? existingDoc.data() || {} : {};
+    const mergedData = {
+      ...existingData,
+      ...cleanData,
+      users: { ...existingData.users || {}, ...cleanData.users || {} },
+      dailyLogs: { ...existingData.dailyLogs || {}, ...cleanData.dailyLogs || {} },
+      weeklyProgress: { ...existingData.weeklyProgress || {}, ...cleanData.weeklyProgress || {} },
+      waterLogs: { ...existingData.waterLogs || {}, ...cleanData.waterLogs || {} },
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    await db.collection("appdata").doc("main").set(mergedData);
+    console.log("[Firestore] Global appdata snapshot safely merged & saved \u2705");
+  } catch (e) {
+    console.error("[Firestore] saveAppData error:", e?.message || e);
+  }
+}
+async function loadAppDataFromFirestore() {
+  const db = getFirestore();
+  if (!db) return null;
+  try {
+    const doc = await db.collection("appdata").doc("main").get();
+    if (doc.exists) {
+      console.log("[Firestore] Global appdata snapshot loaded \u2705");
+      return doc.data();
+    }
+    return null;
+  } catch (e) {
+    console.error("[Firestore] loadAppData error:", e?.message || e);
+    return null;
+  }
+}
+async function getAllUsersFromFirestore() {
+  const db = getFirestore();
+  if (!db) return [];
+  try {
+    const snap2 = await db.collection("users").get();
+    return snap2.docs.map((d) => d.data());
+  } catch (e) {
+    console.error("[Firestore] getAllUsers error:", e?.message || e);
+    return [];
+  }
 }
 
 // services/db.ts
@@ -44222,7 +44979,7 @@ var memCache = {
   waterLogs: /* @__PURE__ */ new Map()
 };
 async function findUserByPhoneOrId(identifier) {
-  const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean2 = identifier.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
       const firestoreUser = await findUserInFirestore(identifier);
@@ -44235,14 +44992,56 @@ async function findUserByPhoneOrId(identifier) {
     const db = await getDatabase();
     if (db) {
       const found = await db.collection("users").findOne({
-        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
+        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean2 }]
       });
       if (found) return found;
     }
   } catch (e) {
     console.warn("[MongoDB] findUser fallback note:", e?.message || e);
   }
-  return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
+  return memCache.users.get(identifier) || memCache.users.get(clean2) || memCache.users.get(`usr_${clean2}`) || null;
+}
+async function deleteUserDocument(phone) {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const variations = Array.from(/* @__PURE__ */ new Set([
+    phone,
+    normPhone,
+    altPhone,
+    cleanPhone,
+    `+${cleanPhone}`,
+    `usr_${phone}`,
+    `usr_${normPhone}`,
+    `usr_${altPhone}`
+  ])).filter(Boolean);
+  for (const v of variations) {
+    memCache.users.delete(v);
+    memCache.subscriptions.delete(v);
+    memCache.waterLogs.delete(v);
+  }
+  for (const k of Array.from(memCache.foodLogs.keys())) {
+    const kClean = k.replace(/\D/g, "");
+    if (cleanPhone && kClean.includes(cleanPhone) || normPhone && kClean.includes(normPhone) || altPhone && kClean.includes(altPhone) || variations.some((v) => k.includes(v))) {
+      memCache.foodLogs.delete(k);
+    }
+  }
+  try {
+    if (getFirestore()) {
+      await deleteUserFromFirestore2(phone);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteUser warning:", e?.message || e);
+  }
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("users").deleteMany({ $or: [{ phone }, { phone: clean }, { userId: `usr_${clean}` }] });
+      }
+    } catch (e) {
+    }
+  }
 }
 async function saveUserDocument(doc) {
   const userId = doc.userId || `usr_${doc.phone}`;
@@ -44284,7 +45083,7 @@ async function saveUserDocument(doc) {
   }
 }
 async function getUserSubscription(userIdOrPhone) {
-  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean2 = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
       const firestoreSub = await getSubscriptionFromFirestore(userIdOrPhone);
@@ -44304,7 +45103,7 @@ async function getUserSubscription(userIdOrPhone) {
   } catch (e) {
     console.warn("[MongoDB] getSubscription fallback note:", e?.message || e);
   }
-  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean) || null;
+  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean2) || null;
 }
 async function saveUserSubscription(doc) {
   memCache.subscriptions.set(doc.phone, doc);
@@ -44337,8 +45136,8 @@ async function saveUserSubscription(doc) {
   }
 }
 async function getFoodLogsForDate(phone, date) {
-  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean}_${date}`;
+  const clean2 = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean2}_${date}`;
   try {
     if (getFirestore()) {
       const firestoreLogs = await getFoodLogsFromFirestore(phone, date);
@@ -44362,8 +45161,8 @@ async function getFoodLogsForDate(phone, date) {
   return memCache.foodLogs.get(cacheKey) || [];
 }
 async function insertFoodLog(doc) {
-  const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean}_${doc.date}`;
+  const clean2 = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean2}_${doc.date}`;
   const existing = memCache.foodLogs.get(cacheKey) || [];
   const idx = existing.findIndex((m) => m.id === doc.id);
   if (idx >= 0) existing[idx] = doc;
@@ -44410,6 +45209,38 @@ async function deleteFoodLog(id) {
     }
   }
 }
+async function deleteAllFoodLogsForDate(phone, date) {
+  try {
+    if (getFirestore()) {
+      await deleteAllFoodLogsForDateFromFirestore(phone, date);
+    }
+  } catch (e) {
+    console.warn("[Firestore] deleteAllFoodLogsForDate warning:", e?.message || e);
+  }
+}
+async function saveWaterLog(doc) {
+  try {
+    if (getFirestore()) {
+      await saveWaterLogToFirestore(doc);
+    }
+  } catch (e) {
+    console.warn("[Firestore] saveWaterLog warning:", e?.message || e);
+  }
+  if (isMongoDualWriteEnabled()) {
+    try {
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("waterLogs").updateOne(
+          { phone: doc.phone, date: doc.date },
+          { $set: doc },
+          { upsert: true }
+        );
+      }
+    } catch (e) {
+      console.warn("[MongoDB] saveWaterLog warning:", e?.message || e);
+    }
+  }
+}
 
 // services/auth.ts
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
@@ -44439,9 +45270,10 @@ function verifyAuthToken(token) {
 async function requireAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    const legacyPhone = req.params.phone || req.headers["x-user-phone"];
+    const legacyHeader = Array.isArray(req.headers["x-user-phone"]) ? req.headers["x-user-phone"][0] : req.headers["x-user-phone"];
+    const legacyPhone = req.params.phone || legacyHeader;
     if (legacyPhone) {
-      const user = await findUserByPhoneOrId(legacyPhone);
+      const user = await findUserByPhoneOrId(String(legacyPhone));
       if (user) {
         req.user = { userId: user.userId, phone: user.phone };
         return next();
@@ -44527,8 +45359,48 @@ var authRateLimiter = (0, import_express_rate_limit.default)({
 });
 
 // server.ts
+process.on("unhandledRejection", (reason) => {
+  const msg = reason?.message || String(reason);
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning") || msg.includes("All promises were rejected")) {
+    console.warn("[unhandledRejection] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[unhandledRejection] Unhandled async error:", msg.substring(0, 200));
+});
+process.on("uncaughtException", (err) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("NO_ADC_FOUND") || msg.includes("default credentials") || msg.includes("MetadataLookupWarning")) {
+    console.warn("[uncaughtException] Non-fatal GCP auth warning (suppressed):", msg.substring(0, 100));
+    return;
+  }
+  console.error("[uncaughtException] Critical error:", msg.substring(0, 200));
+});
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+async function sendWhatsAppAsync(to, body, customFrom, mediaUrl) {
+  const client2 = getTwilio();
+  if (!client2) {
+    console.warn("[Twilio Client] Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN");
+    return null;
+  }
+  try {
+    const fromPhone = customFrom || process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+    const payload = {
+      from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
+      to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
+      body
+    };
+    if (mediaUrl && (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png") || mediaUrl.endsWith(".webp"))) {
+      payload.mediaUrl = [mediaUrl];
+    }
+    const res = await client2.messages.create(payload);
+    console.log(`[Twilio WA] Sent instant message to ${to}, SID: ${res.sid} \u2705`);
+    return res;
+  } catch (err) {
+    console.warn(`[Twilio WA] Note: REST message to ${to} warning:`, err?.message || err);
+    return null;
+  }
+}
 var twilioClient = null;
 function getTwilio() {
   if (!twilioClient && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
@@ -44543,30 +45415,55 @@ async function downloadTwilioMedia(mediaUrl) {
   const token = (process.env.TWILIO_AUTH_TOKEN || TWILIO_AUTH_TOKEN || "").trim();
   const authHeader = sid && token ? "Basic " + Buffer.from(`${sid}:${token}`).toString("base64") : "";
   try {
-    const headers = {};
-    if (authHeader) headers["Authorization"] = authHeader;
-    const initialRes = await fetch(mediaUrl, {
-      method: "GET",
-      headers,
-      redirect: "manual"
-    });
     let targetUrl = mediaUrl;
-    if (initialRes.status >= 300 && initialRes.status < 400) {
-      const redirectLoc = initialRes.headers.get("location");
-      if (redirectLoc) targetUrl = redirectLoc;
+    let reqHeaders = {};
+    if (mediaUrl.includes("twilio.com") && authHeader) {
+      try {
+        const headRes = await import_axios.default.get(mediaUrl, {
+          headers: { Authorization: authHeader },
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 200 && status < 400
+        });
+        if (headRes.headers && headRes.headers.location) {
+          targetUrl = headRes.headers.location;
+          console.log("[Twilio WA] Resolved media redirect location:", targetUrl.substring(0, 90));
+        }
+      } catch (headErr) {
+        if (headErr?.response?.headers?.location) {
+          targetUrl = headErr.response.headers.location;
+          console.log("[Twilio WA] Resolved media redirect via catch:", targetUrl.substring(0, 90));
+        }
+      }
     }
-    const imgRes = await fetch(targetUrl, {
-      headers: targetUrl === mediaUrl && authHeader ? { Authorization: authHeader } : {}
+    if (!targetUrl.includes("twilio.com")) {
+      reqHeaders = {};
+    } else if (authHeader) {
+      reqHeaders["Authorization"] = authHeader;
+    }
+    const res = await import_axios.default.get(targetUrl, {
+      headers: reqHeaders,
+      responseType: "arraybuffer",
+      timeout: 15e3,
+      maxRedirects: 5
     });
-    if (imgRes.ok) {
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const mimeType = (imgRes.headers.get("content-type") || "image/jpeg").split(";")[0];
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
+    if (res && res.status === 200 && res.data) {
+      const mimeType = String(res.headers["content-type"] || "image/jpeg").split(";")[0];
+      const base64 = Buffer.from(res.data).toString("base64");
       console.log(`[Twilio WA] Successfully downloaded media image (${base64.length} chars, mime: ${mimeType}) \u2705`);
       return { data: base64, mimeType };
     }
   } catch (err) {
     console.error("[Twilio WA] downloadTwilioMedia error:", err?.message || err);
+  }
+  try {
+    const fallbackRes = await import_axios.default.get(mediaUrl, { responseType: "arraybuffer", timeout: 15e3, maxRedirects: 5 });
+    if (fallbackRes && fallbackRes.status === 200 && fallbackRes.data) {
+      const mimeType = String(fallbackRes.headers["content-type"] || "image/jpeg").split(";")[0];
+      const base64 = Buffer.from(fallbackRes.data).toString("base64");
+      console.log(`[Twilio WA] Successfully downloaded media via fallback (${base64.length} chars) \u2705`);
+      return { data: base64, mimeType };
+    }
+  } catch (fbErr) {
   }
   return null;
 }
@@ -44590,8 +45487,10 @@ async function generateGeminiContent(prompt, imagePart) {
     throw new Error("GEMINI_API_KEY is not set in environment variables");
   }
   const modelsToTry = [
-    "gemini-3.6-flash",
+    "gemini-flash-latest",
     "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
     "gemini-2.5-flash",
     "gemini-1.5-flash"
   ];
@@ -44706,56 +45605,8 @@ function extractAndParseJson(text) {
   }
   return null;
 }
-function validateAndNormalizeNutrition(parsed, isPhoto = false) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  const isFood = String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG";
-  if (!isFood) return parsed;
-  let protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-  let carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-  let fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
-  let fiber = Math.max(0, Math.round(Number(parsed.fiber) || 0));
-  let sugar = Math.max(0, Math.round(Number(parsed.sugar) || 0));
-  let macroCalories = protein * 4 + carbs * 4 + fat * 9;
-  let rawCalories = Math.round(Number(parsed.calories) || 0);
-  if (macroCalories === 0 && rawCalories > 0) {
-    protein = Math.round(rawCalories * 0.25 / 4);
-    fat = Math.round(rawCalories * 0.3 / 9);
-    carbs = Math.round((rawCalories - (protein * 4 + fat * 9)) / 4);
-    macroCalories = protein * 4 + carbs * 4 + fat * 9;
-  }
-  parsed.calories = macroCalories;
-  parsed.protein = protein;
-  parsed.carbs = carbs;
-  parsed.fat = fat;
-  parsed.fiber = fiber;
-  parsed.sugar = sugar;
-  const satietyRaw = Math.round(protein * 0.15 + fiber * 0.5 + (carbs < 30 ? 2 : 1) + 2);
-  parsed.satietyScore = Math.min(10, Math.max(1, satietyRaw));
-  if (!parsed.satietyExplanation) {
-    if (parsed.satietyScore >= 8) {
-      parsed.satietyExplanation = "Tinggi protein & serat, memberikan rasa kenyang lebih lama.";
-    } else if (parsed.satietyScore >= 5) {
-      parsed.satietyExplanation = "Kandungan protein & karbo seimbang untuk energi harian.";
-    } else {
-      parsed.satietyExplanation = "Rendah serat & protein, dianjurkan tambah lauk berprotein/sayur.";
-    }
-  }
-  let hScore = 7;
-  if (fiber >= 4) hScore += 1;
-  if (protein >= 25) hScore += 1;
-  if (fat > 25) hScore -= 1;
-  if (sugar > 15) hScore -= 1;
-  const fnLower = String(parsed.foodName || "").toLowerCase();
-  if (fnLower.match(/(goreng|deep fried|crispy|santan|jelantah|junk|fast food)/i)) hScore -= 1.5;
-  if (fnLower.match(/(rebus|kukus|panggang|bakar|salad|sayur|brokoli|sup|soto|tim)/i)) hScore += 1;
-  parsed.healthScore = Math.min(10, Math.max(1, Math.round(hScore)));
-  const confLevel = Math.min(98, Math.max(75, Number(parsed.confidenceLevel) || (isPhoto ? 88 : 92)));
-  parsed.confidenceLevel = confLevel;
-  parsed.confidenceText = `Estimasi berdasarkan hasil deteksi AI (Confidence: ${confLevel}%)`;
-  return parsed;
-}
-var DATA_DIR = import_path.default.join(process.cwd(), "data");
-var DB_FILE = import_path.default.join(DATA_DIR, "db.json");
+var DATA_DIR = import_path2.default.join(process.cwd(), "data");
+var DB_FILE = import_path2.default.join(DATA_DIR, "db.json");
 var dbData = {
   users: {},
   dailyLogs: {},
@@ -44824,10 +45675,25 @@ function setWaterCups(rawPhone, cups, dateStr) {
   dbData.waterLogs[key] = newCups;
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   dbData.waterLogs[`${altPhone}_${targetDate}`] = newCups;
+  saveWaterLog({
+    userId: `usr_${phone}`,
+    phone,
+    date: targetDate,
+    cups: newCups,
+    totalMl: newCups * 250,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).catch((e) => console.warn("[Firestore] saveWaterLog note:", e?.message || e));
   saveDb();
   return newCups;
 }
-function getMealTypeByHour() {
+function getMealTypeByHour(userText) {
+  if (userText) {
+    const lower = String(userText).toLowerCase();
+    if (/(?:sarapan|pagi|breakfast|sahur)/i.test(lower)) return "breakfast";
+    if (/(?:siang|lunch|makan siang|tadi siang)/i.test(lower)) return "lunch";
+    if (/(?:sore|snack|ngemil|camilan|cemilan|tadi sore)/i.test(lower)) return "snack";
+    if (/(?:malam|dinner|makan malam|tadi malam)/i.test(lower)) return "dinner";
+  }
   try {
     const wibHour = parseInt(
       new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()),
@@ -44845,85 +45711,101 @@ function getMealTypeByHour() {
     return "dinner";
   }
 }
-var MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://bibi:bibi123@gymbuddy.wb3i2.mongodb.net/gymbuddy?retryWrites=true&w=majority";
-var mongoClient = null;
-var mongoConnected = false;
-async function getMongoDb() {
-  if (!MONGODB_URI) return null;
+async function loadFromFirestore() {
   try {
-    if (!mongoClient) {
-      mongoClient = new import_mongodb2.MongoClient(MONGODB_URI, {
-        serverSelectionTimeoutMS: 5e3,
-        connectTimeoutMS: 1e4
-      });
-    }
-    if (!mongoConnected) {
-      await mongoClient.connect();
-      mongoConnected = true;
-      console.log("[MongoDB] Connected to Atlas \u2705");
-    }
-    return mongoClient.db("gymbuddy");
-  } catch (err) {
-    mongoClient = null;
-    mongoConnected = false;
-    console.error("[MongoDB] Connection error (check Atlas Network Access 0.0.0.0/0 IP whitelist):", err?.message || err);
-    return null;
-  }
-}
-async function loadFromMongo() {
-  try {
-    const db = await getMongoDb();
-    if (!db) return false;
-    const doc = await db.collection("appdata").findOne({ _id: "main" });
+    let hasLoaded = false;
+    const doc = await loadAppDataFromFirestore();
     if (doc) {
-      dbData.users = doc.users || {};
-      dbData.dailyLogs = doc.dailyLogs || {};
-      dbData.weeklyProgress = doc.weeklyProgress || {};
-      dbData.waterLogs = doc.waterLogs || {};
-      console.log(`[MongoDB] Loaded ${Object.keys(dbData.users).length} users from Atlas`);
-      return true;
+      if (doc.users && Object.keys(doc.users).length > 0) {
+        dbData.users = { ...doc.users, ...dbData.users };
+      }
+      if (doc.dailyLogs && Object.keys(doc.dailyLogs).length > 0) {
+        for (const [k, v] of Object.entries(doc.dailyLogs)) {
+          if (Array.isArray(v) && v.length > 0) {
+            const existing = dbData.dailyLogs[k] || [];
+            const mergedMap = /* @__PURE__ */ new Map();
+            for (const item of existing) {
+              if (item.id) mergedMap.set(item.id, item);
+            }
+            for (const item of v) {
+              if (item.id) mergedMap.set(item.id, item);
+            }
+            dbData.dailyLogs[k] = Array.from(mergedMap.values());
+          }
+        }
+      }
+      if (doc.weeklyProgress) {
+        dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+      }
+      if (doc.waterLogs) {
+        dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+      }
+      hasLoaded = true;
     }
-    return false;
+    try {
+      const allUsers = await getAllUsersFromFirestore();
+      if (allUsers && allUsers.length > 0) {
+        for (const u of allUsers) {
+          if (u && u.phone) {
+            const norm = normalizePhone(u.phone);
+            const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : norm.startsWith("62") ? "0" + norm.substring(2) : norm;
+            if (!dbData.users[norm] || !dbData.users[norm].weight) {
+              dbData.users[norm] = u;
+            }
+            if (!dbData.users[altNorm] || !dbData.users[altNorm].weight) {
+              dbData.users[altNorm] = u;
+            }
+          }
+        }
+        hasLoaded = true;
+      }
+    } catch (uErr) {
+      console.warn("[Firestore] Error loading users collection on boot:", uErr);
+    }
+    console.log(`[Firestore] Loaded ${Object.keys(dbData.users).length} users and ${Object.keys(dbData.dailyLogs).length} log dates from Firestore \u2705`);
+    return hasLoaded;
   } catch (e) {
-    console.error("[MongoDB] Load error:", e);
+    console.error("[Firestore] Load error:", e);
     return false;
   }
 }
-async function getUserProfileFromMongo(rawPhone) {
+async function getUserProfileFromFirestore(rawPhone) {
   try {
-    const db = await getMongoDb();
-    if (!db) return null;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-    const doc = await db.collection("appdata").findOne({ _id: "main" });
-    if (!doc || !doc.users) return null;
-    const users = doc.users;
-    const found = users[phone] || users[altPhone] || null;
-    if (found) {
-      dbData.users[phone] = found;
-      dbData.users[altPhone] = found;
-      if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
-      if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
-      if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
-      console.log(`[MongoDB] Restored profile for ${phone} from Atlas \u2705`);
+    const userDoc = await findUserInFirestore(phone) || await findUserInFirestore(altPhone);
+    if (userDoc) {
+      dbData.users[phone] = userDoc;
+      dbData.users[altPhone] = userDoc;
+      console.log(`[Firestore] Restored profile for ${phone} from users collection \u2705`);
+      return userDoc;
     }
-    return found;
+    const doc = await loadAppDataFromFirestore();
+    if (doc && doc.users) {
+      const found = doc.users[phone] || doc.users[altPhone] || null;
+      if (found) {
+        dbData.users[phone] = found;
+        dbData.users[altPhone] = found;
+        if (doc.dailyLogs) dbData.dailyLogs = { ...doc.dailyLogs, ...dbData.dailyLogs };
+        if (doc.weeklyProgress) dbData.weeklyProgress = { ...doc.weeklyProgress, ...dbData.weeklyProgress };
+        if (doc.waterLogs) dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
+        console.log(`[Firestore] Restored profile for ${phone} from appdata snapshot \u2705`);
+        return found;
+      }
+    }
+    return null;
   } catch (e) {
-    console.error("[MongoDB] getUserProfileFromMongo error:", e);
+    console.error("[Firestore] getUserProfileFromFirestore error:", e);
     return null;
   }
 }
-async function saveToMongo() {
+async function saveToFirestore() {
   try {
-    const db = await getMongoDb();
-    if (!db) return;
-    await db.collection("appdata").replaceOne(
-      { _id: "main" },
-      { _id: "main", ...dbData, updatedAt: /* @__PURE__ */ new Date() },
-      { upsert: true }
-    );
+    if (Object.keys(dbData.users).length > 0 || Object.keys(dbData.dailyLogs).length > 0) {
+      await saveAppDataToFirestore(dbData);
+    }
   } catch (e) {
-    console.error("[MongoDB] Save error:", e);
+    console.error("[Firestore] Save error:", e);
   }
 }
 function isLegacyMockMeal(m) {
@@ -44951,13 +45833,13 @@ function purgeLegacyMockLogs() {
     console.log("[Data Purge] Purged legacy mock meal logs from database \u2705");
   }
 }
-function initDb() {
-  if (!import_fs.default.existsSync(DATA_DIR)) {
-    import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+async function initDb() {
+  if (!import_fs2.default.existsSync(DATA_DIR)) {
+    import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
   }
-  if (import_fs.default.existsSync(DB_FILE)) {
+  if (import_fs2.default.existsSync(DB_FILE)) {
     try {
-      const raw = import_fs.default.readFileSync(DB_FILE, "utf-8");
+      const raw = import_fs2.default.readFileSync(DB_FILE, "utf-8");
       dbData = JSON.parse(raw);
       if (!dbData.users) dbData.users = {};
       if (!dbData.dailyLogs) dbData.dailyLogs = {};
@@ -44967,57 +45849,25 @@ function initDb() {
     } catch (e) {
       console.error("Error reading db.json, starting fresh", e);
     }
-  } else {
-    saveDb();
   }
-  purgeLegacyMockLogs();
-  const bibiPhone = "085156919826";
-  const bibiAlt = "6285156919826";
-  if (!dbData.users[bibiPhone] && !dbData.users[bibiAlt]) {
-    const bibiProfile = {
-      name: "Bibi",
-      phone: bibiPhone,
-      normalizedPhone: bibiPhone,
-      goal: "health",
-      goalTitle: "Gaya Hidup Sehat & Fit",
-      weight: 78,
-      startWeight: 78,
-      targetWeight: 78,
-      height: 177,
-      age: 24,
-      gender: "pria",
-      persona: "mia",
-      activityLevel: "light",
-      targetCalories: 2435,
-      proteinGrams: 140,
-      carbGrams: 316,
-      fatGrams: 68,
-      fiberGrams: 32,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    dbData.users[bibiPhone] = bibiProfile;
-    dbData.users[bibiAlt] = bibiProfile;
-  }
-  if (MONGODB_URI) {
-    loadFromMongo().then((loaded) => {
-      if (!loaded) console.log("[MongoDB] No existing data found, will create on first save");
-      purgeLegacyMockLogs();
-    });
+  try {
+    const loaded = await loadFromFirestore();
+    if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
+    purgeLegacyMockLogs();
+  } catch (err) {
+    console.warn("[Firestore] Boot sync warning:", err);
   }
 }
 function saveDb() {
   try {
-    if (!import_fs.default.existsSync(DATA_DIR)) {
-      import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+    if (!import_fs2.default.existsSync(DATA_DIR)) {
+      import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
     }
-    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
+    import_fs2.default.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), "utf-8");
   } catch (e) {
     console.error("Error saving db.json", e);
   }
-  if (MONGODB_URI) {
-    saveToMongo();
-  }
+  saveToFirestore();
 }
 async function sendWhatsAppDirect(rawPhone, message) {
   const phone = normalizePhone(rawPhone);
@@ -45200,8 +46050,6 @@ Yuk lakukan latihan ringan atau tuntaskan set kamu biar goal *${goalTitle}* cepa
     }
   }, 6e4);
 }
-initDb();
-initReminderScheduler();
 function getTodayDateStr() {
   return getLocalDateStr();
 }
@@ -45256,6 +46104,11 @@ function saveUserProfile(rawPhone, profile) {
   if (!phone) return null;
   const existing = dbData.users[phone] || {};
   const initialW = Math.max(30, Number(profile?.weight) || Number(existing.weight) || 65);
+  const targetCal = Number(profile?.targetCalories || profile?.dailyTargetCalories || existing.targetCalories || existing.dailyTargetCalories) || void 0;
+  const targetProt = Number(profile?.proteinGrams || profile?.dailyTargetProtein || existing.proteinGrams || existing.dailyTargetProtein) || void 0;
+  const targetCarb = Number(profile?.carbGrams || profile?.dailyTargetCarbs || existing.carbGrams || existing.dailyTargetCarbs) || void 0;
+  const targetFatVal = Number(profile?.fatGrams || profile?.dailyTargetFat || existing.fatGrams || existing.dailyTargetFat) || void 0;
+  const targetFib = Number(profile?.fiberGrams || existing.fiberGrams) || void 0;
   const updated = {
     ...existing,
     ...profile,
@@ -45263,12 +46116,52 @@ function saveUserProfile(rawPhone, profile) {
     normalizedPhone: phone,
     startWeight: profile?.startWeight !== void 0 ? Number(profile.startWeight) : existing.startWeight || initialW,
     weight: initialW,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
     createdAt: existing.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
   dbData.users[phone] = updated;
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   dbData.users[altPhone] = updated;
+  saveUserDocument({
+    userId: `usr_${phone}`,
+    phone,
+    name: updated.name || "User",
+    gender: updated.gender,
+    age: updated.age ? Number(updated.age) : void 0,
+    weight: updated.weight ? Number(updated.weight) : void 0,
+    height: updated.height ? Number(updated.height) : void 0,
+    targetWeight: updated.targetWeight ? Number(updated.targetWeight) : void 0,
+    startWeight: updated.startWeight ? Number(updated.startWeight) : void 0,
+    goal: updated.goal,
+    activityLevel: updated.activityLevel,
+    dietPreference: updated.dietPreference,
+    experienceLevel: updated.experienceLevel,
+    persona: updated.persona,
+    selectedFeature: updated.selectedFeature || updated.activeService,
+    activeService: updated.activeService,
+    targetCalories: targetCal,
+    dailyTargetCalories: targetCal,
+    proteinGrams: targetProt,
+    dailyTargetProtein: targetProt,
+    carbGrams: targetCarb,
+    dailyTargetCarbs: targetCarb,
+    fatGrams: targetFatVal,
+    dailyTargetFat: targetFatVal,
+    fiberGrams: targetFib,
+    customSchedule: updated.workoutSchedule || updated.customSchedule,
+    customGoals: updated.customGoals,
+    reminderTime: updated.reminderTime,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).catch((e) => console.warn("[Firestore] saveUserDocument note:", e?.message || e));
   if (!dbData.weeklyProgress[phone] || dbData.weeklyProgress[phone].length === 0) {
     dbData.weeklyProgress[phone] = [{
       week: 0,
@@ -45383,16 +46276,41 @@ function calculateUserData(profile) {
   const activityMultiplier = activityMap[profile?.activityLevel] || 1.375;
   const bmr = Math.round(10 * weight + 6.25 * height - 5 * age + (isMale ? 5 : -161));
   const tdee = Math.round(bmr * activityMultiplier);
-  let targetCalories = tdee;
-  if (goal === "lose") {
-    targetCalories = Math.max(1200, tdee - 500);
-  } else if (goal === "gain") {
-    targetCalories = tdee + 400;
+  let targetCalories = profile?.targetCalories || profile?.dailyTargetCalories || profile?.calories;
+  if (!targetCalories || isNaN(Number(targetCalories)) || Number(targetCalories) < 500) {
+    targetCalories = tdee;
+    if (goal === "lose") {
+      targetCalories = Math.max(1200, tdee - 500);
+    } else if (goal === "gain") {
+      targetCalories = tdee + 400;
+    }
+  } else {
+    targetCalories = Math.round(Number(targetCalories));
   }
-  const proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2 : 1.8));
-  const fatGrams = Math.round(targetCalories * 0.25 / 9);
-  const carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
-  const fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  let proteinGrams = profile?.proteinGrams || profile?.dailyTargetProtein || profile?.protein;
+  if (!proteinGrams || isNaN(Number(proteinGrams)) || Number(proteinGrams) < 10) {
+    proteinGrams = Math.round(weight * (goal === "gain" ? 2.2 : goal === "lose" ? 2 : 1.8));
+  } else {
+    proteinGrams = Math.round(Number(proteinGrams));
+  }
+  let fatGrams = profile?.fatGrams || profile?.dailyTargetFat || profile?.fat;
+  if (!fatGrams || isNaN(Number(fatGrams)) || Number(fatGrams) < 5) {
+    fatGrams = Math.round(targetCalories * 0.25 / 9);
+  } else {
+    fatGrams = Math.round(Number(fatGrams));
+  }
+  let carbGrams = profile?.carbGrams || profile?.dailyTargetCarbs || profile?.carbs;
+  if (!carbGrams || isNaN(Number(carbGrams)) || Number(carbGrams) < 10) {
+    carbGrams = Math.round((targetCalories - (proteinGrams * 4 + fatGrams * 9)) / 4);
+  } else {
+    carbGrams = Math.round(Number(carbGrams));
+  }
+  let fiberGrams = profile?.fiberGrams || profile?.fiber;
+  if (!fiberGrams || isNaN(Number(fiberGrams)) || Number(fiberGrams) < 5) {
+    fiberGrams = Math.max(20, Math.min(38, Math.round(targetCalories / 75)));
+  } else {
+    fiberGrams = Math.round(Number(fiberGrams));
+  }
   const activeService = profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
   const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
   const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0 ? profile.workoutSchedule : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
@@ -45429,24 +46347,45 @@ function calculateUserData(profile) {
     subscription
   };
 }
+function deduplicateMealLogs(logs) {
+  if (!Array.isArray(logs)) return [];
+  const seenIds = /* @__PURE__ */ new Set();
+  const cleanLogs = [];
+  for (const log of logs) {
+    if (!log || !log.foodName) continue;
+    const uniqueId = log.id || `${log.foodName}_${log.calories}_${log.timestamp || Date.now()}`;
+    if (seenIds.has(uniqueId)) continue;
+    seenIds.add(uniqueId);
+    cleanLogs.push(log);
+  }
+  return cleanLogs;
+}
 function getDailyTotals(rawPhone, targetDateStr) {
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const targetDate = targetDateStr || getTodayDateStr();
   const key = `${phone}_${targetDate}`;
   const altKey = `${altPhone}_${targetDate}`;
-  const logs = dbData.dailyLogs[key] !== void 0 ? dbData.dailyLogs[key] : dbData.dailyLogs[altKey] !== void 0 ? dbData.dailyLogs[altKey] : [];
+  const rawLogs = dbData.dailyLogs[key] !== void 0 ? dbData.dailyLogs[key] : dbData.dailyLogs[altKey] !== void 0 ? dbData.dailyLogs[altKey] : [];
+  const logs = deduplicateMealLogs(rawLogs);
+  if (logs.length < rawLogs.length) {
+    if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = logs;
+    if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = logs;
+    saveDb();
+  }
   let calories = 0;
   let protein = 0;
   let carbs = 0;
   let fat = 0;
   let fiber = 0;
+  let sodium = 0;
   for (const log of logs) {
     calories += Number(log.calories) || 0;
     protein += Number(log.protein) || 0;
     carbs += Number(log.carbs) || 0;
     fat += Number(log.fat) || 0;
     fiber += Number(log.fiber) || 0;
+    sodium += Number(log.sodium) || 0;
   }
   return {
     calories: Math.round(calories),
@@ -45454,6 +46393,7 @@ function getDailyTotals(rawPhone, targetDateStr) {
     carbs: Math.round(carbs),
     fat: Math.round(fat),
     fiber: Math.round(fiber),
+    sodium: Math.round(sodium),
     logCount: logs.length,
     date: targetDate,
     logs
@@ -45720,14 +46660,20 @@ function addMealLog(rawPhone, meal, targetDateStr) {
   if (liquidParts.length > 0) {
     liquidParts.forEach((lPart, idx) => {
       const detectedVolumeMl = extractVolumeMlFromName(lPart);
+      const isMilky = /(susu|milk|latte|whey|protein|gainer|yogurt|shake)/i.test(lPart);
+      const isSweet = /(manis|sweet|gula|sugar|sirup|syrup|boba|jus|juice|soda|coca|cola|sprite|fanta)/i.test(lPart);
+      const cal = isMilky ? 120 : isSweet ? 65 : 2;
+      const prot = isMilky ? 6 : 0;
+      const carb = isMilky ? 10 : isSweet ? 16 : 0;
+      const fat = isMilky ? 4 : 0;
       mealsToInsert.push({
         ...meal,
         id: `${meal.id || Date.now()}-drink-${idx}`,
         foodName: lPart,
-        calories: Math.round(50 / liquidParts.length),
-        protein: 1,
-        carbs: 5,
-        fat: 0,
+        calories: cal,
+        protein: prot,
+        carbs: carb,
+        fat,
         isHydration: true,
         volumeMl: detectedVolumeMl
       });
@@ -45755,6 +46701,29 @@ function addMealLog(rawPhone, meal, targetDateStr) {
     if (!dbData.dailyLogs[altKey].some((m) => m.id === itemMeal.id)) {
       dbData.dailyLogs[altKey].push(itemMeal);
     }
+    insertFoodLog({
+      id: String(itemMeal.id || `m-${Date.now()}`),
+      userId: `usr_${phone}`,
+      phone,
+      date: targetDate,
+      foodName: itemMeal.foodName,
+      calories: Number(itemMeal.calories) || 0,
+      protein: Number(itemMeal.protein) || 0,
+      carbs: Number(itemMeal.carbs) || 0,
+      fat: Number(itemMeal.fat) || 0,
+      fiber: Number(itemMeal.fiber) || 0,
+      sugar: Number(itemMeal.sugar) || 0,
+      time: itemMeal.time || (/* @__PURE__ */ new Date()).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
+      isHydration: Boolean(itemMeal.isHydration),
+      volumeMl: itemMeal.volumeMl,
+      displayUnit: itemMeal.displayUnit,
+      portionType: itemMeal.portionType || "estimated",
+      itemType: itemMeal.isHydration ? "water" : "food",
+      source: itemMeal.source || "WhatsApp",
+      items: itemMeal.items || [],
+      imageUrl: itemMeal.imageUrl,
+      createdAt: /* @__PURE__ */ new Date()
+    }).catch((e) => console.warn("[Firestore] insertFoodLog note:", e?.message || e));
     if (isPlainWaterName(itemMeal.foodName) && !itemMeal.id?.startsWith("wa-water-")) {
       const vol = itemMeal.volumeMl || 250;
       const cupsToAdd = Math.max(1, Math.round(vol / 250));
@@ -45763,44 +46732,6 @@ function addMealLog(rawPhone, meal, targetDateStr) {
     }
   }
   saveDb();
-}
-function deleteLastMealLog(rawPhone, targetDateStr) {
-  const phone = normalizePhone(rawPhone);
-  const targetDate = targetDateStr || getLocalDateStr();
-  const key = `${phone}_${targetDate}`;
-  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-  const altKey = `${altPhone}_${targetDate}`;
-  const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-  if (logs.length === 0) return null;
-  const deletedItem = logs[logs.length - 1];
-  const updatedLogs = logs.slice(0, -1);
-  if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
-  if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
-  saveDb();
-  return deletedItem;
-}
-function deleteMealLogByName(rawPhone, foodNameQuery, targetDateStr) {
-  const phone = normalizePhone(rawPhone);
-  const targetDate = targetDateStr || getLocalDateStr();
-  const key = `${phone}_${targetDate}`;
-  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-  const altKey = `${altPhone}_${targetDate}`;
-  const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-  const queryLower = foodNameQuery.toLowerCase();
-  let matchIdx = -1;
-  for (let i = logs.length - 1; i >= 0; i--) {
-    if ((logs[i].foodName || "").toLowerCase().includes(queryLower)) {
-      matchIdx = i;
-      break;
-    }
-  }
-  if (matchIdx === -1) return null;
-  const deletedItem = logs[matchIdx];
-  const updatedLogs = logs.filter((_, i) => i !== matchIdx);
-  if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = updatedLogs;
-  if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = updatedLogs;
-  saveDb();
-  return deletedItem;
 }
 function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan") {
   const phone = normalizePhone(rawPhone);
@@ -45915,21 +46846,6 @@ async function sendMetaWhatsappMessage(to, bodyText) {
     console.error("Error sending Meta WhatsApp message:", err);
   }
 }
-async function sendTwilioWhatsappMessage(to, bodyText) {
-  const client2 = getTwilio();
-  if (!client2) return;
-  try {
-    const toNum = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
-    const fromNum = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
-    await client2.messages.create({
-      from: fromNum,
-      to: toNum,
-      body: bodyText
-    });
-  } catch (err) {
-    console.error("Error sending Twilio WhatsApp message:", err);
-  }
-}
 function makeProgressBar(current, target, length = 10) {
   if (!target || target <= 0) return "\u2591".repeat(length);
   const percent = Math.min(100, Math.max(0, Math.round(current / target * 100)));
@@ -46019,13 +46935,17 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const healthScore = Math.min(10, Math.max(1, Number(parsedAi?.healthScore) || 8));
   let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
   satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
+  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
   let portionDetailText = "";
-  if (parsedAi?.portionDetail) {
-    portionDetailText = String(parsedAi.portionDetail).trim();
-  } else if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates.map((p) => typeof p === "string" ? p : JSON.stringify(p)).join("\n");
+  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates.map((p) => {
+      const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
+      return line.startsWith("\u2022") ? line : `\u2022 ${line}`;
+    }).join("\n");
+  } else if (parsedAi?.portionDetail) {
+    portionDetailText = `\u2022 ${String(parsedAi.portionDetail).trim()}`;
   } else {
-    portionDetailText = portionStr;
+    portionDetailText = `\u2022 1 Porsi Standar (~${calories} kcal)`;
   }
   let insightsFormatted = "";
   if (Array.isArray(parsedAi?.keyInsights) && parsedAi.keyInsights.length > 0) {
@@ -46038,8 +46958,8 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
       return `\u{1F7E2} ${cleanInsight}`;
     }).filter(Boolean).join("\n");
   } else {
-    insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung aktivitas harian
-\u{1F7E2} Kandungan makro terdistribusi dengan baik`;
+    insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung target kamu
+\u{1F7E2} Distribusi makronutrisi sesuai target harian`;
   }
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
   const wibIso = wibNow.toISOString();
@@ -46051,60 +46971,45 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
   const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
-  const foodTitleWithEmoji = rawFoodName.startsWith("\u{1F95C}") ? rawFoodName : `\u{1F95C} ${rawFoodName}`;
-  return `${foodTitleWithEmoji} \u2014 ${portionStr}
+  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
+  const totalTodayCal = dailyTotals.calories;
+  const targetCal = userData.targetCalories || 2e3;
+  const calPercent = Math.min(100, Math.round(totalTodayCal / targetCal * 100));
+  return `\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
-\u{1F552} ${dateStr}, ${timeStr}
-\u{1F916} GymBuddy AI Analysis : ${confidenceScore}%
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4CA} REKAP NUTRISI
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
-\u{1F525} ${calories} kcal
-
-\u{1F356} Protein: ${protein}g \u2014 ${protPercent}%
-\u{1F35A} Karbo: ${carbs}g \u2014 ${carbPercent}%
-\u{1F953} Lemak: ${fat}g \u2014 ${fatPercent}%
-\u{1F96C} Serat: ${fiber}g
-\u{1F36F} Gula: ${sugar}g
-
-Kalori dari makro:
-Protein ${protKcal} kcal \u2022 Karbo ${carbKcal} kcal \u2022 Lemak ${fatKcal} kcal
+\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} AI: ${confidenceScore}%
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2B50 SCORE
+\u{1F4CA} *REKAP NUTRISI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F525} *${calories} kcal*
 
-\u{1F963} Satiety: ${satietyScore}/10
-${satietyExplanation}
-
-\u{1F4AF} Health: ${healthScore}/10
+\u{1F356} *Protein*: ${protein}g (${protPercent}%)
+\u{1F35A} *Karbo*: ${carbs}g (${carbPercent}%)
+\u{1F953} *Lemak*: ${fat}g (${fatPercent}%)
+\u{1F96C} *Serat*: ${fiber}g
+\u{1F9C2} *Natrium*: ${sodium} mg${sugar > 0 ? `
+\u{1F36F} *Gula*: ${sugar}g` : ""}
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F37D}\uFE0F PORSI
+\u{1F37D}\uFE0F *ESTIMASI PORSI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
 ${portionDetailText}
 
-\u{1F4A1} KEY INSIGHTS
-
-${insightsFormatted}
-
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F916} ${coachHeader}
+\u{1F916} *${coachHeader}*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
 "${coachComment}"
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2699\uFE0F AKSI CEPAT
+\u{1F4C8} *STATUS HARI INI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u270F\uFE0F Koreksi porsi? Balas:
-   _koreksi: [detail baru]_
-   contoh: "koreksi: nasinya 1 piring, ayam 2 potong"
-\u274C Hapus entry ini? Balas:
-   _hapus log terakhir_`;
+\u{1F525} Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
+\u{1F356} Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
+\u{1F9C2} Natrium: ${dailyTotals.sodium || 0}/2000 mg
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2699\uFE0F _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
 }
 function generateWelcomeMessages(userData) {
   const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, activeService, equipment, injuries, customInjury } = userData;
@@ -46227,16 +47132,19 @@ function generateDailySummaryCard(userData, dailyTotals, dateLabel = "Hari Ini")
   const carbPercent = userData.carbGrams > 0 ? Math.min(100, Math.round(dailyTotals.carbs / userData.carbGrams * 100)) : 0;
   const fatPercent = userData.fatGrams > 0 ? Math.min(100, Math.round(dailyTotals.fat / userData.fatGrams * 100)) : 0;
   const fiberPercent = userData.fiberGrams > 0 ? Math.min(100, Math.round(dailyTotals.fiber / userData.fiberGrams * 100)) : 0;
+  const sodiumVal = dailyTotals.sodium || 0;
+  const sodPercent = Math.min(100, Math.round(sodiumVal / 2e3 * 100));
   const calBar = makeProgressBar(dailyTotals.calories, userData.targetCalories);
   const protBar = makeProgressBar(dailyTotals.protein, userData.proteinGrams);
   const carbBar = makeProgressBar(dailyTotals.carbs, userData.carbGrams);
   const fatBar = makeProgressBar(dailyTotals.fat, userData.fatGrams);
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
+  const sodBar = makeProgressBar(sodiumVal, 2e3);
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
     mealListStr = "_Belum ada makanan yang dicatat pada tanggal ini._";
   } else {
-    mealListStr = dailyTotals.logs.map((m, idx) => `\u2022 ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n");
+    mealListStr = dailyTotals.logs.map((m, idx) => `\u2022 ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${m.sodium ? ` Na:${m.sodium}mg` : ""})`).join("\n");
   }
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
   const quote = userData.persona === "max" ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil." : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya \u2728";
@@ -46255,6 +47163,8 @@ ${carbBar}
 ${fatBar}
 \u{1F96C} *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g (${fiberPercent}%)
 ${fiberBar}
+\u{1F9C2} *Natrium*: ${sodiumVal}/2000mg (${sodPercent}%)
+${sodBar}
 
 \u{1F37D}\uFE0F *Makanan Terdaftar*:
 ${mealListStr}
@@ -46402,7 +47312,8 @@ async function startServer() {
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
   getFirestore();
-  getDatabase().catch((err) => console.error("[MongoDB] Init error:", err));
+  await initDb();
+  initReminderScheduler();
   app.get(["/health", "/api/health"], (req, res) => {
     res.json({
       status: "ok",
@@ -46413,8 +47324,8 @@ async function startServer() {
       environment: process.env.NODE_ENV || "development",
       cloudRun: Boolean(process.env.K_SERVICE),
       database: {
-        firestoreAvailable: Boolean(getFirestore()),
-        mongoConfigured: Boolean(process.env.MONGODB_URI)
+        engine: "Firestore",
+        firestoreAvailable: Boolean(getFirestore())
       }
     });
   });
@@ -46503,12 +47414,17 @@ async function startServer() {
       if (norm) {
         const saved = saveUserProfile(norm, profile);
         saveDb();
-        saveUserDocument({
-          userId: `usr_${norm}`,
-          phone: norm,
-          ...profile,
-          updatedAt: /* @__PURE__ */ new Date()
-        }).catch((err) => console.warn("[MongoDB] User doc save warning:", err?.message || err));
+        try {
+          await saveUserDocument({
+            userId: `usr_${norm}`,
+            phone: norm,
+            ...profile,
+            updatedAt: /* @__PURE__ */ new Date()
+          });
+          await saveAppDataToFirestore(dbData);
+        } catch (fErr) {
+          console.warn("[Firestore] User onboarding sync note:", fErr?.message || fErr);
+        }
         console.log("Saved clean user profile in database for:", norm);
         const token = generateAuthToken({ userId: `usr_${norm}`, phone: norm });
         return res.json({ success: true, profile: saved, token });
@@ -46537,6 +47453,201 @@ async function startServer() {
       streak,
       waterCups
     });
+  });
+  app.delete("/api/user/:phone", async (req, res) => {
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    console.log(`[DELETE Account] Permanently wiping user: ${phone} (${rawPhone})`);
+    delete dbData.users[phone];
+    delete dbData.users[altPhone];
+    delete dbData.users[rawPhone];
+    delete dbData.users[`usr_${phone}`];
+    delete dbData.users[`usr_${altPhone}`];
+    delete dbData.weeklyProgress[phone];
+    delete dbData.weeklyProgress[altPhone];
+    delete dbData.weeklyProgress[rawPhone];
+    await deleteUserDocument(phone);
+    await deleteUserDocument(altPhone);
+    await deleteUserDocument(rawPhone);
+    await deleteUserDocument(`usr_${phone}`);
+    await deleteUserDocument(`usr_${altPhone}`);
+    const variations = Array.from(/* @__PURE__ */ new Set([
+      phone,
+      altPhone,
+      rawPhone,
+      `0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `+62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_${phone}`,
+      `usr_${altPhone}`,
+      `usr_${rawPhone}`,
+      `usr_0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
+      `usr_62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`
+    ])).filter(Boolean);
+    Object.keys(dbData.dailyLogs).forEach((key) => {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
+        delete dbData.dailyLogs[key];
+      }
+    });
+    for (const v of variations) {
+      await deleteAllFoodLogsForDate(v, getLocalDateStr()).catch(() => {
+      });
+    }
+    Object.keys(dbData.waterLogs).forEach((key) => {
+      const keyPrefix = key.split("_")[0];
+      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
+        delete dbData.waterLogs[key];
+      }
+    });
+    saveDb();
+    const firestore = getFirestore();
+    if (firestore) {
+      try {
+        const batch = firestore.batch();
+        for (const v of variations) {
+          batch.delete(firestore.collection("users").doc(v));
+          batch.delete(firestore.collection("subscriptions").doc(v));
+        }
+        for (const v of variations) {
+          const fSnap1 = await firestore.collection("foodLogs").where("phone", "==", v).get();
+          fSnap1.forEach((d) => batch.delete(d.ref));
+          const fSnap2 = await firestore.collection("foodLogs").where("userId", "==", v).get();
+          fSnap2.forEach((d) => batch.delete(d.ref));
+          const wSnap1 = await firestore.collection("waterLogs").where("phone", "==", v).get();
+          wSnap1.forEach((d) => batch.delete(d.ref));
+          const wSnap2 = await firestore.collection("waterLogs").where("userId", "==", v).get();
+          wSnap2.forEach((d) => batch.delete(d.ref));
+        }
+        await batch.commit();
+        console.log(`[Firestore] User ${phone} and all related documents permanently wiped \u2705`);
+      } catch (fErr) {
+        console.warn("[Firestore] User delete warning:", fErr?.message || fErr);
+      }
+    }
+    res.json({
+      success: true,
+      message: `Akun dan seluruh data untuk ${phone} berhasil dihapus permanen dari database.`,
+      phone
+    });
+  });
+  app.get("/api/admin/users-list", async (req, res) => {
+    try {
+      const usersList = [];
+      const seenPhones = /* @__PURE__ */ new Set();
+      if (dbData && dbData.users) {
+        for (const [phone, u] of Object.entries(dbData.users)) {
+          if (!seenPhones.has(phone)) {
+            seenPhones.add(phone);
+            usersList.push({
+              phone,
+              name: u?.name || "Member",
+              goal: u?.goalTitle || u?.goal || "Healthy & Fit",
+              weight: u?.weight || 0,
+              targetWeight: u?.targetWeight || 0,
+              targetCalories: u?.targetCalories || 2e3,
+              persona: u?.persona || "max",
+              source: "Memory/Main Snapshot"
+            });
+          }
+        }
+      }
+      const firestore = getFirestore();
+      if (firestore) {
+        try {
+          const snapshot = await firestore.collection("users").get();
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const phone = data.phone || doc.id;
+            if (!seenPhones.has(phone)) {
+              seenPhones.add(phone);
+              usersList.push({
+                phone,
+                name: data.name || "Member",
+                goal: data.goal || "Healthy & Fit",
+                weight: data.weight || 0,
+                targetWeight: data.targetWeight || 0,
+                targetCalories: data.dailyTargetCalories || 2e3,
+                persona: data.persona || "max",
+                source: "Firestore Collection"
+              });
+            }
+          });
+        } catch (fErr) {
+          console.warn("[Admin Users] Firestore fetch note:", fErr?.message);
+        }
+      }
+      res.json({
+        success: true,
+        totalUsers: usersList.length,
+        users: usersList
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e?.message });
+    }
+  });
+  const cardMediaCache = /* @__PURE__ */ new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, item] of cardMediaCache.entries()) {
+      if (now - item.createdAt > 24 * 60 * 60 * 1e3) {
+        cardMediaCache.delete(id);
+      }
+    }
+  }, 60 * 60 * 1e3);
+  app.get(["/api/card/:cardId.png", "/api/card/:cardId.jpg", "/api/card/:cardId.jpeg", "/api/card/:cardId.svg", "/api/card/nutrition-card.png", "/api/card/nutrition-card.svg"], async (req, res) => {
+    try {
+      const cardId = req.params.cardId || "";
+      const cached = cardId ? cardMediaCache.get(cardId) : null;
+      const foodName = cached?.foodName || req.query.food || "MAKANAN BERGIZI";
+      const calories = cached ? cached.calories : Number(req.query.cal) || 0;
+      const protein = cached ? cached.protein : Number(req.query.prot) || 0;
+      const carbs = cached ? cached.carbs : Number(req.query.carb) || 0;
+      const fat = cached ? cached.fat : Number(req.query.fat) || 0;
+      const sodium = cached?.sodium !== void 0 ? cached.sodium : Number(req.query.sod) || 0;
+      const fiber = cached?.fiber !== void 0 ? cached.fiber : Number(req.query.fib) || 0;
+      const sugar = cached?.sugar !== void 0 ? cached.sugar : Number(req.query.sug) || 0;
+      const mealType = cached?.mealType || req.query.meal || "Makan Siang";
+      const dateStr = cached?.dateStr || req.query.date || (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+      const dailyTargetCalories = cached ? cached.dailyTargetCalories : Number(req.query.target) || 1966;
+      const consumedTodayCalories = cached ? cached.consumedTodayCalories : Number(req.query.consumed) || calories;
+      const dailyTargetProtein = cached?.dailyTargetProtein || (Number(req.query.targetProt) || 120);
+      const dailyTargetCarbs = cached?.dailyTargetCarbs || (Number(req.query.targetCarb) || 240);
+      const dailyTargetFat = cached?.dailyTargetFat || (Number(req.query.targetFat) || 65);
+      const imageBufferOrBase64 = cached?.imageBufferOrBase64 || req.query.img || "";
+      const cardPayload = {
+        foodName,
+        calories,
+        protein,
+        carbs,
+        fat,
+        sodium,
+        fiber,
+        sugar,
+        mealType,
+        dateStr,
+        dailyTargetCalories,
+        consumedTodayCalories,
+        dailyTargetProtein,
+        dailyTargetCarbs,
+        dailyTargetFat,
+        imageBufferOrBase64
+      };
+      if (req.path.endsWith(".svg")) {
+        const svg = generateNutritionCardSvg(cardPayload);
+        res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(svg);
+      }
+      const svgCard = generateNutritionCardSvg(cardPayload);
+      res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(svgCard);
+    } catch (e) {
+      console.error("[Card Generator Error]:", e?.message || e);
+      return res.status(500).send("Error generating card image");
+    }
   });
   app.get("/api/user-profile/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -46669,10 +47780,13 @@ ${cleanedAdvice}` : buildFallbackAdvice();
       console.log(`[analyze-food] Incoming request: "${cleanText}"`);
       const deterministicResult = estimateMealNutritionDeterministic(cleanText);
       console.log(`[analyze-food] Deterministic base: ${deterministicResult.calories} kcal (P:${deterministicResult.protein}g, C:${deterministicResult.carbs}g, F:${deterministicResult.fat}g, Fib:${deterministicResult.fiber}g, Sug:${deterministicResult.sugar}g) [${deterministicResult.items.length} items]`);
+      const userInputFoodName = cleanText;
       if (!getAi()) {
         return res.json({
           success: true,
           ...deterministicResult,
+          foodName: userInputFoodName,
+          // Override with original user input
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -46681,10 +47795,26 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const rawText = await generateGeminiContent(prompt);
         const textOutput = (rawText || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
         let parsed = extractAndParseJson(textOutput) || {};
-        parsed.foodName = parsed.foodName || deterministicResult.foodName;
         const items = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+        if (parsed.isFood === false || String(parsed.isFood).toLowerCase() === "false" || items.length > 0 && items.every((i) => i.notes?.includes("bukan makanan"))) {
+          return res.json({
+            success: true,
+            isFood: false,
+            foodName: userInputFoodName,
+            message: "Objek ini bukan makanan atau minuman. Silakan masukkan nama makanan yang ingin dicatat.",
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+            sugar: 0,
+            items: [],
+            portionNote: "Bukan makanan"
+          });
+        }
+        const itemsToUse = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
         let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
-        for (const it of items) {
+        for (const it of itemsToUse) {
           sumCal += Number(it.calories) || 0;
           sumProt += Number(it.protein) || 0;
           sumCarb += Number(it.carbs) || 0;
@@ -46697,22 +47827,33 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const fat = Math.round(sumFat * 10) / 10;
         const fiber = Math.round(sumFib * 10) / 10;
         const sugar = Math.round(sumSug * 10) / 10;
-        const calories = Math.round(sumCal);
-        parsed.mealType = parsed.mealType || getMealTypeByHour();
+        const genericCheck = isGenericMealInput(cleanText);
+        const isLowConfidence = genericCheck.isGeneric || parsed.confidence === "low" || deterministicResult.needsClarification;
+        const rawSodium = parsed.sodium !== void 0 && parsed.sodium !== null ? Number(parsed.sodium) : void 0;
+        const sodium = rawSodium !== void 0 && !isNaN(rawSodium) && rawSodium > 0 ? rawSodium : void 0;
+        const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
         res.json({
           success: true,
-          foodName: parsed.foodName,
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          sugar,
+          isFood: true,
+          // CRITICAL: Always use original user input as foodName — never AI/catalog name
+          foodName: userInputFoodName,
+          calories: isLowConfidence ? void 0 : atwaterCal,
+          protein: isLowConfidence ? void 0 : protein,
+          carbs: isLowConfidence ? void 0 : carbs,
+          fat: isLowConfidence ? void 0 : fat,
+          fiber: isLowConfidence ? void 0 : fiber,
+          sugar: isLowConfidence ? void 0 : sugar,
+          sodium: isLowConfidence ? void 0 : sodium,
           isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
           volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
           mealType: parsed.mealType,
-          portionNote: items.length === 1 ? "1 detected food item" : `${items.length} detected food items`,
-          items,
+          portionNote: itemsToUse.length === 1 ? "1 meal detected" : `${itemsToUse.length} food items detected`,
+          items: itemsToUse,
+          confidence: isLowConfidence ? "low" : parsed.confidence || deterministicResult.confidence || "medium",
+          needsClarification: isLowConfidence,
+          clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
+          suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
+          portionDisplayLabel: deterministicResult.portionDisplayLabel,
           debugLog: deterministicResult.debugLog
         });
       } catch (aiErr) {
@@ -46720,6 +47861,8 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         res.json({
           success: true,
           ...deterministicResult,
+          foodName: userInputFoodName,
+          // Override with original user input
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -46829,27 +47972,40 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
-    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
     const targetDate = req.query.date || getLocalDateStr();
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
-    let logs = [];
-    if (dbData.dailyLogs[key] !== void 0 && Array.isArray(dbData.dailyLogs[key]) && dbData.dailyLogs[key].length > 0) {
-      logs = dbData.dailyLogs[key].filter((m) => !isLegacyMockMeal(m));
-    } else if (dbData.dailyLogs[altKey] !== void 0 && Array.isArray(dbData.dailyLogs[altKey]) && dbData.dailyLogs[altKey].length > 0) {
-      logs = dbData.dailyLogs[altKey].filter((m) => !isLegacyMockMeal(m));
-    } else {
-      try {
-        const dbLogs = await getFoodLogsForDate(phone, targetDate);
-        if (dbLogs && dbLogs.length > 0) {
-          logs = dbLogs;
-          dbData.dailyLogs[key] = logs;
-          saveDb();
-        }
-      } catch (e) {
-        console.warn("[Meals API] Database fetch note:", e?.message || e);
+    const mergedMap = /* @__PURE__ */ new Map();
+    const memLogs = [
+      ...Array.isArray(dbData.dailyLogs[key]) ? dbData.dailyLogs[key] : [],
+      ...Array.isArray(dbData.dailyLogs[altKey]) ? dbData.dailyLogs[altKey] : []
+    ];
+    for (const m of memLogs) {
+      if (m && !isLegacyMockMeal(m)) {
+        const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+        mergedMap.set(dedupeKey, m);
       }
     }
+    try {
+      const dbLogs = await getFoodLogsForDate(phone, targetDate);
+      if (dbLogs && dbLogs.length > 0) {
+        for (const m of dbLogs) {
+          if (m && !isLegacyMockMeal(m)) {
+            const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
+            if (!mergedMap.has(dedupeKey)) {
+              mergedMap.set(dedupeKey, m);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Meals API] Database fetch note:", e?.message || e);
+    }
+    const logs = deduplicateMealLogs(Array.from(mergedMap.values()));
+    dbData.dailyLogs[key] = logs;
+    dbData.dailyLogs[altKey] = logs;
     res.json({ success: true, phone, date: targetDate, logs });
   });
   app.post("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {
@@ -46868,6 +48024,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       fat: Number(meal.fat) || 0,
       fiber: Number(meal.fiber) || 0,
       sugar: Number(meal.sugar) || 0,
+      sodium: Number(meal.sodium) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
       timestamp: meal.timestamp || (/* @__PURE__ */ new Date()).toISOString(),
       isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : meal.isHydration === false || meal.isHydration === "false" ? false : void 0,
@@ -46894,6 +48051,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         fat: mealObj.fat,
         fiber: mealObj.fiber,
         sugar: mealObj.sugar,
+        sodium: mealObj.sodium,
         isHydration: mealObj.isHydration,
         volumeMl: mealObj.volumeMl,
         itemType: mealObj.isHydration ? "water" : "food",
@@ -46925,7 +48083,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     }
     res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
   });
-  app.delete("/api/user/:phone/meals", (req, res) => {
+  app.delete("/api/user/:phone/meals", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.query.date || getLocalDateStr();
@@ -46934,6 +48092,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[key] = [];
     dbData.dailyLogs[altKey] = [];
     saveDb();
+    try {
+      await deleteAllFoodLogsForDate(phone, targetDate);
+    } catch (e) {
+      console.warn("[Meals API] deleteAllFoodLogsForDate note:", e?.message || e);
+    }
     res.json({ success: true, phone, date: targetDate, logs: [] });
   });
   app.put("/api/user/:phone/meals", import_express.default.json(), async (req, res) => {
@@ -46983,21 +48146,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const updatedCups = setWaterCups(phone, Number(cups) || 0, targetDate);
     res.json({ success: true, phone, date: targetDate, cups: updatedCups, liters: Number((updatedCups * 0.25).toFixed(1)) });
   });
-  app.get("/api/user/:phone", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const user = getUserProfile(phone);
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found in database" });
-    }
-    const calculated = calculateUserData(user);
-    return res.json({
-      success: true,
-      user,
-      profile: user,
-      userData: calculated,
-      calculated
-    });
-  });
   app.delete("/api/user/:phone", (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
@@ -47032,24 +48180,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       generatedImages: {}
     };
     saveDb();
-    if (MONGODB_URI) {
-      try {
-        const db = await getMongoDb();
-        if (db) {
-          await db.collection("appdata").deleteMany({});
-          await db.collection("appdata").replaceOne(
-            { _id: "main" },
-            { _id: "main", users: {}, dailyLogs: {}, weeklyProgress: {}, waterLogs: {}, updatedAt: /* @__PURE__ */ new Date() },
-            { upsert: true }
-          );
-          console.log("[MongoDB] Collection reset successfully \u2705");
-        }
-      } catch (err) {
-        console.error("[MongoDB] Reset error:", err?.message || err);
-      }
+    try {
+      await saveAppDataToFirestore(dbData);
+      console.log("[Firestore] Global appdata reset successfully \u2705");
+    } catch (err) {
+      console.error("[Firestore] Reset error:", err?.message || err);
     }
     console.log("All user database data reset successfully.");
-    return res.json({ success: true, message: "Semua data database (lokal & MongoDB) berhasil dihapus 100%." });
+    return res.json({ success: true, message: "Semua data database (lokal & Firestore) berhasil dihapus 100%." });
   });
   app.post("/api/user/:phone/progress", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -47106,6 +48244,29 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const calculated = calculateUserData(user);
     res.json({ success: true, schedule: calculated.workoutSchedule });
   });
+  app.get("/api/user/:phone/exercises", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const exercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+    res.json({ success: true, phone, date: targetDate, exercises });
+  });
+  app.post("/api/user/:phone/exercises", import_express.default.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.body?.date || req.query.date || getLocalDateStr();
+    const { exercises } = req.body;
+    const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+    const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    if (Array.isArray(exercises)) {
+      dbData.dailyLogs[key] = exercises;
+      dbData.dailyLogs[altKey] = exercises;
+      saveDb();
+    }
+    res.json({ success: true, phone, date: targetDate, exercises: dbData.dailyLogs[key] || [] });
+  });
   app.post("/api/user/:phone/reminder", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const user = getUserProfile(phone);
@@ -47129,14 +48290,16 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     if (!user) {
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
-    const { targetWeight, targetCalories, goal, goalTitle } = req.body;
+    const { targetWeight, targetCalories, goal, goalTitle, customTargets, customGoals } = req.body;
     if (targetWeight) user.targetWeight = Number(targetWeight);
     if (targetCalories) user.targetCalories = Number(targetCalories);
     if (goal) user.goal = goal;
     if (goalTitle) user.goalTitle = goalTitle;
+    if (customTargets) user.customTargets = customTargets;
+    if (customGoals) user.customGoals = customGoals;
     saveUserProfile(phone, user);
     const calculated = calculateUserData(user);
-    res.json({ success: true, user, profile: user, userData: calculated, calculated });
+    res.json({ success: true, user, profile: user, userData: calculated, calculated, customTargets: user.customTargets });
   });
   app.get("/api/exercises", (req, res) => {
     res.json({ success: true, count: EXERCISE_DATABASE.length, exercises: EXERCISE_DATABASE });
@@ -47159,7 +48322,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.post("/api/midtrans/create-transaction", import_express.default.json(), async (req, res) => {
     try {
       const { phone, plan = "advanced", activeService = "both", amount, customerName } = req.body;
-      const orderId = `GYMBUDDY-${Date.now()}-${Math.floor(Math.random() * 1e3)}`;
+      const normPhone = normalizePhone(phone || "");
+      if (!normPhone) {
+        return res.status(400).json({ success: false, error: "Phone number is required for payment" });
+      }
+      const orderId = `GYMBUDDY-${normPhone}-${Date.now()}-${Math.floor(Math.random() * 1e3)}`;
       const grossAmount = Number(amount) || (plan === "premium" ? 139e3 : 79e3);
       const parameter = {
         transaction_details: {
@@ -47175,10 +48342,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         customer_details: req.body.customerDetails || {
           first_name: customerName || "Member GymBuddy",
           email: "member@gymbuddy.app",
-          phone: phone || "08123456789"
-        }
+          phone: normPhone
+        },
+        // Bug #6 FIX: Add custom_fields so Midtrans webhook can identify user & plan
+        // These fields are returned back in the notification payload
+        custom_field1: normPhone,
+        // User phone (primary identifier)
+        custom_field2: plan,
+        // Subscription plan tier
+        custom_field3: activeService
+        // Active service (nutrition/coach/both)
       };
       const transaction = await snap.createTransaction(parameter);
+      console.log(`[Midtrans] Created transaction ${orderId} for user ${normPhone}, plan: ${plan}, service: ${activeService}`);
       res.json({
         success: true,
         orderId,
@@ -47308,7 +48484,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const lowerText = userText.toLowerCase();
           const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
           if (!userProfile) {
-            userProfile = await getUserProfileFromMongo(from);
+            userProfile = await getUserProfileFromFirestore(from);
           }
           if (!userProfile && !isWelcomeMessage) {
             await sendMetaWhatsappMessage(
@@ -47435,10 +48611,22 @@ https://gymbuddygroup.com`
             const totals = getDailyTotals(from, parsedDate.dateStr);
             responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
           } else if (getAi()) {
-            await sendMetaWhatsappMessage(from, "sedang berpikir... \u{1F4AD}\n\nHampir selesai mengecek inputmu... \u{1F4CA}");
-            const isMia = userData.persona === "mia" || userData.persona === "nikita";
-            const personaInstruction = isMia ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.` : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
-            const prompt = `INFORMASI PENGGUNA:
+            const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
+            if (isGenericImageCaption && !imagePart) {
+              const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
+              responseMessages = [
+                `\u{1F4F8} *FOTO BELUM BERHASIL DIPROSES*
+-----------------------------
+Halo ${userData.name}! Fotonya belum berhasil terunduh oleh sistem WhatsApp Meta.
+
+\u{1F4A1} *Solusi Cepat*:
+Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! \u{1F957}\u2728`
+              ];
+            } else {
+              await sendMetaWhatsappMessage(from, "sedang berpikir... \u{1F4AD}\n\nHampir selesai mengecek inputmu... \u{1F4CA}");
+              const isMia = userData.persona === "mia" || userData.persona === "nikita";
+              const personaInstruction = isMia ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.` : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
+              const prompt = `INFORMASI PENGGUNA:
 - Nama: ${userData.name}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
@@ -47449,9 +48637,11 @@ ${personaInstruction}
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
+${imagePart ? 'CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto (nasi, lauk, sayur, buah, dll.) dan SELALU set "isFood": true.' : ""}
 
-Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
+Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", "aku makan ini", dll)
 PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber).
+
 Keluarkan output JSON valid:
 {
   "isFood": true,
@@ -47508,79 +48698,80 @@ Keluarkan output JSON valid:
   "generalReply": "Pesan balasan coach yang alami dan sesuai persona"
 }
 `;
-            try {
-              const rawText = await generateGeminiContent(prompt, imagePart);
-              let parsed = extractAndParseJson(rawText);
-              if (!parsed) {
-                const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
-                parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
-              }
-              if (parsed.isFood) {
+              try {
+                const rawText = await generateGeminiContent(prompt, imagePart);
+                let parsed = extractAndParseJson(rawText);
+                if (!parsed) {
+                  const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
+                  parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
+                }
+                if (parsed.isFood) {
+                  addMealLog(from, {
+                    id: `m-${Date.now()}`,
+                    foodName: parsed.foodName || "Makanan",
+                    calories: Number(parsed.calories) || 0,
+                    protein: Number(parsed.protein) || 0,
+                    carbs: Number(parsed.carbs) || 0,
+                    fat: Number(parsed.fat) || 0,
+                    fiber: Number(parsed.fiber) || 0,
+                    mealType: parsed.mealType || getMealTypeByHour(),
+                    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+                  });
+                  const dailyTotals = getDailyTotals(from);
+                  const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+                  responseMessages = [card];
+                } else if (parsed.isEquipment) {
+                  const eqCard = formatEquipmentCard(parsed, userData);
+                  responseMessages = [eqCard];
+                } else {
+                  responseMessages = [parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?"];
+                }
+              } catch (e) {
+                console.error("Gemini AI Error:", e);
+                let calEst = 350;
+                let protEst = 20;
+                let carbEst = 40;
+                let fatEst = 12;
+                let foodTitle = userText;
+                if (userText.toLowerCase().includes("batagor") || userText.toLowerCase().includes("padang") || userText.toLowerCase().includes("pizza")) {
+                  calEst = 3800;
+                  protEst = 140;
+                  carbEst = 420;
+                  fatEst = 160;
+                  foodTitle = "Batagor 3x, Nasi Padang 3x & Pizza 1 Loyang";
+                }
+                const fallbackFoodObj = {
+                  isFood: true,
+                  isEquipment: false,
+                  foodName: foodTitle,
+                  calories: calEst,
+                  protein: protEst,
+                  carbs: carbEst,
+                  fat: fatEst,
+                  fiber: 15,
+                  sugar: 30,
+                  satietyScore: 9,
+                  satietyExplanation: "Porsi makan sangat besar dengan kepadatan kalori tinggi.",
+                  healthScore: 5,
+                  portionEstimates: [userText],
+                  keyInsights: ["Asupan kalori & karbohidrat sangat tinggi", "Sangat bagus untuk pemulihan energi setelah latihan berat"],
+                  coachComment: userData.persona === "max" ? "Gila bro! Porsi segunung gini langsung melampaui target kalori! Tapi kalau buat bulking ekstrim, habiskan dan gas pembakaran di gym besok!" : "Wah porsi makanmu banyak banget hari ini! Imbangi dengan air putih yang cukup ya \u2728"
+                };
                 addMealLog(from, {
                   id: `m-${Date.now()}`,
-                  foodName: parsed.foodName || "Makanan",
-                  calories: Number(parsed.calories) || 0,
-                  protein: Number(parsed.protein) || 0,
-                  carbs: Number(parsed.carbs) || 0,
-                  fat: Number(parsed.fat) || 0,
-                  fiber: Number(parsed.fiber) || 0,
-                  mealType: parsed.mealType || getMealTypeByHour(),
+                  foodName: fallbackFoodObj.foodName,
+                  calories: calEst,
+                  protein: protEst,
+                  carbs: carbEst,
+                  fat: fatEst,
+                  fiber: 15,
+                  mealType: getMealTypeByHour(),
                   timestamp: (/* @__PURE__ */ new Date()).toISOString()
                 });
                 const dailyTotals = getDailyTotals(from);
-                const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+                const card = formatNutritionCard(fallbackFoodObj, "Teks", userData, dailyTotals);
                 responseMessages = [card];
-              } else if (parsed.isEquipment) {
-                const eqCard = formatEquipmentCard(parsed, userData);
-                responseMessages = [eqCard];
-              } else {
-                responseMessages = [parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?"];
               }
-            } catch (e) {
-              console.error("Gemini AI Error:", e);
-              let calEst = 350;
-              let protEst = 20;
-              let carbEst = 40;
-              let fatEst = 12;
-              let foodTitle = userText;
-              if (userText.toLowerCase().includes("batagor") || userText.toLowerCase().includes("padang") || userText.toLowerCase().includes("pizza")) {
-                calEst = 3800;
-                protEst = 140;
-                carbEst = 420;
-                fatEst = 160;
-                foodTitle = "Batagor 3x, Nasi Padang 3x & Pizza 1 Loyang";
-              }
-              const fallbackFoodObj = {
-                isFood: true,
-                isEquipment: false,
-                foodName: foodTitle,
-                calories: calEst,
-                protein: protEst,
-                carbs: carbEst,
-                fat: fatEst,
-                fiber: 15,
-                sugar: 30,
-                satietyScore: 9,
-                satietyExplanation: "Porsi makan sangat besar dengan kepadatan kalori tinggi.",
-                healthScore: 5,
-                portionEstimates: [userText],
-                keyInsights: ["Asupan kalori & karbohidrat sangat tinggi", "Sangat bagus untuk pemulihan energi setelah latihan berat"],
-                coachComment: userData.persona === "max" ? "Gila bro! Porsi segunung gini langsung melampaui target kalori! Tapi kalau buat bulking ekstrim, habiskan dan gas pembakaran di gym besok!" : "Wah porsi makanmu banyak banget hari ini! Imbangi dengan air putih yang cukup ya \u2728"
-              };
-              addMealLog(from, {
-                id: `m-${Date.now()}`,
-                foodName: fallbackFoodObj.foodName,
-                calories: calEst,
-                protein: protEst,
-                carbs: carbEst,
-                fat: fatEst,
-                fiber: 15,
-                mealType: getMealTypeByHour(),
-                timestamp: (/* @__PURE__ */ new Date()).toISOString()
-              });
-              const dailyTotals = getDailyTotals(from);
-              const card = formatNutritionCard(fallbackFoodObj, "Teks", userData, dailyTotals);
-              responseMessages = [card];
             }
           }
           if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && responseMessages.length > 0) {
@@ -47599,46 +48790,93 @@ Keluarkan output JSON valid:
       res.sendStatus(500);
     }
   });
-  app.post("/api/webhook/twilio-whatsapp", import_express.default.urlencoded({ extended: true }), async (req, res) => {
+  function escapeXml(unsafe) {
+    return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  }
+  app.post(["/api/webhook/twilio-whatsapp", "/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
     console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] Received Twilio WhatsApp Webhook. From: ${req.body?.From}, Body: ${req.body?.Body}`);
     try {
       const { Body, From, NumMedia } = req.body;
-      let userProfile = getUserProfile(From);
+      const rawFrom = From || "";
+      const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
+      let userProfile = null;
+      try {
+        userProfile = await findUserByPhoneOrId(normFrom) || getUserProfile(normFrom) || await getUserProfileFromFirestore(normFrom);
+      } catch (profileErr) {
+        console.warn("[Twilio WA] User profile lookup error (non-fatal):", profileErr?.message || profileErr);
+        userProfile = getUserProfile(normFrom) || null;
+      }
       let userText = Body || "";
+      const lowerText = userText.toLowerCase();
+      const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
+      if (!isWelcomeMessage) {
+        const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
+        const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
+        sendWhatsAppAsync(rawFrom, ackText, req.body?.To).catch((err) => {
+          console.warn("[Twilio WA] Acknowledgment send warning (non-fatal):", err?.message || err);
+        });
+      }
       let imagePart = null;
       if (NumMedia && parseInt(NumMedia) > 0) {
         const mediaUrl = req.body.MediaUrl0;
         const mediaContentType = req.body.MediaContentType0;
         if (mediaUrl) {
           try {
-            const imageRes = await import_axios.default.get(mediaUrl, { responseType: "arraybuffer" });
-            const imageBuffer = Buffer.from(imageRes.data, "binary");
-            const base64Image = imageBuffer.toString("base64");
-            imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            const downloaded = await downloadTwilioMedia(mediaUrl);
+            if (downloaded) {
+              imagePart = { inlineData: { data: downloaded.data, mimeType: downloaded.mimeType } };
+            } else {
+              const imageRes = await import_axios.default.get(mediaUrl, { responseType: "arraybuffer" });
+              const imageBuffer = Buffer.from(imageRes.data, "binary");
+              const base64Image = imageBuffer.toString("base64");
+              imagePart = { inlineData: { data: base64Image, mimeType: mediaContentType || "image/jpeg" } };
+            }
           } catch (mediaErr) {
             console.error("Error fetching Twilio media:", mediaErr);
           }
         }
       }
-      const lowerText = userText.toLowerCase();
-      const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
       if (!userProfile) {
-        userProfile = await getUserProfileFromMongo(From);
+        const latestOB = dbData.users["latest_onboarding"];
+        if (latestOB && latestOB.weight) {
+          userProfile = saveUserProfile(normFrom, { ...latestOB, phone: normFrom, normalizedPhone: normFrom });
+        }
       }
-      if (!userProfile && !isWelcomeMessage) {
-        const twiml2 = new import_twilio.default.twiml.MessagingResponse();
-        twiml2.message(
-          `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar.
-
-Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
-https://gymbuddygroup.com`
-        );
-        return res.type("text/xml").send(twiml2.toString());
+      if (!userProfile) {
+        userProfile = getOrCreateUserProfile(normFrom, userText);
       }
-      if (!userProfile) userProfile = getOrCreateUserProfile(From, userText);
+      if (!userProfile) {
+        userProfile = {
+          name: "Member",
+          phone: normFrom,
+          normalizedPhone: normFrom,
+          weight: 65,
+          startWeight: 65,
+          targetWeight: 60,
+          targetCalories: 2e3,
+          proteinGrams: 140,
+          carbGrams: 200,
+          fatGrams: 60,
+          fiberGrams: 30,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          persona: "max",
+          activeService: "both",
+          gender: "male",
+          height: 170,
+          activityLevel: "moderate"
+        };
+        saveUserProfile(normFrom, userProfile);
+      } else {
+        userProfile.phone = normFrom;
+        userProfile.normalizedPhone = normFrom;
+        if (!userProfile.name) {
+          userProfile.name = "Member";
+        }
+        saveUserProfile(normFrom, userProfile);
+      }
       const userData = calculateUserData(userProfile);
+      console.log(`[Twilio WA] \u2705 Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
       const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
       const isCheckSummaryMessage = lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("makan apa");
@@ -47653,8 +48891,9 @@ https://gymbuddygroup.com`
       const isExerciseInquiry = Boolean(
         matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
+      console.log(`[Twilio WA] \u2705 Step: routing. isReset=${isResetMessage}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
       if (isResetMessage) {
-        const normPhone = normalizePhone(From);
+        const normPhone = normalizePhone(normFrom);
         if (dbData.users[normPhone]) {
           delete dbData.users[normPhone];
         }
@@ -47665,6 +48904,10 @@ https://gymbuddygroup.com`
           }
         });
         saveDb();
+        deleteUserDocument(normPhone).catch(() => {
+        });
+        deleteUserFromFirestore(normPhone).catch(() => {
+        });
         console.log(`[Reset Command] Deleted profile and data for ${normPhone}`);
         responseMessages = [
           `\u{1F5D1}\uFE0F *AKUN & DATA KAMU BERHASIL DIHAPUS!*
@@ -47678,7 +48921,7 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
-          userData.persona || "mia",
+          userData.persona === "max" || userData.persona === "mia" ? userData.persona : "mia",
           userData.goal || "healthy"
         );
         responseMessages = [guide.text];
@@ -47709,7 +48952,7 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
           updatedProfileNeeded = true;
         }
         if (updatedProfileNeeded) {
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
         }
         if (userProfile.hasReceivedWelcome) {
           const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -47721,7 +48964,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           responseMessages = [shortWelcome];
         } else {
           userProfile.hasReceivedWelcome = true;
-          saveUserProfile(From, userProfile);
+          saveUserProfile(normFrom, userProfile);
           const currentCalculated = calculateUserData(userProfile);
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
@@ -47737,8 +48980,8 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           actualMl = Math.round(rawAmount) * 250;
         }
         const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-        const currentCups = getWaterCups(From);
-        const newTotalCups = setWaterCups(From, currentCups + cupsToAdd);
+        const currentCups = getWaterCups(normFrom);
+        const newTotalCups = setWaterCups(normFrom, currentCups + cupsToAdd);
         const liters = (newTotalCups * 0.25).toFixed(1);
         const waterEntry = {
           id: `wa-water-${Date.now()}`,
@@ -47750,9 +48993,9 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           isHydration: true,
           volumeMl: actualMl,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          mealType: getMealTypeByHour()
+          mealType: getMealTypeByHour(userText)
         };
-        addMealLog(From, waterEntry);
+        addMealLog(normFrom, waterEntry);
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         const comment = userData.persona === "max" ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
         responseMessages = [
@@ -47767,7 +49010,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
       } else if (weightMatch) {
         const newW = parseFloat(weightMatch[1].replace(",", "."));
         if (!isNaN(newW) && newW > 30 && newW < 300) {
-          const resProg = addWeeklyProgress(From, newW, "Update via WhatsApp");
+          const resProg = addWeeklyProgress(normFrom, newW, "Update via WhatsApp");
           if (resProg) {
             responseMessages = [formatWeeklyProgressCard(resProg)];
           } else {
@@ -47775,20 +49018,20 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           }
         }
       } else if (isProgressHistoryMessage) {
-        responseMessages = [formatProgressHistoryCard(From)];
+        responseMessages = [formatProgressHistoryCard(normFrom)];
       } else if (isWorkoutReqMessage) {
         responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isRecommendationMessage) {
         responseMessages = [generateMealRecommendations(userData)];
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
-        const totals = getDailyTotals(From, parsedDate.dateStr);
+        const totals = getDailyTotals(normFrom, parsedDate.dateStr);
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-      } else if (handleReminderCommand(userText, userProfile, From, userData)) {
-        responseMessages = handleReminderCommand(userText, userProfile, From, userData);
+      } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
+        responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
       } else if (!userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) && !userText.includes("?") && userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)) {
         const todayStr = getLocalDateStr();
-        const workoutKey = `gymbuddy_exercises_${From}_${todayStr}`;
+        const workoutKey = `gymbuddy_exercises_${normFrom}_${todayStr}`;
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
         saveDb();
@@ -47801,7 +49044,6 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
 "Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
         ];
       } else if (getAi()) {
-        await sendTwilioWhatsappMessage(From, "sedang berpikir... \u{1F4AD}\n\nHampir selesai mengecek inputmu... \u{1F4CA}");
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.` : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
         const activeService = userData.activeService || "both";
@@ -47826,7 +49068,7 @@ TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
-PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber).
+PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber, sodium dalam mg).
 Keluarkan output JSON valid:
 {
   "isFood": true,
@@ -47838,6 +49080,7 @@ Keluarkan output JSON valid:
   "fat": 5,
   "fiber": 2,
   "sugar": 4,
+  "sodium": 350,
   "satietyScore": 7,
   "satietyExplanation": "Penjelasan singkat efek kenyang makanan ini",
   "healthScore": 8,
@@ -47892,7 +49135,7 @@ Keluarkan output JSON valid:
           }
           const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
           if (parsed.isFood) {
-            addMealLog(From, {
+            addMealLog(normFrom, {
               id: `m-${Date.now()}`,
               foodName: parsed.foodName || "Makanan",
               calories: Number(parsed.calories) || 0,
@@ -47900,12 +49143,47 @@ Keluarkan output JSON valid:
               carbs: Number(parsed.carbs) || 0,
               fat: Number(parsed.fat) || 0,
               fiber: Number(parsed.fiber) || 0,
-              mealType: parsed.mealType || getMealTypeByHour(),
+              sugar: Number(parsed.sugar) || 0,
+              sodium: Number(parsed.sodium) || 0,
+              mealType: getMealTypeByHour(userText || parsed.mealType),
               timestamp: (/* @__PURE__ */ new Date()).toISOString()
             });
-            const dailyTotals = getDailyTotals(From);
+            const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
+            if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
+              const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+              const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+              const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
+              cardMediaCache.set(cardId, {
+                foodName: parsed.foodName || "Makanan",
+                calories: Number(parsed.calories) || 0,
+                protein: Number(parsed.protein) || 0,
+                carbs: Number(parsed.carbs) || 0,
+                fat: Number(parsed.fat) || 0,
+                sodium: Number(parsed.sodium) || 0,
+                fiber: Number(parsed.fiber) || 0,
+                sugar: Number(parsed.sugar) || 0,
+                mealType: mealTypeStr,
+                dateStr,
+                dailyTargetCalories: userData.targetCalories || 1966,
+                consumedTodayCalories: dailyTotals.calories,
+                dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
+                dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
+                dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
+                insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
+                imageBufferOrBase64: photoDataUri,
+                createdAt: Date.now()
+              });
+              const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+              const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
+              const dynamicOrigin = `${proto}://${host}`;
+              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+            } else {
+              mediaUrlToSend = "";
+            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;
@@ -47923,56 +49201,44 @@ Keluarkan output JSON valid:
           responseMessages = ["Maaf, aku sedang tidak bisa memproses inputmu saat ini."];
         }
       } else {
-        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar."];
+        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
-      const twiml = new import_twilio.default.twiml.MessagingResponse();
-      if (responseMessages.length > 0) {
-        const combinedMessage = responseMessages.join("\n\n---\n\n");
-        const msgNode = twiml.message();
-        msgNode.body(combinedMessage);
-        if (mediaUrlToSend) {
-          msgNode.media(mediaUrlToSend);
+      for (const msg of responseMessages) {
+        if (msg && msg.trim()) {
+          sendWhatsAppAsync(rawFrom, msg.trim(), req.body?.To).catch((e) => {
+            console.warn("[Twilio WA] Async final message note:", e?.message || e);
+          });
         }
       }
-      if (getTwilio() && responseMessages.length > 0) {
-        (async () => {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = From.startsWith("whatsapp:") ? From : `whatsapp:${From}`;
-            for (const msgText of responseMessages) {
-              const payload = {
-                body: msgText,
-                from: fromNum,
-                to: toNum
-              };
-              if (mediaUrlToSend) {
-                payload.mediaUrl = [mediaUrlToSend];
-              }
-              await getTwilio().messages.create(payload);
-              await new Promise((r) => setTimeout(r, 600));
-            }
-            console.log("Successfully delivered message via Twilio REST API to:", toNum);
-          } catch (restErr) {
-            console.error("Twilio REST API send error:", restErr?.message || restErr);
-          }
-        })();
+      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>`;
+      if (responseMessages.length === 0) {
+        responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
       }
-      const xmlOutput = twiml.toString();
-      console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] Sending TwiML XML response to Twilio:
-${xmlOutput}`);
-      res.type("text/xml").send(xmlOutput);
+      for (let i = 0; i < responseMessages.length; i++) {
+        const msgText = responseMessages[i];
+        if (msgText && msgText.trim()) {
+          const maxChunk = 1400;
+          for (let j = 0; j < msgText.length; j += maxChunk) {
+            const chunk = msgText.substring(j, j + maxChunk);
+            twiml += `<Message><Body>${escapeXml(chunk)}</Body></Message>`;
+          }
+        }
+      }
+      twiml += `</Response>`;
+      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);
+      return res.type("text/xml").send(twiml);
     } catch (error) {
-      console.error("Error processing Twilio webhook:", error);
-      res.sendStatus(500);
+      console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis. Coba lagi sebentar ya! \u{1F64F}</Body></Message></Response>`);
     }
   });
   async function generateGeminiImage(promptText) {
     const rawEq = promptText.match(/for ([A-Z0-9\s]+)\./i);
     const eqName = rawEq ? rawEq[1].trim() : "Gym Equipment";
     const fullPrompt = `Photorealistic 8k fitness infographic tutorial poster for how to use ${eqName}. Dark gym aesthetic background with gold and white typography. Top title TUTORIAL CARA PAKAI ALAT INI ${eqName}. Bagian Alat section showing equipment parts. Cara Pakai section showing 4 step by step workout demonstration cards with athletic people performing the movement. Tips and common mistakes section with red X posture error comparison. Target muscle anatomy diagram showing worked muscles and workout sets reps rest counter. High quality realistic gym guide poster.`;
-    if (USER_GEMINI_KEY) {
-      const cleanKey = USER_GEMINI_KEY;
+    const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+    if (geminiKey) {
+      const cleanKey = geminiKey;
       const isBearer = cleanKey.startsWith("AQ.") || cleanKey.startsWith("ya29.");
       const imagenModels = ["imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"];
       for (const mName of imagenModels) {
@@ -48102,22 +49368,22 @@ ${xmlOutput}`);
   </g>
 
   <!-- Brand Typography -->
-  <text x="80" y="55" font-size="16" font-weight="900" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.5">GYMBUDDY</text>
-  <text x="175" y="55" font-size="12" font-weight="800" fill="#D4FF00" font-family="system-ui, sans-serif" letter-spacing="1">VISION AI</text>
+  <text x="80" y="55" font-size="16" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="0.5">GYMBUDDY</text>
+  <text x="175" y="55" font-size="12" font-weight="800" fill="#D4FF00" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="1">VISION AI</text>
 
   <!-- Day Badge (Top Right) -->
   <rect x="444" y="32" width="120" height="34" rx="17" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.08"/>
-  <text x="504" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">${esc(dayLabel || "Hari Ini")}</text>
+  <text x="504" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(dayLabel || "Hari Ini")}</text>
 
   <!-- FOOD TITLE (Crisp, modern line wrapping) -->
-  <text x="36" y="${nameLine2 ? 104 : 116}" font-size="${nameLine2 ? 26 : 28}" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine1)}</text>
-  ${nameLine2 ? `<text x="36" y="138" font-size="24" font-weight="800" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif">${esc(nameLine2)}</text>` : ""}
+  <text x="36" y="${nameLine2 ? 104 : 116}" font-size="${nameLine2 ? 26 : 28}" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(nameLine1)}</text>
+  ${nameLine2 ? `<text x="36" y="138" font-size="24" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${esc(nameLine2)}</text>` : ""}
 
   <!-- HEALTH SCORE PILL (Clean, zero overlap) -->
   <rect x="36" y="${nameLine2 ? 152 : 142}" width="220" height="32" rx="16" fill="#141C2B" stroke="#D4FF00" stroke-opacity="0.3" stroke-width="1"/>
-  <text x="48" y="${nameLine2 ? 173 : 163}" font-size="14" fill="#D4FF00" font-family="sans-serif">\u2605</text>
-  <text x="66" y="${nameLine2 ? 173 : 163}" font-size="12" font-weight="800" fill="#FFFFFF" font-family="system-ui, sans-serif">${scoreFormatted} / 5.0</text>
-  <text x="130" y="${nameLine2 ? 173 : 163}" font-size="11" font-weight="600" fill="#94A3B8" font-family="system-ui, sans-serif">\u2022 ${scoreRatingText}</text>
+  <text x="48" y="${nameLine2 ? 173 : 163}" font-size="14" fill="#D4FF00" font-family="DejaVu Sans, Arial, sans-serif">\u2605</text>
+  <text x="66" y="${nameLine2 ? 173 : 163}" font-size="12" font-weight="800" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${scoreFormatted} / 5.0</text>
+  <text x="130" y="${nameLine2 ? 173 : 163}" font-size="11" font-weight="600" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">\u2022 ${scoreRatingText}</text>
 
   <!-- FOOD PHOTO -->
   ${imgContent}
@@ -48125,45 +49391,45 @@ ${xmlOutput}`);
 
   <!-- HERO CALORIE BAR -->
   <rect x="36" y="510" width="528" height="68" rx="20" fill="#141C2B" stroke="#FFFFFF" stroke-opacity="0.06"/>
-  <text x="56" y="552" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">\u{1F525} ${calories}</text>
-  <text x="175" y="550" font-size="14" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">TOTAL KALORI (kcal)</text>
-  <text x="544" y="550" text-anchor="end" font-size="12" font-weight="700" fill="#D4FF00" font-family="system-ui, sans-serif">Padat Energi</text>
+  <text x="56" y="552" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">\u{1F525} ${calories}</text>
+  <text x="175" y="550" font-size="14" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">TOTAL KALORI (kcal)</text>
+  <text x="544" y="550" text-anchor="end" font-size="12" font-weight="700" fill="#D4FF00" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Padat Energi</text>
 
   <!-- 4 BALANCED MACRO CARDS -->
   <!-- 1. Protein Card -->
   <rect x="36" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="48" y="602" width="8" height="8" rx="4" fill="#10B981"/>
-  <text x="62" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Protein</text>
-  <text x="98" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${protein}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="62" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Protein</text>
+  <text x="98" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${protein}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="48" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="48" y="676" width="${Math.min(100, Math.round(protein * 2.5))}" height="5" rx="2.5" fill="#10B981"/>
 
   <!-- 2. Karbohidrat Card -->
   <rect x="170" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="182" y="602" width="8" height="8" rx="4" fill="#F59E0B"/>
-  <text x="196" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Karbo</text>
-  <text x="232" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${carbs}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="196" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Karbo</text>
+  <text x="232" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${carbs}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="182" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="182" y="676" width="${Math.min(100, Math.round(carbs * 1.5))}" height="5" rx="2.5" fill="#F59E0B"/>
 
   <!-- 3. Lemak Card -->
   <rect x="304" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="316" y="602" width="8" height="8" rx="4" fill="#8B5CF6"/>
-  <text x="330" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Lemak</text>
-  <text x="366" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fat}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="330" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Lemak</text>
+  <text x="366" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${fat}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="316" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="316" y="676" width="${Math.min(100, Math.round(fat * 2.2))}" height="5" rx="2.5" fill="#8B5CF6"/>
 
   <!-- 4. Serat Card -->
   <rect x="440" y="590" width="124" height="110" rx="20" fill="#101724" stroke="#FFFFFF" stroke-opacity="0.06"/>
   <rect x="452" y="602" width="8" height="8" rx="4" fill="#06B6D4"/>
-  <text x="466" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="system-ui, sans-serif">Serat</text>
-  <text x="502" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="system-ui, sans-serif">${fiber}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
+  <text x="466" y="610" font-size="12" font-weight="700" fill="#94A3B8" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">Serat</text>
+  <text x="502" y="654" text-anchor="middle" font-size="28" font-weight="900" fill="#FFFFFF" font-family="DejaVu Sans, Arial, Helvetica, sans-serif">${fiber}<tspan font-size="14" font-weight="600" fill="#64748B">g</tspan></text>
   <rect x="452" y="676" width="100" height="5" rx="2.5" fill="#1E293B"/>
   <rect x="452" y="676" width="${Math.min(100, Math.round(fiber * 8))}" height="5" rx="2.5" fill="#06B6D4"/>
 
   <!-- FOOTER BRANDING -->
-  <text x="300" y="745" text-anchor="middle" font-size="11" font-weight="700" fill="#475569" font-family="system-ui, sans-serif" letter-spacing="1">GYMBUDDY \xB7 AI NUTRITION ENGINE</text>
+  <text x="300" y="745" text-anchor="middle" font-size="11" font-weight="700" fill="#475569" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" letter-spacing="1">GYMBUDDY \xB7 AI NUTRITION ENGINE</text>
 </svg>`;
   }
   app.get(["/api/nutrition-card/:id.png", "/api/nutrition-card/:id.jpg"], async (req, res) => {
@@ -48187,7 +49453,25 @@ ${xmlOutput}`);
     );
     try {
       const { Resvg } = await import("@resvg/resvg-js");
-      const resvg = new Resvg(svgStr, { fitTo: { mode: "width", value: 600 } });
+      const fontPath = import_path2.default.join(process.cwd(), "fonts", "arial.ttf");
+      let fontBuffer = null;
+      if (import_fs2.default.existsSync(fontPath)) {
+        try {
+          fontBuffer = import_fs2.default.readFileSync(fontPath);
+        } catch (fe) {
+        }
+      }
+      const resvgOptions = {
+        fitTo: { mode: "width", value: 600 },
+        font: {
+          loadSystemFonts: true,
+          defaultFontFamily: "Arial"
+        }
+      };
+      if (fontBuffer) {
+        resvgOptions.font.fontBuffers = [fontBuffer];
+      }
+      const resvg = new Resvg(svgStr, resvgOptions);
       const pngData = resvg.render();
       const pngBuffer = pngData.asPng();
       res.setHeader("Content-Type", "image/png");
@@ -48272,725 +49556,6 @@ ${mistakes}
 ` : "") + `\u{1F4F1} *Kamus Alat & Animasi Gerakan di Web/PWA*:
 \u{1F517} ${pwaUrl}`;
   }
-  function escapeXml(unsafe) {
-    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-  }
-  app.post(["/api/twilio/webhook", "/api/webhook", "/webhook", "/api/whatsapp"], import_express.default.urlencoded({ extended: true }), import_express.default.json(), async (req, res) => {
-    try {
-      const body = req.body;
-      const rawFrom = body.From || "";
-      const userText = (body.Body || "").trim();
-      const numMedia = parseInt(body.NumMedia || "0", 10);
-      const mediaUrl = numMedia > 0 ? body.MediaUrl0 : "";
-      if (!rawFrom) {
-        return res.type("text/xml").send("<Response></Response>");
-      }
-      console.log(`[Twilio WA] Message from ${rawFrom}: "${userText}" media: ${mediaUrl}`);
-      const from = normalizePhone(rawFrom.replace("whatsapp:", ""));
-      let userProfile = await findUserByPhoneOrId(from) || getUserProfile(from);
-      const lowerText = userText.toLowerCase();
-      const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
-      if (!userProfile) {
-        const latestOB = dbData.users["latest_onboarding"];
-        if (latestOB && latestOB.weight) {
-          userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
-        }
-      }
-      if (!userProfile) {
-        userProfile = await getUserProfileFromMongo(from);
-      }
-      if (!userProfile && !isWelcomeMessage) {
-        const reply = `\u26A0\uFE0F *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*
------------------------------
-Halo! Nomor WhatsApp kamu belum terdaftar.
-
-Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
-https://gymbuddygroup.com`;
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escapeXml(reply)}</Body></Message></Response>`;
-        res.type("text/xml").send(twiml);
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({
-              body: reply,
-              from: fromNum,
-              to: toNum
-            });
-          } catch (twErr) {
-            console.log("[Twilio WA] Direct API info:", twErr?.message || twErr);
-          }
-        }
-        return;
-      }
-      if (!userProfile) {
-        userProfile = getOrCreateUserProfile(from, userText);
-      }
-      const userData = calculateUserData(userProfile);
-      const isResetQuery = /^(reset|reset\s*data|hapus\s*data|ulang\s*dari\s*awal|registrasi\s*ulang|hapus\s*akun)/i.test(userText.trim());
-      if (isResetQuery) {
-        delete dbData.users[from];
-        for (const k of Object.keys(dbData.dailyLogs)) {
-          if (k.startsWith(`${from}_`)) delete dbData.dailyLogs[k];
-        }
-        delete dbData.weeklyProgress[from];
-        for (const k of Object.keys(dbData.waterLogs)) {
-          if (k.startsWith(`${from}_`)) delete dbData.waterLogs[k];
-        }
-        saveDb();
-        const resetMsg = `\u{1F5D1}\uFE0F *AKUN & DATA BERHASIL DIHAPUS*
------------------------------------
-Seluruh riwayat makanan, latihan, dan profil kamu di GymBuddy telah dibersihkan secara total.
-
-\u{1F449} *Untuk Registrasi Ulang*:
-Kamu bisa membalas dengan *"Halo Coach"* untuk memulai pendaftaran baru dari awal, atau isi kuesioner baru di website GymBuddy!
-
-Semangat memulai perjalanan baru! \u{1F4AA}\u2728`;
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(resetMsg)}</Message></Response>`;
-        return res.type("text/xml").send(twiml);
-      }
-      const weightMatch = matchPureWeightLog(userText);
-      const waterMatch = matchPureWaterLog(userText);
-      const isDeleteLastLog = /^(hapus\s+log\s+terakhir|batal\s+log|cancel\s+log|delete\s+last|undo\s+log|hapus\s+yang\s+terakhir|cancel\s+entry)/i.test(userText.trim());
-      const isDeleteAllLog = /^(hapus\s+semua\s+log|clear\s+log|hapus\s+semua\s+makanan|reset\s+log\s+hari\s+ini)/i.test(userText.trim());
-      const deleteByNameMatch = userText.trim().match(/^hapus\s+log\s+(.+)/i);
-      if (isDeleteAllLog) {
-        const todayStr = getLocalDateStr();
-        const key = `${from}_${todayStr}`;
-        const altPhone2 = from.startsWith("0") ? "62" + from.substring(1) : from.startsWith("62") ? "0" + from.substring(2) : from;
-        const altKey2 = `${altPhone2}_${todayStr}`;
-        const deletedCount = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey2] || []).length;
-        if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
-        if (dbData.dailyLogs[altKey2]) dbData.dailyLogs[altKey2] = [];
-        saveDb();
-        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(
-          `\u{1F5D1}\uFE0F *SEMUA LOG HARI INI DIHAPUS*
------------------------------
-\u2705 ${deletedCount} entri makanan berhasil dihapus.
-\u{1F4CA} Kalori hari ini kembali ke 0 kcal.
-
-\u{1F4AC} *${coachN}*: "Log makanan hari ini sudah bersih. Yuk mulai catat lagi dari awal! \u{1F957}"`
-        )}</Message></Response>`;
-        return res.type("text/xml").send(twiml);
-      }
-      if (isDeleteLastLog) {
-        const deletedItem = deleteLastMealLog(from);
-        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const updatedTotals2 = getDailyTotals(from);
-        let replyMsg;
-        if (deletedItem) {
-          replyMsg = `\u274C *LOG DIHAPUS*
------------------------------
-\u2705 *"${deletedItem.foodName}"* berhasil dihapus dari catatan hari ini.
-
-\u{1F4CA} *Sisa Asupan Hari Ini:*
-\u{1F525} ${updatedTotals2.calories} kcal  \u2022  \u{1F356} ${updatedTotals2.protein}g protein
-\u{1F35A} ${updatedTotals2.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals2.fat}g lemak
-
-\u{1F4AC} *${coachN}*: "Oke, sudah dihapus! Mau catat yang lain?"`;
-        } else {
-          replyMsg = `\u2139\uFE0F *Tidak Ada Log yang Bisa Dihapus*
------------------------------
-Belum ada catatan makanan hari ini untuk dihapus.
-
-\u{1F4AC} *${coachN}*: "Mau catat makanan dulu? Kirim foto atau ketik nama makanannya!"`;
-        }
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyMsg)}</Message></Response>`;
-        res.type("text/xml").send(twiml);
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum2 = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum2 = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({ body: replyMsg, from: fromNum2, to: toNum2 });
-          } catch (e) {
-          }
-        }
-        return;
-      }
-      if (deleteByNameMatch && deleteByNameMatch[1]) {
-        const queryName = deleteByNameMatch[1].trim();
-        const deletedItem = deleteMealLogByName(from, queryName);
-        const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const updatedTotals2 = getDailyTotals(from);
-        let replyMsg;
-        if (deletedItem) {
-          replyMsg = `\u274C *LOG DIHAPUS*
------------------------------
-\u2705 *"${deletedItem.foodName}"* berhasil dihapus!
-
-\u{1F4CA} *Sisa Asupan Hari Ini:*
-\u{1F525} ${updatedTotals2.calories} kcal  \u2022  \u{1F356} ${updatedTotals2.protein}g protein
-\u{1F35A} ${updatedTotals2.carbs}g karbo  \u2022  \u{1F953} ${updatedTotals2.fat}g lemak
-
-\u{1F4AC} *${coachN}*: "Done! Mau koreksi atau catat yang lain?"`;
-        } else {
-          replyMsg = `\u26A0\uFE0F *Makanan Tidak Ditemukan*
------------------------------
-Tidak ada log "${queryName}" di catatan hari ini.
-
-Ketik *"rekap"* untuk lihat semua log hari ini, atau *"hapus log terakhir"* untuk hapus entry terakhir.`;
-        }
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyMsg)}</Message></Response>`;
-        res.type("text/xml").send(twiml);
-        if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && getTwilio()) {
-          try {
-            const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-            const fromNum2 = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
-            const toNum2 = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-            await getTwilio().messages.create({ body: replyMsg, from: fromNum2, to: toNum2 });
-          } catch (e) {
-          }
-        }
-        return;
-      }
-      let responseMessages = [];
-      let mediaUrlToSend = null;
-      const isWorkoutScheduleQuery = lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")) || lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"));
-      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
-      const isExerciseInquiry = Boolean(
-        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
-      );
-      const isWorkoutReqMessage = lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("jadwal gym") || lowerText.includes("rekomendasi workout") || lowerText.includes("menu latihan") || lowerText.includes("olahraga");
-      if (isWorkoutScheduleQuery) {
-        responseMessages = [generateWorkoutRecommendations(userData)];
-      } else if (isExerciseInquiry && matchedEx) {
-        const guide = formatWhatsAppExerciseGuide(
-          matchedEx,
-          userData.persona || "mia",
-          userData.goal || "healthy"
-        );
-        responseMessages = [guide.text];
-        if (guide.mediaUrl) {
-          mediaUrlToSend = guide.mediaUrl;
-        }
-      } else if (isWorkoutReqMessage && (lowerText.includes("rekomendasi") || lowerText.includes("jadwal") || lowerText.includes("hari ini") || lowerText.includes("apa"))) {
-        responseMessages = [generateWorkoutRecommendations(userData)];
-      } else if (isWelcomeMessage) {
-        const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
-        const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
-        const extractedName = nameMatch ? nameMatch[1].trim().toLowerCase() : "";
-        if (extractedName) {
-          const allUsers = Object.values(dbData.users).filter((u) => u && u.name && u.phone !== "latest_onboarding");
-          const matchByName = allUsers.find((u) => (u.name || "").toLowerCase().includes(extractedName) || extractedName.includes((u.name || "").toLowerCase()));
-          if (matchByName && matchByName.weight) {
-            userProfile = saveUserProfile(from, { ...matchByName, phone: from, normalizedPhone: from });
-          }
-        }
-        const latestOB = dbData.users["latest_onboarding"];
-        if (latestOB && latestOB.name && extractedName && latestOB.weight) {
-          if ((latestOB.name || "").toLowerCase().includes(extractedName) || extractedName.includes((latestOB.name || "").toLowerCase())) {
-            userProfile = saveUserProfile(from, { ...latestOB, phone: from, normalizedPhone: from });
-          }
-        }
-        let profileUpdated = false;
-        if (nameMatch && nameMatch[1].trim() && !userProfile.weight) {
-          userProfile.name = nameMatch[1].trim();
-          profileUpdated = true;
-        }
-        if (targetMatch && targetMatch[1].trim()) {
-          const rawGoal = targetMatch[1].trim().toLowerCase();
-          if (rawGoal.includes("lose") || rawGoal.includes("turun") || rawGoal.includes("kurus") || rawGoal.includes("diet")) {
-            userProfile.goal = "lose";
-            userProfile.goalTitle = "Menurunkan Berat Badan";
-            if (userProfile.targetWeight >= userProfile.weight) {
-              userProfile.targetWeight = Math.max(50, userProfile.weight - 5);
-            }
-          } else if (rawGoal.includes("gain") || rawGoal.includes("naik") || rawGoal.includes("otot") || rawGoal.includes("massa") || rawGoal.includes("bulking")) {
-            userProfile.goal = "gain";
-            userProfile.goalTitle = "Menaikkan Berat Badan & Massa Otot";
-            if (userProfile.targetWeight <= userProfile.weight) {
-              userProfile.targetWeight = userProfile.weight + 5;
-            }
-          } else {
-            userProfile.goal = "maintain";
-            userProfile.goalTitle = "Gaya Hidup Sehat & Fit";
-          }
-          profileUpdated = true;
-        }
-        if (profileUpdated) {
-          saveUserProfile(from, userProfile);
-        }
-        const freshUserData = calculateUserData(userProfile);
-        responseMessages = generateWelcomeMessages(freshUserData);
-      } else if (waterMatch) {
-        const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
-        const unit = (waterMatch[2] || "gelas").toLowerCase();
-        let actualMl;
-        if (unit === "ml") {
-          actualMl = rawAmount;
-        } else if (unit === "l" || unit === "liter") {
-          actualMl = rawAmount * 1e3;
-        } else {
-          actualMl = Math.round(rawAmount) * 250;
-        }
-        const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-        const newTotalCups = setWaterCups(from, getWaterCups(from) + cupsToAdd);
-        const liters = (newTotalCups * 0.25).toFixed(1);
-        const waterEntry = {
-          id: `wa-water-${Date.now()}`,
-          foodName: `Air Putih ${actualMl} ml`,
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          isHydration: true,
-          volumeMl: actualMl,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          mealType: getMealTypeByHour()
-        };
-        addMealLog(from, waterEntry);
-        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        responseMessages = [
-          `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
------------------------------
-\u2705 Kamu menambah *${actualMl} ml* air putih!
-\u{1F4CA} Total Hidrasi: *${newTotalCups} Gelas* (${liters}L / 3.0L Target)
-
-\u{1F4AC} *${coachName}*: Mantap! Tetap jaga hidrasi ya! \u{1F4AA}`
-        ];
-      } else if (handleReminderCommand(userText, userProfile, from, userData)) {
-        responseMessages = handleReminderCommand(userText, userProfile, from, userData);
-      } else if (!userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) && !userText.includes("?") && userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)) {
-        const todayStr = getLocalDateStr();
-        const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
-        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
-        saveDb();
-        responseMessages = [
-          `\u{1F3CB}\uFE0F *LATIHAN HARI INI DICATAT*
------------------------------
-\u2705 ${userText.trim()}
-
-\u{1F4AC} *${coachName}*:
-"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
-        ];
-      } else {
-        if (USER_GEMINI_KEY) {
-          let imagePart = null;
-          if (mediaUrl) {
-            try {
-              const downloaded = await downloadTwilioMedia(mediaUrl);
-              if (downloaded) {
-                imagePart = { inlineData: { data: downloaded.data, mimeType: downloaded.mimeType } };
-              }
-            } catch (imgErr) {
-              console.error("[Twilio WA] Image processing note:", imgErr?.message || imgErr);
-            }
-          }
-          const isMia = userData.persona === "mia" || userData.persona === "nikita";
-          const personaInstruction = isMia ? `PERSONA MIA: Coach wanita bernama Coach Mia. Sangat santun, ramah, halus, lembut, dan profesional. DILARANG KERAS panggil "sayang/cinta/beb". Gunakan sapaan sopan (aku/kamu).` : `PERSONA MAX: Coach pria bernama Coach Max. Tegas, penuh energi, gaul Jakarta (lo/gue).`;
-          const dailyTotals = getDailyTotals(from);
-          const todayMealLogsStr = dailyTotals.logs.length > 0 ? dailyTotals.logs.map((m) => `- ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g)`).join("\n") : "Belum ada catatan makanan hari ini";
-          const equipmentKeywords = ["alat", "mesin", "cara pakai", "cara memakai", "cara makai", "gimana cara", "how to", "dumbbell", "barbell", "barbel", "bench", "squat rack", "lat pulldown", "leg press", "chest press", "cable", "treadmill", "elliptical", "kettlebell", "smith machine", "pull up", "gym"];
-          const hasEquipmentText = equipmentKeywords.some((kw) => lowerText.includes(kw));
-          const isEquipmentQuery = imagePart && (hasEquipmentText || lowerText.length < 10) || !imagePart && hasEquipmentText && (lowerText.includes("cara") || lowerText.includes("pakai") || lowerText.includes("alat") || lowerText.includes("mesin"));
-          const prompt = `KAMU ADALAH BOT ASISTEN GYMBUDDY AI (${personaInstruction}).
-INFORMASI USER:
-- Nama: ${userData.name} | Berat: ${userData.weight}kg | Target: ${userData.targetWeight}kg
-- Target Kalori Harian: ${userData.targetCalories} kcal | Goal: ${userData.goalTitle}
-- Asupan Hari Ini: ${dailyTotals.calories} / ${userData.targetCalories} kcal (Protein: ${dailyTotals.protein}g, Karbo: ${dailyTotals.carbs}g, Lemak: ${dailyTotals.fat}g)
-- Makanan yang Sudah Dimakan Hari Ini:
-${todayMealLogsStr}
-
-PESAN PENGGUNA: "${userText}"${imagePart ? " + [FOTO MAKANAN/MINUMAN TERLAMPIR]" : ""}
-
-${imagePart ? "PENTING: PENGGUNA MENGIRIMKAN FOTO MAKANAN/MINUMAN! Analisis foto makanan/minuman tersebut secara langsung, kenali nama hidangan beserta porsinya, dan WAJIB kembalikan JSON FORMAT 1 (FOOD_LOG). Dilarang bertanya menu apa karena foto sudah dilampirkan." : "TUGAS: Analisis pesan pengguna. Pahami Bahasa Indonesia alamiah (contoh: 'tadi pagi makan nasi uduk sama telur', 'siang makan ayam geprek level 2')."}
-Keluarkan HANYA JSON valid sesuai salah satu format berikut:
-
-FORMAT 1 - JIKA USER MELAPORKAN/MENGINPUT MAKANAN ATAU MINUMAN (BAHASA ALAMIAH / TEKS ATAU FOTO MAKANAN):
-{
-  "intent": "FOOD_LOG",
-  "isFood": true,
-  "foodName": "Nama Makanan/Minuman Spesifik & Porsi (misal: Ayam Geprek Dada + Nasi Putih + Lalapan + Es Teh Manis / Batagor 1 Porsi + Bumbu Kacang / Chicken Rice Bowl + Telur)",
-  "calories": 650,
-  "protein": 32,
-  "carbs": 65,
-  "fat": 28,
-  "fiber": 3,
-  "sugar": 4,
-  "confidenceLevel": 90,
-  "satietyScore": 8,
-  "satietyExplanation": "Penjelasan singkat 1-2 kalimat mengenai tingkat rasa kenyang berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.",
-  "healthScore": 8,
-  "portionEstimates": ["Nasi Putih (150g)", "Ayam Geprek Dada (120g)", "Sambal & Lalapan"],
-  "keyInsights": ["\u{1F7E2} Tinggi protein mendukung pembentukan otot", "\u{1F7E1} Perhatikan minyak dari sambal/gorengan"],
-  "coachComment": "Saran dari coach singkat & membangun"
-}
-
-RUMUS MATEMATIKA SANGAT WAJIB (100% PERSISI, DILARANG SELISIH):
-- KALORI HARUS TEPAT SAMA DENGAN: (protein \xD7 4) + (carbs \xD7 4) + (fat \xD7 9).
-- Contoh konsisten: Protein 35g (140 kcal) + Karbo 60g (240 kcal) + Lemak 20g (180 kcal) = 560 kcal.
-
-ACUAN BENCHMARK DATABASE NUTRISI INDONESIA (PANGANKU / USDA):
-- Batagor 1 porsi (4-5 pcs + bumbu): ~450 kcal | P: 18g | C: 45g | F: 22g | Fiber: 3g
-- Siomay Bandung 1 porsi (5 pcs + telur + bumbu): ~480 kcal | P: 24g | C: 42g | F: 24g | Fiber: 3g
-- Ayam Geprek + Nasi + Sambal: ~650 kcal | P: 32g | C: 65g | F: 28g | Fiber: 2g
-- Chicken Rice Bowl + Telur: ~580 kcal | P: 35g | C: 60g | F: 20g | Fiber: 2g
-- Nasi Padang (Rendang/Ayam Pop + Sayur Singkong): ~750 kcal | P: 38g | C: 70g | F: 34g | Fiber: 4g
-- Nasi Uduk + Telur Balado + Tempe: ~520 kcal | P: 20g | C: 65g | F: 20g | Fiber: 3g
-- Bakso Sapi Urat + Mie: ~420 kcal | P: 26g | C: 40g | F: 18g | Fiber: 2g
-- Soto Ayam + Nasi: ~410 kcal | P: 25g | C: 50g | F: 12g | Fiber: 2g
-- Gado-Gado / Pecel + Lontong: ~430 kcal | P: 16g | C: 52g | F: 18g | Fiber: 6g
-
-FORMAT 2 - JIKA USER MENANYAKAN REKAP / RIWAYAT MAKANAN / CEK APAPUN YANG SUDAH DIMAKAN HARI INI / SISA KALORI:
-{
-  "intent": "DAILY_REKAP",
-  "isFood": false
-}
-
-FORMAT 3 - JIKA USER MENGIRIMKAN FOTO ALAT GYM / MESIN GYM ATAU MENANYAKAN CARA PAKAI ALAT:
-{
-  "intent": "EQUIPMENT_TUTORIAL",
-  "isFood": false,
-  "equipmentName": "Nama Spesifik Alat Gym",
-  "description": "Fungsi alat",
-  "targetMuscles": "Otot yang dilatih",
-  "parts": ["Bagian 1", "Bagian 2"],
-  "steps": ["Langkah 1", "Langkah 2"],
-  "tips": ["Tips 1"],
-  "mistakes": ["Kesalahan 1"]
-}
-
-FORMAT 4 - JIKA USER MINTA JADWAL LATIHAN / WORKOUT PLAN:
-{
-  "intent": "WORKOUT_PLAN",
-  "isFood": false,
-  "generalReply": "Jadwal latihan lengkap"
-}
-
-FORMAT 5 - JIKA USER MEMINTA UNTUK ATUR / UBAH PENGINGAT HARIAN ATAU SCHEDULER:
-{
-  "intent": "REMINDER_SET",
-  "isFood": false,
-  "reminderEnabled": true,
-  "reminderTime": "15:35",
-  "generalReply": "Baik Kak Habibi! Jadwal pengingat harian sudah Mia bantu sesuaikan menjadi pukul 15:35 WIB."
-}
-
-FORMAT 6 - CHAT UMUM / REKOMENDASI / PERTANYAAN LAINNYA:
-{
-  "intent": "CHAT",
-  "isFood": false,
-  "generalReply": "Jawaban coach"
-}
-
-CATATAN:
-- Jika user meminta koreksi (misal: "koreksi: ayamnya 2 potong" / "salah, porsinya setengah"), sesuaikan jumlah nutrisi dan pilih intent FOOD_LOG dengan porsi baru.
-- TULIS JAWABAN RINGKAS & DIRECT TO THE POINT.
-- Keluarkan HANYA JSON tanpa teks lain di luar JSON!`;
-          try {
-            const rawText = await generateGeminiContent(prompt, imagePart);
-            let parsed = extractAndParseJson(rawText);
-            const isRekapQuery = /^(log\s+makanan\s*(ku|saya)?\s*hari\s*ini|rekap|riwayat|ringkasan\s*makanan|sisa\s*kalori|cek\s*kalori\s*hari\s*ini|laporan\s*makanan|makanan\s*hari\s*ini)/i.test(userText.trim());
-            if (isRekapQuery || parsed && parsed.intent === "DAILY_REKAP") {
-              parsed = { intent: "DAILY_REKAP", isFood: false };
-            } else if (!parsed || typeof parsed !== "object") {
-              const foodNameMatch = rawText.match(/"foodName"\s*:\s*"([^"]+)"/i);
-              const calMatch = rawText.match(/"calories"\s*:\s*(\d+)/i);
-              const protMatch = rawText.match(/"protein"\s*:\s*(\d+)/i);
-              const carbMatch = rawText.match(/"carbs"\s*:\s*(\d+)/i);
-              const fatMatch = rawText.match(/"fat"\s*:\s*(\d+)/i);
-              const intentMatch = rawText.match(/"intent"\s*:\s*"([^"]+)"/i);
-              const eqMatch = rawText.match(/"equipmentName"\s*:\s*"([^"]+)"/i);
-              if (foodNameMatch && (calMatch || parsed?.calories)) {
-                parsed = {
-                  intent: "FOOD_LOG",
-                  isFood: true,
-                  foodName: foodNameMatch[1],
-                  calories: calMatch ? parseInt(calMatch[1], 10) : Number(parsed?.calories || 0),
-                  protein: protMatch ? parseInt(protMatch[1], 10) : Number(parsed?.protein || 0),
-                  carbs: carbMatch ? parseInt(carbMatch[1], 10) : Number(parsed?.carbs || 0),
-                  fat: fatMatch ? parseInt(fatMatch[1], 10) : Number(parsed?.fat || 0),
-                  generalReply: "Catatan makanan berhasil disimpan!"
-                };
-              } else if (eqMatch || intentMatch && intentMatch[1] === "EQUIPMENT_TUTORIAL") {
-                parsed = {
-                  intent: "EQUIPMENT_TUTORIAL",
-                  isFood: false,
-                  equipmentName: eqMatch ? eqMatch[1] : "Alat Gym"
-                };
-              } else if (intentMatch && intentMatch[1] === "DAILY_REKAP") {
-                parsed = { intent: "DAILY_REKAP", isFood: false };
-              } else {
-                let cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
-                const genReplyMatch = cleanReply.match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,|\s*\n)/i);
-                if (genReplyMatch && genReplyMatch[1]) {
-                  cleanReply = genReplyMatch[1].replace(/\\n/g, "\n").trim();
-                } else {
-                  cleanReply = cleanReply.replace(/^\{[\s\S]*?"generalReply"\s*:\s*"?/i, "").replace(/"?\s*\}?\s*$/i, "").replace(/\\n/g, "\n").trim();
-                }
-                parsed = { intent: "CHAT", isFood: false, generalReply: cleanReply || "Ada laporan makanan atau latihan lain yang ingin kamu tanyakan?" };
-              }
-            }
-            if (isEquipmentQuery && parsed.intent !== "FOOD_LOG" && parsed.intent !== "EQUIPMENT_TUTORIAL") {
-              parsed.intent = "EQUIPMENT_TUTORIAL";
-              const eqSources = [userText, parsed.generalReply || ""].join(" ");
-              const equipGuess = eqSources.match(/(dumbbell|barbel|barbell|lat pulldown|leg press|chest press|bench press|smith machine|cable machine|hyperextension|treadmill|elliptical|rowing machine|pull up bar|kettlebell|hex dumbbell)/i);
-              parsed.equipmentName = equipGuess ? equipGuess[1] : imagePart ? "Dumbbell Hex" : "Alat Gym";
-            }
-            if (String(parsed.isFood).toLowerCase() === "true" || parsed.intent === "FOOD_LOG") {
-              console.log("[Food] Processing FOOD_LOG intent for:", parsed.foodName);
-              try {
-                parsed = validateAndNormalizeNutrition(parsed, Boolean(imagePart));
-                console.log("[Food] Normalized calories:", parsed.calories);
-                parsed.isFood = true;
-                const mealId = `m-${Date.now()}`;
-                const savedMeal = {
-                  id: mealId,
-                  foodName: parsed.foodName || "Makanan",
-                  calories: Number(parsed.calories) || 0,
-                  protein: Number(parsed.protein) || 0,
-                  carbs: Number(parsed.carbs) || 0,
-                  fat: Number(parsed.fat) || 0,
-                  fiber: Number(parsed.fiber) || 0,
-                  mealType: getMealTypeByHour(),
-                  timestamp: (/* @__PURE__ */ new Date()).toISOString()
-                };
-                console.log("[Food] Saving meal:", savedMeal.foodName, savedMeal.calories, "kcal");
-                addMealLog(from, savedMeal);
-                userProfile.lastFoodLog = { ...savedMeal };
-                saveUserProfile(from, userProfile);
-                const updatedTotals2 = getDailyTotals(from);
-                console.log("[Food] Formatting nutrition card...");
-                responseMessages = [formatNutritionCard(parsed, imagePart ? "Foto AI" : "Teks", userData, updatedTotals2)];
-                console.log("[Food] Card formatted, length:", responseMessages[0].length);
-              } catch (foodErr) {
-                console.error("[Food] ERROR in food processing:", foodErr?.message || foodErr);
-                console.error("[Food] Stack:", foodErr?.stack?.substring(0, 500));
-                responseMessages = [`\u2705 *${parsed.foodName || "Makanan"} berhasil dicatat!*
-
-\u{1F525} ~${parsed.calories || 350} kcal | \u{1F356} ${parsed.protein || 15}g protein
-
-_(Debug: ${foodErr?.message || "none"})_`];
-              }
-              if (imagePart) {
-                try {
-                  const wibDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-                  let wibDay = "";
-                  try {
-                    const wibDateStr = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long" }).format(/* @__PURE__ */ new Date());
-                    wibDay = wibDateStr.charAt(0).toUpperCase() + wibDateStr.slice(1);
-                  } catch {
-                    wibDay = wibDays[(/* @__PURE__ */ new Date()).getDay()];
-                  }
-                  const cardId = `nc-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
-                  if (!dbData.nutritionCards) dbData.nutritionCards = {};
-                  dbData.nutritionCards[cardId] = {
-                    foodName: parsed.foodName || "Makanan",
-                    calories: Number(parsed.calories) || 0,
-                    protein: Number(parsed.protein) || 0,
-                    carbs: Number(parsed.carbs) || 0,
-                    fat: Number(parsed.fat) || 0,
-                    fiber: Number(parsed.fiber) || 0,
-                    healthScore: Number(parsed.healthScore) || 7,
-                    dayLabel: wibDay,
-                    // Embed the original food photo back into the card
-                    foodImageBase64: imagePart.inlineData?.data || null,
-                    foodImageMime: imagePart.inlineData?.mimeType || "image/jpeg"
-                  };
-                  saveDb();
-                  const publicHost = process.env.PUBLIC_URL || (req.headers.host ? `${req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.headers.host}` : "") || process.env.RENDER_EXTERNAL_URL || "https://gymbuddy.id";
-                  const cardUrl = `${publicHost.replace(/\/$/, "")}/api/nutrition-card/${cardId}.png`;
-                  mediaUrlToSend = cardUrl;
-                  console.log("[NutritionCard] Generated card URL:", cardUrl);
-                } catch (cardErr) {
-                  console.warn("[NutritionCard] Failed to generate card:", cardErr);
-                }
-              }
-              try {
-                const remCal = Math.max(0, (userData.targetCalories || 2e3) - updatedTotals.calories);
-                const remProt = Math.max(0, (userData.proteinGrams || 150) - updatedTotals.protein);
-                const remCarb = Math.max(0, (userData.carbGrams || 200) - updatedTotals.carbs);
-                const remFat = Math.max(0, (userData.fatGrams || 60) - updatedTotals.fat);
-                const isMiaCoach = (userData.persona || "max").toLowerCase().includes("mia");
-                const coachNameStr = isMiaCoach ? "Coach Mia" : "Coach Max";
-                const goalStr = userData.goal === "lose" ? "turun berat badan" : userData.goal === "gain" ? "naik massa otot" : "jaga berat badan";
-                let wibHour2 = 12;
-                try {
-                  wibHour2 = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()), 10);
-                } catch (e) {
-                  wibHour2 = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
-                }
-                const timeStr2 = wibHour2 < 10 ? "pagi" : wibHour2 < 15 ? "siang" : wibHour2 < 18 ? "sore" : "malam";
-                const calPercent = updatedTotals.calories / (userData.targetCalories || 2e3);
-                let nextStepTip = "";
-                if (remProt > (userData.proteinGrams || 150) * 0.75) {
-                  nextStepTip = isMiaCoach ? `Protein kamu hari ini masih sangat rendah (*${remProt}g tersisa*). Untuk meal ${timeStr2} berikutnya, prioritaskan dada ayam rebus, telur rebus, atau tahu kukus \u2014 protein tinggi biar otot dan metabolismu tetap optimal! \u{1F4AA}` : `Protein lo masih kurang *${remProt}g* bro. Next meal lo harus makan yang tinggi protein \u2014 dada ayam panggang, ikan bakar, atau telur rebus 3 biji. Jangan skip! \u{1F525}`;
-                } else if (remProt > remCarb && remProt > remFat && remProt > 25) {
-                  const sugg = userData.goal === "lose" ? isMiaCoach ? "dada ayam panggang atau ikan tuna" : "ayam grill atau ikan bakar tanpa nasi" : isMiaCoach ? "chicken rice bowl atau dada ayam + nasi merah" : "chicken rice bowl atau tuna rice bowl";
-                  nextStepTip = isMiaCoach ? `Sisa *${remProt}g protein* masih perlu kamu penuhi hari ini. Untuk meal ${timeStr2} selanjutnya, pilih ${sugg} \u2014 pas banget buat recovery dan mendukung ${goalStr}mu! \u2728` : `Lo masih butuh *${remProt}g protein* lagi hari ini! Langsung serang \u2014 ${sugg}. Otot lo butuh ini buat tumbuh, jangan delay! \u26A1`;
-                } else if (calPercent > 0.88) {
-                  nextStepTip = isMiaCoach ? `Kalori kamu hampir mencapai target hari ini! Kalau masih ingin makan ${timeStr2} ini, pilih camilan ringan saja \u2014 buah segar, salad, atau yogurt tanpa gula. Tetap konsisten ya buat ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target bro! Kalau laper, makan yang ringan aja \u2014 buah atau salad. Jangan over-eat, kita lagi ngejer ${goalStr}! \u{1F3AF}`;
-                } else if (wibHour2 >= 14 && wibHour2 <= 16 && remProt > 20) {
-                  const snackSugg = userData.goal === "gain" ? isMiaCoach ? "protein shake atau susu full cream" : "protein shake atau susu coklat \u2014 kalori ekstra yang bagus" : isMiaCoach ? "segenggam kacang almond atau yogurt Greek" : "kacang atau yogurt plain buat snack yang ga bikin kalori jebol";
-                  nextStepTip = isMiaCoach ? `Waktu ${timeStr2} ini cocok banget buat snack protein! Coba ${snackSugg} \u2014 ini bantu kamu penuhi sisa *${remProt}g protein* hari ini tanpa terlalu berat. \u{1F375}` : `${timeStr2.charAt(0).toUpperCase() + timeStr2.slice(1)} ini prime time buat snack protein! Gas ${snackSugg} sekarang. Lo masih butuh *${remProt}g protein* lagi! \u{1F4AA}`;
-                } else {
-                  const defaultSugg = userData.goal === "lose" ? isMiaCoach ? "makanan tinggi serat dan protein rendah kalori \u2014 sayur bening, ayam rebus, atau ikan kukus" : "ayam panggang + sayur, atau salad tuna \u2014 efektif buat fat loss" : userData.goal === "gain" ? isMiaCoach ? "karbohidrat + protein \u2014 nasi merah, kentang, atau oatmeal dengan ayam" : "nasi + ayam geprek atau chicken rice bowl ukuran besar" : isMiaCoach ? "makanan seimbang \u2014 nasi porsi sedang, lauk berprotein, dan sayuran" : "nasi + ayam/ikan + sayur \u2014 combo paling solid";
-                  nextStepTip = isMiaCoach ? `Untuk meal ${timeStr2} selanjutnya, ${coachNameStr} saranin ${defaultSugg}. Pas banget buat mendukung goal ${goalStr} kamu! Minum air putih 250ml dulu sebelum makan ya. \u{1F4A7}` : `Next meal ${timeStr2} ini, lo butuh ${defaultSugg}. Paling optimal buat ${goalStr} lo! Dan minum air sekarang \u2014 jangan tunggu haus bro. \u{1F4A7}\u{1F525}`;
-                }
-                if (nextStepTip) {
-                  responseMessages.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F3AF} SARAN ${coachNameStr.toUpperCase()}
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
-${nextStepTip}`);
-                }
-              } catch (tipErr) {
-                console.warn("[next-step-tip] Error generating tip:", tipErr);
-              }
-            } else if (parsed.intent === "DAILY_REKAP") {
-              const totals = getDailyTotals(from);
-              responseMessages = [generateDailySummaryCard(userData, totals, "Hari Ini")];
-            } else if (parsed.intent === "REMINDER_SET" || parsed.reminderTime) {
-              const isOff = parsed.reminderEnabled === false;
-              userProfile.reminderEnabled = !isOff;
-              if (parsed.reminderTime && /^\d{2}:\d{2}$/.test(parsed.reminderTime)) {
-                userProfile.reminderTime = parsed.reminderTime;
-              }
-              saveUserProfile(from, userProfile);
-              const coachN = (userData?.persona || "max").toLowerCase() === "max" ? "Coach Max" : "Coach Mia";
-              const replyMsg = parsed.generalReply || (isOff ? `\u274C *PENGINGAT HARIAN DIMATIKAN*
------------------------------
-Pengingat harian scheduler kamu telah dinonaktifkan.` : `\u2705 *PENGINGAT HARIAN DIAKTIFKAN*
------------------------------
-\u23F0 Jam Pengingat: *${userProfile.reminderTime} WIB*
-STATUS: *Scheduler Aktif*
-
-\u{1F4AC} *${coachN}*:
-"Mantap! Setiap hari pukul *${userProfile.reminderTime} WIB*, ${coachN} bakal kirim chat pengingat ke WhatsApp kamu! \u{1F525}"`);
-              responseMessages = [replyMsg];
-            } else if (parsed.intent === "WORKOUT_PLAN") {
-              let workoutReply = parsed.generalReply || "";
-              if (!workoutReply || workoutReply.trim().length < 10) {
-                workoutReply = `\u{1F3CB}\uFE0F *JADWAL LATIHAN UNTUK ${userData.name.toUpperCase()}*
-\u{1F3AF} Goal: ${userData.goalTitle}
-
-\u{1F4C5} *SENIN - DADA & TRISEP*
-\u2022 Bench Press: 4x10
-\u2022 Incline Dumbbell Press: 3x12
-\u2022 Cable Crossover: 3x15
-\u2022 Tricep Pushdown: 3x15
-
-\u{1F4C5} *SELASA - PUNGGUNG & BISEP*
-\u2022 Pull Up: 4x8
-\u2022 Barbell Row: 4x10
-\u2022 Lat Pulldown: 3x12
-\u2022 Bicep Curl: 3x15
-
-\u{1F4C5} *RABU - ISTIRAHAT AKTIF*
-\u2022 Jalan kaki 30 menit atau Yoga ringan
-
-\u{1F4C5} *KAMIS - KAKI*
-\u2022 Squat: 4x10
-\u2022 Leg Press: 4x12
-\u2022 Lunges: 3x12 per kaki
-\u2022 Leg Curl: 3x15
-
-\u{1F4C5} *JUMAT - BAHU & ABS*
-\u2022 Shoulder Press: 4x10
-\u2022 Lateral Raise: 3x15
-\u2022 Face Pull: 3x15
-\u2022 Plank: 3x60 detik
-
-\u{1F4C5} *SABTU & MINGGU*
-\u2022 Istirahat atau cardio ringan 20-30 menit
-
-\u{1F4AA} *Rekomendasi*: ${userData.goalTitle?.includes("turun") ? "Tambahkan 20 menit cardio setelah latihan" : "Fokus progressive overload setiap minggu"}`;
-              }
-              responseMessages = [workoutReply];
-            } else if (parsed.intent === "EQUIPMENT_TUTORIAL" || parsed.equipmentName) {
-              responseMessages = [formatEquipmentTutorialCard(parsed, userData)];
-            } else {
-              let finalMsg = (parsed.generalReply || "").trim();
-              if (!finalMsg || finalMsg.startsWith("{") || finalMsg.includes('"intent":')) {
-                const gMatch = (finalMsg || "").match(/"generalReply"\s*:\s*"([\s\S]*?)"(?=\s*\}|\s*,)/i);
-                finalMsg = gMatch ? gMatch[1].replace(/\\n/g, "\n").trim() : "";
-              }
-              if (!finalMsg || finalMsg.length < 5) {
-                const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-                finalMsg = `Hei ${userData.name}! \u{1F4AA} Ada yang bisa ${coachN} bantu hari ini? Mau catat makanan, cek kalori, minta jadwal workout, atau tanya cara pakai alat gym?`;
-              }
-              responseMessages = [finalMsg];
-            }
-          } catch (e) {
-            console.error("[Twilio WA] Gemini AI error:", e);
-            if (userText.match(/(makan|minum|habis|makanan|sarapan|malam|siang|americano|kopi|nasi|ayam|telur|roti|susu|jus|teh|buah|daging|ikan|gandum|es)/i)) {
-              const rawFood = userText.replace(/^(aku|saya|gue|habis|makan|minum|catat|log|input|tambah)\s+/gi, "").trim() || "Makanan";
-              const foodName = rawFood.charAt(0).toUpperCase() + rawFood.slice(1);
-              let estCal = 350, estProt = 15, estCarb = 40, estFat = 10;
-              const textLower = userText.toLowerCase();
-              if (textLower.includes("americano") || textLower.includes("kopi hitam") || textLower.includes("espresso")) {
-                estCal = 10;
-                estProt = 0;
-                estCarb = 2;
-                estFat = 0;
-              } else if (textLower.includes("nasi goreng")) {
-                estCal = 550;
-                estProt = 18;
-                estCarb = 65;
-                estFat = 22;
-              } else if (textLower.includes("telur")) {
-                estCal = 210;
-                estProt = 18;
-                estCarb = 2;
-                estFat = 14;
-              } else if (textLower.includes("ayam")) {
-                estCal = 320;
-                estProt = 35;
-                estCarb = 5;
-                estFat = 15;
-              }
-              const parsedFallback = { intent: "FOOD_LOG", isFood: true, foodName, calories: estCal, protein: estProt, carbs: estCarb, fat: estFat, generalReply: "Catatan makanan berhasil disimpan!" };
-              addMealLog(from, {
-                id: `m-${Date.now()}`,
-                foodName,
-                calories: estCal,
-                protein: estProt,
-                carbs: estCarb,
-                fat: estFat,
-                fiber: 0,
-                mealType: getMealTypeByHour(),
-                timestamp: (/* @__PURE__ */ new Date()).toISOString()
-              });
-              const updatedTotals2 = getDailyTotals(from);
-              responseMessages = [formatNutritionCard(parsedFallback, "Teks", userData, updatedTotals2)];
-            } else if (userText.match(/(lari|jogging|gbk|olahraga|cardio)/i)) {
-              responseMessages = [`\u{1F3C3} *TIPS LARI SORE DI GBK FOR ${userData.name.toUpperCase()}*
-
-\u{1F525} *Persiapan & Hydration*:
-\u2022 Minum 300-500ml air putih 30 menit sebelum lari.
-\u2022 Gunakan sepatu lari pendukung & lakukan pemanasan 5 menit.
-
-\u{1F3AF} *Target*: Lari santai 20-30 menit (Zone 2 cardio) untuk membakar kalori & menjaga kesehatan jantung!
-
-Semangat latihannya hari ini! \u{1F4AA}`];
-            } else {
-              const coachN = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-              responseMessages = [`Hei ${userData.name}! \u{1F4AA} ${coachN} siap bantu kamu catat makanan (misal: "habis minum americano"), cek kalori, jadwal workout, atau tutorial alat gym!`];
-            }
-          }
-        }
-      }
-      if (responseMessages.length > 0) {
-        const combinedReply = responseMessages.join("\n\n");
-        let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>`;
-        if (mediaUrlToSend) {
-          twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
-        }
-        twiml += `<Body>${escapeXml(combinedReply)}</Body></Message></Response>`;
-        console.log(`[Twilio WA] Sending TwiML response to ${rawFrom} (${combinedReply.length} chars) \u2705`);
-        return res.type("text/xml").send(twiml);
-      } else {
-        return res.type("text/xml").send("<Response></Response>");
-      }
-    } catch (error) {
-      console.error("[Twilio WA] Webhook error:", error);
-      res.type("text/xml").send("<Response></Response>");
-    }
-  });
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
       server: { middlewareMode: true },
@@ -48998,17 +49563,17 @@ Semangat latihannya hari ini! \u{1F4AA}`];
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
-    const distIndex = import_path.default.join(distPath, "index.html");
-    const rootIndex = import_path.default.join(process.cwd(), "index.html");
-    if (import_fs.default.existsSync(distPath)) {
+    const distPath = import_path2.default.join(process.cwd(), "dist");
+    const distIndex = import_path2.default.join(distPath, "index.html");
+    const rootIndex = import_path2.default.join(process.cwd(), "index.html");
+    if (import_fs2.default.existsSync(distPath)) {
       app.use(import_express.default.static(distPath));
     }
     app.use(import_express.default.static(process.cwd()));
     app.use((req, res) => {
-      if (import_fs.default.existsSync(distIndex)) {
+      if (import_fs2.default.existsSync(distIndex)) {
         res.sendFile(distIndex);
-      } else if (import_fs.default.existsSync(rootIndex)) {
+      } else if (import_fs2.default.existsSync(rootIndex)) {
         res.sendFile(rootIndex);
       } else {
         res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
