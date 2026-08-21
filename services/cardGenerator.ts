@@ -1,5 +1,6 @@
+import fs from "fs";
+import path from "path";
 import { Resvg } from "@resvg/resvg-js";
-import { getFontFaceDefs } from "./embeddedFonts";
 
 export interface NutritionCardData {
   foodName: string;
@@ -21,7 +22,35 @@ export interface NutritionCardData {
   imageBufferOrBase64?: string; // Data URI (data:image/jpeg;base64,...) or image URL
 }
 
+// Load font buffers — Resvg REQUIRES fontBuffers (does not support @font-face CSS in SVG)
+// Priority: Cloud Run /app/fonts → local project fonts/ → give up gracefully
+const FONT_SEARCH_PATHS = [
+  "/app/fonts",                              // Google Cloud Run (WORKDIR /app)
+  path.join(process.cwd(), "fonts"),         // local dev & any other env
+  path.join(__dirname, "..", "fonts"),       // relative to compiled file
+];
 
+function loadFontBuffer(filename: string): Buffer | null {
+  for (const dir of FONT_SEARCH_PATHS) {
+    const p = path.join(dir, filename);
+    try {
+      if (fs.existsSync(p)) {
+        const buf = fs.readFileSync(p);
+        console.log(`[CardGen] Font loaded: ${p}`);
+        return buf;
+      }
+    } catch (_) { /* try next */ }
+  }
+  console.warn(`[CardGen] Font NOT FOUND: ${filename} (searched ${FONT_SEARCH_PATHS.join(", ")})`);
+  return null;
+}
+
+const cachedFontBuffers: Buffer[] = [
+  "arial.ttf",
+  "arialbd.ttf",
+].map(loadFontBuffer).filter((b): b is Buffer => b !== null);
+
+console.log(`[CardGen] Loaded ${cachedFontBuffers.length}/2 font buffers for Resvg`);
 
 
 function escapeXml(unsafe: string): string {
@@ -324,16 +353,13 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
 export async function generateNutritionCardPng(data: NutritionCardData): Promise<Buffer> {
   const svg = generateNutritionCardSvg(data);
   try {
-    // Fonts are embedded directly in the SVG <defs> as @font-face data URIs
-    // No external font files or fontBuffers needed — works on any environment
+    const fontOptions = cachedFontBuffers.length > 0
+      ? { fontBuffers: cachedFontBuffers, defaultFontFamily: "Arial", loadSystemFonts: false }
+      : { loadSystemFonts: true }; // fallback: try system fonts if none found
+
     const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: "width",
-        value: 720
-      },
-      font: {
-        loadSystemFonts: false
-      }
+      fitTo: { mode: "width", value: 720 },
+      font: fontOptions
     });
     return resvg.render().asPng();
   } catch (e) {
