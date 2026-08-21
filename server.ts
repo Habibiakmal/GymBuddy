@@ -31,6 +31,7 @@ import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
 import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt, isGenericMealInput } from "./services/nutritionEngine";
+import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
 // Twilio configuration (strictly from environment variables)
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
@@ -2656,6 +2657,42 @@ async function startServer() {
     }
   });
 
+  // Dynamic GYMBUDDY.AI Nutrition Infographic Image Card Route
+  app.get("/api/card/nutrition-card.png", async (req, res) => {
+    try {
+      const foodName = (req.query.food as string) || "MAKANAN BERGIZI";
+      const calories = Number(req.query.cal) || 785;
+      const protein = Number(req.query.prot) || 38;
+      const carbs = Number(req.query.carb) || 95;
+      const fat = Number(req.query.fat) || 28;
+      const mealType = (req.query.meal as string) || "Makan Siang";
+      const dateStr = (req.query.date as string) || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+      const dailyTargetCalories = Number(req.query.target) || 2054;
+      const consumedTodayCalories = Number(req.query.consumed) || calories;
+      const imageBufferOrBase64 = (req.query.img as string) || "";
+
+      const pngBuffer = await generateNutritionCardPng({
+        foodName,
+        calories,
+        protein,
+        carbs,
+        fat,
+        mealType,
+        dateStr,
+        dailyTargetCalories,
+        consumedTodayCalories,
+        imageBufferOrBase64
+      });
+
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(pngBuffer);
+    } catch (e: any) {
+      console.error("[Card Generator Error]:", e?.message || e);
+      return res.status(500).send("Error generating card image");
+    }
+  });
+
   app.get("/api/user-profile/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const profile = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
@@ -4455,6 +4492,14 @@ Keluarkan output JSON valid:
             const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
+
+            // Generate & send GYMBUDDY.AI Infographic Image Card for WhatsApp food uploads
+            const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
+            const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+            const rawPhoto = req.body?.MediaUrl0 || "";
+            const cardImgUrl = `${domainUrl}/api/card/nutrition-card.png?food=${encodeURIComponent(parsed.foodName || "Makanan")}&cal=${Number(parsed.calories) || 0}&prot=${Number(parsed.protein) || 0}&carb=${Number(parsed.carbs) || 0}&fat=${Number(parsed.fat) || 0}&meal=${encodeURIComponent(mealTypeStr)}&target=${userData.targetCalories || 2054}&consumed=${dailyTotals.calories}&img=${encodeURIComponent(rawPhoto)}`;
+
+            mediaUrlToSend = cardImgUrl;
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;
