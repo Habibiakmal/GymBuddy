@@ -37,6 +37,31 @@ import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/c
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 
+async function sendWhatsAppAsync(to: string, body: string, mediaUrl?: string) {
+  const client = getTwilio();
+  if (!client) {
+    console.warn("[Twilio Client] Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN");
+    return null;
+  }
+  try {
+    const fromPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+    const payload: any = {
+      from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
+      to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
+      body
+    };
+    if (mediaUrl) {
+      payload.mediaUrl = [mediaUrl];
+    }
+    const res = await client.messages.create(payload);
+    console.log(`[Twilio WA] Sent instant message to ${to}, SID: ${res.sid} ✅`);
+    return res;
+  } catch (err: any) {
+    console.warn(`[Twilio WA] Note: REST message to ${to} warning:`, err?.message || err);
+    return null;
+  }
+}
+
 import {
   findUserByPhoneOrId,
   saveUserDocument,
@@ -4128,6 +4153,20 @@ function escapeXml(unsafe: string): string {
       }
 
       let userText = Body || "";
+      const lowerText = userText.toLowerCase();
+      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+                               (lowerText.includes("nama saya") && lowerText.includes("target saya"));
+
+      // ─── 1. IMMEDIATELY SEND SHORT COACH ACKNOWLEDGMENT MESSAGE ───
+      // Max: "Oke, aku cek dulu..." | Mia: "Sebentar ya, aku cek dulu..."
+      if (!isWelcomeMessage) {
+        const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
+        const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
+        sendWhatsAppAsync(rawFrom, ackText).catch((err) => {
+          console.warn("[Twilio WA] Acknowledgment send warning (non-fatal):", err?.message || err);
+        });
+      }
+
       let imagePart: any = null;
 
       if (NumMedia && parseInt(NumMedia) > 0) {
@@ -4150,11 +4189,6 @@ function escapeXml(unsafe: string): string {
           }
         }
       }
-
-      const lowerText = userText.toLowerCase();
-
-      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
-                               (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
       // 1. Check if user has onboarding data in latest_onboarding
       if (!userProfile) {

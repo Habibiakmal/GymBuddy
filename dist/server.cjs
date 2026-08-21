@@ -45377,6 +45377,30 @@ process.on("uncaughtException", (err) => {
 });
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+async function sendWhatsAppAsync(to, body, mediaUrl) {
+  const client2 = getTwilio();
+  if (!client2) {
+    console.warn("[Twilio Client] Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN");
+    return null;
+  }
+  try {
+    const fromPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+    const payload = {
+      from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
+      to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
+      body
+    };
+    if (mediaUrl) {
+      payload.mediaUrl = [mediaUrl];
+    }
+    const res = await client2.messages.create(payload);
+    console.log(`[Twilio WA] Sent instant message to ${to}, SID: ${res.sid} \u2705`);
+    return res;
+  } catch (err) {
+    console.warn(`[Twilio WA] Note: REST message to ${to} warning:`, err?.message || err);
+    return null;
+  }
+}
 var twilioClient = null;
 function getTwilio() {
   if (!twilioClient && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
@@ -48783,6 +48807,15 @@ Keluarkan output JSON valid:
         userProfile = getUserProfile(normFrom) || null;
       }
       let userText = Body || "";
+      const lowerText = userText.toLowerCase();
+      const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
+      if (!isWelcomeMessage) {
+        const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
+        const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
+        sendWhatsAppAsync(rawFrom, ackText).catch((err) => {
+          console.warn("[Twilio WA] Acknowledgment send warning (non-fatal):", err?.message || err);
+        });
+      }
       let imagePart = null;
       if (NumMedia && parseInt(NumMedia) > 0) {
         const mediaUrl = req.body.MediaUrl0;
@@ -48803,8 +48836,6 @@ Keluarkan output JSON valid:
           }
         }
       }
-      const lowerText = userText.toLowerCase();
-      const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
       if (!userProfile) {
         const latestOB = dbData.users["latest_onboarding"];
         if (latestOB && latestOB.weight) {
