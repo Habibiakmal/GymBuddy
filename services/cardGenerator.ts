@@ -4,10 +4,16 @@ export interface NutritionCardData {
   protein: number;
   carbs: number;
   fat: number;
+  sodium?: number;
+  fiber?: number;
+  sugar?: number;
   mealType?: string;
   dateStr?: string;
   dailyTargetCalories?: number;
   consumedTodayCalories?: number;
+  dailyTargetProtein?: number;
+  dailyTargetCarbs?: number;
+  dailyTargetFat?: number;
   imageBufferOrBase64?: string; // Data URI (data:image/jpeg;base64,...) or image URL
 }
 
@@ -59,6 +65,7 @@ const GLYPH_PATHS: Record<string, string> = {
   '·': 'M 0 45 L 24 45 L 24 69 L 0 69 Z',
   '-': 'M 0 50 L 60 50 L 60 70 L 0 70 Z',
   '+': 'M 35 15 L 65 15 L 65 45 L 95 45 L 95 75 L 65 75 L 65 105 L 35 105 L 35 75 L 5 75 L 5 45 L 35 45 Z',
+  '%': 'M 25 15 Q 40 15 40 30 Q 40 45 25 45 Q 10 45 10 30 Q 10 15 25 15 Z M 75 75 Q 90 75 90 90 Q 90 105 75 105 Q 60 105 60 90 Q 60 75 75 75 Z M 85 10 L 100 20 L 25 110 L 10 100 Z',
   '&': 'M 80 100 Q 55 120 35 120 Q 0 120 0 85 Q 0 60 30 45 Q 15 35 15 18 Q 15 0 40 0 Q 65 0 65 20 Q 65 38 40 50 L 70 85 L 90 65 L 105 80 L 80 100 Z M 35 98 Q 50 98 55 85 L 30 58 Q 22 68 22 80 Q 22 98 35 98 Z M 40 20 Q 30 20 30 25 Q 30 32 38 38 Q 45 32 45 25 Q 45 20 40 20 Z',
   '(': 'M 50 0 Q 15 60 50 120 L 25 120 Q -10 60 25 0 Z',
   ')': 'M 0 0 Q 35 60 0 120 L 25 120 Q 60 60 25 0 Z',
@@ -121,58 +128,91 @@ function calculateVectorTextWidth(text: string, height: number, letterSpacing = 
 }
 
 export function generateNutritionCardSvg(data: NutritionCardData): string {
-  const foodTitle = (data.foodName || "MAKANAN BERGIZI").toUpperCase().trim();
-  const calories = Math.round(Number(data.calories) || 0);
+  const foodTitle = (data.foodName || "INDOMIE CUP MI GORENG (75G)").toUpperCase().trim();
   const protein = Math.round(Number(data.protein) || 0);
   const carbs = Math.round(Number(data.carbs) || 0);
   const fat = Math.round(Number(data.fat) || 0);
+  const sodium = Math.round(Number(data.sodium) || 0);
 
-  const mealType = (data.mealType || "MAKAN SIANG").toUpperCase();
+  // Critical Data Consistency: Calorie = (P * 4) + (C * 4) + (F * 9)
+  // For Indomie 7g P, 48g C, 15g F: 7*4 + 48*4 + 15*9 = 28 + 192 + 135 = 355 KCAL!
+  const macroCalcCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  const calories = macroCalcCalories > 0 ? macroCalcCalories : (Math.round(Number(data.calories)) || 0);
+
+  const mealType = (data.mealType || "LUNCH").toUpperCase();
   const dateStr = (data.dateStr || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" })).toUpperCase();
 
-  const targetCal = Math.round(Number(data.dailyTargetCalories) || 2054);
+  const targetCal = Math.round(Number(data.dailyTargetCalories) || 1966);
   const consumedCal = Math.round(Number(data.consumedTodayCalories) || calories);
   const remainingCal = targetCal - consumedCal;
 
-  const isOntrack = remainingCal >= 0;
-  const pillText = isOntrack 
-    ? `ON TRACK · SISA ${remainingCal.toLocaleString("id-ID")} KCAL` 
-    : `OVER TARGET +${Math.abs(remainingCal).toLocaleString("id-ID")} KCAL`;
+  // Daily target status logic: only show "DAILY TARGET EXCEEDED" if total daily consumption is above target
+  const isOver = remainingCal < 0;
+  const pillText = isOver 
+    ? `DAILY TARGET EXCEEDED +${Math.abs(remainingCal).toLocaleString("id-ID")} KCAL` 
+    : `${remainingCal.toLocaleString("id-ID")} KCAL REMAINING`;
   
-  const pillBg = isOntrack ? "#14532D" : "#7F1D1D";
-  const pillBorder = isOntrack ? "#22C55E" : "#EF4444";
-  const pillTextColor = isOntrack ? "#86EFAC" : "#FCA5A5";
+  const pillBg = isOver ? "#7F1D1D" : "#14532D";
+  const pillBorder = isOver ? "#EF4444" : "#22C55E";
+  const pillTextColor = isOver ? "#FCA5A5" : "#86EFAC";
 
-  // Split food title if long
+  // Clean split for food title
   const words = foodTitle.split(/\s+/);
   let line1 = "";
   let line2 = "";
   for (const w of words) {
-    if ((line1 + " " + w).length <= 22 && !line2) {
+    if ((line1 + " " + w).length <= 24 && !line2) {
       line1 = (line1 + " " + w).trim();
     } else {
       line2 = (line2 + " " + w).trim();
     }
   }
   if (!line1) line1 = foodTitle;
-  if (line2.length > 24) line2 = line2.substring(0, 21) + "...";
+  if (line2.length > 28) line2 = line2.substring(0, 25) + "...";
   const hasLine2 = Boolean(line2);
 
-  const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
-  const photoHeight = 440;
-  const photoY = 160;
+  // Spacing & Layout Coordinates (Height: 1140px)
+  const headerY = 40;
+  const titleY = 100;
+  const titleHeight = hasLine2 ? 55 : 30;
+  const photoY = titleY + titleHeight + 15; // Generous space so title NEVER overlaps photo!
+  const photoHeight = 340; // Reduced height for stronger nutrition visual priority
+  const calBentoY = photoY + photoHeight + 18;
+  const macroGridY = calBentoY + 128 + 14;
+  const secondaryRowY = macroGridY + 165 + 14;
+  const footerY = secondaryRowY + 58 + 18;
 
-  const pillWidth = calculateVectorTextWidth(pillText, 14, 0.15) + 48;
+  const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
+
+  // Clean Header Lockup with ZERO text overlapping
+  const gymbuddyWidth = calculateVectorTextWidth("GYMBUDDY", 17, 0.15);
+  const aiWidth = calculateVectorTextWidth(".AI", 17, 0.15);
+  const brandLeftWidth = 48 + gymbuddyWidth + 6 + aiWidth + 24;
+  const aiX = 78 + gymbuddyWidth + 6;
+
   const headerRightText = `${mealType} · ${dateStr}`;
-  const headerRightWidth = calculateVectorTextWidth(headerRightText, 13, 0.15) + 36;
+  const headerRightWidth = calculateVectorTextWidth(headerRightText, 12, 0.15) + 32;
   const headerRightX = 680 - headerRightWidth;
 
+  // Floating Status Badge inside bottom of photo
+  const pillWidth = calculateVectorTextWidth(pillText, 13, 0.15) + 42;
+
+  // Macro % Daily Goal calculation
+  const targetProtein = Math.round(data.dailyTargetProtein || 120);
+  const targetCarbs = Math.round(data.dailyTargetCarbs || 240);
+  const targetFat = Math.round(data.dailyTargetFat || 65);
+
+  const protPct = Math.min(999, Math.round((protein / targetProtein) * 100));
+  const carbPct = Math.min(999, Math.round((carbs / targetCarbs) * 100));
+  const fatPct = Math.min(999, Math.round((fat / targetFat) * 100));
+
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="720" height="1080" viewBox="0 0 720 1080">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="720" height="1140" viewBox="0 0 720 1140">
   <defs>
+    <!-- Background & Card Gradients -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#070A0F"/>
-      <stop offset="50%" stop-color="#0F172A"/>
+      <stop offset="40%" stop-color="#0D131F"/>
       <stop offset="100%" stop-color="#030712"/>
     </linearGradient>
 
@@ -202,102 +242,117 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
     </linearGradient>
 
     <clipPath id="foodPhotoClip">
-      <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="28" ry="28"/>
+      <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="24" ry="24"/>
     </clipPath>
   </defs>
 
   <!-- Deep Obsidian Bento Background -->
-  <rect width="720" height="1080" fill="url(#bgGrad)"/>
+  <rect width="720" height="1140" fill="url(#bgGrad)"/>
 
-  <!-- Top Header Bar -->
+  <!-- 1. Header Bar: Brand Lockup & Meal Date -->
   <g id="header">
-    <rect x="40" y="45" width="220" height="46" rx="23" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
-    <circle cx="64" cy="68" r="8" fill="#22C55E"/>
-    ${renderVectorText("GYMBUDDY", 82, 58, 20, "#FFFFFF")}
-    ${renderVectorText(".AI", 188, 58, 20, "#22C55E")}
+    <rect x="40" y="${headerY}" width="${brandLeftWidth}" height="42" rx="21" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+    <circle cx="62" cy="${headerY + 21}" r="7" fill="#22C55E"/>
+    ${renderVectorText("GYMBUDDY", 78, headerY + 12, 17, "#FFFFFF")}
+    ${renderVectorText(".AI", aiX, headerY + 12, 17, "#22C55E")}
 
     <!-- Date & Meal Badge -->
-    <rect x="${headerRightX}" y="45" width="${headerRightWidth}" height="46" rx="23" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
-    ${renderVectorText(headerRightText, headerRightX + 18, 62, 13, "#94A3B8")}
+    <rect x="${headerRightX}" y="${headerY}" width="${headerRightWidth}" height="42" rx="21" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+    ${renderVectorText(headerRightText, headerRightX + 16, headerY + 14, 12, "#94A3B8")}
   </g>
 
-  <!-- Food Title Box -->
+  <!-- 2. Meal Title (Clean Spacing, No Overlap) -->
   <g id="titleBox">
-    ${renderVectorText(line1, 44, 115, 25, "#F8FAFC")}
-    ${hasLine2 ? renderVectorText(line2, 44, 145, 20, "#94A3B8") : ""}
+    ${renderVectorText(line1, 42, titleY, 24, "#F8FAFC")}
+    ${hasLine2 ? renderVectorText(line2, 42, titleY + 30, 20, "#94A3B8") : ""}
   </g>
 
-  <!-- Food Photo Card with Border -->
+  <!-- 3. Food Photo Card -->
   <g id="photoCard">
-    <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="28" ry="28" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="24" ry="24" fill="#1E293B" stroke="#334155" stroke-width="2"/>
     <image href="${photoHref}" xlink:href="${photoHref}" x="40" y="${photoY}" width="640" height="${photoHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
 
-    <!-- Bottom Photo Dark Gradient Scrim -->
-    <rect x="40" y="${photoY + photoHeight - 90}" width="640" height="90" fill="#000000" opacity="0.5" clip-path="url(#foodPhotoClip)"/>
+    <!-- Bottom Scrim -->
+    <rect x="40" y="${photoY + photoHeight - 80}" width="640" height="80" fill="#000000" opacity="0.55" clip-path="url(#foodPhotoClip)"/>
 
     <!-- Floating Status Pill Badge -->
-    <rect x="60" y="${photoY + photoHeight - 60}" width="${pillWidth}" height="42" rx="21" ry="21" fill="${pillBg}" stroke="${pillBorder}" stroke-width="1.5"/>
-    <circle cx="80" cy="${photoY + photoHeight - 39}" r="5" fill="${pillBorder}"/>
-    ${renderVectorText(pillText, 94, photoY + photoHeight - 47, 14, pillTextColor)}
+    <rect x="56" y="${photoY + photoHeight - 54}" width="${pillWidth}" height="38" rx="19" ry="19" fill="${pillBg}" stroke="${pillBorder}" stroke-width="1.5"/>
+    <circle cx="74" cy="${photoY + photoHeight - 35}" r="5" fill="${pillBorder}"/>
+    ${renderVectorText(pillText, 88, photoY + photoHeight - 43, 13, pillTextColor)}
   </g>
 
-  <!-- Calorie Hero Bento Card -->
-  <g id="calorieBento" transform="translate(40, 630)">
-    <rect x="0" y="0" width="640" height="135" rx="24" ry="24" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5"/>
+  <!-- 4. Calorie Section: Meal Energy vs Daily Calorie Goal -->
+  <g id="calorieBento" transform="translate(40, ${calBentoY})">
+    <rect x="0" y="0" width="640" height="128" rx="22" ry="22" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5"/>
     
-    <!-- Left: Calorie Stat -->
-    ${renderVectorText("ENERGI MAKANAN INI", 28, 22, 13, "#94A3B8")}
-    ${renderVectorText(calories.toLocaleString("id-ID"), 26, 52, 54, "#FF5722")}
-    ${renderVectorText("KCAL", 26 + calculateVectorTextWidth(calories.toLocaleString("id-ID"), 54, 0.15) + 14, 66, 26, "#FF5722")}
+    <!-- Left: Meal Energy (Dominant Number) -->
+    ${renderVectorText("ENERGY FROM THIS MEAL", 26, 20, 12, "#94A3B8")}
+    ${renderVectorText(calories.toLocaleString("id-ID"), 24, 48, 52, "#FF5722")}
+    ${renderVectorText("KCAL", 24 + calculateVectorTextWidth(calories.toLocaleString("id-ID"), 52, 0.15) + 14, 62, 24, "#FF5722")}
 
-    <!-- Right: Daily Target Box -->
-    <rect x="390" y="24" width="226" height="86" rx="16" ry="16" fill="#0B0F17" stroke="#334155" stroke-width="1"/>
-    ${renderVectorText("TARGET HARIAN", 410, 38, 12, "#94A3B8")}
-    ${renderVectorText(`${targetCal.toLocaleString("id-ID")} KCAL`, 410, 62, 24, "#F8FAFC")}
+    <!-- Right: Daily Calorie Goal -->
+    <rect x="385" y="20" width="230" height="86" rx="16" ry="16" fill="#070A0F" stroke="#334155" stroke-width="1"/>
+    ${renderVectorText("DAILY CALORIE GOAL", 404, 34, 11, "#94A3B8")}
+    ${renderVectorText(`${targetCal.toLocaleString("id-ID")} KCAL`, 404, 58, 23, "#F8FAFC")}
   </g>
 
-  <!-- Macro Breakdown Bento Grid (3 Pillars) -->
-  <g id="macroGrid" transform="translate(40, 790)">
-    <!-- 1. Protein Pillar -->
+  <!-- 5. Macronutrients Bento Grid (3 Compact Balanced Pillars) -->
+  <g id="macroGrid" transform="translate(40, ${macroGridY})">
+    <!-- 1. Protein -->
     <g transform="translate(0, 0)">
-      <rect x="0" y="0" width="200" height="190" rx="22" ry="22" fill="url(#cardGrad)" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="34" cy="36" r="14" fill="#78350F"/>
-      ${renderVectorText("P", 29, 27, 18, "#F59E0B")}
-      ${renderVectorText("PROTEIN", 58, 28, 15, "#F59E0B")}
-      ${renderVectorText(`${protein}G`, 24, 75, 42, "#FEF3C7")}
-      <rect x="24" y="138" width="152" height="8" rx="4" fill="#334155"/>
-      <rect x="24" y="138" width="${Math.min(152, Math.max(8, Math.round((protein / 150) * 152)))}" height="8" rx="4" fill="url(#protGrad)"/>
-      ${renderVectorText("OTOT & PEMULIHAN", 24, 158, 11, "#94A3B8")}
+      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.6"/>
+      <circle cx="32" cy="32" r="13" fill="#78350F"/>
+      ${renderVectorText("P", 27, 24, 16, "#F59E0B")}
+      ${renderVectorText("PROTEIN", 54, 25, 14, "#F59E0B")}
+      ${renderVectorText(`${protein}G`, 22, 65, 38, "#FEF3C7")}
+      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
+      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round((protein / targetProtein) * 156)))}" height="7" rx="3.5" fill="url(#protGrad)"/>
+      ${renderVectorText(`${protPct}% DAILY GOAL`, 22, 137, 11, "#94A3B8")}
     </g>
 
-    <!-- 2. Karbohidrat Pillar -->
+    <!-- 2. Carbs -->
     <g transform="translate(220, 0)">
-      <rect x="0" y="0" width="200" height="190" rx="22" ry="22" fill="url(#cardGrad)" stroke="#EC4899" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="34" cy="36" r="14" fill="#831843"/>
-      ${renderVectorText("C", 29, 27, 18, "#EC4899")}
-      ${renderVectorText("KARBO", 58, 28, 15, "#EC4899")}
-      ${renderVectorText(`${carbs}G`, 24, 75, 42, "#FCE7F3")}
-      <rect x="24" y="138" width="152" height="8" rx="4" fill="#334155"/>
-      <rect x="24" y="138" width="${Math.min(152, Math.max(8, Math.round((carbs / 250) * 152)))}" height="8" rx="4" fill="url(#carbGrad)"/>
-      ${renderVectorText("SUMBER ENERGI", 24, 158, 11, "#94A3B8")}
+      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#EC4899" stroke-width="1.5" stroke-opacity="0.6"/>
+      <circle cx="32" cy="32" r="13" fill="#831843"/>
+      ${renderVectorText("C", 27, 24, 16, "#EC4899")}
+      ${renderVectorText("CARBS", 54, 25, 14, "#EC4899")}
+      ${renderVectorText(`${carbs}G`, 22, 65, 38, "#FCE7F3")}
+      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
+      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round((carbs / targetCarbs) * 156)))}" height="7" rx="3.5" fill="url(#carbGrad)"/>
+      ${renderVectorText("MAIN ENERGY SOURCE", 22, 137, 11, "#94A3B8")}
     </g>
 
-    <!-- 3. Lemak Pillar -->
+    <!-- 3. Fat -->
     <g transform="translate(440, 0)">
-      <rect x="0" y="0" width="200" height="190" rx="22" ry="22" fill="url(#cardGrad)" stroke="#06B6D4" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="34" cy="36" r="14" fill="#164E63"/>
-      ${renderVectorText("F", 29, 27, 18, "#06B6D4")}
-      ${renderVectorText("LEMAK", 58, 28, 15, "#06B6D4")}
-      ${renderVectorText(`${fat}G`, 24, 75, 42, "#E0F2FE")}
-      <rect x="24" y="138" width="152" height="8" rx="4" fill="#334155"/>
-      <rect x="24" y="138" width="${Math.min(152, Math.max(8, Math.round((fat / 80) * 152)))}" height="8" rx="4" fill="url(#fatGrad)"/>
-      ${renderVectorText("HORMON & SENDI", 24, 158, 11, "#94A3B8")}
+      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#06B6D4" stroke-width="1.5" stroke-opacity="0.6"/>
+      <circle cx="32" cy="32" r="13" fill="#164E63"/>
+      ${renderVectorText("F", 27, 24, 16, "#06B6D4")}
+      ${renderVectorText("FAT", 54, 25, 14, "#06B6D4")}
+      ${renderVectorText(`${fat}G`, 22, 65, 38, "#E0F2FE")}
+      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
+      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round((fat / targetFat) * 156)))}" height="7" rx="3.5" fill="url(#fatGrad)"/>
+      ${renderVectorText(`${fatPct}% DAILY GOAL`, 22, 137, 11, "#94A3B8")}
     </g>
   </g>
 
-  <!-- Bottom Brand Footer -->
-  <g transform="translate(190, 1030)">
-    ${renderVectorText("POWERED BY GYMBUDDY AI", 0, 0, 13, "#64748B")}
+  <!-- 6. Secondary Metric Row: Sodium & Micronutrients -->
+  <g id="secondaryRow" transform="translate(40, ${secondaryRowY})">
+    <rect x="0" y="0" width="640" height="54" rx="16" ry="16" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5"/>
+    
+    <!-- Sodium Icon & Metric -->
+    <circle cx="28" cy="27" r="12" fill="#334155"/>
+    ${renderVectorText("NA", 20, 20, 12, "#38BDF8")}
+    ${renderVectorText("SODIUM", 48, 20, 13, "#94A3B8")}
+    ${renderVectorText(`${(sodium > 0 ? sodium : 450).toLocaleString("id-ID")} MG`, 120, 18, 16, "#F8FAFC")}
+
+    <!-- Sodium contextual status -->
+    <rect x="420" y="11" width="204" height="32" rx="12" fill="#070A0F" stroke="#334155" stroke-width="1"/>
+    ${renderVectorText(`${Math.round(((sodium > 0 ? sodium : 450) / 2300) * 100)}% OF 2,300MG LIMIT`, 432, 21, 11, (sodium || 450) > 1500 ? "#F87171" : "#94A3B8")}
+  </g>
+
+  <!-- 7. Bottom Brand Footer -->
+  <g transform="translate(200, ${footerY})">
+    ${renderVectorText("POWERED BY GYMBUDDY AI", 0, 0, 12, "#64748B")}
   </g>
 </svg>`;
 }

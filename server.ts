@@ -2693,26 +2693,40 @@ async function startServer() {
       const protein = cached ? cached.protein : (Number(req.query.prot) || 0);
       const carbs = cached ? cached.carbs : (Number(req.query.carb) || 0);
       const fat = cached ? cached.fat : (Number(req.query.fat) || 0);
+      const sodium = cached?.sodium !== undefined ? cached.sodium : (Number(req.query.sod) || 0);
+      const fiber = cached?.fiber !== undefined ? cached.fiber : (Number(req.query.fib) || 0);
+      const sugar = cached?.sugar !== undefined ? cached.sugar : (Number(req.query.sug) || 0);
       const mealType = cached?.mealType || (req.query.meal as string) || "Makan Siang";
       const dateStr = cached?.dateStr || (req.query.date as string) || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-      const dailyTargetCalories = cached ? cached.dailyTargetCalories : (Number(req.query.target) || 2054);
+      const dailyTargetCalories = cached ? cached.dailyTargetCalories : (Number(req.query.target) || 1966);
       const consumedTodayCalories = cached ? cached.consumedTodayCalories : (Number(req.query.consumed) || calories);
+      const dailyTargetProtein = cached?.dailyTargetProtein || (Number(req.query.targetProt) || 120);
+      const dailyTargetCarbs = cached?.dailyTargetCarbs || (Number(req.query.targetCarb) || 240);
+      const dailyTargetFat = cached?.dailyTargetFat || (Number(req.query.targetFat) || 65);
       const imageBufferOrBase64 = cached?.imageBufferOrBase64 || (req.query.img as string) || "";
+
+      const cardPayload = {
+        foodName,
+        calories,
+        protein,
+        carbs,
+        fat,
+        sodium,
+        fiber,
+        sugar,
+        mealType,
+        dateStr,
+        dailyTargetCalories,
+        consumedTodayCalories,
+        dailyTargetProtein,
+        dailyTargetCarbs,
+        dailyTargetFat,
+        imageBufferOrBase64
+      };
 
       // If client requests SVG explicitly
       if (req.path.endsWith(".svg")) {
-        const svg = generateNutritionCardSvg({
-          foodName,
-          calories,
-          protein,
-          carbs,
-          fat,
-          mealType,
-          dateStr,
-          dailyTargetCalories,
-          consumedTodayCalories,
-          imageBufferOrBase64
-        });
+        const svg = generateNutritionCardSvg(cardPayload);
         res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
         res.setHeader("Cache-Control", "public, max-age=86400");
         return res.send(svg);
@@ -2720,18 +2734,7 @@ async function startServer() {
 
       // Try generating true raster PNG
       try {
-        const pngBuf = await generateNutritionCardPng({
-          foodName,
-          calories,
-          protein,
-          carbs,
-          fat,
-          mealType,
-          dateStr,
-          dailyTargetCalories,
-          consumedTodayCalories,
-          imageBufferOrBase64
-        });
+        const pngBuf = await generateNutritionCardPng(cardPayload);
 
         if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 0x89 && pngBuf[1] === 0x50) {
           res.setHeader("Content-Type", "image/png");
@@ -2753,18 +2756,7 @@ async function startServer() {
       }
 
       // Fallback: send SVG
-      const fallbackSvg = generateNutritionCardSvg({
-        foodName,
-        calories,
-        protein,
-        carbs,
-        fat,
-        mealType,
-        dateStr,
-        dailyTargetCalories,
-        consumedTodayCalories,
-        imageBufferOrBase64
-      });
+      const fallbackSvg = generateNutritionCardSvg(cardPayload);
       res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
       return res.send(fallbackSvg);
@@ -4587,10 +4579,16 @@ Keluarkan output JSON valid:
                 protein: Number(parsed.protein) || 0,
                 carbs: Number(parsed.carbs) || 0,
                 fat: Number(parsed.fat) || 0,
+                sodium: Number(parsed.sodium) || 0,
+                fiber: Number(parsed.fiber) || 0,
+                sugar: Number(parsed.sugar) || 0,
                 mealType: mealTypeStr,
                 dateStr,
-                dailyTargetCalories: userData.targetCalories || 2054,
+                dailyTargetCalories: userData.targetCalories || 1966,
                 consumedTodayCalories: dailyTotals.calories,
+                dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
+                dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
+                dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
                 imageBufferOrBase64: photoDataUri,
                 createdAt: Date.now()
               });
