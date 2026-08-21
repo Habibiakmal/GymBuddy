@@ -44159,11 +44159,9 @@ function generateNutritionCardSvg(data) {
   if (photoHref.includes("&") && !photoHref.includes("&amp;")) {
     photoHref = photoHref.replace(/&/g, "&amp;");
   }
-  const fontFaceDefs = getFontFaceDefs();
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}">
   <defs>
-    ${fontFaceDefs}
     <clipPath id="foodPhotoClip">
       <rect x="${paddingX}" y="${photoY}" width="${contentWidth}" height="${photoHeight}" rx="20" ry="20"/>
     </clipPath>
