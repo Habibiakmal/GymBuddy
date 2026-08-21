@@ -44062,63 +44062,92 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 }
 
 // services/cardGenerator.ts
-var GLYPH_PATHS = {
-  // Numbers
-  "0": "M 20 0 L 80 0 Q 100 0 100 20 L 100 100 Q 100 120 80 120 L 20 120 Q 0 120 0 100 L 0 20 Q 0 0 20 0 Z M 28 24 L 28 96 Q 28 100 32 100 L 68 100 Q 72 100 72 96 L 72 24 Q 72 20 68 20 L 32 20 Q 28 20 28 24 Z",
-  "1": "M 35 0 L 65 0 L 65 120 L 35 120 Z M 15 30 L 35 0 L 65 0 L 15 30 Z",
-  "2": "M 0 20 Q 0 0 50 0 Q 100 0 100 35 Q 100 65 50 85 L 28 98 L 100 98 L 100 120 L 0 120 L 0 95 L 55 60 Q 75 45 75 32 Q 75 20 50 20 Q 28 20 28 32 L 0 32 Q 0 20 0 20 Z",
-  "3": "M 0 0 L 95 0 L 95 22 L 45 48 L 70 48 Q 100 48 100 84 Q 100 120 50 120 Q 0 120 0 85 L 28 85 Q 28 98 50 98 Q 72 98 72 84 Q 72 70 50 70 L 25 70 L 25 48 L 60 22 L 0 22 Z",
-  "4": "M 70 0 L 100 0 L 100 120 L 70 120 L 70 90 L 0 90 L 0 65 L 65 0 L 70 0 Z M 30 68 L 70 68 L 70 28 Z",
-  "5": "M 0 0 L 95 0 L 95 22 L 28 22 L 28 48 Q 45 45 65 45 Q 100 45 100 82 Q 100 120 50 120 Q 0 120 0 88 L 28 88 Q 28 98 50 98 Q 72 98 72 82 Q 72 66 50 66 Q 35 66 25 72 L 0 50 Z",
-  "6": "M 50 0 Q 100 0 95 32 L 68 32 Q 70 20 50 20 Q 28 20 28 45 Q 40 40 60 40 Q 100 40 100 80 Q 100 120 50 120 Q 0 120 0 60 Q 0 0 50 0 Z M 28 80 Q 28 98 50 98 Q 72 98 72 80 Q 72 62 50 62 Q 28 62 28 80 Z",
-  "7": "M 0 0 L 100 0 L 100 22 L 45 120 L 15 120 L 68 22 L 0 22 Z",
-  "8": "M 50 0 Q 95 0 95 32 Q 95 50 75 58 Q 100 68 100 88 Q 100 120 50 120 Q 0 120 0 88 Q 0 68 25 58 Q 5 50 5 32 Q 5 0 50 0 Z M 50 20 Q 28 20 28 32 Q 28 45 50 45 Q 72 45 72 32 Q 72 20 50 20 Z M 50 68 Q 28 68 28 88 Q 28 100 50 100 Q 72 100 72 88 Q 72 68 50 68 Z",
-  "9": "M 50 120 Q 0 120 5 88 L 32 88 Q 30 100 50 100 Q 72 100 72 75 Q 60 80 40 80 Q 0 80 0 40 Q 0 0 50 0 Q 100 0 100 60 Q 100 120 50 120 Z M 72 40 Q 72 22 50 22 Q 28 22 28 40 Q 28 58 50 58 Q 72 58 72 40 Z",
-  // Letters
-  "A": "M 50 0 L 100 120 L 72 120 L 58 85 L 42 85 L 28 120 L 0 120 Z M 50 30 L 44 65 L 56 65 Z",
-  "B": "M 0 0 L 70 0 Q 100 0 100 30 Q 100 52 75 58 Q 100 65 100 90 Q 100 120 70 120 L 0 120 Z M 26 22 L 26 48 L 65 48 Q 74 48 74 35 Q 74 22 65 22 Z M 26 70 L 26 98 L 68 98 Q 74 98 74 84 Q 74 70 68 70 Z",
-  "C": "M 85 24 L 65 38 Q 60 22 45 22 Q 26 22 26 60 Q 26 98 45 98 Q 60 98 68 82 L 88 96 Q 75 120 45 120 Q 0 120 0 60 Q 0 0 45 0 Q 75 0 85 24 Z",
-  "D": "M 0 0 L 60 0 Q 100 0 100 60 Q 100 120 60 120 L 0 120 Z M 26 22 L 26 98 L 58 98 Q 74 98 74 60 Q 74 22 58 22 Z",
-  "E": "M 0 0 L 95 0 L 95 24 L 26 24 L 26 48 L 85 48 L 85 70 L 26 70 L 26 96 L 95 96 L 95 120 L 0 120 Z",
-  "F": "M 0 0 L 95 0 L 95 24 L 26 24 L 26 48 L 85 48 L 85 70 L 26 70 L 26 120 L 0 120 Z",
-  "G": "M 85 24 L 65 38 Q 60 22 45 22 Q 26 22 26 60 Q 26 98 45 98 Q 65 98 72 75 L 50 75 L 50 55 L 98 55 L 98 100 Q 75 120 45 120 Q 0 120 0 60 Q 0 0 45 0 Q 75 0 85 24 Z",
-  "H": "M 0 0 L 26 0 L 26 48 L 74 48 L 74 0 L 100 0 L 100 120 L 74 120 L 74 72 L 26 72 L 26 120 L 0 120 Z",
-  "I": "M 0 0 L 32 0 L 32 120 L 0 120 Z",
-  "J": "M 70 0 L 96 0 L 96 90 Q 96 120 50 120 Q 10 120 4 90 L 30 84 Q 34 98 50 98 Q 70 98 70 85 Z",
-  "K": "M 0 0 L 26 0 L 26 50 L 72 0 L 100 0 L 48 58 L 100 120 L 72 120 L 26 68 L 26 120 L 0 120 Z",
-  "L": "M 0 0 L 26 0 L 26 96 L 95 96 L 95 120 L 0 120 Z",
-  "M": "M 0 0 L 30 0 L 50 65 L 70 0 L 100 0 L 100 120 L 75 120 L 75 40 L 58 95 L 42 95 L 25 40 L 25 120 L 0 120 Z",
-  "N": "M 0 0 L 26 0 L 74 80 L 74 0 L 100 0 L 100 120 L 74 120 L 26 40 L 26 120 L 0 120 Z",
-  "O": "M 45 0 Q 100 0 100 60 Q 100 120 45 120 Q 0 120 0 60 Q 0 0 45 0 Z M 45 22 Q 26 22 26 60 Q 26 98 45 98 Q 74 98 74 60 Q 74 22 45 22 Z",
-  "P": "M 0 0 L 70 0 Q 100 0 100 40 Q 100 75 70 75 L 26 75 L 26 120 L 0 120 Z M 26 22 L 26 53 L 65 53 Q 74 53 74 38 Q 74 22 65 22 Z",
-  "Q": "M 45 0 Q 100 0 100 60 Q 100 120 45 120 Q 0 120 0 60 Q 0 0 45 0 Z M 45 22 Q 26 22 26 60 Q 26 98 45 98 Q 74 98 74 60 Q 74 22 45 22 Z M 65 85 L 90 120 L 105 105 L 80 75 Z",
-  "R": "M 0 0 L 70 0 Q 100 0 100 38 Q 100 65 75 68 L 100 120 L 72 120 L 52 70 L 26 70 L 26 120 L 0 120 Z M 26 22 L 26 48 L 65 48 Q 74 48 74 35 Q 74 22 65 22 Z",
-  "S": "M 85 24 L 65 38 Q 60 22 45 22 Q 26 22 26 35 Q 26 50 65 58 Q 100 65 100 90 Q 100 120 50 120 Q 15 120 0 95 L 22 80 Q 30 98 50 98 Q 74 98 74 85 Q 74 70 35 62 Q 0 55 0 32 Q 0 0 45 0 Q 75 0 85 24 Z",
-  "T": "M 0 0 L 100 0 L 100 24 L 63 24 L 63 120 L 37 120 L 37 24 L 0 24 Z",
-  "U": "M 0 0 L 26 0 L 26 80 Q 26 98 50 98 Q 74 98 74 80 L 74 0 L 100 0 L 100 80 Q 100 120 50 120 Q 0 120 0 80 Z",
-  "V": "M 0 0 L 28 0 L 50 85 L 72 0 L 100 0 L 64 120 L 36 120 Z",
-  "W": "M 0 0 L 24 0 L 38 75 L 50 20 L 62 75 L 76 0 L 100 0 L 80 120 L 58 120 L 50 65 L 42 120 L 20 120 Z",
-  "X": "M 0 0 L 30 0 L 50 45 L 70 0 L 100 0 L 68 60 L 100 120 L 70 120 L 50 75 L 30 120 L 0 120 L 32 60 Z",
-  "Y": "M 0 0 L 30 0 L 50 50 L 70 0 L 100 0 L 64 68 L 64 120 L 36 120 L 36 68 Z",
-  "Z": "M 0 0 L 95 0 L 95 24 L 35 96 L 95 96 L 95 120 L 0 120 L 0 96 L 60 24 L 0 24 Z",
-  // Symbols
-  ".": "M 0 96 L 24 96 L 24 120 L 0 120 Z",
-  ",": "M 10 96 L 30 96 L 15 130 L 0 120 Z",
-  ":": "M 0 30 L 24 30 L 24 54 L 0 54 Z M 0 96 L 24 96 L 24 120 L 0 120 Z",
-  "\xB7": "M 0 45 L 24 45 L 24 69 L 0 69 Z",
-  "-": "M 0 50 L 60 50 L 60 70 L 0 70 Z",
-  "+": "M 35 15 L 65 15 L 65 45 L 95 45 L 95 75 L 65 75 L 65 105 L 35 105 L 35 75 L 5 75 L 5 45 L 35 45 Z",
-  "%": "M 25 15 Q 40 15 40 30 Q 40 45 25 45 Q 10 45 10 30 Q 10 15 25 15 Z M 75 75 Q 90 75 90 90 Q 90 105 75 105 Q 60 105 60 90 Q 60 75 75 75 Z M 85 10 L 100 20 L 25 110 L 10 100 Z",
-  "&": "M 80 100 Q 55 120 35 120 Q 0 120 0 85 Q 0 60 30 45 Q 15 35 15 18 Q 15 0 40 0 Q 65 0 65 20 Q 65 38 40 50 L 70 85 L 90 65 L 105 80 L 80 100 Z M 35 98 Q 50 98 55 85 L 30 58 Q 22 68 22 80 Q 22 98 35 98 Z M 40 20 Q 30 20 30 25 Q 30 32 38 38 Q 45 32 45 25 Q 45 20 40 20 Z",
-  "(": "M 50 0 Q 15 60 50 120 L 25 120 Q -10 60 25 0 Z",
-  ")": "M 0 0 Q 35 60 0 120 L 25 120 Q 60 60 25 0 Z",
-  "/": "M 75 0 L 100 0 L 25 120 L 0 120 Z",
+var MANROPE_GLYPHS = {
+  // Numbers (bold, clean, human)
+  "0": "M 50 0 C 22 0 10 26 10 60 C 10 94 22 120 50 120 C 78 120 90 94 90 60 C 90 26 78 0 50 0 Z M 50 22 C 64 22 68 40 68 60 C 68 80 64 98 50 98 C 36 98 32 80 32 60 C 32 40 36 22 50 22 Z",
+  "1": "M 32 0 L 58 0 L 58 120 L 32 120 Z M 16 28 L 32 0 L 58 0 L 16 28 Z",
+  "2": "M 10 32 C 10 12 28 0 52 0 C 78 0 90 14 90 32 C 90 56 60 76 38 96 L 90 96 L 90 120 L 10 120 L 10 98 L 50 56 C 64 42 68 34 68 28 C 68 20 60 18 52 18 C 40 18 32 24 32 34 Z",
+  "3": "M 14 0 L 86 0 L 86 22 L 44 48 C 50 46 58 46 64 46 C 82 46 90 58 90 78 C 90 102 76 120 50 120 C 24 120 10 102 10 82 L 32 82 C 32 94 40 100 50 100 C 60 100 68 92 68 78 C 68 64 60 58 48 58 L 36 58 L 36 40 L 62 20 L 14 20 Z",
+  "4": "M 62 0 L 86 0 L 86 120 L 62 120 L 62 92 L 6 92 L 6 70 L 58 0 L 62 0 Z M 30 70 L 62 70 L 62 28 Z",
+  "5": "M 14 0 L 86 0 L 86 22 L 36 22 L 36 46 C 44 42 54 42 62 42 C 80 42 90 56 90 78 C 90 102 76 120 50 120 C 22 120 10 100 10 78 L 32 78 C 32 92 40 98 50 98 C 60 98 68 90 68 78 C 68 66 60 58 48 58 C 40 58 32 62 26 68 L 14 54 Z",
+  "6": "M 50 0 C 76 0 88 20 88 38 L 66 38 C 66 24 58 20 50 20 C 34 20 30 38 30 60 C 36 50 46 44 58 44 C 78 44 88 58 88 80 C 88 104 74 120 50 120 C 22 120 8 98 8 58 C 8 20 24 0 50 0 Z M 50 64 C 40 64 32 72 32 82 C 32 92 40 100 50 100 C 60 100 66 92 66 82 C 66 72 60 64 50 64 Z",
+  "7": "M 10 0 L 90 0 L 90 20 L 46 120 L 20 120 L 64 20 L 10 20 Z",
+  "8": "M 50 0 C 72 0 84 14 84 32 C 84 46 72 56 60 60 C 76 64 88 76 88 92 C 88 110 74 120 50 120 C 26 120 12 110 12 92 C 12 76 24 64 40 60 C 28 56 16 46 16 32 C 16 14 28 0 50 0 Z M 50 18 C 38 18 36 26 36 32 C 36 38 40 44 50 44 C 60 44 64 38 64 32 C 64 26 62 18 50 18 Z M 50 60 C 36 60 32 68 32 78 C 32 88 38 98 50 98 C 62 98 68 88 68 78 C 68 68 64 60 50 60 Z",
+  "9": "M 50 120 C 24 120 12 100 12 82 L 34 82 C 34 96 42 100 50 100 C 66 100 70 82 70 60 C 64 70 54 76 42 76 C 22 76 12 62 12 40 C 12 16 26 0 50 0 C 78 0 92 22 92 62 C 92 100 76 120 50 120 Z M 50 56 C 60 56 68 48 68 38 C 68 28 60 20 50 20 C 40 20 34 28 34 38 C 34 48 40 56 50 56 Z",
+  // Uppercase Letters
+  "A": "M 50 0 L 92 120 L 68 120 L 56 84 L 44 84 L 32 120 L 8 120 Z M 50 28 L 41 64 L 59 64 Z",
+  "B": "M 14 0 L 58 0 C 78 0 88 12 88 32 C 88 44 80 54 68 58 C 82 62 90 74 90 92 C 90 110 78 120 56 120 L 14 120 Z M 36 20 L 36 48 L 54 48 C 64 48 68 42 68 34 C 68 26 64 20 54 20 Z M 36 66 L 36 100 L 56 100 C 66 100 70 94 70 84 C 70 74 66 66 56 66 Z",
+  "C": "M 82 28 C 76 12 64 0 48 0 C 22 0 10 26 10 60 C 10 94 22 120 48 120 C 64 120 76 108 82 92 L 62 84 C 58 94 52 100 46 100 C 32 100 28 80 28 60 C 28 40 32 20 46 20 C 52 20 58 26 62 36 Z",
+  "D": "M 14 0 L 52 0 C 78 0 88 26 88 60 C 88 94 78 120 52 120 L 14 120 Z M 36 20 L 36 100 L 50 100 C 66 100 70 80 70 60 C 70 40 66 20 50 20 Z",
+  "E": "M 14 0 L 86 0 L 86 22 L 36 22 L 36 48 L 78 48 L 78 70 L 36 70 L 36 98 L 86 98 L 86 120 L 14 120 Z",
+  "F": "M 14 0 L 86 0 L 86 22 L 36 22 L 36 48 L 78 48 L 78 70 L 36 70 L 36 120 L 14 120 Z",
+  "G": "M 82 28 C 76 12 64 0 48 0 C 22 0 10 26 10 60 C 10 94 22 120 48 120 C 70 120 84 104 86 78 L 48 78 L 48 58 L 88 58 L 88 100 C 80 114 66 120 48 120 C 22 120 10 94 10 60 C 10 26 22 0 48 0 C 64 0 76 12 82 28 Z",
+  "H": "M 14 0 L 36 0 L 36 48 L 64 48 L 64 0 L 86 0 L 86 120 L 64 120 L 64 70 L 36 70 L 36 120 L 14 120 Z",
+  "I": "M 18 0 L 40 0 L 40 120 L 18 120 Z",
+  "J": "M 60 0 L 82 0 L 82 88 C 82 110 68 120 46 120 C 24 120 12 110 10 92 L 30 86 C 32 96 38 100 46 100 C 56 100 62 94 62 86 Z",
+  "K": "M 14 0 L 36 0 L 36 50 L 64 0 L 88 0 L 48 58 L 90 120 L 64 120 L 36 68 L 36 120 L 14 120 Z",
+  "L": "M 14 0 L 36 0 L 36 98 L 86 98 L 86 120 L 14 120 Z",
+  "M": "M 12 0 L 36 0 L 50 60 L 64 0 L 88 0 L 88 120 L 66 120 L 66 40 L 54 90 L 46 90 L 34 40 L 34 120 L 12 120 Z",
+  "N": "M 14 0 L 36 0 L 66 76 L 66 0 L 86 0 L 86 120 L 64 120 L 34 44 L 34 120 L 14 120 Z",
+  "O": "M 50 0 C 22 0 10 26 10 60 C 10 94 22 120 50 120 C 78 120 90 94 90 60 C 90 26 78 0 50 0 Z M 50 20 C 64 20 68 40 68 60 C 68 80 64 100 50 100 C 36 100 32 80 32 60 C 32 40 36 20 50 20 Z",
+  "P": "M 14 0 L 56 0 C 78 0 88 16 88 40 C 88 64 78 76 56 76 L 36 76 L 36 120 L 14 120 Z M 36 20 L 36 56 L 54 56 C 64 56 68 50 68 40 C 68 30 64 20 54 20 Z",
+  "Q": "M 50 0 C 22 0 10 26 10 60 C 10 94 22 120 50 120 C 64 120 74 114 80 104 L 70 88 C 66 94 58 100 50 100 C 36 100 32 80 32 60 C 32 40 36 20 50 20 C 64 20 68 40 68 60 C 68 68 66 76 62 82 L 80 100 C 86 88 90 74 90 60 C 90 26 78 0 50 0 Z M 68 88 L 86 116 L 72 122 L 56 94 Z",
+  "R": "M 14 0 L 56 0 C 78 0 88 14 88 38 C 88 56 78 68 60 72 L 90 120 L 64 120 L 40 76 L 36 76 L 36 120 L 14 120 Z M 36 20 L 36 56 L 54 56 C 64 56 68 50 68 38 C 68 26 64 20 54 20 Z",
+  "S": "M 82 30 C 76 12 64 0 48 0 C 26 0 14 14 14 32 C 14 48 26 58 48 64 C 66 70 72 76 72 88 C 72 98 62 100 50 100 C 38 100 28 92 24 78 L 6 86 C 12 108 28 120 50 120 C 74 120 88 106 88 88 C 88 70 76 60 54 54 C 36 48 30 42 30 32 C 30 22 38 18 48 18 C 58 18 66 22 70 34 Z",
+  "T": "M 6 0 L 94 0 L 94 22 L 58 22 L 58 120 L 42 120 L 42 22 L 6 22 Z",
+  "U": "M 14 0 L 36 0 L 36 78 C 36 94 42 100 50 100 C 58 100 64 94 64 78 L 64 0 L 86 0 L 86 78 C 86 104 74 120 50 120 C 26 120 14 104 14 78 Z",
+  "V": "M 10 0 L 32 0 L 50 86 L 68 0 L 90 0 L 62 120 L 38 120 Z",
+  "W": "M 8 0 L 28 0 L 42 78 L 50 24 L 58 78 L 72 0 L 92 0 L 78 120 L 60 120 L 50 64 L 40 120 L 22 120 Z",
+  "X": "M 12 0 L 36 0 L 50 44 L 64 0 L 88 0 L 64 58 L 90 120 L 66 120 L 50 74 L 34 120 L 10 120 L 36 58 Z",
+  "Y": "M 10 0 L 34 0 L 50 48 L 66 0 L 90 0 L 60 66 L 60 120 L 40 120 L 40 66 Z",
+  "Z": "M 14 0 L 86 0 L 86 20 L 36 98 L 86 98 L 86 120 L 14 120 L 14 100 L 64 22 L 14 22 Z",
+  // Lowercase Letters
+  "a": "M 50 38 C 26 38 14 54 14 78 C 14 102 26 118 50 118 C 62 118 72 112 76 102 L 76 118 L 94 118 L 94 38 L 76 38 L 76 54 C 72 44 62 38 50 38 Z M 54 56 C 68 56 76 66 76 78 C 76 90 68 100 54 100 C 40 100 32 90 32 78 C 32 66 40 56 54 56 Z",
+  "b": "M 14 0 L 32 0 L 32 54 C 38 44 48 38 60 38 C 82 38 94 56 94 78 C 94 102 82 118 60 118 C 48 118 38 112 32 102 L 32 118 L 14 118 Z M 54 56 C 40 56 32 66 32 78 C 32 90 40 100 54 100 C 68 100 76 90 76 78 C 76 66 68 56 54 56 Z",
+  "c": "M 78 58 C 72 46 62 38 50 38 C 26 38 14 54 14 78 C 14 102 26 118 50 118 C 64 118 74 110 78 98 L 62 92 C 58 98 54 100 48 100 C 38 100 32 90 32 78 C 32 66 38 56 48 56 C 54 56 60 60 62 66 Z",
+  "d": "M 76 0 L 94 0 L 94 118 L 76 118 L 76 102 C 70 112 60 118 48 118 C 26 118 14 102 14 78 C 14 56 26 38 48 38 C 60 38 70 44 76 54 Z M 54 56 C 40 56 32 66 32 78 C 32 90 40 100 54 100 C 68 100 76 90 76 78 C 76 66 68 56 54 56 Z",
+  "e": "M 50 38 C 24 38 12 54 12 78 C 12 102 26 118 50 118 C 68 118 78 108 84 92 L 68 86 C 64 94 58 100 50 100 C 38 100 30 90 30 76 L 86 76 C 86 52 74 38 50 38 Z M 30 62 C 32 50 40 44 50 44 C 60 44 68 50 68 62 Z",
+  "f": "M 42 0 C 26 0 16 10 16 26 L 16 38 L 4 38 L 4 56 L 16 56 L 16 118 L 34 118 L 34 56 L 52 56 L 52 38 L 34 38 L 34 26 C 34 20 38 16 44 16 L 52 16 L 52 0 Z",
+  "g": "M 76 38 L 94 38 L 94 102 C 94 126 80 138 56 138 C 34 138 20 128 16 114 L 32 108 C 36 116 44 120 54 120 C 68 120 76 114 76 102 L 76 98 C 70 106 60 110 48 110 C 26 110 14 94 14 74 C 14 54 26 38 48 38 C 60 38 70 44 76 54 Z M 54 54 C 40 54 32 64 32 74 C 32 86 40 94 54 94 C 68 94 76 86 76 74 C 76 64 68 54 54 54 Z",
+  "h": "M 14 0 L 32 0 L 32 54 C 38 44 48 38 60 38 C 78 38 88 50 88 70 L 88 118 L 70 118 L 70 72 C 70 60 64 54 54 54 C 44 54 36 60 32 70 L 32 118 L 14 118 Z",
+  "i": "M 14 0 L 32 0 L 32 18 L 14 18 Z M 14 38 L 32 38 L 32 118 L 14 118 Z",
+  "j": "M 36 0 L 54 0 L 54 18 L 36 18 Z M 36 38 L 54 38 L 54 108 C 54 124 44 136 24 136 C 14 136 4 130 0 120 L 16 112 C 20 118 24 120 30 120 C 38 120 42 114 42 104 L 42 38 Z",
+  "k": "M 14 0 L 32 0 L 32 70 L 64 38 L 86 38 L 48 76 L 88 118 L 64 118 L 32 82 L 32 118 L 14 118 Z",
+  "l": "M 14 0 L 32 0 L 32 118 L 14 118 Z",
+  "m": "M 10 38 L 28 38 L 28 54 C 32 44 40 38 50 38 C 60 38 68 44 72 54 C 76 44 84 38 94 38 C 110 38 118 50 118 70 L 118 118 L 100 118 L 100 72 C 100 60 96 54 88 54 C 80 54 74 60 70 70 L 70 118 L 52 118 L 52 72 C 52 60 48 54 40 54 C 34 54 28 60 28 70 L 28 118 L 10 118 Z",
+  "n": "M 14 38 L 32 38 L 32 54 C 38 44 48 38 60 38 C 78 38 88 50 88 70 L 88 118 L 70 118 L 70 72 C 70 60 64 54 54 54 C 44 54 36 60 32 70 L 32 118 L 14 118 Z",
+  "o": "M 50 38 C 26 38 14 54 14 78 C 14 102 26 118 50 118 C 74 118 86 102 86 78 C 86 54 74 38 50 38 Z M 50 56 C 64 56 68 68 68 78 C 68 88 64 100 50 100 C 36 100 32 88 32 78 C 32 68 36 56 50 56 Z",
+  "p": "M 14 38 L 32 38 L 32 54 C 38 44 48 38 60 38 C 82 38 94 56 94 78 C 94 102 82 118 60 118 C 48 118 38 112 32 102 L 32 140 L 14 140 Z M 54 56 C 40 56 32 66 32 78 C 32 90 40 100 54 100 C 68 100 76 90 76 78 C 76 66 68 56 54 56 Z",
+  "q": "M 76 38 L 94 38 L 94 140 L 76 140 L 76 102 C 70 112 60 118 48 118 C 26 118 14 102 14 78 C 14 56 26 38 48 38 C 60 38 70 44 76 54 Z M 54 56 C 40 56 32 66 32 78 C 32 90 40 100 54 100 C 68 100 76 90 76 78 C 76 66 68 56 54 56 Z",
+  "r": "M 14 38 L 32 38 L 32 60 C 38 46 48 38 60 38 L 68 38 L 68 58 L 56 58 C 44 58 36 66 32 76 L 32 118 L 14 118 Z",
+  "s": "M 74 56 C 68 44 58 38 46 38 C 28 38 18 48 18 62 C 18 74 26 80 44 86 C 60 90 66 94 66 100 C 66 106 58 110 48 110 C 36 110 28 104 24 94 L 8 100 C 14 114 28 122 48 122 C 70 122 84 112 84 98 C 84 84 74 76 56 72 C 40 68 34 64 34 58 C 34 52 40 48 48 48 C 56 48 62 52 66 60 Z",
+  "t": "M 18 16 L 36 16 L 36 38 L 54 38 L 54 56 L 36 56 L 36 98 C 36 104 38 106 44 106 L 54 106 L 54 120 C 44 122 34 122 26 118 C 20 112 18 104 18 94 L 18 56 L 6 56 L 6 38 L 18 38 Z",
+  "u": "M 14 38 L 32 38 L 32 82 C 32 94 38 100 48 100 C 58 100 66 94 70 82 L 70 38 L 88 38 L 88 118 L 70 118 L 70 102 C 66 112 56 118 44 118 C 24 118 14 106 14 82 Z",
+  "v": "M 8 38 L 28 38 L 48 98 L 68 38 L 88 38 L 58 118 L 38 118 Z",
+  "w": "M 6 38 L 24 38 L 38 96 L 48 54 L 58 96 L 72 38 L 90 38 L 78 118 L 62 118 L 50 76 L 38 118 L 22 118 Z",
+  "x": "M 10 38 L 30 38 L 48 68 L 66 38 L 86 38 L 60 78 L 88 118 L 68 118 L 48 88 L 28 118 L 8 118 L 36 78 Z",
+  "y": "M 10 38 L 30 38 L 48 84 L 66 38 L 86 38 L 58 108 C 52 124 44 136 24 136 C 14 136 6 132 0 126 L 12 114 C 16 118 20 120 26 120 C 36 120 42 114 46 104 L 10 38 Z",
+  "z": "M 14 38 L 82 38 L 82 54 L 34 102 L 84 102 L 84 118 L 14 118 L 14 102 L 62 54 L 14 54 Z",
+  // Punctuation & Symbols
+  ".": "M 0 100 L 18 100 L 18 118 L 0 118 Z",
+  ",": "M 6 100 L 22 100 L 12 126 L 0 118 Z",
+  ":": "M 0 48 L 18 48 L 18 66 L 0 66 Z M 0 100 L 18 100 L 18 118 L 0 118 Z",
+  "\xB7": "M 0 54 L 18 54 L 18 72 L 0 72 Z",
+  "-": "M 0 62 L 48 62 L 48 76 L 0 76 Z",
+  "+": "M 28 32 L 48 32 L 48 56 L 72 56 L 72 76 L 48 76 L 48 100 L 28 100 L 28 76 L 4 76 L 4 56 L 28 56 Z",
+  "%": "M 20 20 C 32 20 32 40 20 40 C 8 40 8 20 20 20 Z M 60 76 C 72 76 72 96 60 96 C 48 96 48 76 60 76 Z M 68 16 L 80 24 L 20 100 L 8 92 Z",
+  "/": "M 60 0 L 80 0 L 20 120 L 0 120 Z",
+  "(": "M 40 0 C 12 40 12 80 40 120 L 22 120 C -6 80 -6 40 22 0 Z",
+  ")": "M 0 0 C 28 40 28 80 0 120 L 18 120 C 46 80 46 40 18 0 Z",
+  "'": "M 10 0 L 26 0 L 16 28 L 4 20 Z",
+  '"': "M 4 0 L 20 0 L 14 26 L 0 20 Z M 28 0 L 44 0 L 38 26 L 24 20 Z",
+  "!": "M 6 0 L 24 0 L 20 72 L 10 72 Z M 6 96 L 24 96 L 24 118 L 6 118 Z",
   " ": " "
 };
-function renderVectorText(text, x, y, height, fill = "#FFFFFF", letterSpacing = 0.15) {
-  const str = String(text || "").toUpperCase();
+function renderHumanVectorText(text, x, y, height, fill = "#FFFFFF", letterSpacing = 0.12) {
+  const str = String(text || "");
   const scale = height / 120;
-  const standardWidth = 100 * scale;
+  const standardWidth = 80 * scale;
   let currentX = x;
   let paths = "";
   for (let i = 0; i < str.length; i++) {
@@ -44127,12 +44156,16 @@ function renderVectorText(text, x, y, height, fill = "#FFFFFF", letterSpacing = 
       currentX += standardWidth * 0.45;
       continue;
     }
-    const glyph = GLYPH_PATHS[char];
+    const glyph = MANROPE_GLYPHS[char];
     let glyphWidth = standardWidth;
-    if (char === "I" || char === "." || char === ":" || char === "\xB7" || char === ",") {
-      glyphWidth = 32 * scale;
-    } else if (char === "W" || char === "M") {
+    if (char === "i" || char === "l" || char === "." || char === ":" || char === "\xB7" || char === "," || char === "!" || char === "'") {
+      glyphWidth = 24 * scale;
+    } else if (char === "m" || char === "w" || char === "M" || char === "W") {
       glyphWidth = 110 * scale;
+    } else if (char === "r" || char === "t" || char === "f" || char === "j") {
+      glyphWidth = 50 * scale;
+    } else if (char >= "a" && char <= "z") {
+      glyphWidth = 74 * scale;
     }
     if (glyph && glyph.trim()) {
       paths += `<path d="${glyph}" transform="translate(${currentX.toFixed(1)}, ${y.toFixed(1)}) scale(${scale.toFixed(4)})" fill="${fill}"/>
@@ -44142,10 +44175,10 @@ function renderVectorText(text, x, y, height, fill = "#FFFFFF", letterSpacing = 
   }
   return paths;
 }
-function calculateVectorTextWidth(text, height, letterSpacing = 0.15) {
-  const str = String(text || "").toUpperCase();
+function calculateHumanTextWidth(text, height, letterSpacing = 0.12) {
+  const str = String(text || "");
   const scale = height / 120;
-  const standardWidth = 100 * scale;
+  const standardWidth = 80 * scale;
   let w = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
@@ -44154,217 +44187,158 @@ function calculateVectorTextWidth(text, height, letterSpacing = 0.15) {
       continue;
     }
     let glyphWidth = standardWidth;
-    if (char === "I" || char === "." || char === ":" || char === "\xB7" || char === ",") {
-      glyphWidth = 32 * scale;
-    } else if (char === "W" || char === "M") {
+    if (char === "i" || char === "l" || char === "." || char === ":" || char === "\xB7" || char === "," || char === "!" || char === "'") {
+      glyphWidth = 24 * scale;
+    } else if (char === "m" || char === "w" || char === "M" || char === "W") {
       glyphWidth = 110 * scale;
+    } else if (char === "r" || char === "t" || char === "f" || char === "j") {
+      glyphWidth = 50 * scale;
+    } else if (char >= "a" && char <= "z") {
+      glyphWidth = 74 * scale;
     }
     w += glyphWidth + standardWidth * letterSpacing;
   }
   return w;
 }
 function generateNutritionCardSvg(data) {
-  const foodTitle = (data.foodName || "INDOMIE CUP MI GORENG (75G)").toUpperCase().trim();
+  const rawTitle = (data.foodName || "Es Pisang Ijo").trim();
+  const foodTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
   const protein = Math.round(Number(data.protein) || 0);
   const carbs = Math.round(Number(data.carbs) || 0);
   const fat = Math.round(Number(data.fat) || 0);
   const sodium = Math.round(Number(data.sodium) || 0);
   const macroCalcCalories = protein * 4 + carbs * 4 + fat * 9;
   const calories = macroCalcCalories > 0 ? macroCalcCalories : Math.round(Number(data.calories)) || 0;
-  const mealType = (data.mealType || "LUNCH").toUpperCase();
-  const dateStr = (data.dateStr || (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" })).toUpperCase();
+  const mealType = data.mealType || "Lunch";
+  const dateStr = data.dateStr || (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const targetCal = Math.round(Number(data.dailyTargetCalories) || 1966);
   const consumedCal = Math.round(Number(data.consumedTodayCalories) || calories);
   const remainingCal = targetCal - consumedCal;
   const isOver = remainingCal < 0;
-  const pillText = isOver ? `DAILY TARGET EXCEEDED +${Math.abs(remainingCal).toLocaleString("id-ID")} KCAL` : `${remainingCal.toLocaleString("id-ID")} KCAL REMAINING`;
-  const pillBg = isOver ? "#7F1D1D" : "#14532D";
-  const pillBorder = isOver ? "#EF4444" : "#22C55E";
-  const pillTextColor = isOver ? "#FCA5A5" : "#86EFAC";
-  const words = foodTitle.split(/\s+/);
-  let line1 = "";
-  let line2 = "";
-  for (const w of words) {
-    if ((line1 + " " + w).length <= 24 && !line2) {
-      line1 = (line1 + " " + w).trim();
+  const statusText = isOver ? `${Math.abs(remainingCal).toLocaleString("en-US")} kcal over your goal today` : `${remainingCal.toLocaleString("en-US")} kcal remaining today`;
+  const statusColor = isOver ? "#F87171" : "#4ADE80";
+  const statusDotColor = isOver ? "#EF4444" : "#22C55E";
+  let insightText = (data.insight || "").trim();
+  if (!insightText) {
+    if (protein >= 25) {
+      insightText = "Great protein boost! Excellent for muscle recovery and satiety.";
+    } else if (carbs >= 60) {
+      insightText = "High in carbs. Consider pairing with protein for a balanced day.";
+    } else if (fat >= 25) {
+      insightText = "Rich in healthy energy. Balance with light fiber for dinner.";
     } else {
-      line2 = (line2 + " " + w).trim();
+      insightText = "Well-balanced meal. Keep staying on track with your water and daily goal.";
     }
   }
-  if (!line1) line1 = foodTitle;
-  if (line2.length > 28) line2 = line2.substring(0, 25) + "...";
-  const hasLine2 = Boolean(line2);
-  const headerY = 40;
-  const titleY = 100;
-  const titleHeight = hasLine2 ? 55 : 30;
-  const photoY = titleY + titleHeight + 15;
-  const photoHeight = 340;
-  const calBentoY = photoY + photoHeight + 18;
-  const macroGridY = calBentoY + 128 + 14;
-  const secondaryRowY = macroGridY + 165 + 14;
-  const footerY = secondaryRowY + 58 + 18;
+  const headerY = 42;
+  const photoY = 135;
+  const photoHeight = 460;
+  const calorieY = photoY + photoHeight + 28;
+  const macroY = calorieY + 95;
+  const sodiumY = macroY + 78;
+  const insightY = sodiumY + 54;
   const photoHref = data.imageBufferOrBase64 || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
-  const gymbuddyWidth = calculateVectorTextWidth("GYMBUDDY", 17, 0.15);
-  const aiWidth = calculateVectorTextWidth(".AI", 17, 0.15);
-  const brandLeftWidth = 48 + gymbuddyWidth + 6 + aiWidth + 24;
-  const aiX = 78 + gymbuddyWidth + 6;
-  const headerRightText = `${mealType} \xB7 ${dateStr}`;
-  const headerRightWidth = calculateVectorTextWidth(headerRightText, 12, 0.15) + 32;
-  const headerRightX = 680 - headerRightWidth;
-  const pillWidth = calculateVectorTextWidth(pillText, 13, 0.15) + 42;
-  const targetProtein = Math.round(data.dailyTargetProtein || 120);
-  const targetCarbs = Math.round(data.dailyTargetCarbs || 240);
-  const targetFat = Math.round(data.dailyTargetFat || 65);
-  const protPct = Math.min(999, Math.round(protein / targetProtein * 100));
-  const carbPct = Math.min(999, Math.round(carbs / targetCarbs * 100));
-  const fatPct = Math.min(999, Math.round(fat / targetFat * 100));
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="720" height="1140" viewBox="0 0 720 1140">
   <defs>
-    <!-- Background & Card Gradients -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#070A0F"/>
-      <stop offset="40%" stop-color="#0D131F"/>
-      <stop offset="100%" stop-color="#030712"/>
+    <!-- Calm Dark Navy / Slate Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="60%" stop-color="#090E17"/>
+      <stop offset="100%" stop-color="#04070D"/>
     </linearGradient>
 
+    <!-- Subtle container gradient -->
     <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1E293B"/>
-      <stop offset="100%" stop-color="#0F172A"/>
-    </linearGradient>
-
-    <linearGradient id="calGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FF5722"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-
-    <linearGradient id="protGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F59E0B"/>
-      <stop offset="100%" stop-color="#D97706"/>
-    </linearGradient>
-
-    <linearGradient id="carbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#EC4899"/>
-      <stop offset="100%" stop-color="#BE185D"/>
-    </linearGradient>
-
-    <linearGradient id="fatGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#06B6D4"/>
-      <stop offset="100%" stop-color="#0284C7"/>
+      <stop offset="0%" stop-color="#1E293B" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0.4"/>
     </linearGradient>
 
     <clipPath id="foodPhotoClip">
-      <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="24" ry="24"/>
+      <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="20" ry="20"/>
     </clipPath>
   </defs>
 
-  <!-- Deep Obsidian Bento Background -->
+  <!-- Calm Dark Navy Canvas -->
   <rect width="720" height="1140" fill="url(#bgGrad)"/>
 
-  <!-- 1. Header Bar: Brand Lockup & Meal Date -->
+  <!-- 1. Editorial Meal Header -->
   <g id="header">
-    <rect x="40" y="${headerY}" width="${brandLeftWidth}" height="42" rx="21" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
-    <circle cx="62" cy="${headerY + 21}" r="7" fill="#22C55E"/>
-    ${renderVectorText("GYMBUDDY", 78, headerY + 12, 17, "#FFFFFF")}
-    ${renderVectorText(".AI", aiX, headerY + 12, 17, "#22C55E")}
+    <!-- GymBuddy Branding Subtle Tag -->
+    <circle cx="48" cy="${headerY + 6}" r="4" fill="#22C55E"/>
+    ${renderHumanVectorText("GymBuddy", 60, headerY, 14, "#94A3B8")}
 
-    <!-- Date & Meal Badge -->
-    <rect x="${headerRightX}" y="${headerY}" width="${headerRightWidth}" height="42" rx="21" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
-    ${renderVectorText(headerRightText, headerRightX + 16, headerY + 14, 12, "#94A3B8")}
+    <!-- Meal Name in Natural Editorial Sentence Case -->
+    ${renderHumanVectorText(foodTitle, 40, headerY + 28, 28, "#F8FAFC")}
+
+    <!-- Meta Subtitle: Lunch \xB7 Jun 21 -->
+    ${renderHumanVectorText(`${mealType} \xB7 ${dateStr}`, 40, headerY + 66, 14, "#64748B")}
   </g>
 
-  <!-- 2. Meal Title (Clean Spacing, No Overlap) -->
-  <g id="titleBox">
-    ${renderVectorText(line1, 42, titleY, 24, "#F8FAFC")}
-    ${hasLine2 ? renderVectorText(line2, 42, titleY + 30, 20, "#94A3B8") : ""}
-  </g>
-
-  <!-- 3. Food Photo Card -->
+  <!-- 2. Natural Portrait Food Photo (No heavy cropping or aggressive overlays) -->
   <g id="photoCard">
-    <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="24" ry="24" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <rect x="40" y="${photoY}" width="640" height="${photoHeight}" rx="20" ry="20" fill="#1E293B"/>
     <image href="${photoHref}" xlink:href="${photoHref}" x="40" y="${photoY}" width="640" height="${photoHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
-
-    <!-- Bottom Scrim -->
-    <rect x="40" y="${photoY + photoHeight - 80}" width="640" height="80" fill="#000000" opacity="0.55" clip-path="url(#foodPhotoClip)"/>
-
-    <!-- Floating Status Pill Badge -->
-    <rect x="56" y="${photoY + photoHeight - 54}" width="${pillWidth}" height="38" rx="19" ry="19" fill="${pillBg}" stroke="${pillBorder}" stroke-width="1.5"/>
-    <circle cx="74" cy="${photoY + photoHeight - 35}" r="5" fill="${pillBorder}"/>
-    ${renderVectorText(pillText, 88, photoY + photoHeight - 43, 13, pillTextColor)}
   </g>
 
-  <!-- 4. Calorie Section: Meal Energy vs Daily Calorie Goal -->
-  <g id="calorieBento" transform="translate(40, ${calBentoY})">
-    <rect x="0" y="0" width="640" height="128" rx="22" ry="22" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5"/>
-    
-    <!-- Left: Meal Energy (Dominant Number) -->
-    ${renderVectorText("ENERGY FROM THIS MEAL", 26, 20, 12, "#94A3B8")}
-    ${renderVectorText(calories.toLocaleString("id-ID"), 24, 48, 52, "#FF5722")}
-    ${renderVectorText("KCAL", 24 + calculateVectorTextWidth(calories.toLocaleString("id-ID"), 52, 0.15) + 14, 62, 24, "#FF5722")}
+  <!-- 3. Calorie & Goal Section (Clean typography hierarchy, no heavy boxes) -->
+  <g id="calorieSection" transform="translate(40, ${calorieY})">
+    <!-- Big Primary Calorie Number -->
+    ${renderHumanVectorText(`${calories}`, 0, 0, 52, "#F8FAFC")}
+    ${renderHumanVectorText("kcal", calculateHumanTextWidth(`${calories}`, 52) + 10, 16, 26, "#94A3B8")}
 
-    <!-- Right: Daily Calorie Goal -->
-    <rect x="385" y="20" width="230" height="86" rx="16" ry="16" fill="#070A0F" stroke="#334155" stroke-width="1"/>
-    ${renderVectorText("DAILY CALORIE GOAL", 404, 34, 11, "#94A3B8")}
-    ${renderVectorText(`${targetCal.toLocaleString("id-ID")} KCAL`, 404, 58, 23, "#F8FAFC")}
+    <!-- Context: of your 1,966 kcal daily goal -->
+    ${renderHumanVectorText(`of your ${targetCal.toLocaleString("en-US")} kcal daily goal`, 0, 56, 14, "#64748B")}
+
+    <!-- Subtle Human Daily Status Indicator on the right -->
+    <g transform="translate(360, 14)">
+      <circle cx="8" cy="14" r="4.5" fill="${statusDotColor}"/>
+      ${renderHumanVectorText(statusText, 20, 4, 13, statusColor)}
+    </g>
   </g>
 
-  <!-- 5. Macronutrients Bento Grid (3 Compact Balanced Pillars) -->
-  <g id="macroGrid" transform="translate(40, ${macroGridY})">
-    <!-- 1. Protein -->
+  <!-- Subtle Thin Divider Line -->
+  <line x1="40" y1="${calorieY + 84}" x2="680" y2="${calorieY + 84}" stroke="#1E293B" stroke-width="1"/>
+
+  <!-- 4. Clean Horizontal Macronutrients (Compact, calm, color dots) -->
+  <g id="macroSection" transform="translate(40, ${macroY})">
+    <!-- Protein -->
     <g transform="translate(0, 0)">
-      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="32" cy="32" r="13" fill="#78350F"/>
-      ${renderVectorText("P", 27, 24, 16, "#F59E0B")}
-      ${renderVectorText("PROTEIN", 54, 25, 14, "#F59E0B")}
-      ${renderVectorText(`${protein}G`, 22, 65, 38, "#FEF3C7")}
-      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
-      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round(protein / targetProtein * 156)))}" height="7" rx="3.5" fill="url(#protGrad)"/>
-      ${renderVectorText(`${protPct}% DAILY GOAL`, 22, 137, 11, "#94A3B8")}
+      <circle cx="6" cy="10" r="4.5" fill="#F59E0B"/>
+      ${renderHumanVectorText("Protein", 18, 0, 14, "#94A3B8")}
+      ${renderHumanVectorText(`${protein} g`, 18, 22, 26, "#F8FAFC")}
     </g>
 
-    <!-- 2. Carbs -->
-    <g transform="translate(220, 0)">
-      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#EC4899" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="32" cy="32" r="13" fill="#831843"/>
-      ${renderVectorText("C", 27, 24, 16, "#EC4899")}
-      ${renderVectorText("CARBS", 54, 25, 14, "#EC4899")}
-      ${renderVectorText(`${carbs}G`, 22, 65, 38, "#FCE7F3")}
-      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
-      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round(carbs / targetCarbs * 156)))}" height="7" rx="3.5" fill="url(#carbGrad)"/>
-      ${renderVectorText("MAIN ENERGY SOURCE", 22, 137, 11, "#94A3B8")}
+    <!-- Carbs -->
+    <g transform="translate(240, 0)">
+      <circle cx="6" cy="10" r="4.5" fill="#EC4899"/>
+      ${renderHumanVectorText("Carbs", 18, 0, 14, "#94A3B8")}
+      ${renderHumanVectorText(`${carbs} g`, 18, 22, 26, "#F8FAFC")}
     </g>
 
-    <!-- 3. Fat -->
-    <g transform="translate(440, 0)">
-      <rect x="0" y="0" width="200" height="165" rx="20" ry="20" fill="url(#cardGrad)" stroke="#06B6D4" stroke-width="1.5" stroke-opacity="0.6"/>
-      <circle cx="32" cy="32" r="13" fill="#164E63"/>
-      ${renderVectorText("F", 27, 24, 16, "#06B6D4")}
-      ${renderVectorText("FAT", 54, 25, 14, "#06B6D4")}
-      ${renderVectorText(`${fat}G`, 22, 65, 38, "#E0F2FE")}
-      <rect x="22" y="118" width="156" height="7" rx="3.5" fill="#334155"/>
-      <rect x="22" y="118" width="${Math.min(156, Math.max(8, Math.round(fat / targetFat * 156)))}" height="7" rx="3.5" fill="url(#fatGrad)"/>
-      ${renderVectorText(`${fatPct}% DAILY GOAL`, 22, 137, 11, "#94A3B8")}
+    <!-- Fat -->
+    <g transform="translate(480, 0)">
+      <circle cx="6" cy="10" r="4.5" fill="#06B6D4"/>
+      ${renderHumanVectorText("Fat", 18, 0, 14, "#94A3B8")}
+      ${renderHumanVectorText(`${fat} g`, 18, 22, 26, "#F8FAFC")}
     </g>
   </g>
 
-  <!-- 6. Secondary Metric Row: Sodium & Micronutrients -->
-  <g id="secondaryRow" transform="translate(40, ${secondaryRowY})">
-    <rect x="0" y="0" width="640" height="54" rx="16" ry="16" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5"/>
-    
-    <!-- Sodium Icon & Metric -->
-    <circle cx="28" cy="27" r="12" fill="#334155"/>
-    ${renderVectorText("NA", 20, 20, 12, "#38BDF8")}
-    ${renderVectorText("SODIUM", 48, 20, 13, "#94A3B8")}
-    ${renderVectorText(`${(sodium > 0 ? sodium : 450).toLocaleString("id-ID")} MG`, 120, 18, 16, "#F8FAFC")}
-
-    <!-- Sodium contextual status -->
-    <rect x="420" y="11" width="204" height="32" rx="12" fill="#070A0F" stroke="#334155" stroke-width="1"/>
-    ${renderVectorText(`${Math.round((sodium > 0 ? sodium : 450) / 2300 * 100)}% OF 2,300MG LIMIT`, 432, 21, 11, (sodium || 450) > 1500 ? "#F87171" : "#94A3B8")}
+  <!-- 5. Secondary Nutrition: Sodium (Visually quiet) -->
+  <g id="sodiumSection" transform="translate(40, ${sodiumY})">
+    <rect x="0" y="0" width="640" height="42" rx="12" fill="url(#cardGrad)"/>
+    <circle cx="18" cy="21" r="3.5" fill="#64748B"/>
+    ${renderHumanVectorText("Sodium", 30, 12, 13, "#94A3B8")}
+    ${renderHumanVectorText(`${sodium || 180} mg`, 96, 11, 14, "#CBD5E1")}
+    ${renderHumanVectorText("2,300 mg daily limit", 470, 12, 12, "#64748B")}
   </g>
 
-  <!-- 7. Bottom Brand Footer -->
-  <g transform="translate(200, ${footerY})">
-    ${renderVectorText("POWERED BY GYMBUDDY AI", 0, 0, 12, "#64748B")}
+  <!-- 6. Human GymBuddy Insight (Real actionable coaching, warm and supportive) -->
+  <g id="insightSection" transform="translate(40, ${insightY})">
+    <rect x="0" y="0" width="640" height="66" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+    <!-- Sparkle / Tip icon -->
+    <path d="M 22 18 C 14 18 10 24 10 32 C 10 38 14 42 16 46 L 16 50 L 28 50 L 28 46 C 30 42 34 38 34 32 C 34 24 30 18 22 18 Z M 16 54 L 28 54 L 28 56 L 16 56 Z" fill="#FBBF24"/>
+    ${renderHumanVectorText(insightText, 46, 22, 13, "#94A3B8")}
   </g>
 </svg>`;
 }
@@ -49168,6 +49142,7 @@ Keluarkan output JSON valid:
                 dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
                 dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
                 dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
+                insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
                 imageBufferOrBase64: photoDataUri,
                 createdAt: Date.now()
               });

@@ -4589,6 +4589,7 @@ Keluarkan output JSON valid:
                 dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
                 dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
                 dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
+                insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
                 imageBufferOrBase64: photoDataUri,
                 createdAt: Date.now()
               });
