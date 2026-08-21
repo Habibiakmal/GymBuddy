@@ -44374,6 +44374,21 @@ function generateNutritionCardSvg(data) {
   </g>
 </svg>`;
 }
+async function generateNutritionCardPng(data) {
+  const svg = generateNutritionCardSvg(data);
+  try {
+    const { Resvg } = await import("@resvg/resvg-js");
+    const resvg = new Resvg(svg, {
+      fitTo: {
+        mode: "width",
+        value: 720
+      }
+    });
+    return resvg.render().asPng();
+  } catch (e) {
+    return Buffer.from(svg);
+  }
+}
 
 // services/db.ts
 var import_mongodb = require("mongodb");
@@ -47634,11 +47649,29 @@ async function startServer() {
         dailyTargetFat,
         imageBufferOrBase64
       };
+      if (imageBufferOrBase64 && imageBufferOrBase64.startsWith("data:")) {
+        const base64Data = imageBufferOrBase64.replace(/^data:image\/\w+;base64,/, "");
+        const rawBuf = Buffer.from(base64Data, "base64");
+        const mime = imageBufferOrBase64.match(/^data:(image\/\w+);base64,/)?.[1] || "image/jpeg";
+        res.setHeader("Content-Type", mime);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(rawBuf);
+      }
       if (req.path.endsWith(".svg")) {
         const svg = generateNutritionCardSvg(cardPayload);
         res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
         res.setHeader("Cache-Control", "public, max-age=86400");
         return res.send(svg);
+      }
+      try {
+        const pngBuf = await generateNutritionCardPng(cardPayload);
+        if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 137 && pngBuf[1] === 80) {
+          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          return res.send(pngBuf);
+        }
+      } catch (pErr) {
+        console.warn("[Card Generator] Raster PNG note:", pErr);
       }
       const svgCard = generateNutritionCardSvg(cardPayload);
       res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
@@ -49180,7 +49213,7 @@ Keluarkan output JSON valid:
               const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
               const dynamicOrigin = `${proto}://${host}`;
               const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
-              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
             } else {
               mediaUrlToSend = "";
             }
@@ -49203,30 +49236,13 @@ Keluarkan output JSON valid:
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
-      for (const msg of responseMessages) {
-        if (msg && msg.trim()) {
-          sendWhatsAppAsync(rawFrom, msg.trim(), req.body?.To).catch((e) => {
-            console.warn("[Twilio WA] Async final message note:", e?.message || e);
-          });
-        }
+      const finalMsg = responseMessages[0] || "Sip, data kamu sudah tercatat!";
+      if (mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
+        await sendWhatsAppAsync(rawFrom, finalMsg, req.body?.To, mediaUrlToSend);
+      } else {
+        await sendWhatsAppAsync(rawFrom, finalMsg, req.body?.To);
       }
-      let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>`;
-      if (responseMessages.length === 0) {
-        responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
-      }
-      for (let i = 0; i < responseMessages.length; i++) {
-        const msgText = responseMessages[i];
-        if (msgText && msgText.trim()) {
-          const maxChunk = 1400;
-          for (let j = 0; j < msgText.length; j += maxChunk) {
-            const chunk = msgText.substring(j, j + maxChunk);
-            twiml += `<Message><Body>${escapeXml(chunk)}</Body></Message>`;
-          }
-        }
-      }
-      twiml += `</Response>`;
-      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);
-      return res.type("text/xml").send(twiml);
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
       return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis. Coba lagi sebentar ya! \u{1F64F}</Body></Message></Response>`);
