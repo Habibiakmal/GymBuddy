@@ -705,7 +705,7 @@ function purgeLegacyMockLogs() {
   }
 }
 
-function initDb() {
+async function initDb(): Promise<void> {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
@@ -723,11 +723,14 @@ function initDb() {
     }
   }
 
-  // Load from Firestore asynchronously (authoritative cloud store)
-  loadFromFirestore().then(loaded => {
+  // Load from Firestore synchronously on boot (authoritative cloud store)
+  try {
+    const loaded = await loadFromFirestore();
     if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
-  });
+  } catch (err) {
+    console.warn("[Firestore] Boot sync warning:", err);
+  }
 }
 
 function saveDb() {
@@ -936,9 +939,7 @@ function initReminderScheduler() {
   }, 60000);
 }
 
-// Initialize database & scheduler on server start
-initDb();
-initReminderScheduler();
+// Helpers for profile resolution
 
 function getTodayDateStr(): string {
   return getLocalDateStr();
@@ -2327,8 +2328,10 @@ async function startServer() {
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
 
-  // Initialize Database Layers (Firestore Primary)
+  // Initialize Database Layers (Firestore Primary) and await cloud sync before accepting traffic
   getFirestore();
+  await initDb();
+  initReminderScheduler();
 
   // ── Health Check Endpoints (Google Cloud Run liveness/readiness) ─────────
   app.get(["/health", "/api/health"], (req, res) => {

@@ -45478,7 +45478,7 @@ function purgeLegacyMockLogs() {
     console.log("[Data Purge] Purged legacy mock meal logs from database \u2705");
   }
 }
-function initDb() {
+async function initDb() {
   if (!import_fs.default.existsSync(DATA_DIR)) {
     import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
   }
@@ -45495,10 +45495,13 @@ function initDb() {
       console.error("Error reading db.json, starting fresh", e);
     }
   }
-  loadFromFirestore().then((loaded) => {
+  try {
+    const loaded = await loadFromFirestore();
     if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
-  });
+  } catch (err) {
+    console.warn("[Firestore] Boot sync warning:", err);
+  }
 }
 function saveDb() {
   try {
@@ -45692,8 +45695,6 @@ Yuk lakukan latihan ringan atau tuntaskan set kamu biar goal *${goalTitle}* cepa
     }
   }, 6e4);
 }
-initDb();
-initReminderScheduler();
 function getTodayDateStr() {
   return getLocalDateStr();
 }
@@ -46956,6 +46957,8 @@ async function startServer() {
   app.use("/api/ai/", aiRateLimiter);
   app.use("/api/auth/", authRateLimiter);
   getFirestore();
+  await initDb();
+  initReminderScheduler();
   app.get(["/health", "/api/health"], (req, res) => {
     res.json({
       status: "ok",
