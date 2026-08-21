@@ -44167,6 +44167,21 @@ function generateNutritionCardSvg(data) {
   </g>
 </svg>`;
 }
+async function generateNutritionCardPng(data) {
+  const svg = generateNutritionCardSvg(data);
+  try {
+    const { Resvg } = await import("@resvg/resvg-js");
+    const resvg = new Resvg(svg, {
+      fitTo: {
+        mode: "width",
+        value: 640
+      }
+    });
+    return resvg.render().asPng();
+  } catch (e) {
+    return Buffer.from(svg);
+  }
+}
 
 // services/db.ts
 var import_mongodb = require("mongodb");
@@ -47365,7 +47380,7 @@ async function startServer() {
       }
     }
   }, 60 * 60 * 1e3);
-  app.get(["/api/card/:cardId.svg", "/api/card/:cardId.png", "/api/card/nutrition-card.svg", "/api/card/nutrition-card.png"], async (req, res) => {
+  app.get(["/api/card/:cardId.png", "/api/card/:cardId.jpg", "/api/card/:cardId.jpeg", "/api/card/:cardId.svg", "/api/card/nutrition-card.png", "/api/card/nutrition-card.svg"], async (req, res) => {
     try {
       const cardId = req.params.cardId || "";
       const cached = cardId ? cardMediaCache.get(cardId) : null;
@@ -47379,7 +47394,53 @@ async function startServer() {
       const dailyTargetCalories = cached ? cached.dailyTargetCalories : Number(req.query.target) || 2054;
       const consumedTodayCalories = cached ? cached.consumedTodayCalories : Number(req.query.consumed) || calories;
       const imageBufferOrBase64 = cached?.imageBufferOrBase64 || req.query.img || "";
-      const svg = generateNutritionCardSvg({
+      if (req.path.endsWith(".svg")) {
+        const svg = generateNutritionCardSvg({
+          foodName,
+          calories,
+          protein,
+          carbs,
+          fat,
+          mealType,
+          dateStr,
+          dailyTargetCalories,
+          consumedTodayCalories,
+          imageBufferOrBase64
+        });
+        res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(svg);
+      }
+      try {
+        const pngBuf = await generateNutritionCardPng({
+          foodName,
+          calories,
+          protein,
+          carbs,
+          fat,
+          mealType,
+          dateStr,
+          dailyTargetCalories,
+          consumedTodayCalories,
+          imageBufferOrBase64
+        });
+        if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 137 && pngBuf[1] === 80) {
+          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          return res.send(pngBuf);
+        }
+      } catch (pErr) {
+        console.warn("[Card Generator] Raster PNG note:", pErr);
+      }
+      if (imageBufferOrBase64 && imageBufferOrBase64.startsWith("data:")) {
+        const base64Data = imageBufferOrBase64.replace(/^data:image\/\w+;base64,/, "");
+        const rawBuf = Buffer.from(base64Data, "base64");
+        const mime = imageBufferOrBase64.match(/^data:(image\/\w+);base64,/)?.[1] || "image/jpeg";
+        res.setHeader("Content-Type", mime);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(rawBuf);
+      }
+      const fallbackSvg = generateNutritionCardSvg({
         foodName,
         calories,
         protein,
@@ -47393,7 +47454,7 @@ async function startServer() {
       });
       res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.send(svg);
+      return res.send(fallbackSvg);
     } catch (e) {
       console.error("[Card Generator Error]:", e?.message || e);
       return res.status(500).send("Error generating card image");
@@ -48913,7 +48974,7 @@ Keluarkan output JSON valid:
                 createdAt: Date.now()
               });
               const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
-              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.png`;
             } else {
               mediaUrlToSend = "";
             }
@@ -48946,13 +49007,12 @@ Keluarkan output JSON valid:
           const maxChunk = 1400;
           for (let j = 0; j < msgText.length; j += maxChunk) {
             const chunk = msgText.substring(j, j + maxChunk);
-            twiml += `<Message>`;
-            if (i === 0 && j === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-              twiml += `<Media>${escapeXml2(mediaUrlToSend)}</Media>`;
-            }
-            twiml += `<Body>${escapeXml2(chunk)}</Body></Message>`;
+            twiml += `<Message><Body>${escapeXml2(chunk)}</Body></Message>`;
           }
         }
+      }
+      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+        twiml += `<Message><Media>${escapeXml2(mediaUrlToSend)}</Media></Message>`;
       }
       twiml += `</Response>`;
       console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);

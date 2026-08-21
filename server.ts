@@ -2682,8 +2682,8 @@ async function startServer() {
     }
   }, 60 * 60 * 1000);
 
-  // Dynamic GYMBUDDY.AI Nutrition Infographic Image Card Route (SVG / PNG)
-  app.get(["/api/card/:cardId.svg", "/api/card/:cardId.png", "/api/card/nutrition-card.svg", "/api/card/nutrition-card.png"], async (req, res) => {
+  // Dynamic GYMBUDDY.AI Nutrition Infographic Image Card Route (PNG / JPEG / SVG)
+  app.get(["/api/card/:cardId.png", "/api/card/:cardId.jpg", "/api/card/:cardId.jpeg", "/api/card/:cardId.svg", "/api/card/nutrition-card.png", "/api/card/nutrition-card.svg"], async (req, res) => {
     try {
       const cardId = req.params.cardId || "";
       const cached = cardId ? cardMediaCache.get(cardId) : null;
@@ -2699,7 +2699,61 @@ async function startServer() {
       const consumedTodayCalories = cached ? cached.consumedTodayCalories : (Number(req.query.consumed) || calories);
       const imageBufferOrBase64 = cached?.imageBufferOrBase64 || (req.query.img as string) || "";
 
-      const svg = generateNutritionCardSvg({
+      // If client requests SVG explicitly
+      if (req.path.endsWith(".svg")) {
+        const svg = generateNutritionCardSvg({
+          foodName,
+          calories,
+          protein,
+          carbs,
+          fat,
+          mealType,
+          dateStr,
+          dailyTargetCalories,
+          consumedTodayCalories,
+          imageBufferOrBase64
+        });
+        res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(svg);
+      }
+
+      // Try generating true raster PNG
+      try {
+        const pngBuf = await generateNutritionCardPng({
+          foodName,
+          calories,
+          protein,
+          carbs,
+          fat,
+          mealType,
+          dateStr,
+          dailyTargetCalories,
+          consumedTodayCalories,
+          imageBufferOrBase64
+        });
+
+        if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 0x89 && pngBuf[1] === 0x50) {
+          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          return res.send(pngBuf);
+        }
+      } catch (pErr) {
+        console.warn("[Card Generator] Raster PNG note:", pErr);
+      }
+
+      // If user uploaded a photo, deliver the photo cleanly as JPEG / PNG to WhatsApp
+      if (imageBufferOrBase64 && imageBufferOrBase64.startsWith("data:")) {
+        const base64Data = imageBufferOrBase64.replace(/^data:image\/\w+;base64,/, "");
+        const rawBuf = Buffer.from(base64Data, "base64");
+        const mime = imageBufferOrBase64.match(/^data:(image\/\w+);base64,/)?.[1] || "image/jpeg";
+        res.setHeader("Content-Type", mime);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(rawBuf);
+      }
+
+      // Fallback: send SVG
+      const fallbackSvg = generateNutritionCardSvg({
         foodName,
         calories,
         protein,
@@ -2711,10 +2765,9 @@ async function startServer() {
         consumedTodayCalories,
         imageBufferOrBase64
       });
-
       res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.send(svg);
+      return res.send(fallbackSvg);
     } catch (e: any) {
       console.error("[Card Generator Error]:", e?.message || e);
       return res.status(500).send("Error generating card image");
@@ -4543,7 +4596,7 @@ Keluarkan output JSON valid:
               });
 
               const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
-              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.png`;
             } else {
               // Jika HANYA pesan teks (tanpa foto), jangan kirim gambar kartu!
               mediaUrlToSend = "";
@@ -4580,13 +4633,14 @@ Keluarkan output JSON valid:
           const maxChunk = 1400;
           for (let j = 0; j < msgText.length; j += maxChunk) {
             const chunk = msgText.substring(j, j + maxChunk);
-            twiml += `<Message>`;
-            if (i === 0 && j === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
-              twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
-            }
-            twiml += `<Body>${escapeXml(chunk)}</Body></Message>`;
+            twiml += `<Message><Body>${escapeXml(chunk)}</Body></Message>`;
           }
         }
+      }
+
+      // If media URL is available (e.g. food photo card or exercise GIF), send as separate media block
+      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+        twiml += `<Message><Media>${escapeXml(mediaUrlToSend)}</Media></Message>`;
       }
       twiml += `</Response>`;
       console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) ✅`);
