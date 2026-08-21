@@ -44374,21 +44374,6 @@ function generateNutritionCardSvg(data) {
   </g>
 </svg>`;
 }
-async function generateNutritionCardPng(data) {
-  const svg = generateNutritionCardSvg(data);
-  try {
-    const { Resvg } = await import("@resvg/resvg-js");
-    const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: "width",
-        value: 720
-      }
-    });
-    return resvg.render().asPng();
-  } catch (e) {
-    return Buffer.from(svg);
-  }
-}
 
 // services/db.ts
 var import_mongodb = require("mongodb");
@@ -47631,28 +47616,10 @@ async function startServer() {
         res.setHeader("Cache-Control", "public, max-age=86400");
         return res.send(svg);
       }
-      try {
-        const pngBuf = await generateNutritionCardPng(cardPayload);
-        if (pngBuf && pngBuf.length > 8 && pngBuf[0] === 137 && pngBuf[1] === 80) {
-          res.setHeader("Content-Type", "image/png");
-          res.setHeader("Cache-Control", "public, max-age=86400");
-          return res.send(pngBuf);
-        }
-      } catch (pErr) {
-        console.warn("[Card Generator] Raster PNG note:", pErr);
-      }
-      if (imageBufferOrBase64 && imageBufferOrBase64.startsWith("data:")) {
-        const base64Data = imageBufferOrBase64.replace(/^data:image\/\w+;base64,/, "");
-        const rawBuf = Buffer.from(base64Data, "base64");
-        const mime = imageBufferOrBase64.match(/^data:(image\/\w+);base64,/)?.[1] || "image/jpeg";
-        res.setHeader("Content-Type", mime);
-        res.setHeader("Cache-Control", "public, max-age=86400");
-        return res.send(rawBuf);
-      }
-      const fallbackSvg = generateNutritionCardSvg(cardPayload);
+      const svgCard = generateNutritionCardSvg(cardPayload);
       res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.send(fallbackSvg);
+      return res.send(svgCard);
     } catch (e) {
       console.error("[Card Generator Error]:", e?.message || e);
       return res.status(500).send("Error generating card image");
@@ -49178,8 +49145,11 @@ Keluarkan output JSON valid:
                 imageBufferOrBase64: photoDataUri,
                 createdAt: Date.now()
               });
-              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
-              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.png`;
+              const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+              const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
+              const dynamicOrigin = `${proto}://${host}`;
+              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
             } else {
               mediaUrlToSend = "";
             }
@@ -49206,21 +49176,28 @@ Keluarkan output JSON valid:
       if (responseMessages.length === 0) {
         responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
       }
+      let mediaAttached = false;
       for (let i = 0; i < responseMessages.length; i++) {
         const msgText = responseMessages[i];
         if (msgText && msgText.trim()) {
           const maxChunk = 1400;
           for (let j = 0; j < msgText.length; j += maxChunk) {
             const chunk = msgText.substring(j, j + maxChunk);
-            twiml += `<Message><Body>${escapeXml(chunk)}</Body></Message>`;
+            twiml += `<Message>`;
+            twiml += `<Body>${escapeXml(chunk)}</Body>`;
+            if (!mediaAttached && mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
+              twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
+              mediaAttached = true;
+            }
+            twiml += `</Message>`;
           }
         }
       }
-      if (mediaUrlToSend && mediaUrlToSend.startsWith("https://")) {
+      if (!mediaAttached && mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
         twiml += `<Message><Media>${escapeXml(mediaUrlToSend)}</Media></Message>`;
       }
       twiml += `</Response>`;
-      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);
+      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks, media: ${Boolean(mediaUrlToSend)}) \u2705`);
       return res.type("text/xml").send(twiml);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
