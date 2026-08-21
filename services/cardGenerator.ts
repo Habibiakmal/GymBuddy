@@ -174,15 +174,11 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
     <!-- Brand Name -->
     <text x="42" y="11" fill="#FFFFFF" font-family="Arial" font-size="14" font-weight="bold" letter-spacing="1.5">GYM BUDDY AI</text>
 
-    <!-- Right Header Metadata: Fork and Knife Icon + Meal Type | Date -->
-    <g transform="translate(${contentWidth - 170}, 0)">
-      <!-- Fork and Knife Icon in Lime -->
-      <g transform="translate(0, -2) scale(0.75)">
-        <path d="M4 2v7c0 1.5 1 2.5 2.5 2.5V20M8 2v7c0 1.5-1 2.5-2.5 2.5M6 2v7M16 2c-1.5 0-2.5 1-2.5 3v6c0 1.5 1 2.5 2.5 2.5V20" fill="none" stroke="#D4FF00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </g>
-      <text x="22" y="11" fill="#D4FF00" font-family="Arial" font-size="14" font-weight="bold">${escapeXml(mealType)}</text>
-      <text x="76" y="11" fill="#3E4756" font-family="Arial" font-size="14">|</text>
-      <text x="90" y="11" fill="#8E95A5" font-family="Arial" font-size="13" font-weight="bold">${escapeXml(dateStr)}</text>
+    <!-- Right Header Metadata: Fork and Knife Icon + Meal Type & Date -->
+    <g transform="translate(${contentWidth}, 0)">
+      <text x="0" y="11" text-anchor="end" fill="#8E95A5" font-family="Arial" font-size="13" font-weight="bold">
+        <tspan fill="#D4FF00">${escapeXml(mealType)}</tspan><tspan fill="#3E4756">  |  </tspan><tspan fill="#8E95A5">${escapeXml(dateStr)}</tspan>
+      </text>
     </g>
   </g>
 
