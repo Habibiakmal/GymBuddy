@@ -45377,20 +45377,20 @@ process.on("uncaughtException", (err) => {
 });
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
-async function sendWhatsAppAsync(to, body, mediaUrl) {
+async function sendWhatsAppAsync(to, body, customFrom, mediaUrl) {
   const client2 = getTwilio();
   if (!client2) {
     console.warn("[Twilio Client] Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN");
     return null;
   }
   try {
-    const fromPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+    const fromPhone = customFrom || process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
     const payload = {
       from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
       to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
       body
     };
-    if (mediaUrl) {
+    if (mediaUrl && (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png") || mediaUrl.endsWith(".webp"))) {
       payload.mediaUrl = [mediaUrl];
     }
     const res = await client2.messages.create(payload);
@@ -48812,7 +48812,7 @@ Keluarkan output JSON valid:
       if (!isWelcomeMessage) {
         const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
         const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
-        sendWhatsAppAsync(rawFrom, ackText).catch((err) => {
+        sendWhatsAppAsync(rawFrom, ackText, req.body?.To).catch((err) => {
           console.warn("[Twilio WA] Acknowledgment send warning (non-fatal):", err?.message || err);
         });
       }
@@ -49203,32 +49203,29 @@ Keluarkan output JSON valid:
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
+      for (const msg of responseMessages) {
+        if (msg && msg.trim()) {
+          sendWhatsAppAsync(rawFrom, msg.trim(), req.body?.To).catch((e) => {
+            console.warn("[Twilio WA] Async final message note:", e?.message || e);
+          });
+        }
+      }
       let twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>`;
       if (responseMessages.length === 0) {
         responseMessages = ["Sip, data kamu sudah tercatat! Ada yang ingin kamu tanyakan lagi?"];
       }
-      let mediaAttached = false;
       for (let i = 0; i < responseMessages.length; i++) {
         const msgText = responseMessages[i];
         if (msgText && msgText.trim()) {
           const maxChunk = 1400;
           for (let j = 0; j < msgText.length; j += maxChunk) {
             const chunk = msgText.substring(j, j + maxChunk);
-            twiml += `<Message>`;
-            twiml += `<Body>${escapeXml(chunk)}</Body>`;
-            if (!mediaAttached && mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
-              twiml += `<Media>${escapeXml(mediaUrlToSend)}</Media>`;
-              mediaAttached = true;
-            }
-            twiml += `</Message>`;
+            twiml += `<Message><Body>${escapeXml(chunk)}</Body></Message>`;
           }
         }
       }
-      if (!mediaAttached && mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
-        twiml += `<Message><Media>${escapeXml(mediaUrlToSend)}</Media></Message>`;
-      }
       twiml += `</Response>`;
-      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks, media: ${Boolean(mediaUrlToSend)}) \u2705`);
+      console.log(`[Twilio WA] Sending TwiML XML response (${responseMessages.length} message blocks) \u2705`);
       return res.type("text/xml").send(twiml);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
