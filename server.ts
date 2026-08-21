@@ -2657,21 +2657,49 @@ async function startServer() {
     }
   });
 
-  // Dynamic GYMBUDDY.AI Nutrition Infographic Image Card Route
-  app.get("/api/card/nutrition-card.png", async (req, res) => {
-    try {
-      const foodName = (req.query.food as string) || "MAKANAN BERGIZI";
-      const calories = Number(req.query.cal) || 785;
-      const protein = Number(req.query.prot) || 38;
-      const carbs = Number(req.query.carb) || 95;
-      const fat = Number(req.query.fat) || 28;
-      const mealType = (req.query.meal as string) || "Makan Siang";
-      const dateStr = (req.query.date as string) || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-      const dailyTargetCalories = Number(req.query.target) || 2054;
-      const consumedTodayCalories = Number(req.query.consumed) || calories;
-      const imageBufferOrBase64 = (req.query.img as string) || "";
+  // In-memory cache for dynamic GYMBUDDY.AI infographic image cards (with user food photos)
+  const cardMediaCache = new Map<string, {
+    foodName: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    mealType: string;
+    dateStr: string;
+    dailyTargetCalories: number;
+    consumedTodayCalories: number;
+    imageBufferOrBase64: string;
+    createdAt: number;
+  }>();
 
-      const pngBuffer = await generateNutritionCardPng({
+  // Periodic garbage collection for card media older than 24 hours
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, item] of cardMediaCache.entries()) {
+      if (now - item.createdAt > 24 * 60 * 60 * 1000) {
+        cardMediaCache.delete(id);
+      }
+    }
+  }, 60 * 60 * 1000);
+
+  // Dynamic GYMBUDDY.AI Nutrition Infographic Image Card Route (SVG / PNG)
+  app.get(["/api/card/:cardId.svg", "/api/card/:cardId.png", "/api/card/nutrition-card.svg", "/api/card/nutrition-card.png"], async (req, res) => {
+    try {
+      const cardId = req.params.cardId || "";
+      const cached = cardId ? cardMediaCache.get(cardId) : null;
+
+      const foodName = cached?.foodName || (req.query.food as string) || "MAKANAN BERGIZI";
+      const calories = cached ? cached.calories : (Number(req.query.cal) || 0);
+      const protein = cached ? cached.protein : (Number(req.query.prot) || 0);
+      const carbs = cached ? cached.carbs : (Number(req.query.carb) || 0);
+      const fat = cached ? cached.fat : (Number(req.query.fat) || 0);
+      const mealType = cached?.mealType || (req.query.meal as string) || "Makan Siang";
+      const dateStr = cached?.dateStr || (req.query.date as string) || new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+      const dailyTargetCalories = cached ? cached.dailyTargetCalories : (Number(req.query.target) || 2054);
+      const consumedTodayCalories = cached ? cached.consumedTodayCalories : (Number(req.query.consumed) || calories);
+      const imageBufferOrBase64 = cached?.imageBufferOrBase64 || (req.query.img as string) || "";
+
+      const svg = generateNutritionCardSvg({
         foodName,
         calories,
         protein,
@@ -2684,9 +2712,9 @@ async function startServer() {
         imageBufferOrBase64
       });
 
-      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.send(pngBuffer);
+      return res.send(svg);
     } catch (e: any) {
       console.error("[Card Generator Error]:", e?.message || e);
       return res.status(500).send("Error generating card image");
@@ -4493,13 +4521,33 @@ Keluarkan output JSON valid:
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
 
-            // Generate & send GYMBUDDY.AI Infographic Image Card for WhatsApp food uploads
-            const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
-            const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
-            const rawPhoto = req.body?.MediaUrl0 || "";
-            const cardImgUrl = `${domainUrl}/api/card/nutrition-card.png?food=${encodeURIComponent(parsed.foodName || "Makanan")}&cal=${Number(parsed.calories) || 0}&prot=${Number(parsed.protein) || 0}&carb=${Number(parsed.carbs) || 0}&fat=${Number(parsed.fat) || 0}&meal=${encodeURIComponent(mealTypeStr)}&target=${userData.targetCalories || 2054}&consumed=${dailyTotals.calories}&img=${encodeURIComponent(rawPhoto)}`;
+            // HANYA kirim gambar kartu infografis jika user MENGIRIM FOTO MAKANAN (imagePart / MediaUrl0)
+            if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
+              const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+              const dateStr = new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+              const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
 
-            mediaUrlToSend = cardImgUrl;
+              cardMediaCache.set(cardId, {
+                foodName: parsed.foodName || "Makanan",
+                calories: Number(parsed.calories) || 0,
+                protein: Number(parsed.protein) || 0,
+                carbs: Number(parsed.carbs) || 0,
+                fat: Number(parsed.fat) || 0,
+                mealType: mealTypeStr,
+                dateStr,
+                dailyTargetCalories: userData.targetCalories || 2054,
+                consumedTodayCalories: dailyTotals.calories,
+                imageBufferOrBase64: photoDataUri,
+                createdAt: Date.now()
+              });
+
+              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+            } else {
+              // Jika HANYA pesan teks (tanpa foto), jangan kirim gambar kartu!
+              mediaUrlToSend = "";
+            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;

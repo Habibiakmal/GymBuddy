@@ -44065,35 +44065,8 @@ KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
 function escapeXml(unsafe) {
   return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
-function wrapTitleLines(text, maxLenPerLine = 32, maxLines = 2) {
-  const clean2 = text.trim().toUpperCase();
-  if (clean2.length <= maxLenPerLine) return [clean2];
-  const words = clean2.split(/\s+/);
-  const lines = [];
-  let currentLine = "";
-  for (const w of words) {
-    if ((currentLine + " " + w).trim().length <= maxLenPerLine) {
-      currentLine = (currentLine + " " + w).trim();
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = w;
-      if (lines.length === maxLines - 1) break;
-    }
-  }
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-  if (words.length > 0 && lines.length === maxLines) {
-    const joined = lines.join(" ");
-    if (joined.length < clean2.length) {
-      lines[lines.length - 1] = lines[lines.length - 1].replace(/\.?\s*$/, "") + "...";
-    }
-  }
-  return lines;
-}
 function generateNutritionCardSvg(data) {
-  const foodTitle = data.foodName || "MAKANAN BERGIZI";
-  const titleLines = wrapTitleLines(foodTitle, 28, 2);
+  const foodTitle = (data.foodName || "MAKANAN BERGIZI").toUpperCase().trim();
   const calories = Math.round(Number(data.calories) || 0);
   const protein = Math.round(Number(data.protein) || 0);
   const carbs = Math.round(Number(data.carbs) || 0);
@@ -44106,121 +44079,93 @@ function generateNutritionCardSvg(data) {
   const isOntrack = remainingCal >= 0;
   const pillText = isOntrack ? `On track \xB7 sisa ${remainingCal.toLocaleString("id-ID")} kcal` : `Melebihi target \xB7 +${Math.abs(remainingCal).toLocaleString("id-ID")} kcal`;
   const pillBg = isOntrack ? "#043927" : "#991B1B";
-  const pillTextColor = "#FFFFFF";
-  let imageHref = data.imageBufferOrBase64 || "";
-  if (!imageHref) {
-    imageHref = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="520" height="420" viewBox="0 0 520 420"><rect width="520" height="420" fill="%231E293B"/><text x="50%25" y="50%25" font-family="sans-serif" font-weight="900" font-size="28" fill="%23D4FF00" text-anchor="middle" dominant-baseline="middle">GYMBUDDY FOOD PHOTO</text></svg>`;
+  const pillWidth = pillText.length * 9.5 + 36;
+  const words = foodTitle.split(/\s+/);
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if ((line1 + " " + w).length <= 26 && !line2) {
+      line1 = (line1 + " " + w).trim();
+    } else {
+      line2 = (line2 + " " + w).trim();
+    }
   }
-  const titleY = titleLines.length === 1 ? 140 : 125;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="980" viewBox="0 0 600 980">
+  if (!line1) line1 = foodTitle;
+  if (line2.length > 28) line2 = line2.substring(0, 25) + "...";
+  const hasLine2 = Boolean(line2);
+  const photoY = hasLine2 ? 165 : 145;
+  const pillY = hasLine2 ? 520 : 500;
+  const starY = hasLine2 ? 155 : 135;
+  const calY = hasLine2 ? 670 : 650;
+  const macroBaseY = hasLine2 ? 790 : 770;
+  let photoHref = data.imageBufferOrBase64 || "";
+  if (!photoHref) {
+    photoHref = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="960" viewBox="0 0 640 960">
+  <!-- Warm Off-White Cream Background -->
+  <rect width="640" height="960" fill="#FAF6F0"/>
+
+  <!-- Top Header -->
+  <text x="40" y="58" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900" fill="#0A0A0A">GYMBUDDY<tspan fill="#25D366">.AI</tspan></text>
+  <text x="600" y="55" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="end">${escapeXml(mealType)} \xB7 ${escapeXml(dateStr)}</text>
+
+  <!-- Main Food Title -->
+  <text x="40" y="108" font-family="Arial Black, Impact, sans-serif" font-size="25" font-weight="900" fill="#043927">${escapeXml(line1)}</text>
+  ${hasLine2 ? `<text x="40" y="140" font-family="Arial Black, Impact, sans-serif" font-size="25" font-weight="900" fill="#043927">${escapeXml(line2)}</text>` : ""}
+
+  <!-- Clip Path for Rounded Food Photo -->
   <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&amp;family=Inter:wght@400;600;700;900&amp;display=swap');
-      .brand-title { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .header-sub { font-family: 'Inter', sans-serif; font-weight: 700; }
-      .food-title { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .cal-val { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .macro-val { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .macro-lbl { font-family: 'Inter', sans-serif; font-weight: 700; }
-    </style>
-
-    <clipPath id="imgClip">
-      <rect x="40" y="190" width="520" height="410" rx="36" ry="36" />
+    <clipPath id="foodPhotoClip">
+      <rect x="40" y="${photoY}" width="560" height="420" rx="32" ry="32"/>
     </clipPath>
-
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.12" />
-    </filter>
   </defs>
 
-  <!-- Warm Off-White Cream Canvas Background -->
-  <rect width="600" height="980" fill="#FAF6F0" />
+  <!-- Photo Placeholder Box & Actual Image -->
+  <rect x="40" y="${photoY}" width="560" height="420" rx="32" ry="32" fill="#E2E8F0"/>
+  <image href="${escapeXml(photoHref)}" xlink:href="${escapeXml(photoHref)}" x="40" y="${photoY}" width="560" height="420" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
 
-  <!-- HEADER -->
-  <g transform="translate(40, 55)">
-    <!-- GYMBUDDY.AI Logo -->
-    <text class="brand-title" font-size="34" fill="#0A0A0A" y="0">
-      GYMBUDDY<tspan fill="#25D366">.AI</tspan>
-    </text>
-    <!-- Right Meal Type & Date -->
-    <text class="header-sub" font-size="16" fill="#043927" x="520" y="-4" text-anchor="end">
-      ${escapeXml(mealType)} \xB7 ${escapeXml(dateStr)}
-    </text>
+  <!-- Sparkle Star Top Right of Photo -->
+  <path d="M 585 ${starY} L 589 ${starY + 13} L 602 ${starY + 17} L 589 ${starY + 21} L 585 ${starY + 34} L 581 ${starY + 21} L 568 ${starY + 17} L 581 ${starY + 13} Z" fill="#FFC700"/>
+
+  <!-- Status Pill Overlay on Photo -->
+  <rect x="65" y="${pillY}" width="${pillWidth}" height="42" rx="21" ry="21" fill="${pillBg}"/>
+  <text x="${65 + pillWidth / 2}" y="${pillY + 27}" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapeXml(pillText)}</text>
+
+  <!-- Calorie Hero Section -->
+  <g transform="translate(40, ${calY})">
+    <text x="0" y="30" font-family="Arial Black, Impact, sans-serif" font-size="78" font-weight="900" fill="#FF4500">${calories.toLocaleString("id-ID")}</text>
+    <text x="${String(calories).length * 48 + 12}" y="12" font-family="Arial Black, Impact, sans-serif" font-size="28" font-weight="900" fill="#FF4500">KCAL</text>
+
+    <text x="560" y="-12" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#666666" text-anchor="end">Target harian</text>
+    <text x="560" y="28" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900" fill="#043927" text-anchor="end">${targetCal.toLocaleString("id-ID")}</text>
   </g>
 
-  <!-- MULTI-LINE FOOD TITLE -->
-  <g transform="translate(40, ${titleY})">
-    ${titleLines.map(
-    (line, idx) => `<text class="food-title" font-size="26" fill="#043927" y="${idx * 34}">${escapeXml(line)}</text>`
-  ).join("\n    ")}
-  </g>
-
-  <!-- FOOD PHOTO CONTAINER -->
-  <g filter="url(#shadow)">
-    <!-- Main Food Photo -->
-    <image href="${escapeXml(imageHref)}" x="40" y="190" width="520" height="410" preserveAspectRatio="xMidYMid slice" clip-path="url(#imgClip)" />
-    
-    <!-- Top-Right Sparkle Star Overlay -->
-    <path d="M545 180 L549 194 L563 198 L549 202 L545 216 L541 202 L527 198 L541 194 Z" fill="#FFC700" />
-
-    <!-- Status Pill Overlay (Bottom-Left of Photo) -->
-    <rect x="60" y="535" width="${pillText.length * 9.5 + 40}" height="44" rx="22" fill="${pillBg}" opacity="0.95" />
-    <text class="header-sub" font-size="14" fill="${pillTextColor}" x="80" y="562">
-      ${escapeXml(pillText)}
-    </text>
-  </g>
-
-  <!-- CALORIE HERO SECTION -->
-  <g transform="translate(40, 675)">
-    <!-- Total Calories Value -->
-    <text class="cal-val" font-size="76" fill="#FF4500" x="0" y="0">${calories.toLocaleString("id-ID")}</text>
-    <text class="cal-val" font-size="28" fill="#FF4500" x="${String(calories).length * 46 + 10}" y="-18">KCAL</text>
-
-    <!-- Daily Target Right-Aligned -->
-    <text class="header-sub" font-size="15" fill="#666666" x="520" y="-35" text-anchor="end">Target harian</text>
-    <text class="brand-title" font-size="34" fill="#043927" x="520" y="2" text-anchor="end">${targetCal.toLocaleString("id-ID")}</text>
-  </g>
-
-  <!-- 3 MACRO BADGES CIRCLES -->
-  <g transform="translate(0, 830)">
-    <!-- PROTEIN BADGE (Amber/Yellow Circle) -->
-    <g transform="translate(120, 0)">
-      <circle cx="0" cy="0" r="54" fill="#FFD000" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${protein}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Protein</text>
+  <!-- 3 Circular Macro Badges -->
+  <g transform="translate(0, ${macroBaseY})">
+    <!-- Protein Badge (Yellow/Amber) -->
+    <g transform="translate(130, 0)">
+      <circle cx="0" cy="0" r="54" fill="#FFD000"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${protein}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Protein</text>
     </g>
 
-    <!-- KARBO BADGE (Soft Pink/Purple Circle) -->
-    <g transform="translate(300, 0)">
-      <circle cx="0" cy="0" r="54" fill="#FBCFE8" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${carbs}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Karbo</text>
+    <!-- Karbo Badge (Pink/Purple) -->
+    <g transform="translate(320, 0)">
+      <circle cx="0" cy="0" r="54" fill="#FBCFE8"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${carbs}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Karbo</text>
     </g>
 
-    <!-- LEMAK BADGE (Light Cyan/Blue Circle) -->
-    <g transform="translate(480, 0)">
-      <circle cx="0" cy="0" r="54" fill="#BAE6FD" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${fat}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Lemak</text>
+    <!-- Lemak Badge (Light Cyan/Blue) -->
+    <g transform="translate(510, 0)">
+      <circle cx="0" cy="0" r="54" fill="#BAE6FD"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${fat}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Lemak</text>
     </g>
   </g>
 </svg>`;
-}
-async function generateNutritionCardPng(data) {
-  const svg = generateNutritionCardSvg(data);
-  try {
-    const { Resvg } = await import("@resvg/resvg-js");
-    const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: "width",
-        value: 600
-      }
-    });
-    return resvg.render().asPng();
-  } catch (e) {
-    console.warn("[Card Generator] Native resvg fallback note:", e?.message || e);
-    return Buffer.from(svg);
-  }
 }
 
 // services/db.ts
@@ -47394,19 +47339,30 @@ async function startServer() {
       res.status(500).json({ success: false, error: e?.message });
     }
   });
-  app.get("/api/card/nutrition-card.png", async (req, res) => {
+  const cardMediaCache = /* @__PURE__ */ new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, item] of cardMediaCache.entries()) {
+      if (now - item.createdAt > 24 * 60 * 60 * 1e3) {
+        cardMediaCache.delete(id);
+      }
+    }
+  }, 60 * 60 * 1e3);
+  app.get(["/api/card/:cardId.svg", "/api/card/:cardId.png", "/api/card/nutrition-card.svg", "/api/card/nutrition-card.png"], async (req, res) => {
     try {
-      const foodName = req.query.food || "MAKANAN BERGIZI";
-      const calories = Number(req.query.cal) || 785;
-      const protein = Number(req.query.prot) || 38;
-      const carbs = Number(req.query.carb) || 95;
-      const fat = Number(req.query.fat) || 28;
-      const mealType = req.query.meal || "Makan Siang";
-      const dateStr = req.query.date || (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-      const dailyTargetCalories = Number(req.query.target) || 2054;
-      const consumedTodayCalories = Number(req.query.consumed) || calories;
-      const imageBufferOrBase64 = req.query.img || "";
-      const pngBuffer = await generateNutritionCardPng({
+      const cardId = req.params.cardId || "";
+      const cached = cardId ? cardMediaCache.get(cardId) : null;
+      const foodName = cached?.foodName || req.query.food || "MAKANAN BERGIZI";
+      const calories = cached ? cached.calories : Number(req.query.cal) || 0;
+      const protein = cached ? cached.protein : Number(req.query.prot) || 0;
+      const carbs = cached ? cached.carbs : Number(req.query.carb) || 0;
+      const fat = cached ? cached.fat : Number(req.query.fat) || 0;
+      const mealType = cached?.mealType || req.query.meal || "Makan Siang";
+      const dateStr = cached?.dateStr || req.query.date || (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+      const dailyTargetCalories = cached ? cached.dailyTargetCalories : Number(req.query.target) || 2054;
+      const consumedTodayCalories = cached ? cached.consumedTodayCalories : Number(req.query.consumed) || calories;
+      const imageBufferOrBase64 = cached?.imageBufferOrBase64 || req.query.img || "";
+      const svg = generateNutritionCardSvg({
         foodName,
         calories,
         protein,
@@ -47418,9 +47374,9 @@ async function startServer() {
         consumedTodayCalories,
         imageBufferOrBase64
       });
-      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400");
-      return res.send(pngBuffer);
+      return res.send(svg);
     } catch (e) {
       console.error("[Card Generator Error]:", e?.message || e);
       return res.status(500).send("Error generating card image");
@@ -48921,11 +48877,29 @@ Keluarkan output JSON valid:
             const dailyTotals = getDailyTotals(normFrom);
             const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
             responseMessages = [card];
-            const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
-            const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
-            const rawPhoto = req.body?.MediaUrl0 || "";
-            const cardImgUrl = `${domainUrl}/api/card/nutrition-card.png?food=${encodeURIComponent(parsed.foodName || "Makanan")}&cal=${Number(parsed.calories) || 0}&prot=${Number(parsed.protein) || 0}&carb=${Number(parsed.carbs) || 0}&fat=${Number(parsed.fat) || 0}&meal=${encodeURIComponent(mealTypeStr)}&target=${userData.targetCalories || 2054}&consumed=${dailyTotals.calories}&img=${encodeURIComponent(rawPhoto)}`;
-            mediaUrlToSend = cardImgUrl;
+            if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
+              const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+              const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+              const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
+              cardMediaCache.set(cardId, {
+                foodName: parsed.foodName || "Makanan",
+                calories: Number(parsed.calories) || 0,
+                protein: Number(parsed.protein) || 0,
+                carbs: Number(parsed.carbs) || 0,
+                fat: Number(parsed.fat) || 0,
+                mealType: mealTypeStr,
+                dateStr,
+                dailyTargetCalories: userData.targetCalories || 2054,
+                consumedTodayCalories: dailyTotals.calories,
+                imageBufferOrBase64: photoDataUri,
+                createdAt: Date.now()
+              });
+              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app").replace(/\/$/, "");
+              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.svg`;
+            } else {
+              mediaUrlToSend = "";
+            }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;

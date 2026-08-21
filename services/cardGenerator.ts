@@ -20,43 +20,8 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function wrapTitleLines(text: string, maxLenPerLine: number = 32, maxLines: number = 2): string[] {
-  const clean = text.trim().toUpperCase();
-  if (clean.length <= maxLenPerLine) return [clean];
-  
-  const words = clean.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const w of words) {
-    if ((currentLine + " " + w).trim().length <= maxLenPerLine) {
-      currentLine = (currentLine + " " + w).trim();
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = w;
-      if (lines.length === maxLines - 1) break;
-    }
-  }
-
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-
-  // Add ellipsis to last line if truncated
-  if (words.length > 0 && lines.length === maxLines) {
-    const joined = lines.join(" ");
-    if (joined.length < clean.length) {
-      lines[lines.length - 1] = lines[lines.length - 1].replace(/\.?\s*$/, "") + "...";
-    }
-  }
-
-  return lines;
-}
-
 export function generateNutritionCardSvg(data: NutritionCardData): string {
-  const foodTitle = data.foodName || "MAKANAN BERGIZI";
-  const titleLines = wrapTitleLines(foodTitle, 28, 2);
-
+  const foodTitle = (data.foodName || "MAKANAN BERGIZI").toUpperCase().trim();
   const calories = Math.round(Number(data.calories) || 0);
   const protein = Math.round(Number(data.protein) || 0);
   const carbs = Math.round(Number(data.carbs) || 0);
@@ -75,110 +40,96 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
     : `Melebihi target · +${Math.abs(remainingCal).toLocaleString("id-ID")} kcal`;
   
   const pillBg = isOntrack ? "#043927" : "#991B1B";
-  const pillTextColor = "#FFFFFF";
+  const pillWidth = pillText.length * 9.5 + 36;
 
-  // Use provided base64/URL photo or fallback styled food placeholder pattern
-  let imageHref = data.imageBufferOrBase64 || "";
-  if (!imageHref) {
-    // Generate a sleek food pattern SVG placeholder if no photo provided
-    imageHref = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="520" height="420" viewBox="0 0 520 420"><rect width="520" height="420" fill="%231E293B"/><text x="50%25" y="50%25" font-family="sans-serif" font-weight="900" font-size="28" fill="%23D4FF00" text-anchor="middle" dominant-baseline="middle">GYMBUDDY FOOD PHOTO</text></svg>`;
+  // Split title into 2 clean lines if long
+  const words = foodTitle.split(/\s+/);
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if ((line1 + " " + w).length <= 26 && !line2) {
+      line1 = (line1 + " " + w).trim();
+    } else {
+      line2 = (line2 + " " + w).trim();
+    }
+  }
+  if (!line1) line1 = foodTitle;
+  if (line2.length > 28) line2 = line2.substring(0, 25) + "...";
+
+  const hasLine2 = Boolean(line2);
+  const photoY = hasLine2 ? 165 : 145;
+  const pillY = hasLine2 ? 520 : 500;
+  const starY = hasLine2 ? 155 : 135;
+  const calY = hasLine2 ? 670 : 650;
+  const macroBaseY = hasLine2 ? 790 : 770;
+
+  // Food Photo
+  let photoHref = data.imageBufferOrBase64 || "";
+  if (!photoHref) {
+    photoHref = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80";
   }
 
-  const titleY = titleLines.length === 1 ? 140 : 125;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="960" viewBox="0 0 640 960">
+  <!-- Warm Off-White Cream Background -->
+  <rect width="640" height="960" fill="#FAF6F0"/>
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="980" viewBox="0 0 600 980">
+  <!-- Top Header -->
+  <text x="40" y="58" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900" fill="#0A0A0A">GYMBUDDY<tspan fill="#25D366">.AI</tspan></text>
+  <text x="600" y="55" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="end">${escapeXml(mealType)} · ${escapeXml(dateStr)}</text>
+
+  <!-- Main Food Title -->
+  <text x="40" y="108" font-family="Arial Black, Impact, sans-serif" font-size="25" font-weight="900" fill="#043927">${escapeXml(line1)}</text>
+  ${hasLine2 ? `<text x="40" y="140" font-family="Arial Black, Impact, sans-serif" font-size="25" font-weight="900" fill="#043927">${escapeXml(line2)}</text>` : ""}
+
+  <!-- Clip Path for Rounded Food Photo -->
   <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&amp;family=Inter:wght@400;600;700;900&amp;display=swap');
-      .brand-title { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .header-sub { font-family: 'Inter', sans-serif; font-weight: 700; }
-      .food-title { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .cal-val { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .macro-val { font-family: 'Archivo Black', 'Arial Black', sans-serif; font-weight: 900; }
-      .macro-lbl { font-family: 'Inter', sans-serif; font-weight: 700; }
-    </style>
-
-    <clipPath id="imgClip">
-      <rect x="40" y="190" width="520" height="410" rx="36" ry="36" />
+    <clipPath id="foodPhotoClip">
+      <rect x="40" y="${photoY}" width="560" height="420" rx="32" ry="32"/>
     </clipPath>
-
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.12" />
-    </filter>
   </defs>
 
-  <!-- Warm Off-White Cream Canvas Background -->
-  <rect width="600" height="980" fill="#FAF6F0" />
+  <!-- Photo Placeholder Box & Actual Image -->
+  <rect x="40" y="${photoY}" width="560" height="420" rx="32" ry="32" fill="#E2E8F0"/>
+  <image href="${escapeXml(photoHref)}" xlink:href="${escapeXml(photoHref)}" x="40" y="${photoY}" width="560" height="420" preserveAspectRatio="xMidYMid slice" clip-path="url(#foodPhotoClip)"/>
 
-  <!-- HEADER -->
-  <g transform="translate(40, 55)">
-    <!-- GYMBUDDY.AI Logo -->
-    <text class="brand-title" font-size="34" fill="#0A0A0A" y="0">
-      GYMBUDDY<tspan fill="#25D366">.AI</tspan>
-    </text>
-    <!-- Right Meal Type & Date -->
-    <text class="header-sub" font-size="16" fill="#043927" x="520" y="-4" text-anchor="end">
-      ${escapeXml(mealType)} · ${escapeXml(dateStr)}
-    </text>
+  <!-- Sparkle Star Top Right of Photo -->
+  <path d="M 585 ${starY} L 589 ${starY + 13} L 602 ${starY + 17} L 589 ${starY + 21} L 585 ${starY + 34} L 581 ${starY + 21} L 568 ${starY + 17} L 581 ${starY + 13} Z" fill="#FFC700"/>
+
+  <!-- Status Pill Overlay on Photo -->
+  <rect x="65" y="${pillY}" width="${pillWidth}" height="42" rx="21" ry="21" fill="${pillBg}"/>
+  <text x="${65 + pillWidth / 2}" y="${pillY + 27}" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapeXml(pillText)}</text>
+
+  <!-- Calorie Hero Section -->
+  <g transform="translate(40, ${calY})">
+    <text x="0" y="30" font-family="Arial Black, Impact, sans-serif" font-size="78" font-weight="900" fill="#FF4500">${calories.toLocaleString("id-ID")}</text>
+    <text x="${String(calories).length * 48 + 12}" y="12" font-family="Arial Black, Impact, sans-serif" font-size="28" font-weight="900" fill="#FF4500">KCAL</text>
+
+    <text x="560" y="-12" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#666666" text-anchor="end">Target harian</text>
+    <text x="560" y="28" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900" fill="#043927" text-anchor="end">${targetCal.toLocaleString("id-ID")}</text>
   </g>
 
-  <!-- MULTI-LINE FOOD TITLE -->
-  <g transform="translate(40, ${titleY})">
-    ${titleLines
-      .map(
-        (line, idx) =>
-          `<text class="food-title" font-size="26" fill="#043927" y="${idx * 34}">${escapeXml(line)}</text>`
-      )
-      .join("\n    ")}
-  </g>
-
-  <!-- FOOD PHOTO CONTAINER -->
-  <g filter="url(#shadow)">
-    <!-- Main Food Photo -->
-    <image href="${escapeXml(imageHref)}" x="40" y="190" width="520" height="410" preserveAspectRatio="xMidYMid slice" clip-path="url(#imgClip)" />
-    
-    <!-- Top-Right Sparkle Star Overlay -->
-    <path d="M545 180 L549 194 L563 198 L549 202 L545 216 L541 202 L527 198 L541 194 Z" fill="#FFC700" />
-
-    <!-- Status Pill Overlay (Bottom-Left of Photo) -->
-    <rect x="60" y="535" width="${pillText.length * 9.5 + 40}" height="44" rx="22" fill="${pillBg}" opacity="0.95" />
-    <text class="header-sub" font-size="14" fill="${pillTextColor}" x="80" y="562">
-      ${escapeXml(pillText)}
-    </text>
-  </g>
-
-  <!-- CALORIE HERO SECTION -->
-  <g transform="translate(40, 675)">
-    <!-- Total Calories Value -->
-    <text class="cal-val" font-size="76" fill="#FF4500" x="0" y="0">${calories.toLocaleString("id-ID")}</text>
-    <text class="cal-val" font-size="28" fill="#FF4500" x="${String(calories).length * 46 + 10}" y="-18">KCAL</text>
-
-    <!-- Daily Target Right-Aligned -->
-    <text class="header-sub" font-size="15" fill="#666666" x="520" y="-35" text-anchor="end">Target harian</text>
-    <text class="brand-title" font-size="34" fill="#043927" x="520" y="2" text-anchor="end">${targetCal.toLocaleString("id-ID")}</text>
-  </g>
-
-  <!-- 3 MACRO BADGES CIRCLES -->
-  <g transform="translate(0, 830)">
-    <!-- PROTEIN BADGE (Amber/Yellow Circle) -->
-    <g transform="translate(120, 0)">
-      <circle cx="0" cy="0" r="54" fill="#FFD000" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${protein}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Protein</text>
+  <!-- 3 Circular Macro Badges -->
+  <g transform="translate(0, ${macroBaseY})">
+    <!-- Protein Badge (Yellow/Amber) -->
+    <g transform="translate(130, 0)">
+      <circle cx="0" cy="0" r="54" fill="#FFD000"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${protein}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Protein</text>
     </g>
 
-    <!-- KARBO BADGE (Soft Pink/Purple Circle) -->
-    <g transform="translate(300, 0)">
-      <circle cx="0" cy="0" r="54" fill="#FBCFE8" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${carbs}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Karbo</text>
+    <!-- Karbo Badge (Pink/Purple) -->
+    <g transform="translate(320, 0)">
+      <circle cx="0" cy="0" r="54" fill="#FBCFE8"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${carbs}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Karbo</text>
     </g>
 
-    <!-- LEMAK BADGE (Light Cyan/Blue Circle) -->
-    <g transform="translate(480, 0)">
-      <circle cx="0" cy="0" r="54" fill="#BAE6FD" />
-      <text class="macro-val" font-size="26" fill="#0A0A0A" text-anchor="middle" y="9">${fat}G</text>
-      <text class="macro-lbl" font-size="15" fill="#043927" text-anchor="middle" y="80">Lemak</text>
+    <!-- Lemak Badge (Light Cyan/Blue) -->
+    <g transform="translate(510, 0)">
+      <circle cx="0" cy="0" r="54" fill="#BAE6FD"/>
+      <text x="0" y="10" font-family="Arial Black, Impact, sans-serif" font-size="26" font-weight="900" fill="#0A0A0A" text-anchor="middle">${fat}G</text>
+      <text x="0" y="78" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#043927" text-anchor="middle">Lemak</text>
     </g>
   </g>
 </svg>`;
@@ -191,12 +142,11 @@ export async function generateNutritionCardPng(data: NutritionCardData): Promise
     const resvg = new Resvg(svg, {
       fitTo: {
         mode: "width",
-        value: 600
+        value: 640
       }
     });
     return resvg.render().asPng();
   } catch (e) {
-    console.warn("[Card Generator] Native resvg fallback note:", (e as any)?.message || e);
     return Buffer.from(svg);
   }
 }
