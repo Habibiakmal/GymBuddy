@@ -26,14 +26,34 @@ export interface NutritionCardData {
 const fontFiles = ["arial.ttf", "arialbd.ttf", "segoeui.ttf", "seguisb.ttf"];
 const cachedFontBuffers: Buffer[] = [];
 
+// Try multiple possible base paths to find fonts (handles different CWDs in Cloud Run)
+const possibleFontDirs = [
+  path.join(process.cwd(), "fonts"),                           // root/fonts
+  path.join(process.cwd(), "..", "fonts"),                     // up one level
+  path.join(__dirname, "fonts"),                               // relative to this file
+  path.join(__dirname, "..", "fonts"),                         // parent of services/
+  path.join(__dirname, "..", "..", "fonts"),                   // two levels up
+  "/app/fonts",                                                // Cloud Run /app root
+  "/app/dist/../fonts",                                        // Cloud Run dist sibling
+];
+
 for (const f of fontFiles) {
-  const p = path.join(process.cwd(), "fonts", f);
-  if (fs.existsSync(p)) {
-    try {
-      cachedFontBuffers.push(fs.readFileSync(p));
-    } catch (e) {
-      console.warn(`[CardGenerator] Note: could not load font ${f}:`, e);
+  let loaded = false;
+  for (const dir of possibleFontDirs) {
+    const p = path.join(dir, f);
+    if (fs.existsSync(p)) {
+      try {
+        cachedFontBuffers.push(fs.readFileSync(p));
+        console.log(`[CardGenerator] Loaded font: ${p}`);
+        loaded = true;
+        break;
+      } catch (e) {
+        // continue trying next dir
+      }
     }
+  }
+  if (!loaded) {
+    console.warn(`[CardGenerator] Font not found in any path: ${f}`);
   }
 }
 

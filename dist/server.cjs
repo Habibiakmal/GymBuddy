@@ -44067,14 +44067,38 @@ var import_path = __toESM(require("path"), 1);
 var import_resvg_js = require("@resvg/resvg-js");
 var fontFiles = ["arial.ttf", "arialbd.ttf", "segoeui.ttf", "seguisb.ttf"];
 var cachedFontBuffers = [];
+var possibleFontDirs = [
+  import_path.default.join(process.cwd(), "fonts"),
+  // root/fonts
+  import_path.default.join(process.cwd(), "..", "fonts"),
+  // up one level
+  import_path.default.join(__dirname, "fonts"),
+  // relative to this file
+  import_path.default.join(__dirname, "..", "fonts"),
+  // parent of services/
+  import_path.default.join(__dirname, "..", "..", "fonts"),
+  // two levels up
+  "/app/fonts",
+  // Cloud Run /app root
+  "/app/dist/../fonts"
+  // Cloud Run dist sibling
+];
 for (const f of fontFiles) {
-  const p = import_path.default.join(process.cwd(), "fonts", f);
-  if (import_fs.default.existsSync(p)) {
-    try {
-      cachedFontBuffers.push(import_fs.default.readFileSync(p));
-    } catch (e) {
-      console.warn(`[CardGenerator] Note: could not load font ${f}:`, e);
+  let loaded = false;
+  for (const dir of possibleFontDirs) {
+    const p = import_path.default.join(dir, f);
+    if (import_fs.default.existsSync(p)) {
+      try {
+        cachedFontBuffers.push(import_fs.default.readFileSync(p));
+        console.log(`[CardGenerator] Loaded font: ${p}`);
+        loaded = true;
+        break;
+      } catch (e) {
+      }
     }
+  }
+  if (!loaded) {
+    console.warn(`[CardGenerator] Font not found in any path: ${f}`);
   }
 }
 function escapeXml(unsafe) {
