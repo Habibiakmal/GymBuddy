@@ -44066,12 +44066,10 @@ var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_resvg_js = require("@resvg/resvg-js");
 var FONT_SEARCH_PATHS = [
-  "/app/fonts",
-  // Google Cloud Run (WORKDIR /app)
   import_path.default.join(process.cwd(), "fonts"),
-  // local dev & any other env
-  import_path.default.join(__dirname, "..", "fonts")
-  // relative to compiled file
+  // local dev
+  "/app/fonts"
+  // Cloud Run (also in system fonts)
 ];
 function loadFontBuffer(filename) {
   for (const dir of FONT_SEARCH_PATHS) {
@@ -44079,20 +44077,19 @@ function loadFontBuffer(filename) {
     try {
       if (import_fs.default.existsSync(p)) {
         const buf = import_fs.default.readFileSync(p);
-        console.log(`[CardGen] Font loaded: ${p}`);
+        console.log(`[CardGen] Font buffer loaded: ${p}`);
         return buf;
       }
     } catch (_) {
     }
   }
-  console.warn(`[CardGen] Font NOT FOUND: ${filename} (searched ${FONT_SEARCH_PATHS.join(", ")})`);
   return null;
 }
 var cachedFontBuffers = [
   "arial.ttf",
   "arialbd.ttf"
 ].map(loadFontBuffer).filter((b) => b !== null);
-console.log(`[CardGen] Loaded ${cachedFontBuffers.length}/2 font buffers for Resvg`);
+console.log(`[CardGen] Font buffers: ${cachedFontBuffers.length}/2 (system fonts also available on Alpine)`);
 function escapeXml(unsafe) {
   return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
@@ -44360,7 +44357,8 @@ function generateNutritionCardSvg(data) {
 async function generateNutritionCardPng(data) {
   const svg = generateNutritionCardSvg(data);
   try {
-    const fontOptions = cachedFontBuffers.length > 0 ? { fontBuffers: cachedFontBuffers, defaultFontFamily: "Arial", loadSystemFonts: false } : { loadSystemFonts: true };
+    const isCloudRun = process.env.K_SERVICE !== void 0 || process.env.NODE_ENV === "production";
+    const fontOptions = isCloudRun ? { loadSystemFonts: true, defaultFontFamily: "Arial" } : cachedFontBuffers.length > 0 ? { fontBuffers: cachedFontBuffers, defaultFontFamily: "Arial", loadSystemFonts: false } : { loadSystemFonts: true };
     const resvg = new import_resvg_js.Resvg(svg, {
       fitTo: { mode: "width", value: 720 },
       font: fontOptions

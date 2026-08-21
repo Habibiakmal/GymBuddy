@@ -21,6 +21,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
+# Install fontconfig + copy bundled TTF fonts into system font directory
+# This ensures @resvg/resvg-js can find fonts via loadSystemFonts: true on Alpine Linux
+RUN apk add --no-cache fontconfig
+
+COPY --from=builder /app/fonts/*.ttf /usr/share/fonts/truetype/
+RUN fc-cache -fv
+
 # Install only production dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
@@ -29,8 +36,6 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
-# Copy runtime assets needed by server (fonts for card generator, exercise data)
-COPY --from=builder /app/fonts ./fonts
 COPY --from=builder /app/data ./data
 
 # Cloud Run listens on $PORT (defaults to 8080)

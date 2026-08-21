@@ -22,12 +22,12 @@ export interface NutritionCardData {
   imageBufferOrBase64?: string; // Data URI (data:image/jpeg;base64,...) or image URL
 }
 
-// Load font buffers — Resvg REQUIRES fontBuffers (does not support @font-face CSS in SVG)
-// Priority: Cloud Run /app/fonts → local project fonts/ → give up gracefully
+// Load font buffers for local dev fallback
+// On Cloud Run Alpine, fonts are installed as system fonts via Dockerfile fc-cache
+// so loadSystemFonts: true is the primary approach; fontBuffers is a local dev fallback
 const FONT_SEARCH_PATHS = [
-  "/app/fonts",                              // Google Cloud Run (WORKDIR /app)
-  path.join(process.cwd(), "fonts"),         // local dev & any other env
-  path.join(__dirname, "..", "fonts"),       // relative to compiled file
+  path.join(process.cwd(), "fonts"),   // local dev
+  "/app/fonts",                         // Cloud Run (also in system fonts)
 ];
 
 function loadFontBuffer(filename: string): Buffer | null {
@@ -36,12 +36,11 @@ function loadFontBuffer(filename: string): Buffer | null {
     try {
       if (fs.existsSync(p)) {
         const buf = fs.readFileSync(p);
-        console.log(`[CardGen] Font loaded: ${p}`);
+        console.log(`[CardGen] Font buffer loaded: ${p}`);
         return buf;
       }
     } catch (_) { /* try next */ }
   }
-  console.warn(`[CardGen] Font NOT FOUND: ${filename} (searched ${FONT_SEARCH_PATHS.join(", ")})`);
   return null;
 }
 
@@ -50,7 +49,7 @@ const cachedFontBuffers: Buffer[] = [
   "arialbd.ttf",
 ].map(loadFontBuffer).filter((b): b is Buffer => b !== null);
 
-console.log(`[CardGen] Loaded ${cachedFontBuffers.length}/2 font buffers for Resvg`);
+console.log(`[CardGen] Font buffers: ${cachedFontBuffers.length}/2 (system fonts also available on Alpine)`);
 
 
 function escapeXml(unsafe: string): string {
@@ -353,9 +352,16 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
 export async function generateNutritionCardPng(data: NutritionCardData): Promise<Buffer> {
   const svg = generateNutritionCardSvg(data);
   try {
-    const fontOptions = cachedFontBuffers.length > 0
-      ? { fontBuffers: cachedFontBuffers, defaultFontFamily: "Arial", loadSystemFonts: false }
-      : { loadSystemFonts: true }; // fallback: try system fonts if none found
+    // PRIMARY: loadSystemFonts: true — on Cloud Run Alpine, Arial TTF is installed
+    // to /usr/share/fonts/truetype/ via Dockerfile fc-cache, so Resvg finds it.
+    // FALLBACK: if running locally without system fonts, use fontBuffers instead.
+    const isCloudRun = process.env.K_SERVICE !== undefined || process.env.NODE_ENV === "production";
+
+    const fontOptions = isCloudRun
+      ? { loadSystemFonts: true, defaultFontFamily: "Arial" }
+      : cachedFontBuffers.length > 0
+        ? { fontBuffers: cachedFontBuffers, defaultFontFamily: "Arial", loadSystemFonts: false }
+        : { loadSystemFonts: true };
 
     const resvg = new Resvg(svg, {
       fitTo: { mode: "width", value: 720 },
