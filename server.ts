@@ -1838,10 +1838,25 @@ async function sendTwilioWhatsappMessage(to: string, bodyText: string) {
 }
 
 function makeProgressBar(current: number, target: number, length: number = 10): string {
-  if (!target || target <= 0) return "░".repeat(length);
-  const percent = Math.min(100, Math.max(0, Math.round((current / target) * 100)));
-  const filledCount = Math.min(length, Math.max(0, Math.floor((percent / 100) * length)));
-  return "🟩".repeat(filledCount) + "░".repeat(length - filledCount);
+  if (!target || target <= 0) return `[░░░░░░░░░░] 0% · ⚪ Belum Cukup`;
+  const rawPercent = Math.round((current / target) * 100);
+  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
+  const filledCount = Math.min(length, Math.max(0, Math.round((cappedPercent / 100) * length)));
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
+
+  let statusText = "";
+  if (rawPercent >= 100) {
+    statusText = "✅ Tercapai";
+  } else if (rawPercent >= 75) {
+    statusText = "🟢 Hampir Cukup";
+  } else if (rawPercent >= 40) {
+    statusText = "🟡 Sedang";
+  } else {
+    statusText = "⚪ Belum Cukup";
+  }
+
+  return `[${bar}] ${rawPercent}% · ${statusText}`;
 }
 
 function parseDateFromQuery(userText: string): { dateStr: string; label: string } {
@@ -1972,7 +1987,22 @@ function formatNutritionCard(
 
   const totalTodayCal = dailyTotals.calories;
   const targetCal = userData.targetCalories || 2000;
-  const calPercent = Math.min(100, Math.round((totalTodayCal / targetCal) * 100));
+  const calBar = makeProgressBar(totalTodayCal, targetCal);
+
+  const totalTodayProt = dailyTotals.protein;
+  const targetProt = userData.proteinGrams || 120;
+  const protBar = makeProgressBar(totalTodayProt, targetProt);
+
+  const totalTodayCarb = dailyTotals.carbs;
+  const targetCarb = userData.carbGrams || 240;
+  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
+
+  const totalTodayFat = dailyTotals.fat;
+  const targetFat = userData.fatGrams || 65;
+  const fatBar = makeProgressBar(totalTodayFat, targetFat);
+
+  const totalTodaySodium = (dailyTotals as any).sodium || 0;
+  const sodBar = makeProgressBar(totalTodaySodium, 2000);
 
   return `🍽️ *${cleanFoodName.toUpperCase()}*
 
@@ -2002,9 +2032,20 @@ ${portionDetailText}
 ━━━━━━━━━━━━━━
 📈 *STATUS HARI INI*
 ━━━━━━━━━━━━━━
-🔥 Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
-🍖 Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
-🧂 Natrium: ${dailyTotals.sodium || 0}/2000 mg
+🔥 *Kalori*: ${totalTodayCal}/${targetCal} kcal
+${calBar}
+
+🍖 *Protein*: ${totalTodayProt}/${targetProt}g
+${protBar}
+
+🍚 *Karbo*: ${totalTodayCarb}/${targetCarb}g
+${carbBar}
+
+🥓 *Lemak*: ${totalTodayFat}/${targetFat}g
+${fatBar}
+
+🧂 *Natrium*: ${totalTodaySodium}/2000 mg
+${sodBar}
 
 ━━━━━━━━━━━━━━
 ⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
@@ -2168,18 +2209,23 @@ function generateDailySummaryCard(
 
 ⚖️ *Berat*: ${userData.weight} kg
 
-📊 *Progress User*:
-🔥 *Kalori*: ${dailyTotals.calories}/${userData.targetCalories}kcal (${calPercent}%)
+📊 *Progress Nutrisi*:
+🔥 *Kalori*: ${dailyTotals.calories}/${userData.targetCalories} kcal
 ${calBar}
-🍖 *Protein*: ${dailyTotals.protein}/${userData.proteinGrams}g (${protPercent}%)
+
+🍖 *Protein*: ${dailyTotals.protein}/${userData.proteinGrams}g
 ${protBar}
-🍚 *Karbo*: ${dailyTotals.carbs}/${userData.carbGrams}g (${carbPercent}%)
+
+🍚 *Karbo*: ${dailyTotals.carbs}/${userData.carbGrams}g
 ${carbBar}
-🥓 *Lemak*: ${dailyTotals.fat}/${userData.fatGrams}g (${fatPercent}%)
+
+🥓 *Lemak*: ${dailyTotals.fat}/${userData.fatGrams}g
 ${fatBar}
-🥬 *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g (${fiberPercent}%)
+
+🥬 *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g
 ${fiberBar}
-🧂 *Natrium*: ${sodiumVal}/2000mg (${sodPercent}%)
+
+🧂 *Natrium*: ${sodiumVal}/2000 mg
 ${sodBar}
 
 🍽️ *Makanan Terdaftar*:

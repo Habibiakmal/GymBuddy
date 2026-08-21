@@ -46836,10 +46836,23 @@ async function sendMetaWhatsappMessage(to, bodyText) {
   }
 }
 function makeProgressBar(current, target, length = 10) {
-  if (!target || target <= 0) return "\u2591".repeat(length);
-  const percent = Math.min(100, Math.max(0, Math.round(current / target * 100)));
-  const filledCount = Math.min(length, Math.max(0, Math.floor(percent / 100 * length)));
-  return "\u{1F7E9}".repeat(filledCount) + "\u2591".repeat(length - filledCount);
+  if (!target || target <= 0) return `[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 0% \xB7 \u26AA Belum Cukup`;
+  const rawPercent = Math.round(current / target * 100);
+  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
+  const filledCount = Math.min(length, Math.max(0, Math.round(cappedPercent / 100 * length)));
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
+  let statusText = "";
+  if (rawPercent >= 100) {
+    statusText = "\u2705 Tercapai";
+  } else if (rawPercent >= 75) {
+    statusText = "\u{1F7E2} Hampir Cukup";
+  } else if (rawPercent >= 40) {
+    statusText = "\u{1F7E1} Sedang";
+  } else {
+    statusText = "\u26AA Belum Cukup";
+  }
+  return `[${bar}] ${rawPercent}% \xB7 ${statusText}`;
 }
 function parseDateFromQuery(userText) {
   const lower = userText.toLowerCase();
@@ -46963,7 +46976,18 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
   const totalTodayCal = dailyTotals.calories;
   const targetCal = userData.targetCalories || 2e3;
-  const calPercent = Math.min(100, Math.round(totalTodayCal / targetCal * 100));
+  const calBar = makeProgressBar(totalTodayCal, targetCal);
+  const totalTodayProt = dailyTotals.protein;
+  const targetProt = userData.proteinGrams || 120;
+  const protBar = makeProgressBar(totalTodayProt, targetProt);
+  const totalTodayCarb = dailyTotals.carbs;
+  const targetCarb = userData.carbGrams || 240;
+  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
+  const totalTodayFat = dailyTotals.fat;
+  const targetFat = userData.fatGrams || 65;
+  const fatBar = makeProgressBar(totalTodayFat, targetFat);
+  const totalTodaySodium = dailyTotals.sodium || 0;
+  const sodBar = makeProgressBar(totalTodaySodium, 2e3);
   return `\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
 \u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} AI: ${confidenceScore}%
@@ -46993,9 +47017,20 @@ ${portionDetailText}
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F4C8} *STATUS HARI INI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F525} Kalori: ${totalTodayCal}/${targetCal} kcal (${calPercent}%)
-\u{1F356} Protein: ${dailyTotals.protein}/${userData.proteinGrams}g
-\u{1F9C2} Natrium: ${dailyTotals.sodium || 0}/2000 mg
+\u{1F525} *Kalori*: ${totalTodayCal}/${targetCal} kcal
+${calBar}
+
+\u{1F356} *Protein*: ${totalTodayProt}/${targetProt}g
+${protBar}
+
+\u{1F35A} *Karbo*: ${totalTodayCarb}/${targetCarb}g
+${carbBar}
+
+\u{1F953} *Lemak*: ${totalTodayFat}/${targetFat}g
+${fatBar}
+
+\u{1F9C2} *Natrium*: ${totalTodaySodium}/2000 mg
+${sodBar}
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u2699\uFE0F _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
@@ -47141,18 +47176,23 @@ function generateDailySummaryCard(userData, dailyTotals, dateLabel = "Hari Ini")
 
 \u2696\uFE0F *Berat*: ${userData.weight} kg
 
-\u{1F4CA} *Progress User*:
-\u{1F525} *Kalori*: ${dailyTotals.calories}/${userData.targetCalories}kcal (${calPercent}%)
+\u{1F4CA} *Progress Nutrisi*:
+\u{1F525} *Kalori*: ${dailyTotals.calories}/${userData.targetCalories} kcal
 ${calBar}
-\u{1F356} *Protein*: ${dailyTotals.protein}/${userData.proteinGrams}g (${protPercent}%)
+
+\u{1F356} *Protein*: ${dailyTotals.protein}/${userData.proteinGrams}g
 ${protBar}
-\u{1F35A} *Karbo*: ${dailyTotals.carbs}/${userData.carbGrams}g (${carbPercent}%)
+
+\u{1F35A} *Karbo*: ${dailyTotals.carbs}/${userData.carbGrams}g
 ${carbBar}
-\u{1F953} *Lemak*: ${dailyTotals.fat}/${userData.fatGrams}g (${fatPercent}%)
+
+\u{1F953} *Lemak*: ${dailyTotals.fat}/${userData.fatGrams}g
 ${fatBar}
-\u{1F96C} *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g (${fiberPercent}%)
+
+\u{1F96C} *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g
 ${fiberBar}
-\u{1F9C2} *Natrium*: ${sodiumVal}/2000mg (${sodPercent}%)
+
+\u{1F9C2} *Natrium*: ${sodiumVal}/2000 mg
 ${sodBar}
 
 \u{1F37D}\uFE0F *Makanan Terdaftar*:
