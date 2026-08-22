@@ -49158,7 +49158,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
 \u{1F4AC} *${coachName}*:
 "Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
         ];
-      } else if (getAi()) {
+      } else {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
@@ -49365,8 +49365,6 @@ Keluarkan output JSON valid:
           const card = formatNutritionCard(fallbackFoodObj, imagePart ? "Foto" : "Teks", userData, dailyTotals);
           responseMessages = [card];
         }
-      } else {
-        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
       const finalMsg = responseMessages[0] || "Sip, data kamu sudah tercatat!";
       if (mediaUrlToSend && mediaUrlToSend.startsWith("http")) {

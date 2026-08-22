@@ -4625,7 +4625,7 @@ function escapeXml(unsafe: string): string {
           `✅ ${userText.trim()}\n\n` +
           `💬 *${coachName}*:\n"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! 💪🔥"`
         ];
-      } else if (getAi()) {
+      } else {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia
           ? `PERSONA COACH MIA:
@@ -4853,8 +4853,6 @@ Keluarkan output JSON valid:
           const card = formatNutritionCard(fallbackFoodObj, imagePart ? "Foto" : "Teks", userData, dailyTotals);
           responseMessages = [card];
         }
-      } else {
-        responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
       }
 
       // ─── 2. SEND FINAL COACH RESPONSE IN 1 CHAT BUBBLE (PHOTO + REKAP NUTRISI AS CAPTION) ───
