@@ -63,6 +63,7 @@ import {
   CheckCircle,
   HelpCircle,
   Scale,
+  Lock,
   AlertTriangle
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
@@ -656,6 +657,63 @@ const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
   );
 };
 
+export const DUMMY_USERS: Record<string, any> = {
+  alex: {
+    userId: "usr_alex_demo",
+    name: "Alex",
+    phone: "08111111111",
+    gender: "Pria",
+    age: 26,
+    weight: 75,
+    startWeight: 75,
+    targetWeight: 70,
+    height: 175,
+    goal: "lose",
+    goalTitle: "Menurunkan Berat Badan",
+    persona: "max",
+    activeService: "nutritionist",
+    selectedFeature: "nutrition",
+    plan: "nutrition",
+    activityLevel: "moderate",
+    targetCalories: 2100,
+    dailyTargetCalories: 2100,
+    proteinGrams: 155,
+    dailyTargetProtein: 155,
+    carbGrams: 210,
+    dailyTargetCarbs: 210,
+    fatGrams: 65,
+    dailyTargetFat: 65,
+    fiberGrams: 30
+  },
+  mia: {
+    userId: "usr_mia_demo",
+    name: "Mia",
+    phone: "08222222222",
+    gender: "Wanita",
+    age: 24,
+    weight: 58,
+    startWeight: 58,
+    targetWeight: 54,
+    height: 165,
+    goal: "gain",
+    goalTitle: "Membentuk Otot & Tone",
+    persona: "mia",
+    activeService: "workout",
+    selectedFeature: "workout",
+    plan: "workout",
+    activityLevel: "moderate",
+    targetCalories: 1850,
+    dailyTargetCalories: 1850,
+    proteinGrams: 120,
+    dailyTargetProtein: 120,
+    carbGrams: 200,
+    dailyTargetCarbs: 200,
+    fatGrams: 55,
+    dailyTargetFat: 55,
+    fiberGrams: 28
+  }
+};
+
 export default function Dashboard({
   user: initialUser,
   language: initialLang = "ID",
@@ -776,6 +834,49 @@ export default function Dashboard({
   const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   const activeUser = liveUser || safeUser;
+
+  // ── PLAN ENTITLEMENTS & ACCESS CONTROL (Nutrition Plan vs Workout Coach Plan) ──
+  const userActiveService = (activeUser?.activeService || activeUser?.selectedFeature || activeUser?.plan || "").toLowerCase();
+  
+  const isNutritionPlan = userActiveService === "nutrition" || 
+                          userActiveService === "nutritionist" || 
+                          activeUser?.name === "Alex";
+
+  const isWorkoutPlan = userActiveService === "workout" || 
+                        userActiveService === "coach" || 
+                        activeUser?.name === "Mia";
+
+  const isFullAccess = !isNutritionPlan && !isWorkoutPlan;
+
+  const hasNutritionAccess = isNutritionPlan || isFullAccess;
+  const hasWorkoutAccess = isWorkoutPlan || isFullAccess;
+
+  const [showUpgradePlanModal, setShowUpgradePlanModal] = useState(false);
+  const [upgradeTargetFeature, setUpgradeTargetFeature] = useState<"nutrition" | "workout" | "both">("workout");
+
+  const handleOpenUpgradeModal = (feature: "nutrition" | "workout" | "both") => {
+    setUpgradeTargetFeature(feature);
+    setShowUpgradePlanModal(true);
+  };
+
+  const handleSelectDemoUser = (userKey: "alex" | "mia" | "both") => {
+    if (userKey === "both") {
+      const bothUser: any = {
+        ...safeUser,
+        name: "Member (Full Access)",
+        activeService: "both",
+        selectedFeature: "both",
+        plan: "both"
+      };
+      setLiveUser(bothUser);
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(bothUser));
+      return;
+    }
+    const dummy = DUMMY_USERS[userKey];
+    setLiveUser(dummy as any);
+    localStorage.setItem("gymbuddy_active_session", JSON.stringify(dummy));
+    setAllLogs(getLocalMeals(dummy.phone, selectedDate));
+  };
 
   // Determine User Registration Date as Min Date Constraint
   const getUserRegisterDateStr = (): string => {
@@ -2667,6 +2768,80 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {activeTab === "home" && (
           <div className="space-y-5">
+            {/* PLAN ACCESS & DEMO SWITCHER BAR */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#121722]/90 border border-white/[0.08] p-3 sm:p-3.5 rounded-2xl backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#D4FF00]/15 text-[#D4FF00] flex items-center justify-center font-black text-sm shrink-0 border border-[#D4FF00]/20">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-black text-white">{isEN ? "Active Plan:" : "Paket Aktif:"}</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                      isNutritionPlan 
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
+                        : isWorkoutPlan 
+                        ? "bg-[#D4FF00]/20 text-[#D4FF00] border-[#D4FF00]/30" 
+                        : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                    }`}>
+                      {isNutritionPlan ? "🥗 Nutritionist Plan" : isWorkoutPlan ? "🏋️ Workout Coach Plan" : "🌟 Full Access"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 font-medium">
+                    {isNutritionPlan 
+                      ? (isEN ? "Nutritionist: Unlocked • Workout Coach: Locked" : "Nutritionist: Akses Penuh • Workout Coach: Terkunci (Feature Preview)")
+                      : isWorkoutPlan 
+                      ? (isEN ? "Workout Coach: Unlocked • Nutritionist: Locked" : "Workout Coach: Akses Penuh • Nutritionist: Terkunci (Feature Preview)")
+                      : (isEN ? "All features unlocked" : "Semua fitur aktif")}
+                  </p>
+                </div>
+              </div>
+
+              {/* Demo Switcher Buttons */}
+              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.04]">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mr-1 hidden sm:inline">{isEN ? "Demo User:" : "User Demo:"}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSelectDemoUser("alex")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border shrink-0 ${
+                    isNutritionPlan
+                      ? "bg-emerald-500 text-black border-emerald-500 shadow-xs"
+                      : "bg-[#18202E] text-neutral-300 border-white/[0.08] hover:bg-neutral-800"
+                  }`}
+                  title="Alex: Nutritionist Plan Active, Workout Coach Locked"
+                >
+                  <span>🥗 Alex (Nutrition)</span>
+                  {isNutritionPlan && <Check size={12} strokeWidth={3} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectDemoUser("mia")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border shrink-0 ${
+                    isWorkoutPlan
+                      ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-xs"
+                      : "bg-[#18202E] text-neutral-300 border-white/[0.08] hover:bg-neutral-800"
+                  }`}
+                  title="Mia: Workout Coach Plan Active, Nutritionist Locked"
+                >
+                  <span>🏋️ Mia (Workout)</span>
+                  {isWorkoutPlan && <Check size={12} strokeWidth={3} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectDemoUser("both")}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border shrink-0 ${
+                    isFullAccess
+                      ? "bg-purple-500 text-white border-purple-500 shadow-xs font-black"
+                      : "bg-[#18202E] text-neutral-400 border-white/[0.08] hover:bg-neutral-800"
+                  }`}
+                  title="Full Access: Both Plans Unlocked"
+                >
+                  <span>🌟 Both</span>
+                  {isFullAccess && <Check size={12} strokeWidth={3} />}
+                </button>
+              </div>
+            </div>
+
             {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs">
               <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
@@ -2784,8 +2959,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   snack: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "snack").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
                 };
 
-                return (
-                  <div key="hero" className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden space-y-5">
+                const heroContent = (
+                  <div className="bg-gradient-to-br from-[#151D2C] to-[#0D131F] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden space-y-5">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/5 rounded-full blur-3xl pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00D2FF]/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -2945,7 +3120,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
-                              <span>{isEN ? "Water Intake" : "Air Minum"}</span>
+                              <span>{t.waterLabel}</span>
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-white font-mono">{totalHydrationMl.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetHydrationGoal.toLocaleString()}ml</span></span>
@@ -3041,6 +3216,54 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     </div>
                   </div>
                 );
+
+                if (!hasNutritionAccess) {
+                  return (
+                    <div key="hero" className="relative overflow-hidden rounded-3xl group">
+                      {/* Dimmed live preview */}
+                      <div className="opacity-35 filter blur-[0.5px] pointer-events-none select-none transition-all">
+                        {heroContent}
+                      </div>
+
+                      {/* Locked Feature Overlay */}
+                      <div 
+                        onClick={() => handleOpenUpgradeModal("nutrition")}
+                        className="absolute inset-0 z-20 flex items-center justify-center p-5 sm:p-6 bg-radial from-neutral-950/70 via-neutral-950/85 to-[#0b0e14]/95 backdrop-blur-[3px] border border-emerald-500/30 rounded-3xl cursor-pointer hover:border-emerald-500/50 transition-all"
+                      >
+                        <div className="max-w-md w-full text-center space-y-3.5 p-6 sm:p-7 rounded-3xl bg-[#121722]/95 border border-emerald-500/30 shadow-2xl backdrop-blur-xl">
+                          <div className="w-13 h-13 mx-auto rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+                            <Lock size={24} strokeWidth={2.5} />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              🔒 {isEN ? "Plan Locked • Nutritionist" : "Fitur Terkunci • Paket Nutritionist"}
+                            </span>
+                            <h3 className="text-lg font-black text-white tracking-tight">
+                              {isEN ? "Unlock Nutritionist" : "Buka Akses AI Nutritionist"}
+                            </h3>
+                            <p className="text-xs text-neutral-300 font-medium leading-relaxed">
+                              {isEN
+                                ? "Get personalized nutrition guidance, meal tracking, and nutrition insights with the Nutritionist plan."
+                                : "Dapatkan panduan nutrisi personal, pencatatan makanan real-time via WhatsApp & foto, kalkulasi makro otomatis, dan insight kalori dengan paket Nutritionist."}
+                            </p>
+                          </div>
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleOpenUpgradeModal("nutrition"); }}
+                              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-black text-xs sm:text-sm transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 mx-auto cursor-pointer active:scale-95"
+                            >
+                              <Sparkles size={15} />
+                              <span>{isEN ? "Upgrade Plan" : "Upgrade Plan"}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return <div key="hero">{heroContent}</div>;
               }
 
               // ── CARD 2: FEEL SELECTOR & COACH RECOMMENDATION (PLACED DIRECTLY TOGETHER) ──
@@ -3138,8 +3361,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               // ── CARD 3: TODAY'S WORKOUT CARD ──
               if (cardId === "workout") {
-                return (
-                  <div key="workout" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                const workoutContent = (
+                  <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-3.5">
                       <div className="w-12 h-12 rounded-2xl bg-[#18202E] border border-white/[0.08] flex items-center justify-center text-[#D4FF00] shrink-0">
                         <Dumbbell size={22} />
@@ -3165,12 +3388,55 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     </button>
                   </div>
                 );
+
+                if (!hasWorkoutAccess) {
+                  return (
+                    <div key="workout" className="relative overflow-hidden rounded-2xl group">
+                      <div className="opacity-40 filter blur-[0.5px] pointer-events-none select-none transition-all">
+                        {workoutContent}
+                      </div>
+                      <div 
+                        onClick={() => handleOpenUpgradeModal("workout")}
+                        className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-neutral-950/85 backdrop-blur-[3px] border border-[#D4FF00]/25 rounded-2xl cursor-pointer hover:border-[#D4FF00]/45 transition-all"
+                      >
+                        <div className="text-center space-y-2.5 max-w-sm p-4">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                            <Lock size={18} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-[#D4FF00] tracking-wider">
+                              🔒 {isEN ? "Workout Plan Required" : "Fitur Terkunci • Workout Coach"}
+                            </span>
+                            <h4 className="text-sm font-black text-white mt-0.5">
+                              {isEN ? "Unlock Workout Coach" : "Buka Akses AI Workout Coach"}
+                            </h4>
+                            <p className="text-xs text-neutral-300 mt-1">
+                              {isEN
+                                ? "Get personalized workout plans, progress tracking, and coaching with the Workout Coach plan."
+                                : "Dapatkan program latihan harian personal, tracker per-set, dan panduan alat gym dengan paket Workout Coach."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenUpgradeModal("workout"); }}
+                            className="px-5 py-2 rounded-xl bg-[#D4FF00] hover:bg-[#c2ea00] text-black font-black text-xs transition-all shadow-md shadow-[#D4FF00]/20 flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+                          >
+                            <Sparkles size={14} />
+                            <span>{isEN ? "Upgrade Plan" : "Upgrade Plan"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return <div key="workout">{workoutContent}</div>;
               }
 
               // ── CARD 4: FOOD MEALS LIST (Rule 8, 9, 13, 14, 15, 16, 17, 18) ──
               if (cardId === "food") {
-                return (
-                  <div key="food" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+                const foodContent = (
+                  <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <Flame size={18} className="text-amber-400" />
@@ -3277,13 +3543,23 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  handleOpenEditMealModal(item);
+                                }}
+                                className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-[#18202E] transition-colors cursor-pointer"
+                                title={isEN ? "Edit nutrition values" : "Ubah data kalori & makro"}
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setMealToDelete(item);
                                 }}
-                                className="p-2 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                                title={t.delete}
-                                aria-label={`Delete ${item.foodName}`}
+                                className="p-2 rounded-xl text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                title={isEN ? "Delete meal log" : "Hapus catatan makanan"}
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={15} />
                               </button>
                               <ChevronRight size={18} className="text-neutral-500 group-hover:text-[#D4FF00] group-hover:translate-x-0.5 transition-all" />
                             </div>
@@ -3293,12 +3569,55 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     )}
                   </div>
                 );
+
+                if (!hasNutritionAccess) {
+                  return (
+                    <div key="food" className="relative overflow-hidden rounded-2xl group">
+                      <div className="opacity-40 filter blur-[0.5px] pointer-events-none select-none transition-all">
+                        {foodContent}
+                      </div>
+                      <div 
+                        onClick={() => handleOpenUpgradeModal("nutrition")}
+                        className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-neutral-950/85 backdrop-blur-[3px] border border-emerald-500/25 rounded-2xl cursor-pointer hover:border-emerald-500/45 transition-all"
+                      >
+                        <div className="text-center space-y-2.5 max-w-sm p-4">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                            <Lock size={18} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">
+                              🔒 {isEN ? "Nutrition Plan Required" : "Fitur Terkunci • Nutritionist"}
+                            </span>
+                            <h4 className="text-sm font-black text-white mt-0.5">
+                              {isEN ? "Unlock Nutritionist" : "Buka Jurnal Makanan Real-Time"}
+                            </h4>
+                            <p className="text-xs text-neutral-300 mt-1">
+                              {isEN
+                                ? "Get personalized nutrition guidance, meal tracking, and nutrition insights with the Nutritionist plan."
+                                : "Catat makanan via foto & chat WhatsApp dengan estimasi makro presisi tinggi pada Paket Nutritionist."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenUpgradeModal("nutrition"); }}
+                            className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+                          >
+                            <Sparkles size={14} />
+                            <span>{isEN ? "Upgrade Plan" : "Upgrade Plan"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return <div key="food">{foodContent}</div>;
               }
 
               // ── CARD 5: WATER & HYDRATION TRACKER ──
               if (cardId === "hydration") {
-                return (
-                  <div key="hydration" className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
+                const hydrationContent = (
+                  <div className="bg-[#121722] border border-white/[0.06] rounded-2xl p-5 shadow-xs space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Droplets size={18} className="text-blue-400" />
@@ -3403,6 +3722,49 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     )}
                   </div>
                 );
+
+                if (!hasNutritionAccess) {
+                  return (
+                    <div key="hydration" className="relative overflow-hidden rounded-2xl group">
+                      <div className="opacity-40 filter blur-[0.5px] pointer-events-none select-none transition-all">
+                        {hydrationContent}
+                      </div>
+                      <div 
+                        onClick={() => handleOpenUpgradeModal("nutrition")}
+                        className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-neutral-950/85 backdrop-blur-[3px] border border-blue-500/25 rounded-2xl cursor-pointer hover:border-blue-500/45 transition-all"
+                      >
+                        <div className="text-center space-y-2.5 max-w-sm p-4">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                            <Lock size={18} strokeWidth={2.5} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-blue-400 tracking-wider">
+                              🔒 {isEN ? "Nutrition Plan Required" : "Fitur Terkunci • Nutritionist"}
+                            </span>
+                            <h4 className="text-sm font-black text-white mt-0.5">
+                              {isEN ? "Unlock Hydration Tracker" : "Buka Pelacak Hidrasi & Minum"}
+                            </h4>
+                            <p className="text-xs text-neutral-300 mt-1">
+                              {isEN
+                                ? "Get personalized hydration tracking and nutrition insights with the Nutritionist plan."
+                                : "Pantau target 2.500ml harian dan riwayat minum lengkap dengan paket Nutritionist."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenUpgradeModal("nutrition"); }}
+                            className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-black font-black text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+                          >
+                            <Sparkles size={14} />
+                            <span>{isEN ? "Upgrade Plan" : "Upgrade Plan"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return <div key="hydration">{hydrationContent}</div>;
               }
 
               return null;
@@ -3582,10 +3944,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {/* TAB 2: WORKOUTS (JADWAL & SESI LATIHAN) */}
         {/* ========================================================================= */}
-        {activeTab === "workouts" && (
-          <div className="space-y-5">
-            {/* Top Navigation Back to Home Bar */}
-            <div className="flex items-center justify-between">
+        {activeTab === "workouts" && (() => {
+          const workoutTabContent = (
+            <div className="space-y-5">
+              {/* Top Navigation Back to Home Bar */}
+              <div className="flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setActiveTab("home")}
@@ -3777,7 +4140,68 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
             )}
           </div>
-        )}
+        );
+
+        if (!hasWorkoutAccess) {
+          return (
+            <div className="space-y-5">
+              {/* Top Navigation Back to Home Bar */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("home")}
+                  className="px-3.5 py-2 rounded-xl bg-[#18202E] hover:bg-[#202b3d] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+                >
+                  <ArrowLeft size={16} className="text-[#D4FF00]" />
+                  <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
+                </button>
+              </div>
+
+              {/* Locked Full View with Live Preview */}
+              <div className="relative overflow-hidden rounded-3xl min-h-[550px] group">
+                <div className="opacity-35 filter blur-[0.5px] pointer-events-none select-none transition-all">
+                  {workoutTabContent}
+                </div>
+                <div 
+                  onClick={() => handleOpenUpgradeModal("workout")}
+                  className="absolute inset-0 z-20 flex items-center justify-center p-6 bg-radial from-neutral-950/70 via-neutral-950/85 to-[#0b0e14]/95 backdrop-blur-[3px] border border-[#D4FF00]/25 rounded-3xl cursor-pointer hover:border-[#D4FF00]/45 transition-all"
+                >
+                  <div className="max-w-md w-full text-center space-y-4 p-6 sm:p-8 rounded-3xl bg-[#121722]/95 border border-[#D4FF00]/30 shadow-2xl backdrop-blur-xl">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-lg shadow-[#D4FF00]/10">
+                      <Lock size={26} strokeWidth={2.5} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                        🔒 {isEN ? "Plan Locked • Workout Coach" : "Fitur Terkunci • Paket Workout Coach"}
+                      </span>
+                      <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                        {isEN ? "Unlock Full Workout Coach" : "Buka Akses Penuh AI Workout Coach"}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-neutral-300 font-medium leading-relaxed">
+                        {isEN
+                          ? "Get personalized workout plans, progress tracking, and coaching with the Workout Coach plan."
+                          : "Dapatkan program latihan terstruktur harian, per-set workout tracker tersinkronisasi WhatsApp, GIF guide alat gym, dan coaching interaktif dengan paket Workout Coach."}
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleOpenUpgradeModal("workout"); }}
+                        className="w-full px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4FF00] to-lime-400 hover:from-[#c2ea00] hover:to-lime-300 text-black font-black text-xs sm:text-sm transition-all shadow-lg shadow-[#D4FF00]/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <Sparkles size={16} />
+                        <span>{isEN ? "Upgrade to Workout Plan" : "Upgrade Plan"}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return workoutTabContent;
+      })()}
 
         {/* ========================================================================= */}
         {/* TAB 3: PROGRESS (PROYEKSI & HISTORI ANALITIK LENGKAP) */}
@@ -7432,6 +7856,192 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-black text-xs transition-all cursor-pointer shadow-md"
                 >
                   {isEN ? "Delete Meal" : "Hapus Makanan"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: UPGRADE PLAN MODAL (Plan-Based Feature Locking) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showUpgradePlanModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111620] border border-neutral-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white my-auto max-h-[92vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-neutral-800 pb-3 gap-2">
+                <div className="flex items-center gap-3">
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg border ${
+                    upgradeTargetFeature === "nutrition"
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                      : "bg-[#D4FF00]/15 border-[#D4FF00]/30 text-[#D4FF00]"
+                  }`}>
+                    {upgradeTargetFeature === "nutrition" ? "🥗" : "🏋️"}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                      {isEN ? "GymBuddy Upgrade" : "Tingkatkan Akses GymBuddy"}
+                    </span>
+                    <h3 className="font-['Archivo_Black'] text-lg sm:text-xl text-white">
+                      {upgradeTargetFeature === "nutrition"
+                        ? (isEN ? "Unlock AI Nutritionist Plan" : "Buka Akses Paket Nutritionist")
+                        : (isEN ? "Unlock AI Workout Coach Plan" : "Buka Akses Paket Workout Coach")}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUpgradePlanModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Feature Switcher Selector inside modal */}
+              <div className="grid grid-cols-2 gap-2 bg-[#0E131F] p-1 rounded-2xl border border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setUpgradeTargetFeature("nutrition")}
+                  className={`py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    upgradeTargetFeature === "nutrition"
+                      ? "bg-emerald-500 text-black shadow-xs font-black"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <span>🥗 Nutritionist</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpgradeTargetFeature("workout")}
+                  className={`py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    upgradeTargetFeature === "workout"
+                      ? "bg-[#D4FF00] text-black shadow-xs font-black"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <span>🏋️ Workout Coach</span>
+                </button>
+              </div>
+
+              {/* Plan Details & Benefits */}
+              {upgradeTargetFeature === "nutrition" ? (
+                <div className="space-y-4">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                      {isEN ? "Personalized Nutrition" : "Pola Makan & Nutrisi Presisi"}
+                    </span>
+                    <h4 className="text-sm font-black text-white">
+                      {isEN ? "AI Nutritionist & Real-Time Food Tracker" : "AI Nutritionist & Jurnal Makanan Real-Time"}
+                    </h4>
+                    <p className="text-xs text-neutral-300">
+                      {isEN
+                        ? "Track macros, log meals instantly via WhatsApp photo/text, and get personalized calorie advice."
+                        : "Hitung otomatis kalori & makro harian dengan foto atau chat WhatsApp, plus konsultasi pola makan terpandu."}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                      {isEN ? "Included Features:" : "Fitur yang Didapatkan:"}
+                    </span>
+                    {[
+                      { icon: "📸", title: isEN ? "Vision AI Photo Food Scanning" : "Scan Foto Makanan & Estimasi Makro Instan", desc: isEN ? "Recognizes Indonesian and global meals in <1.5s." : "Mengenali nasi padang, jajanan, minuman, & menu diet." },
+                      { icon: "💬", title: isEN ? "WhatsApp Meal Logging" : "Catat Makanan via WhatsApp Tanpa Buka Web", desc: isEN ? "Log meals naturally via chat or photo on WhatsApp." : "Kirim teks atau foto makanan langsung ke WhatsApp bot." },
+                      { icon: "📊", title: isEN ? "Dynamic Macronutrient Targets" : "Target Kalori, Protein, Karbo, Lemak & Natrium", desc: isEN ? "Custom formula tailored to your body and goal." : "Sistem auto-kalkulasi defisit/surplus kalori presisi." },
+                      { icon: "💧", title: isEN ? "Smart 2.5L Hydration Tracking" : "Pelacak Air & Hidrasi Cerdas 2.500ml", desc: isEN ? "Interactive glasses, water log, and drink presets." : "Visual 8 gelas interaktif dan auto-kalkulasi kopi & teh." }
+                    ].map((feat, idx) => (
+                      <div key={idx} className="p-3 bg-[#161C28] border border-white/[0.06] rounded-2xl flex items-start gap-3">
+                        <span className="text-xl shrink-0">{feat.icon}</span>
+                        <div>
+                          <h5 className="text-xs font-black text-white">{feat.title}</h5>
+                          <p className="text-[11px] text-neutral-400 font-medium mt-0.5">{feat.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-[#D4FF00]/10 border border-[#D4FF00]/20 rounded-2xl p-4 space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#D4FF00]">
+                      {isEN ? "Structured Strength Training" : "Program Latihan Gym Terstruktur"}
+                    </span>
+                    <h4 className="text-sm font-black text-white">
+                      {isEN ? "AI Workout Coach & Interactive Exercise Guide" : "AI Workout Coach & Panduan Alat Komprehensif"}
+                    </h4>
+                    <p className="text-xs text-neutral-300">
+                      {isEN
+                        ? "Get personalized workout splits, per-set checklist tracking with WhatsApp sync, and 100+ GIF guides."
+                        : "Jadwal harian sesuai target bentuk otot/fat loss, per-set checklist sinkron WhatsApp, dan panduan alat GIF."}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                      {isEN ? "Included Features:" : "Fitur yang Didapatkan:"}
+                    </span>
+                    {[
+                      { icon: "📅", title: isEN ? "Daily Tailored Gym Routines" : "Menu Latihan Harian Personal", desc: isEN ? "Push/Pull/Legs, Upper/Lower, or Full Body split." : "Disusun sesuai level kebugaran dan target tubuhmu." },
+                      { icon: "✅", title: isEN ? "Per-Set Checklist & WhatsApp Sync" : "Checklist Set Latihan Tersinkronisasi Otomatis", desc: isEN ? "Log done sets via WhatsApp chat or directly on dashboard." : "Set checklist terupdate otomatis saat chat 'done set 1'." },
+                      { icon: "🎬", title: isEN ? "100+ Exercise GIF & Equipment Guides" : "Kamus Alat Gym & Video/GIF Visual Gerakan", desc: isEN ? "Proper biomechanics form and coach cues." : "Visualisasi gerakan 2 fase, cue pelatih Max & Mia." },
+                      { icon: "🏊‍♂️", title: isEN ? "Spontaneous Additional Activities" : "Tracking Aktivitas Olahraga Bebas", desc: isEN ? "Log swimming, running, badminton, walking & yoga anytime." : "Catat renang, lari, badminton, sepedaan di luar jadwal." }
+                    ].map((feat, idx) => (
+                      <div key={idx} className="p-3 bg-[#161C28] border border-white/[0.06] rounded-2xl flex items-start gap-3">
+                        <span className="text-xl shrink-0">{feat.icon}</span>
+                        <div>
+                          <h5 className="text-xs font-black text-white">{feat.title}</h5>
+                          <p className="text-[11px] text-neutral-400 font-medium mt-0.5">{feat.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Activate demo user / plan switch for testing
+                    if (upgradeTargetFeature === "nutrition") {
+                      handleSelectDemoUser("alex");
+                    } else {
+                      handleSelectDemoUser("mia");
+                    }
+                    setShowUpgradePlanModal(false);
+                  }}
+                  className={`w-full py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
+                    upgradeTargetFeature === "nutrition"
+                      ? "bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 text-black shadow-emerald-500/25"
+                      : "bg-gradient-to-r from-[#D4FF00] to-lime-400 hover:from-[#c2ea00] text-black shadow-[#D4FF00]/25"
+                  }`}
+                >
+                  <Sparkles size={16} />
+                  <span>
+                    {upgradeTargetFeature === "nutrition"
+                      ? (isEN ? "Switch to Nutritionist Plan (Demo)" : "Aktifkan Paket Nutritionist (Demo)")
+                      : (isEN ? "Switch to Workout Coach Plan (Demo)" : "Aktifkan Paket Workout Coach (Demo)")}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSelectDemoUser("both");
+                    setShowUpgradePlanModal(false);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[#161C28] hover:bg-[#202838] border border-white/10 text-neutral-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>🌟 {isEN ? "Unlock All-Access (Both Plans)" : "Buka Akses Penuh (Kedua Paket)"}</span>
                 </button>
               </div>
             </motion.div>

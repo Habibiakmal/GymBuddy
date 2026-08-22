@@ -45857,6 +45857,68 @@ async function initDb() {
   } catch (err) {
     console.warn("[Firestore] Boot sync warning:", err);
   }
+  if (!dbData.users["08111111111"]) {
+    const alexUser = {
+      userId: "usr_alex_demo",
+      name: "Alex",
+      phone: "08111111111",
+      gender: "Pria",
+      age: 26,
+      weight: 75,
+      startWeight: 75,
+      targetWeight: 70,
+      height: 175,
+      goal: "lose",
+      goalTitle: "Menurunkan Berat Badan",
+      persona: "max",
+      activeService: "nutritionist",
+      selectedFeature: "nutrition",
+      plan: "nutrition",
+      activityLevel: "moderate",
+      targetCalories: 2100,
+      dailyTargetCalories: 2100,
+      proteinGrams: 155,
+      dailyTargetProtein: 155,
+      carbGrams: 210,
+      dailyTargetCarbs: 210,
+      fatGrams: 65,
+      dailyTargetFat: 65,
+      fiberGrams: 30
+    };
+    dbData.users["08111111111"] = alexUser;
+    dbData.users["62811111111"] = alexUser;
+  }
+  if (!dbData.users["08222222222"]) {
+    const miaUser = {
+      userId: "usr_mia_demo",
+      name: "Mia",
+      phone: "08222222222",
+      gender: "Wanita",
+      age: 24,
+      weight: 58,
+      startWeight: 58,
+      targetWeight: 54,
+      height: 165,
+      goal: "gain",
+      goalTitle: "Membentuk Otot & Tone",
+      persona: "mia",
+      activeService: "workout",
+      selectedFeature: "workout",
+      plan: "workout",
+      activityLevel: "moderate",
+      targetCalories: 1850,
+      dailyTargetCalories: 1850,
+      proteinGrams: 120,
+      dailyTargetProtein: 120,
+      carbGrams: 200,
+      dailyTargetCarbs: 200,
+      fatGrams: 55,
+      dailyTargetFat: 55,
+      fiberGrams: 28
+    };
+    dbData.users["08222222222"] = miaUser;
+    dbData.users["62822222222"] = miaUser;
+  }
 }
 function saveDb() {
   try {
