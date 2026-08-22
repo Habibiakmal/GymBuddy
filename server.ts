@@ -1867,51 +1867,93 @@ function makeProgressBar(current: number, target: number, length: number = 10): 
   return `[${bar}] ${rawPercent}% · ${statusText}`;
 }
 
-function parseDateFromQuery(userText: string): { dateStr: string; label: string } {
-  const lower = userText.toLowerCase();
-  const today = new Date();
-  
-  const formatDate = (d: Date) => getLocalDateStr(d);
-  const formatLabel = (d: Date, prefix: string = "") => {
-    const dayStr = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-    return prefix ? `${prefix} (${dayStr})` : dayStr;
+function makeSodiumProgressBar(current: number, limit: number = 2000, length: number = 10): string {
+  if (!limit || limit <= 0) limit = 2000;
+  const rawPercent = Math.round((current / limit) * 100);
+  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
+  const filledCount = Math.min(length, Math.max(0, Math.round((cappedPercent / 100) * length)));
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
+
+  let statusText = "";
+  if (rawPercent > 100) {
+    statusText = "🔴 Melebihi Batas";
+  } else if (rawPercent === 100) {
+    statusText = "🟡 Di Batas Maksimal";
+  } else if (rawPercent >= 80) {
+    statusText = "🟡 Mendekati Batas";
+  } else {
+    statusText = "🟢 Dalam Batas";
+  }
+
+  return `[${bar}] ${rawPercent}% · ${statusText}`;
+}
+
+function parseDateFromQuery(userText: string): { dateStr: string; label: string; isYesterday: boolean; isToday: boolean; isSpecificDate: boolean } {
+  const lower = userText.toLowerCase().trim();
+  const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const getWibDate = (d: Date) => {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   };
 
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
   if (lower.includes("kemarin lusa") || lower.includes("2 hari lalu")) {
-    const d = new Date(today.getTime() - 86400000 * 2);
-    return { dateStr: formatDate(d), label: formatLabel(d, "2 Hari Lalu") };
+    const d = new Date(wibNow.getTime() - 86400000 * 2);
+    const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    return { dateStr: getWibDate(d), label, isYesterday: false, isToday: false, isSpecificDate: true };
   }
 
   if (lower.includes("kemarin") || lower.includes("yesterday")) {
-    const d = new Date(today.getTime() - 86400000);
-    return { dateStr: formatDate(d), label: formatLabel(d, "Kemarin") };
+    const d = new Date(wibNow.getTime() - 86400000);
+    const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    return { dateStr: getWibDate(d), label, isYesterday: true, isToday: false, isSpecificDate: true };
   }
 
-  const dateMatch = userText.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2})\s*(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des|januari|februari|maret|april|juni|juli|agustus|september|oktober|november|desember)/i);
-  if (dateMatch) {
-    if (dateMatch[1]) {
-      const parsedDate = new Date(dateMatch[1]);
-      if (!isNaN(parsedDate.getTime())) {
-        return { dateStr: dateMatch[1], label: formatLabel(parsedDate) };
-      }
-    } else if (dateMatch[2] && dateMatch[3]) {
-      const dayNum = parseInt(dateMatch[2]);
-      const monthStr = dateMatch[3].toLowerCase();
-      const monthMap: Record<string, number> = {
-        jan: 0, januari: 0, feb: 1, februari: 1, mar: 2, maret: 2, apr: 3, april: 3,
-        mei: 4, jun: 5, juni: 5, jul: 6, juli: 6, agu: 7, agustus: 7, sep: 8, september: 8,
-        okt: 9, oktober: 9, nov: 10, november: 10, des: 11, desember: 11
-      };
-      const monthIdx = monthMap[monthStr];
-      if (monthIdx !== undefined) {
-        let year = today.getFullYear();
-        const d = new Date(year, monthIdx, dayNum);
-        return { dateStr: formatDate(d), label: formatLabel(d) };
-      }
+  const textDateMatch = lower.match(/(?:tanggal|tgl|di\s*)?\s*(\d{1,2})\s*(?:de\s*)?(januari|jan|februari|feb|maret|mar|april|apr|mei|may|juni|jun|juli|jul|agustus|agust|agu|august|aug|september|sept|sep|oktober|okt|october|oct|november|nov|desember|des|december|dec)(?:\s*(\d{4}))?/i);
+  
+  if (textDateMatch) {
+    const dayNum = parseInt(textDateMatch[1], 10);
+    const monthStr = textDateMatch[2].toLowerCase();
+    const explicitYear = textDateMatch[3] ? parseInt(textDateMatch[3], 10) : wibNow.getUTCFullYear();
+
+    const monthMap: Record<string, number> = {
+      jan: 0, januari: 0,
+      feb: 1, februari: 1,
+      mar: 2, maret: 2,
+      apr: 3, april: 3,
+      mei: 4, may: 4,
+      jun: 5, juni: 5,
+      jul: 6, juli: 6,
+      agu: 7, agust: 7, agustus: 7, aug: 7, august: 7,
+      sep: 8, sept: 8, september: 8,
+      okt: 9, oktober: 9, oct: 9, october: 9,
+      nov: 10, november: 10,
+      des: 11, desember: 11, dec: 11, december: 11
+    };
+
+    const mIdx = monthMap[monthStr];
+    if (mIdx !== undefined && dayNum >= 1 && dayNum <= 31) {
+      const dStr = `${explicitYear}-${String(mIdx + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+      const label = `${dayNum} ${monthNames[mIdx]} ${explicitYear}`;
+      return { dateStr: dStr, label, isYesterday: false, isToday: dStr === getWibDate(wibNow), isSpecificDate: true };
     }
   }
 
-  return { dateStr: formatDate(today), label: formatLabel(today, "Hari Ini") };
+  const isoMatch = lower.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const label = `${day} ${monthNames[m]} ${y}`;
+    return { dateStr: isoMatch[0], label, isYesterday: false, isToday: isoMatch[0] === getWibDate(wibNow), isSpecificDate: true };
+  }
+
+  const todayLabel = `${wibNow.getUTCDate()} ${monthNames[wibNow.getUTCMonth()]} ${wibNow.getUTCFullYear()}`;
+  return { dateStr: getWibDate(wibNow), label: todayLabel, isYesterday: false, isToday: true, isSpecificDate: false };
 }
 
 function formatNutritionCard(
@@ -2010,7 +2052,10 @@ function formatNutritionCard(
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
 
   const totalTodaySodium = (dailyTotals as any).sodium || 0;
-  const sodBar = makeProgressBar(totalTodaySodium, 2000);
+  const sodBar = makeSodiumProgressBar(totalTodaySodium, 2000);
+  const sodiumTip = totalTodaySodium > 2000
+    ? `\n\n💡 *Catatan Natrium*: Asupan natrium kamu hari ini (${totalTodaySodium.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg. Untuk makanan berikutnya, prioritaskan opsi lebih rendah sodium dan cukupi minum air putih ya.`
+    : "";
 
   return `🍽️ *${cleanFoodName.toUpperCase()}*
 
@@ -2052,8 +2097,8 @@ ${carbBar}
 🥓 *Lemak*: ${totalTodayFat}/${targetFat}g
 ${fatBar}
 
-🧂 *Natrium*: ${totalTodaySodium}/2000 mg
-${sodBar}
+🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg
+${sodBar}${sodiumTip}
 
 ━━━━━━━━━━━━━━
 ⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
@@ -2181,25 +2226,96 @@ Yuk, kita mulai! Coba kirim ${firstItemPrompt} pertama kamu sekarang! ✨`
   }
 }
 
+function formatHistoricalFoodLog(
+  userData: ReturnType<typeof calculateUserData>,
+  dailyTotals: ReturnType<typeof getDailyTotals>,
+  dateInfo: ReturnType<typeof parseDateFromQuery>
+): string {
+  const dateLabel = dateInfo.label;
+
+  if (!dailyTotals || dailyTotals.logs.length === 0) {
+    if (dateInfo.isYesterday) {
+      return (
+        `📅 *LOG MAKANAN — KEMARIN*\n` +
+        `${dateLabel}\n\n` +
+        `Belum ada makanan atau minuman yang tercatat kemarin.\n\n` +
+        `Kamu bisa kirim menu makanmu kapan saja dan aku siap bantu catat. 😊`
+      );
+    }
+    return (
+      `📅 *LOG MAKANAN — ${dateLabel.toUpperCase()}*\n\n` +
+      `Belum ada makanan atau minuman yang tercatat untuk tanggal ini.\n\n` +
+      `Kalau kamu baru saja makan, kamu bisa langsung kirim menu atau fotonya dan aku bantu catat. 😊`
+    );
+  }
+
+  // Group by mealType
+  const mealTypeOrder = ["breakfast", "lunch", "dinner", "snack"];
+  const mealTypeLabels: Record<string, string> = {
+    breakfast: "🍳 *Breakfast*",
+    lunch: "🍛 *Lunch*",
+    dinner: "🌙 *Dinner*",
+    snack: "🥪 *Snack*"
+  };
+
+  const sections: string[] = [];
+  const groups: Record<string, any[]> = {};
+  dailyTotals.logs.forEach(log => {
+    const type = log.mealType || "lunch";
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(log);
+  });
+
+  mealTypeOrder.forEach(type => {
+    if (groups[type] && groups[type].length > 0) {
+      const header = mealTypeLabels[type] || `🍽️ *${type}*`;
+      const items = groups[type].map(m => `• ${m.foodName}`).join("\n");
+      const mealCals = groups[type].reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
+      sections.push(`${header}\n${items}\n🔥 ${mealCals} kcal`);
+    }
+  });
+
+  // Handle any other mealType
+  Object.keys(groups).forEach(type => {
+    if (!mealTypeOrder.includes(type) && groups[type].length > 0) {
+      const items = groups[type].map(m => `• ${m.foodName}`).join("\n");
+      const mealCals = groups[type].reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
+      sections.push(`🍽️ *${type.toUpperCase()}*\n${items}\n🔥 ${mealCals} kcal`);
+    }
+  });
+
+  const sodiumVal = (dailyTotals as any).sodium || 0;
+
+  return (
+    `🍽️ *LOG MAKANAN*\n` +
+    `📅 ${dateLabel}\n\n` +
+    sections.join("\n\n") + "\n\n" +
+    `━━━━━━━━━━━━━━\n` +
+    `📊 *TOTAL HARI ITU*\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `🔥 Kalori: ${dailyTotals.calories} kcal\n` +
+    `🍖 Protein: ${dailyTotals.protein} g\n` +
+    `🍚 Karbo: ${dailyTotals.carbs} g\n` +
+    `🥓 Lemak: ${dailyTotals.fat} g\n` +
+    `🧂 Natrium: ${sodiumVal} mg`
+  );
+}
+
 function generateDailySummaryCard(
   userData: ReturnType<typeof calculateUserData>,
   dailyTotals: ReturnType<typeof getDailyTotals>,
   dateLabel: string = "Hari Ini"
 ): string {
-  const calPercent = userData.targetCalories > 0 ? Math.min(100, Math.round((dailyTotals.calories / userData.targetCalories) * 100)) : 0;
-  const protPercent = userData.proteinGrams > 0 ? Math.min(100, Math.round((dailyTotals.protein / userData.proteinGrams) * 100)) : 0;
-  const carbPercent = userData.carbGrams > 0 ? Math.min(100, Math.round((dailyTotals.carbs / userData.carbGrams) * 100)) : 0;
-  const fatPercent = userData.fatGrams > 0 ? Math.min(100, Math.round((dailyTotals.fat / userData.fatGrams) * 100)) : 0;
-  const fiberPercent = userData.fiberGrams > 0 ? Math.min(100, Math.round((dailyTotals.fiber / userData.fiberGrams) * 100)) : 0;
-  const sodiumVal = (dailyTotals as any).sodium || 0;
-  const sodPercent = Math.min(100, Math.round((sodiumVal / 2000) * 100));
-
   const calBar = makeProgressBar(dailyTotals.calories, userData.targetCalories);
   const protBar = makeProgressBar(dailyTotals.protein, userData.proteinGrams);
   const carbBar = makeProgressBar(dailyTotals.carbs, userData.carbGrams);
   const fatBar = makeProgressBar(dailyTotals.fat, userData.fatGrams);
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
-  const sodBar = makeProgressBar(sodiumVal, 2000);
+  const sodiumVal = (dailyTotals as any).sodium || 0;
+  const sodBar = makeSodiumProgressBar(sodiumVal, 2000);
+  const sodiumTip = sodiumVal > 2000
+    ? `\n\n💡 *Catatan Natrium*: Asupan natrium kamu pada rekap ini (${sodiumVal.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg.`
+    : "";
 
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
@@ -2233,8 +2349,8 @@ ${fatBar}
 🥬 *Serat*: ${dailyTotals.fiber}/${userData.fiberGrams}g
 ${fiberBar}
 
-🧂 *Natrium*: ${sodiumVal}/2000 mg
-${sodBar}
+🧂 *Natrium*: ${sodiumVal.toLocaleString("id-ID")}/2,000 mg
+${sodBar}${sodiumTip}
 
 🍽️ *Makanan Terdaftar*:
 ${mealListStr}
@@ -4092,15 +4208,21 @@ const mediaUrl = mediaRes.data.url;
             lowerText.includes("olahraga")
           );
 
-          const isCheckSummaryMessage = lowerText.includes("cek kalori") || 
+          const parsedQueryDate = parseDateFromQuery(userText);
+          const isCheckSummaryMessage = (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
+                                       lowerText.includes("cek kalori") || 
                                        lowerText.includes("sisa kalori") || 
                                        lowerText.includes("rekap kalori") ||
+                                       lowerText.includes("rekap nutrisi") ||
                                        lowerText.includes("rekap") ||
                                        lowerText.includes("kemarin") ||
+                                       lowerText.includes("yesterday") ||
                                        lowerText.includes("makan apa") ||
                                        lowerText.includes("makanan hari ini") ||
-                                       lowerText.includes("log makanan hari ini") ||
-                                       lowerText.includes("food log hari ini") ||
+                                       lowerText.includes("log makanan") ||
+                                       lowerText.includes("log makan") ||
+                                       lowerText.includes("food log") ||
+                                       lowerText.includes("riwayat makan") ||
                                        lowerText.includes("total kalori") ||
                                        lowerText.includes("apa yang sudah aku makan") ||
                                        lowerText.includes("makanan saya hari ini");
@@ -4194,7 +4316,11 @@ const mediaUrl = mediaRes.data.url;
           } else if (isCheckSummaryMessage) {
             const parsedDate = parseDateFromQuery(userText);
             const totals = getDailyTotals(from, parsedDate.dateStr);
-            responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+            if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
+              responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
+            } else {
+              responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+            }
           } else if (getAi()) {
             const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
             
@@ -4546,15 +4672,21 @@ function escapeXml(unsafe: string): string {
         lowerText.includes("olahraga")
       );
 
-      const isCheckSummaryMessage = lowerText.includes("cek kalori") || 
+      const parsedQueryDate = parseDateFromQuery(userText);
+      const isCheckSummaryMessage = (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
+                                   lowerText.includes("cek kalori") || 
                                    lowerText.includes("sisa kalori") || 
                                    lowerText.includes("rekap kalori") ||
+                                   lowerText.includes("rekap nutrisi") ||
                                    lowerText.includes("rekap") ||
                                    lowerText.includes("kemarin") ||
+                                   lowerText.includes("yesterday") ||
                                    lowerText.includes("makan apa") ||
                                    lowerText.includes("makanan hari ini") ||
-                                   lowerText.includes("log makanan hari ini") ||
-                                   lowerText.includes("food log hari ini") ||
+                                   lowerText.includes("log makanan") ||
+                                   lowerText.includes("log makan") ||
+                                   lowerText.includes("food log") ||
+                                   lowerText.includes("riwayat makan") ||
                                    lowerText.includes("total kalori") ||
                                    lowerText.includes("apa yang sudah aku makan") ||
                                    lowerText.includes("makanan saya hari ini");
@@ -4725,7 +4857,11 @@ function escapeXml(unsafe: string): string {
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
         const totals = getDailyTotals(normFrom, parsedDate.dateStr);
-        responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+        if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
+          responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
+        } else {
+          responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+        }
       } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
         responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData)!;
       } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
