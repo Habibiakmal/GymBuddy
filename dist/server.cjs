@@ -46622,10 +46622,12 @@ function matchPureWaterLog(text) {
   return text.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
 }
 function matchPureWeightLog(text) {
-  if (hasFoodContext(text) && !/^(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang)\b/i.test(text.trim())) {
+  const lower = text.toLowerCase().trim();
+  if (lower.match(/(?:makan|sarapan|lunch|dinner|minum|porsi|kalori|kcal|resep)/i)) {
     return null;
   }
-  return text.match(/(?:update\s+bb|lapor\s+bb|berat\s+badan|bb\s+sekarang|bb)\s*:?\s*(\d+(?:[\.,]\d+)?)/i);
+  const match = lower.match(/(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|tadi\s*nimbang|nimbang|weight)\s*(?:hari\s*ini|saat\s*ini|sekarang|terbaru|terkini|adalah|di|:|udah|sudah)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)?/i) || lower.match(/(?:sekarang|hari\s*ini|saat\s*ini)\s*(?:berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?)\s*(?:adalah|di|:|udah|sudah)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)?/i) || lower.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)?\s*(?:berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?)/i);
+  return match;
 }
 function isPlainWaterName(name) {
   if (!name) return false;
