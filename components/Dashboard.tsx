@@ -2611,7 +2611,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0D14] text-white font-['Inter'] p-0 sm:p-4 lg:p-6 flex flex-col lg:flex-row gap-5 selection:bg-[#D4FF00] selection:text-black">
+    <div className="min-h-screen bg-[#F8FAFC] text-white font-['Inter'] p-0 sm:p-4 lg:p-6 flex flex-col lg:flex-row gap-5 selection:bg-[#D4FF00] selection:text-black">
       
       {/* Toast Notification */}
       <AnimatePresence>
