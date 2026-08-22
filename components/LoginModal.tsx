@@ -87,6 +87,65 @@ export default function LoginModal({
     let foundProfile: any = null;
     let foundProgress: any = null;
 
+    // Injected test accounts (Alex & Mia)
+    if (normPhone === "08111111111" || cleanedPhone === "08111111111" || cleanedPhone === "62811111111") {
+      foundProfile = {
+        userId: "usr_alex_demo",
+        name: "Alex",
+        phone: "08111111111",
+        gender: "pria",
+        age: 26,
+        weight: 75,
+        startWeight: 75,
+        targetWeight: 70,
+        height: 175,
+        goal: "lose",
+        goalTitle: "Menurunkan Berat Badan",
+        persona: "max",
+        activeService: "nutritionist",
+        selectedFeature: "nutrition",
+        plan: "nutrition",
+        activityLevel: "moderate",
+        targetCalories: 2100,
+        dailyTargetCalories: 2100,
+        proteinGrams: 155,
+        dailyTargetProtein: 155,
+        carbGrams: 210,
+        dailyTargetCarbs: 210,
+        fatGrams: 65,
+        dailyTargetFat: 65,
+        fiberGrams: 30
+      };
+    } else if (normPhone === "08222222222" || cleanedPhone === "08222222222" || cleanedPhone === "62822222222") {
+      foundProfile = {
+        userId: "usr_mia_demo",
+        name: "Mia",
+        phone: "08222222222",
+        gender: "wanita",
+        age: 24,
+        weight: 58,
+        startWeight: 58,
+        targetWeight: 54,
+        height: 165,
+        goal: "gain",
+        goalTitle: "Membentuk Otot & Tone",
+        persona: "mia",
+        activeService: "workout",
+        selectedFeature: "workout",
+        plan: "workout",
+        activityLevel: "moderate",
+        targetCalories: 1850,
+        dailyTargetCalories: 1850,
+        proteinGrams: 120,
+        dailyTargetProtein: 120,
+        carbGrams: 200,
+        dailyTargetCarbs: 200,
+        fatGrams: 55,
+        dailyTargetFat: 55,
+        fiberGrams: 28
+      };
+    }
+
     // Helper to fetch profile from an API base trying all phone variations
     const tryFetchProfile = async (baseUrl: string) => {
       for (const p of phoneVariations) {
@@ -109,7 +168,9 @@ export default function LoginModal({
     };
 
     // 1. Try local relative endpoint
-    foundProfile = await tryFetchProfile("");
+    if (!foundProfile) {
+      foundProfile = await tryFetchProfile("");
+    }
 
     // 2. Try configured environment API or external fallback URL
     if (!foundProfile) {

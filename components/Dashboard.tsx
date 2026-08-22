@@ -836,16 +836,17 @@ export default function Dashboard({
   const activeUser = liveUser || safeUser;
 
   // ── PLAN ENTITLEMENTS & ACCESS CONTROL (Nutrition Plan vs Workout Coach Plan) ──
-  const userActiveService = (activeUser?.activeService || activeUser?.selectedFeature || activeUser?.plan || "").toLowerCase();
+  const userPhone = String(activeUser?.phone || "").replace(/\D/g, "");
+  const userActiveService = String(activeUser?.activeService || activeUser?.selectedFeature || activeUser?.plan || "both").toLowerCase();
   
-  const isNutritionPlan = userActiveService === "nutrition" || 
-                          userActiveService === "nutritionist" || 
-                          activeUser?.name === "Alex";
+  // Single-service checks: Only trigger if explicitly restricted or injected test user
+  const isAlexTestUser = userPhone === "08111111111" || userPhone === "62811111111" || (activeUser?.name === "Alex" && activeUser?.userId === "usr_alex_demo");
+  const isMiaTestUser = userPhone === "08222222222" || userPhone === "62822222222" || (activeUser?.name === "Mia" && activeUser?.userId === "usr_mia_demo");
 
-  const isWorkoutPlan = userActiveService === "workout" || 
-                        userActiveService === "coach" || 
-                        activeUser?.name === "Mia";
+  const isNutritionPlan = isAlexTestUser || (!isMiaTestUser && (userActiveService === "nutrition" || userActiveService === "nutritionist"));
+  const isWorkoutPlan = isMiaTestUser || (!isAlexTestUser && (userActiveService === "workout" || userActiveService === "coach"));
 
+  // Production default: Full access unless explicitly restricted to single plan
   const isFullAccess = !isNutritionPlan && !isWorkoutPlan;
 
   const hasNutritionAccess = isNutritionPlan || isFullAccess;
@@ -2768,80 +2769,6 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {activeTab === "home" && (
           <div className="space-y-5">
-            {/* PLAN ACCESS & DEMO SWITCHER BAR */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#121722]/90 border border-white/[0.08] p-3 sm:p-3.5 rounded-2xl backdrop-blur-md">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#D4FF00]/15 text-[#D4FF00] flex items-center justify-center font-black text-sm shrink-0 border border-[#D4FF00]/20">
-                  <Sparkles size={16} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-black text-white">{isEN ? "Active Plan:" : "Paket Aktif:"}</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                      isNutritionPlan 
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
-                        : isWorkoutPlan 
-                        ? "bg-[#D4FF00]/20 text-[#D4FF00] border-[#D4FF00]/30" 
-                        : "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                    }`}>
-                      {isNutritionPlan ? "🥗 Nutritionist Plan" : isWorkoutPlan ? "🏋️ Workout Coach Plan" : "🌟 Full Access"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-400 font-medium">
-                    {isNutritionPlan 
-                      ? (isEN ? "Nutritionist: Unlocked • Workout Coach: Locked" : "Nutritionist: Akses Penuh • Workout Coach: Terkunci (Feature Preview)")
-                      : isWorkoutPlan 
-                      ? (isEN ? "Workout Coach: Unlocked • Nutritionist: Locked" : "Workout Coach: Akses Penuh • Nutritionist: Terkunci (Feature Preview)")
-                      : (isEN ? "All features unlocked" : "Semua fitur aktif")}
-                  </p>
-                </div>
-              </div>
-
-              {/* Demo Switcher Buttons */}
-              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.04]">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mr-1 hidden sm:inline">{isEN ? "Demo User:" : "User Demo:"}</span>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDemoUser("alex")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border shrink-0 ${
-                    isNutritionPlan
-                      ? "bg-emerald-500 text-black border-emerald-500 shadow-xs"
-                      : "bg-[#18202E] text-neutral-300 border-white/[0.08] hover:bg-neutral-800"
-                  }`}
-                  title="Alex: Nutritionist Plan Active, Workout Coach Locked"
-                >
-                  <span>🥗 Alex (Nutrition)</span>
-                  {isNutritionPlan && <Check size={12} strokeWidth={3} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDemoUser("mia")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border shrink-0 ${
-                    isWorkoutPlan
-                      ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-xs"
-                      : "bg-[#18202E] text-neutral-300 border-white/[0.08] hover:bg-neutral-800"
-                  }`}
-                  title="Mia: Workout Coach Plan Active, Nutritionist Locked"
-                >
-                  <span>🏋️ Mia (Workout)</span>
-                  {isWorkoutPlan && <Check size={12} strokeWidth={3} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDemoUser("both")}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border shrink-0 ${
-                    isFullAccess
-                      ? "bg-purple-500 text-white border-purple-500 shadow-xs font-black"
-                      : "bg-[#18202E] text-neutral-400 border-white/[0.08] hover:bg-neutral-800"
-                  }`}
-                  title="Full Access: Both Plans Unlocked"
-                >
-                  <span>🌟 Both</span>
-                  {isFullAccess && <Check size={12} strokeWidth={3} />}
-                </button>
-              </div>
-            </div>
-
             {/* STEP 1: TOP GREETING HEADER & DATE STRIP */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 bg-[#121722] border border-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs">
               <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">

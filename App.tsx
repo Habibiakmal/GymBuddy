@@ -101,6 +101,79 @@ export default function App() {
     } catch (e) {}
   }, [language]);
 
+  // Direct URL parameter login for testing (e.g. ?user=alex or ?user=mia)
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const testParam = (params.get("user") || params.get("demo") || params.get("test") || "").toLowerCase();
+      if (testParam === "alex") {
+        const alexProfile = {
+          userId: "usr_alex_demo",
+          name: "Alex",
+          phone: "08111111111",
+          gender: "pria",
+          age: 26,
+          weight: 75,
+          startWeight: 75,
+          targetWeight: 70,
+          height: 175,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          persona: "max",
+          activeService: "nutritionist",
+          selectedFeature: "nutrition",
+          plan: "nutrition",
+          activityLevel: "moderate",
+          targetCalories: 2100,
+          dailyTargetCalories: 2100,
+          proteinGrams: 155,
+          dailyTargetProtein: 155,
+          carbGrams: 210,
+          dailyTargetCarbs: 210,
+          fatGrams: 65,
+          dailyTargetFat: 65,
+          fiberGrams: 30
+        };
+        setCurrentUser(alexProfile);
+        setIsLoggedIn(true);
+        setViewMode("dashboard");
+        localStorage.setItem("gymbuddy_active_session", JSON.stringify(alexProfile));
+      } else if (testParam === "mia") {
+        const miaProfile = {
+          userId: "usr_mia_demo",
+          name: "Mia",
+          phone: "08222222222",
+          gender: "wanita",
+          age: 24,
+          weight: 58,
+          startWeight: 58,
+          targetWeight: 54,
+          height: 165,
+          goal: "gain",
+          goalTitle: "Membentuk Otot & Tone",
+          persona: "mia",
+          activeService: "workout",
+          selectedFeature: "workout",
+          plan: "workout",
+          activityLevel: "moderate",
+          targetCalories: 1850,
+          dailyTargetCalories: 1850,
+          proteinGrams: 120,
+          dailyTargetProtein: 120,
+          carbGrams: 200,
+          dailyTargetCarbs: 200,
+          fatGrams: 55,
+          dailyTargetFat: 55,
+          fiberGrams: 28
+        };
+        setCurrentUser(miaProfile);
+        setIsLoggedIn(true);
+        setViewMode("dashboard");
+        localStorage.setItem("gymbuddy_active_session", JSON.stringify(miaProfile));
+      }
+    } catch (e) {}
+  }, []);
+
   // Session verification: keep user logged in and sync profile in background
   React.useEffect(() => {
     const verifySession = async () => {
@@ -119,6 +192,11 @@ export default function App() {
           setCurrentUser(parsed);
           setIsLoggedIn(true);
           setViewMode("dashboard");
+
+          // Skip background deletion check for test accounts
+          if (parsed.phone === "08111111111" || parsed.phone === "08222222222" || parsed.userId === "usr_alex_demo" || parsed.userId === "usr_mia_demo") {
+            return;
+          }
 
           // Background sync with server database
           const norm = String(parsed.phone).replace(/\D/g, "").replace(/^62/, "0");
