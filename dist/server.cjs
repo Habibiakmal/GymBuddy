@@ -47319,6 +47319,12 @@ ${exercises}
 \u{1F4AC} *${coachName}*:
 "${comment}"`;
 }
+function formatRepsCompact(targetReps, targetSets) {
+  let clean2 = targetReps.trim();
+  clean2 = clean2.replace(/^[0-9]+\s*Set[s]?\s*x\s*/i, `${targetSets} \xD7 `);
+  clean2 = clean2.replace(/\bSecs\b/gi, "detik").replace(/\bDetik\b/gi, "detik").replace(/\bReps\b/gi, "reps").replace(/\bMins\b/gi, "menit").replace(/\bMenit\b/gi, "menit");
+  return clean2;
+}
 function generateWeeklyWorkoutSchedule(userData) {
   const goal = userData.goal || "healthy";
   const schedule = getDefaultWeeklySchedule(goal);
@@ -47326,30 +47332,31 @@ function generateWeeklyWorkoutSchedule(userData) {
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
   const todayDayName = dayNames[currentDayIdx];
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-  const scheduleLines = dayOrder.map((day) => {
+  const scheduleBlocks = dayOrder.map((day) => {
     const routine = schedule.find((s) => s.day.toLowerCase() === day.toLowerCase());
     const isToday = day.toLowerCase() === todayDayName.toLowerCase();
-    const isRest = !routine || routine.focus.toLowerCase().includes("rest") || routine.focus.toLowerCase().includes("istirahat") || routine.exercises.length === 0;
-    let line = `*${day}*
-`;
-    if (isRest) {
-      line += `Rest`;
-    } else {
-      line += `${routine.focus}`;
-    }
+    const isRest = !routine || routine.focus.toLowerCase().includes("rest") || routine.focus.toLowerCase().includes("istirahat") || (routine.exercises || []).length === 0;
+    let header = `*${day}*`;
     if (isToday) {
-      line += ` \u2190 *Hari ini*`;
+      header += ` \u2190 _Hari ini_`;
     }
-    return line;
+    if (isRest) {
+      return `${header}
+${routine?.focus || "Pemulihan Aktif & Hidrasi"}`;
+    }
+    const exLines = (routine.exercises || []).map((ex) => {
+      const repsFormatted = formatRepsCompact(ex.targetReps, ex.targetSets);
+      return `\u2022 ${ex.name} \u2014 ${repsFormatted}`;
+    }).join("\n");
+    return `${header}
+${routine.focus}
+${exLines}`;
   }).join("\n\n");
   return `\u{1F4C5} *JADWAL LATIHAN MINGGU INI*
-\u{1F3AF} Target: *${userData.goalTitle || "Kebugaran"}*
+-----------------------------
+${scheduleBlocks}
 
-${scheduleLines}
-
-\u{1F4A1} *Tips ${coachName}*:
-Ketik *"latihan hari ini"* untuk melihat rincian set & repetisi gerakan hari ini! \u{1F4AA}`;
+\u{1F4AC} _Ketik nama latihan dan jumlah set (misal: "aku sudah plank 2 set") untuk mencatat progress langsung ke Dashboard!_`;
 }
 function generateWorkoutRecommendations(userData, targetDayOffset = 0) {
   const goal = userData.goal || "healthy";
@@ -47382,6 +47389,110 @@ Berikut daftar gerakan yang terjadwal untukmu:
 \u2022 Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${targetRoutine.exercises[0]?.name || "squat"}").
 
 Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
+}
+function handleWorkoutProgressLogging(rawPhone, userText, userData) {
+  const phone = normalizePhone(rawPhone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const lower = userText.toLowerCase().trim();
+  if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
+    return null;
+  }
+  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|set|\bsets\b)/i);
+  if (!hasWorkoutSignal) {
+    return null;
+  }
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
+  const todayDayName = dayNames[currentDayIdx];
+  const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
+  const todayStr = getLocalDateStr();
+  const key = `gymbuddy_exercises_${phone}_${todayStr}`;
+  const altKey = `gymbuddy_exercises_${altPhone}_${todayStr}`;
+  let existingExercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+  if (!Array.isArray(existingExercises) || existingExercises.length === 0 || !existingExercises[0]?.targetSets) {
+    existingExercises = JSON.parse(JSON.stringify(todayRoutine.exercises || []));
+  }
+  const isFullWorkout = lower.match(/(?:sudah\s*)?(?:selesai|beres|done)\s*(?:semua\s*)?(?:latihan|workout|olahraga)|(?:latihan|workout|olahraga)\s*(?:hari\s*ini\s*)?(?:sudah\s*)?(?:selesai|beres|done)/i);
+  let matchedEx = null;
+  for (const ex of existingExercises) {
+    const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+    const exWords = exNameLower.split(/\s+/).filter((w) => w.length > 2);
+    if (lower.includes(exNameLower)) {
+      matchedEx = ex;
+      break;
+    }
+    for (const w of exWords) {
+      if (w !== "day" && w !== "grip" && w !== "medium" && w !== "sets" && w !== "wide" && lower.includes(w)) {
+        matchedEx = ex;
+        break;
+      }
+    }
+    if (matchedEx) break;
+  }
+  if (!matchedEx) {
+    const dbEx = findExerciseOrEquipment(userText);
+    if (dbEx) {
+      for (const ex of existingExercises) {
+        if (ex.name.toLowerCase().includes(dbEx.name.toLowerCase()) || dbEx.name.toLowerCase().includes(ex.name.toLowerCase()) || dbEx.aliases && dbEx.aliases.some((a) => ex.name.toLowerCase().includes(a.toLowerCase()))) {
+          matchedEx = ex;
+          break;
+        }
+      }
+    }
+  }
+  if (matchedEx) {
+    const setMatch = lower.match(/(\d+)\s*(?:set|sets)/i);
+    let count = setMatch ? parseInt(setMatch[1], 10) : matchedEx.targetSets;
+    count = Math.min(matchedEx.targetSets, Math.max(1, count));
+    matchedEx.completedSets = count;
+    matchedEx.setsState = (matchedEx.setsState || []).map((_, idx) => idx < count);
+    matchedEx.status = count >= matchedEx.targetSets ? "completed" : "in_progress";
+    dbData.dailyLogs[key] = existingExercises;
+    dbData.dailyLogs[altKey] = existingExercises;
+    saveDb();
+    const nextEx = existingExercises.find((e) => e.id !== matchedEx.id && e.status !== "completed");
+    if (count >= matchedEx.targetSets) {
+      if (nextEx) {
+        const nextReps = formatRepsCompact(nextEx.targetReps, nextEx.targetSets);
+        return [
+          `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set selesai. \u2705
+
+Setelah itu tinggal *${nextEx.name}*, ${nextReps}.`
+        ];
+      } else {
+        return [
+          `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set selesai. \u2705
+
+Semua latihan hari ini sudah selesai! Luar biasa! \u{1F525}\u{1F4AA}`
+        ];
+      }
+    } else {
+      const remaining = matchedEx.targetSets - count;
+      return [
+        `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set. \u2705
+
+Tinggal ${remaining} set lagi.`
+      ];
+    }
+  }
+  if (isFullWorkout && existingExercises.length > 0) {
+    existingExercises.forEach((e) => {
+      e.completedSets = e.targetSets;
+      e.setsState = (e.setsState || []).map(() => true);
+      e.status = "completed";
+    });
+    dbData.dailyLogs[key] = existingExercises;
+    dbData.dailyLogs[altKey] = existingExercises;
+    saveDb();
+    return [
+      `Luar biasa! Seluruh jadwal latihan hari ini (*${todayRoutine.focus}*) sudah tercatat selesai 100%! \u{1F389}\u{1F4AA}
+
+Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u2728`
+    ];
+  }
+  return null;
 }
 async function startServer() {
   const app = (0, import_express.default)();
@@ -48658,31 +48769,8 @@ https://gymbuddygroup.com`
             ];
           } else if (handleReminderCommand(userText, userProfile, from, userData)) {
             responseMessages = handleReminderCommand(userText, userProfile, from, userData);
-          } else if (userText.match(/(?:selesai\s*latihan|latihan\s*selesai|workout\s*selesai|selesai\s*workout|lapor\s*latihan|catat\s*latihan|latihan\s*hari\s*ini|push\s*up|squat|bench\s*press|pull\s*up|(\d+)\s*set\s*selesai)/i)) {
-            const todayStr = getTodayDateStr();
-            const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
-            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-            const workoutLogEntry = {
-              id: `wa-workout-${Date.now()}`,
-              foodName: `\u{1F3CB}\uFE0F Log Latihan: ${userText.trim()}`,
-              calories: 0,
-              protein: 0,
-              carbs: 0,
-              fat: 0,
-              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-              mealType: "snack"
-            };
-            addMealLog(from, workoutLogEntry);
-            dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
-            saveDb();
-            responseMessages = [
-              `\u{1F3CB}\uFE0F *CATATAN LATIHAN BERHASIL DISIMPAN!*
------------------------------
-\u2705 Laporan latihan kamu: *"${userText.trim()}"* telah dicatat Selesai hari ini!
-
-\u{1F4AC} *${coachName}*:
-"Mantap bro ${(userData.name || "").toUpperCase()}! 1 langkah lebih dekat ke target *${userData.goalTitle || "Kebugaran"}* kamu! Istirahat cukup dan jaga nutrisi ya! \u{1F525}"`
-            ];
+          } else if (handleWorkoutProgressLogging(from, userText, userData)) {
+            responseMessages = handleWorkoutProgressLogging(from, userText, userData);
           } else if (weightMatch) {
             const newW = parseFloat(weightMatch[1].replace(",", "."));
             if (!isNaN(newW) && newW > 30 && newW < 300) {
@@ -49142,20 +49230,8 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
       } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
         responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
-      } else if (!userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) && !userText.includes("?") && userText.match(/(?:(?:sudah|udah|telah)?\s*(?:selesai\s*(?:latihan|workout|olahraga|gym)|latihan\s*(?:sudah\s*)?selesai|workout\s*(?:sudah\s*)?selesai)|lapor\s*(?:selesai\s*)?latihan|catat\s*(?:selesai\s*)?latihan|(\d+)\s*set\s*(?:selesai|done))/i)) {
-        const todayStr = getLocalDateStr();
-        const workoutKey = `gymbuddy_exercises_${normFrom}_${todayStr}`;
-        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        dbData.dailyLogs[workoutKey] = [{ id: "completed", foodName: "Workout", calories: 0, protein: 0, carbs: 0, fat: 0, timestamp: (/* @__PURE__ */ new Date()).toISOString() }];
-        saveDb();
-        responseMessages = [
-          `\u{1F3CB}\uFE0F *LATIHAN HARI INI DICATAT*
------------------------------
-\u2705 ${userText.trim()}
-
-\u{1F4AC} *${coachName}*:
-"Kerja bagus! Latihan kamu sudah tercatat. Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u{1F4AA}\u{1F525}"`
-        ];
+      } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
+        responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
       } else {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA COACH MIA:
