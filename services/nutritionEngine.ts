@@ -1307,8 +1307,11 @@ IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
 1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
    Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
-3. ESTIMASI PORSI REALISTIS (JANGAN MINIATURISASI PORSI):
-   - Pasta: ~180g porsi matang / cooked (bukan pasta mentah).
+   - JANGAN mengasumsikan mentega/krim/minyak/dressing berlebih kecuali ada indikasi jelas.
+   - Jika ada saus/dressing yang tidak diketahui jumlahnya, catat pada portionNote: "Estimasi ini belum memasukkan saus/dressing tambahan".
+3. ESTIMASI PORSI REALISTIS (HINDARI KEPASTIAN PALSU):
+   - Gunakan porsi standar wajar (misal: "sekitar 60g", bukan angka desimal palsu "63.7g").
+   - Pasta: ~180g porsi matang / cooked (bukan mentah).
    - Kentang goreng: ~100g porsi saji sedang.
    - Roti: ~60g (2 lembar roti tawar standar).
    - Telur: ~50g per 1 butir besar.

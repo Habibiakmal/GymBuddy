@@ -2364,24 +2364,71 @@ ${exercises}
 
 
 
-function generateWorkoutRecommendations(userData: ReturnType<typeof calculateUserData>): string {
+function generateWeeklyWorkoutSchedule(userData: ReturnType<typeof calculateUserData>): string {
   const goal = userData.goal || "healthy";
   const schedule = getDefaultWeeklySchedule(goal);
+  const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = new Date().getDay();
   const todayDayName = dayNames[currentDayIdx];
-  const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
+  const scheduleLines = dayOrder.map(day => {
+    const routine = schedule.find(s => s.day.toLowerCase() === day.toLowerCase());
+    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
+    const isRest = !routine || routine.focus.toLowerCase().includes("rest") || routine.focus.toLowerCase().includes("istirahat") || routine.exercises.length === 0;
+
+    let line = `*${day}*\n`;
+    if (isRest) {
+      line += `Rest`;
+    } else {
+      line += `${routine.focus}`;
+    }
+    if (isToday) {
+      line += ` ← *Hari ini*`;
+    }
+    return line;
+  }).join("\n\n");
+
   return (
-    `Halo ${userData.name || "Kak"}! Sesuai dengan target *${userData.goalTitle || "Kebugaran"}* dan jadwal kamu di dashboard:\n\n` +
-    `📅 *LATIHAN HARI INI (${todayRoutine.day}): ${todayRoutine.focus.toUpperCase()}*\n` +
+    `📅 *JADWAL LATIHAN MINGGU INI*\n` +
+    `🎯 Target: *${userData.goalTitle || "Kebugaran"}*\n\n` +
+    `${scheduleLines}\n\n` +
+    `💡 *Tips ${coachName}*:\n` +
+    `Ketik *"latihan hari ini"* untuk melihat rincian set & repetisi gerakan hari ini! 💪`
+  );
+}
+
+function generateWorkoutRecommendations(userData: ReturnType<typeof calculateUserData>, targetDayOffset: number = 0): string {
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const targetDayIdx = (new Date().getDay() + targetDayOffset + 7) % 7;
+  const targetDayName = dayNames[targetDayIdx];
+  const targetRoutine = schedule.find((s) => s.day.toLowerCase() === targetDayName.toLowerCase()) || schedule[0];
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  const dayLabel = targetDayOffset === 1 ? "BESOK" : "HARI INI";
+
+  const isRest = !targetRoutine || targetRoutine.focus.toLowerCase().includes("rest") || targetRoutine.focus.toLowerCase().includes("istirahat") || targetRoutine.exercises.length === 0;
+
+  if (isRest) {
+    return (
+      `📅 *JADWAL LATIHAN ${dayLabel} (${targetRoutine?.day || targetDayName})*\n` +
+      `--------------------------------------------------\n` +
+      `🌴 *FOKUS: REST & RECOVERY*\n\n` +
+      `Hari ini adalah hari pemulihan otot. Cukupi asupan protein, minum air putih minimal 2-3 liter, dan tidur yang cukup agar ototmu pulih maksimal! 🌿✨\n\n` +
+      `💬 *${coachName}*:\n"Istirahat sama pentingnya dengan latihan. Jangan lupa tetap jaga pola makan sehat hari ini!"`
+    );
+  }
+
+  return (
+    `📅 *LATIHAN ${dayLabel} (${targetRoutine.day}): ${targetRoutine.focus.toUpperCase()}*\n` +
     `--------------------------------------------------\n` +
-    `Berikut daftar gerakan yang terjadwal untukmu hari ini:\n\n` +
-    todayRoutine.exercises.map((ex, idx) => `${idx + 1}. *${ex.name}*: ${ex.targetReps}`).join("\n") +
+    `Berikut daftar gerakan yang terjadwal untukmu:\n\n` +
+    targetRoutine.exercises.map((ex, idx) => `${idx + 1}. *${ex.name}*: ${ex.targetReps}`).join("\n") +
     `\n\n💡 *Tips ${coachName}*:\n` +
     `• Buka menu latihan di dashboard untuk mencatat checklist set kamu secara real-time!\n` +
-    `• Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${todayRoutine.exercises[0]?.name || "squat"}").\n\n` +
+    `• Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${targetRoutine.exercises[0]?.name || "squat"}").\n\n` +
     `Selamat berlatih, tetap konsisten! 💪🔥`
   );
 }
@@ -3820,7 +3867,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                 const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${imageId}`, {
                   headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
                 });
-                const mediaUrl = mediaRes.data.url;
+const mediaUrl = mediaRes.data.url;
                 const imageBinary = await axios.get(mediaUrl, {
                   headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
                   responseType: 'arraybuffer'
@@ -3864,19 +3911,47 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                                           lowerText.includes("pagi siang malam") ||
                                           lowerText.includes("rekomendasi sarapan");
 
-          const isWorkoutReqMessage = lowerText.includes("workout") ||
-                                      lowerText.includes("latihan") ||
-                                      lowerText.includes("jadwal gym") ||
-                                      lowerText.includes("rekomendasi workout") ||
-                                      lowerText.includes("menu latihan") ||
-                                      lowerText.includes("olahraga");
+          const isWeeklyScheduleQuery = (
+            lowerText.includes("jadwal latihan minggu") ||
+            lowerText.includes("jadwal minggu ini") ||
+            lowerText.includes("jadwal latihan aku minggu ini") ||
+            lowerText.includes("jadwal gym minggu ini") ||
+            lowerText.includes("jadwal workout minggu ini") ||
+            lowerText.includes("jadwal seminggu") ||
+            lowerText.includes("program minggu ini")
+          );
+
+          const isWorkoutReqMessage = !isWeeklyScheduleQuery && (
+            lowerText.includes("latihan apa") ||
+            lowerText.includes("workout apa") ||
+            lowerText.includes("jadwal hari ini") ||
+            lowerText.includes("latihan hari ini") ||
+            lowerText.includes("workout hari ini") ||
+            lowerText.includes("workout besok") ||
+            lowerText.includes("latihan besok") ||
+            lowerText.includes("jadwal gym") ||
+            lowerText.includes("jadwal latihan") ||
+            lowerText.includes("menu latihan") ||
+            lowerText.includes("rekomendasi workout") ||
+            lowerText.includes("rekomendasi latihan") ||
+            lowerText.includes("olahraga hari ini") ||
+            lowerText.includes("workout") ||
+            lowerText.includes("latihan") ||
+            lowerText.includes("olahraga")
+          );
 
           const isCheckSummaryMessage = lowerText.includes("cek kalori") || 
                                        lowerText.includes("sisa kalori") || 
                                        lowerText.includes("rekap kalori") ||
                                        lowerText.includes("rekap") ||
                                        lowerText.includes("kemarin") ||
-                                       lowerText.includes("makan apa");
+                                       lowerText.includes("makan apa") ||
+                                       lowerText.includes("makanan hari ini") ||
+                                       lowerText.includes("log makanan hari ini") ||
+                                       lowerText.includes("food log hari ini") ||
+                                       lowerText.includes("total kalori") ||
+                                       lowerText.includes("apa yang sudah aku makan") ||
+                                       lowerText.includes("makanan saya hari ini");
 
           const isProgressHistoryMessage = lowerText.includes("cek progress") || 
                                           lowerText.includes("riwayat progress") || 
@@ -3906,21 +3981,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           } else if (waterMatch) {
             const rawAmount = parseFloat(waterMatch[1].replace(',', '.'));
             const unit = (waterMatch[2] || "gelas").toLowerCase();
-            // Bug 4 Fix: compute actual ml accurately (no rounding loss)
             let actualMl: number;
             if (unit === "ml") {
               actualMl = rawAmount;
             } else if (unit === "l" || unit === "liter") {
               actualMl = rawAmount * 1000;
             } else {
-              // "gelas" / "cup" = 250ml each
               actualMl = Math.round(rawAmount) * 250;
             }
             const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
             const currentCups = getWaterCups(from);
             const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
             const liters = (newTotalCups * 0.25).toFixed(1);
-            // Bug 4 Fix: also add entry to dailyLogs so dashboard shows it
             const waterEntry: MealLog = {
               id: `wa-water-${Date.now()}`,
               foodName: `Air Putih ${actualMl} ml`,
@@ -3931,7 +4003,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               isHydration: true,
               volumeMl: actualMl,
               timestamp: new Date().toISOString(),
-              mealType: getMealTypeByHour()
+              mealType: getMealTypeByHour(userText)
             };
             addMealLog(from, waterEntry);
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -3951,7 +4023,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             const workoutKey = `gymbuddy_exercises_${from}_${todayStr}`;
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
 
-            // Record workout log in dailyLogs
             const workoutLogEntry: MealLog = {
               id: `wa-workout-${Date.now()}`,
               foodName: `🏋️ Log Latihan: ${userText.trim()}`,
@@ -3983,8 +4054,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             }
           } else if (isProgressHistoryMessage) {
             responseMessages = [formatProgressHistoryCard(from)];
+          } else if (isWeeklyScheduleQuery) {
+            responseMessages = [generateWeeklyWorkoutSchedule(userData)];
           } else if (isWorkoutReqMessage) {
-            responseMessages = [generateWorkoutRecommendations(userData)];
+            const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
+            responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
           } else if (isRecommendationMessage) {
             responseMessages = [generateMealRecommendations(userData)];
           } else if (isCheckSummaryMessage) {
@@ -3992,7 +4066,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             const totals = getDailyTotals(from, parsedDate.dateStr);
             responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
           } else if (getAi()) {
-            // Check if user sent a generic photo caption like "aku makan ini" without image binary
             const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
             
             if (isGenericImageCaption && !imagePart) {
@@ -4004,15 +4077,26 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                 `Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! 🥗✨`
               ];
             } else {
-              // Immediate Status notification: "sedang berpikir..."
-              await sendMetaWhatsappMessage(from, "sedang berpikir... 💭\n\nHampir selesai mengecek inputmu... 📊");
-
               const isMia = userData.persona === "mia" || userData.persona === "nikita";
-              const personaInstruction = isMia
-                ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
-                : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
+              const processingMsg = isMia ? "Sebentar ya, aku cek dulu... ✨" : "Sebentar. Aku cek dulu.";
+              await sendMetaWhatsappMessage(from, processingMsg);
 
-              const prompt = `INFORMASI PENGGUNA:
+              const personaInstruction = isMia
+                ? `PERSONA COACH MIA:
+- Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
+- BATASAN MUTLAK:
+  • DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
+  • Hindari pujian berlebihan atau kata klise yang diulang-ulang (seperti "Coach Mia bangga denganmu!").
+  • Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.`
+                : `PERSONA COACH MAX:
+- Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
+- Gaya Bicara: Bahasa gaul Jakarta / bro (lo/gue) yang santai tapi berbobot.
+- BATASAN MUTLAK:
+  • Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
+  • Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
+
+              const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
+INFORMASI PENGGUNA:
 - Nama: ${userData.name}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
@@ -4023,11 +4107,15 @@ ${personaInstruction}
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
-${imagePart ? "CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto (nasi, lauk, sayur, buah, dll.) dan SELALU set \"isFood\": true." : ""}
+${imagePart ? "CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto dan SELALU set \"isFood\": true." : ""}
 
-Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", "aku makan ini", dll)
-PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber).
+PRINSIP UTAMA:
+1. Akurasi ilmiah selalu diutamakan.
+2. Konsistensi kalori: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+3. Hindari kepastian palsu jika porsi atau saus tidak diketahui secara pasti.
 
+Kategori 1: LAPORAN MAKANAN/MINUMAN
+PASTIKAN "isFood": true dan berikan angka estimasi realistis.
 Keluarkan output JSON valid:
 {
   "isFood": true,
@@ -4299,19 +4387,47 @@ function escapeXml(unsafe: string): string {
                                       lowerText.includes("pagi siang malam") ||
                                       lowerText.includes("rekomendasi sarapan");
 
-      const isWorkoutReqMessage = lowerText.includes("workout") ||
-                                  lowerText.includes("latihan") ||
-                                  lowerText.includes("jadwal gym") ||
-                                  lowerText.includes("rekomendasi workout") ||
-                                  lowerText.includes("menu latihan") ||
-                                  lowerText.includes("olahraga");
+      const isWeeklyScheduleQuery = (
+        lowerText.includes("jadwal latihan minggu") ||
+        lowerText.includes("jadwal minggu ini") ||
+        lowerText.includes("jadwal latihan aku minggu ini") ||
+        lowerText.includes("jadwal gym minggu ini") ||
+        lowerText.includes("jadwal workout minggu ini") ||
+        lowerText.includes("jadwal seminggu") ||
+        lowerText.includes("program minggu ini")
+      );
+
+      const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && (
+        lowerText.includes("latihan apa") ||
+        lowerText.includes("workout apa") ||
+        lowerText.includes("jadwal hari ini") ||
+        lowerText.includes("latihan hari ini") ||
+        lowerText.includes("workout hari ini") ||
+        lowerText.includes("workout besok") ||
+        lowerText.includes("latihan besok") ||
+        lowerText.includes("jadwal gym") ||
+        lowerText.includes("jadwal latihan") ||
+        lowerText.includes("menu latihan") ||
+        lowerText.includes("rekomendasi workout") ||
+        lowerText.includes("rekomendasi latihan") ||
+        lowerText.includes("olahraga hari ini") ||
+        lowerText.includes("workout") ||
+        lowerText.includes("latihan") ||
+        lowerText.includes("olahraga")
+      );
 
       const isCheckSummaryMessage = lowerText.includes("cek kalori") || 
                                    lowerText.includes("sisa kalori") || 
                                    lowerText.includes("rekap kalori") ||
                                    lowerText.includes("rekap") ||
                                    lowerText.includes("kemarin") ||
-                                   lowerText.includes("makan apa");
+                                   lowerText.includes("makan apa") ||
+                                   lowerText.includes("makanan hari ini") ||
+                                   lowerText.includes("log makanan hari ini") ||
+                                   lowerText.includes("food log hari ini") ||
+                                   lowerText.includes("total kalori") ||
+                                   lowerText.includes("apa yang sudah aku makan") ||
+                                   lowerText.includes("makanan saya hari ini");
 
       const isProgressHistoryMessage = lowerText.includes("cek progress") || 
                                       lowerText.includes("riwayat progress") || 
@@ -4330,23 +4446,7 @@ function escapeXml(unsafe: string): string {
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | undefined = undefined;
 
-      const isWorkoutScheduleQuery = (
-        lowerText.includes("latihan apa") ||
-        lowerText.includes("workout apa") ||
-        lowerText.includes("jadwal hari ini") ||
-        lowerText.includes("latihan hari ini") ||
-        lowerText.includes("workout hari ini") ||
-        lowerText.includes("jadwal gym") ||
-        lowerText.includes("jadwal latihan") ||
-        lowerText.includes("menu latihan") ||
-        lowerText.includes("rekomendasi workout") ||
-        lowerText.includes("rekomendasi latihan") ||
-        lowerText.includes("olahraga hari ini") ||
-        (lowerText.includes("latihan") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa"))) ||
-        (lowerText.includes("workout") && (lowerText.includes("hari ini") || lowerText.includes("jadwal") || lowerText.includes("apa")))
-      );
-
-      const matchedEx = !isWorkoutScheduleQuery ? findExerciseOrEquipment(userText) : null;
+      const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
         matchedEx && (
           userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
@@ -4361,7 +4461,7 @@ function escapeXml(unsafe: string): string {
         )
       );
 
-      console.log(`[Twilio WA] ✅ Step: routing. isReset=${isResetMessage}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
+      console.log(`[Twilio WA] ✅ Step: routing. isReset=${isResetMessage}, isWeekly=${isWeeklyScheduleQuery}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
       if (isResetMessage) {
         const normPhone = normalizePhone(normFrom);
         if (dbData.users[normPhone]) {
@@ -4382,8 +4482,11 @@ function escapeXml(unsafe: string): string {
           `Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.\n\n` +
           `Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! ✨`
         ];
+      } else if (isWeeklyScheduleQuery) {
+        responseMessages = [generateWeeklyWorkoutSchedule(userData)];
       } else if (isWorkoutScheduleQuery) {
-        responseMessages = [generateWorkoutRecommendations(userData)];
+        const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
+        responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
       } else if (isExerciseInquiry && matchedEx) {
         const guide = formatWhatsAppExerciseGuide(
           matchedEx,
@@ -4517,8 +4620,18 @@ function escapeXml(unsafe: string): string {
       } else if (getAi()) {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia
-          ? `PERSONA MIA: Kamu adalah pelatih (coach) profesional wanita bernama Coach Mia. Kamu sangat santun, ramah, halus, lembut, dan edukatif (aku/kamu). DILARANG KERAS menggunakan panggilan berlebihan seperti "sayang", "cinta", "beb", dll. Tetaplah 100% PROFESIONAL, sopan, baik hati, dan mendukung kebugaran pengguna secara halus. SELALU panggil dirimu Coach Mia dan JANGAN PERNAH menyapa sebagai Coach Max.`
-          : `PERSONA MAX: Kamu adalah pelatih (coach) pria bernama Coach Max. Kamu tegas, serius, to-the-point, dan ala bahasa gaul Jakarta/bro (lo/gue). SELALU panggil dirimu Coach Max.`;
+          ? `PERSONA COACH MIA:
+- Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
+- BATASAN MUTLAK:
+  • DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
+  • Hindari pujian berlebihan atau kata klise yang diulang-ulang (seperti "Coach Mia bangga denganmu!").
+  • Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.`
+          : `PERSONA COACH MAX:
+- Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
+- Gaya Bicara: Bahasa gaul Jakarta / bro (lo/gue) yang santai tapi berbobot.
+- BATASAN MUTLAK:
+  • Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
+  • Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
 
         const activeService = userData.activeService || "both";
         const serviceInstruction = activeService === "nutritionist"
@@ -4533,7 +4646,8 @@ Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingat
 "💡 *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Workout Coach. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Nutritionist penuh! 🥦"`
           : `BATASAN LAYANAN PENGGUNA: User berlangganan Paket Premium (All-Access). Berikan pendampingan penuh untuk nutrisi maupun latihan.`;
 
-        const prompt = `INFORMASI PENGGUNA:
+        const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
+INFORMASI PENGGUNA:
 - Nama: ${userData.name}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
@@ -4545,6 +4659,11 @@ ${serviceInstruction}
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
+
+PRINSIP UTAMA:
+1. Akurasi ilmiah selalu diutamakan.
+2. Konsistensi kalori: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+3. Hindari kepastian palsu jika porsi atau saus tidak diketahui secara pasti.
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
 PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber, sodium dalam mg).
@@ -5089,7 +5208,7 @@ Keluarkan output JSON valid:
       `🔄 *Reps*: ${reps}\n` +
       `⏳ *Istirahat*: ${rest}\n\n` +
       (coachCue ? `💬 *${coachName}*:\n"${coachCue}"\n\n` : "") +
-      `📱 *Kamus Alat & Animasi Gerakan di Web/PWA*:\n🔗 ${pwaUrl}`;
+      `🎥 *Lihat Panduan Visual Gerakan*:\n🔗 ${pwaUrl}`;
   }
 
   // =============================================
