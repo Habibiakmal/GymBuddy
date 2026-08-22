@@ -3220,7 +3220,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               {/* ── CARD B: AI WORKOUT COACH FIRST-CLASS BENTO MODULE ── */}
               {(() => {
-                const completedExerciseCount = exercises.filter(ex => ex.completedSets && ex.completedSets.every(Boolean)).length;
+                const completedExerciseCount = exercises.filter(ex => 
+                  ex.status === "completed" || 
+                  (typeof ex.completedSets === "number" && ex.targetSets > 0 && ex.completedSets >= ex.targetSets) ||
+                  (Array.isArray(ex.setsState) && ex.setsState.length > 0 && ex.setsState.every(Boolean))
+                ).length;
                 
                 const workoutBentoContent = (
                   <div className="bg-[#222222] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-xl space-y-5 flex flex-col justify-between h-full relative overflow-hidden">
@@ -3325,10 +3329,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         ) : (
                           <div className="space-y-2">
                             {exercises.slice(0, 3).map((ex, exIdx) => {
-                              const isAllDone = ex.completedSets && ex.completedSets.every(Boolean);
+                              const isAllDone = 
+                                ex.status === "completed" || 
+                                (typeof ex.completedSets === "number" && ex.targetSets > 0 && ex.completedSets >= ex.targetSets) ||
+                                (Array.isArray(ex.setsState) && ex.setsState.length > 0 && ex.setsState.every(Boolean));
                               return (
                                 <div
-                                  key={ex.name || exIdx}
+                                  key={ex.name || ex.id || exIdx}
                                   onClick={() => setActiveTab("workouts")}
                                   className="p-3 bg-[#181818] hover:bg-[#2a2a2a] border border-white/[0.08] rounded-2xl flex items-center justify-between gap-3 transition-all cursor-pointer group"
                                 >
@@ -3345,7 +3352,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                         {ex.name}
                                       </h4>
                                       <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
-                                        {ex.sets || 3} Set x {ex.reps || "10-12"} Reps • Rest {ex.rest || "60s"}
+                                        {ex.targetSets || 3} Set x {ex.targetReps || "10-12 Reps"}
                                       </p>
                                     </div>
                                   </div>
