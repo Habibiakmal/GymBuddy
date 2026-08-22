@@ -48594,7 +48594,7 @@ https://gymbuddygroup.com`
           const userData = calculateUserData(userProfile);
           const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
           const isWeeklyScheduleQuery = lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini");
-          const isWorkoutReqMessage2 = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("olahraga"));
+          const isWorkoutReqMessage = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("olahraga"));
           const isCheckSummaryMessage = lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan hari ini") || lowerText.includes("food log hari ini") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
           const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
           const weightMatch = matchPureWeightLog(userText);
@@ -48697,7 +48697,7 @@ https://gymbuddygroup.com`
             responseMessages = [formatProgressHistoryCard(from)];
           } else if (isWeeklyScheduleQuery) {
             responseMessages = [generateWeeklyWorkoutSchedule(userData)];
-          } else if (isWorkoutReqMessage2) {
+          } else if (isWorkoutReqMessage) {
             const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
             responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
           } else if (isRecommendationMessage) {
@@ -49134,8 +49134,6 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         }
       } else if (isProgressHistoryMessage) {
         responseMessages = [formatProgressHistoryCard(normFrom)];
-      } else if (isWorkoutReqMessage) {
-        responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isRecommendationMessage) {
         responseMessages = [generateMealRecommendations(userData)];
       } else if (isCheckSummaryMessage) {
@@ -49375,8 +49373,7 @@ Keluarkan output JSON valid:
       return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
     } catch (error) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
-      const errDetail = error?.message || String(error);
-      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis [${errDetail.replace(/[<>&'"]/g, "")}]. Coba lagi sebentar ya! \u{1F64F}</Body></Message></Response>`);
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis. Coba lagi sebentar ya! \u{1F64F}</Body></Message></Response>`);
     }
   });
   async function generateGeminiImage(promptText) {

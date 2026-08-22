@@ -4598,8 +4598,6 @@ function escapeXml(unsafe: string): string {
         }
       } else if (isProgressHistoryMessage) {
         responseMessages = [formatProgressHistoryCard(normFrom)];
-      } else if (isWorkoutReqMessage) {
-        responseMessages = [generateWorkoutRecommendations(userData)];
       } else if (isRecommendationMessage) {
         responseMessages = [generateMealRecommendations(userData)];
       } else if (isCheckSummaryMessage) {
@@ -4868,8 +4866,7 @@ Keluarkan output JSON valid:
       return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
     } catch (error: any) {
       console.error("Error processing Twilio webhook:", error?.message || error, error?.stack?.substring(0, 500));
-      const errDetail = error?.message || String(error);
-      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis [${errDetail.replace(/[<>&'"]/g, "")}]. Coba lagi sebentar ya! 🙏</Body></Message></Response>`);
+      return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>Maaf, terjadi gangguan teknis. Coba lagi sebentar ya! 🙏</Body></Message></Response>`);
     }
   });
 
