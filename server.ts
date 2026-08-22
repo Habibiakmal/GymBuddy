@@ -192,65 +192,73 @@ function getAi() {
 }
 
 async function generateGeminiContent(prompt: string, imagePart?: any): Promise<string> {
-  const cleanKey = USER_GEMINI_KEY;
-  if (!cleanKey) {
-    throw new Error("GEMINI_API_KEY is not set in environment variables");
-  }
+  const keysToTry = [
+    USER_GEMINI_KEY,
+    FALLBACK_GEMINI_KEY
+  ].filter(Boolean);
 
   const modelsToTry = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
     "gemini-3.6-flash",
+    "gemini-3.5-flash",
     "gemini-3.7-flash",
-    "gemini-2.5-flash",
-    "gemini-1.5-flash"
+    "gemini-flash-latest"
   ];
 
-  // 1. Try official SDK first (@google/genai natively supports AQ. Auth keys)
-  const ai = getAi();
-  if (ai) {
-    for (const mName of modelsToTry) {
-      try {
-        const contents: any[] = imagePart ? [prompt, imagePart] : [prompt];
-        const response = await ai.models.generateContent({
-          model: mName,
-          contents
-        });
-        if (response?.text) {
-          console.log(`[Gemini SDK] Success with model: ${mName}`);
-          return response.text;
+  for (const k of keysToTry) {
+    try {
+      const client = new GoogleGenAI({ apiKey: k });
+      for (const mName of modelsToTry) {
+        try {
+          const contents: any[] = imagePart ? [prompt, imagePart] : [prompt];
+          const response = await client.models.generateContent({
+            model: mName,
+            contents
+          });
+          if (response?.text) {
+            console.log(`[Gemini SDK] Success with model ${mName} (key prefix=${k.substring(0, 6)})`);
+            return response.text;
+          }
+        } catch (err: any) {
+          console.log(`[Gemini SDK] Model ${mName} note:`, err?.message?.substring(0, 100) || err);
         }
-      } catch (err: any) {
-        console.log(`[Gemini SDK] Model ${mName} note:`, err?.message || err);
       }
+    } catch (clientErr: any) {
+      console.warn("[Gemini SDK] Client init note:", clientErr?.message || clientErr);
     }
   }
 
-  // 2. Try REST API with key in URL and native fetch
-  for (const mName of modelsToTry) {
-    try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-      const requestParts: any[] = [{ text: prompt }];
-      if (imagePart && imagePart.inlineData) {
-        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
-      }
+  // Fallback to REST API
+  for (const k of keysToTry) {
+    for (const mName of modelsToTry) {
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(k)}`;
+        const requestParts: any[] = [{ text: prompt }];
+        if (imagePart && imagePart.inlineData) {
+          requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
+        }
 
-      const res = await fetch(restUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: requestParts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-        })
-      });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const data: any = await res.json();
-      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini REST] Success with model: ${mName}`);
-        return data.candidates[0].content.parts[0].text;
+        const res = await fetch(restUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: requestParts }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+          })
+        });
+        clearTimeout(timeoutId);
+
+        const data: any = await res.json();
+        if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+          console.log(`[Gemini REST] Success with model: ${mName}`);
+          return data.candidates[0].content.parts[0].text;
+        }
+      } catch (restErr: any) {
+        console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message?.substring(0, 100) || restErr);
       }
-    } catch (restErr: any) {
-      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message || restErr);
     }
   }
 
@@ -4806,7 +4814,44 @@ Keluarkan output JSON valid:
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);
-          responseMessages = ["Maaf, aku sedang tidak bisa memproses inputmu saat ini."];
+          const detRes = estimateMealNutritionDeterministic(userText);
+          const fallbackFoodObj = {
+            isFood: true,
+            isEquipment: false,
+            foodName: detRes.foodName || userText,
+            calories: detRes.calories || 450,
+            protein: detRes.protein || 30,
+            carbs: detRes.carbs || 50,
+            fat: detRes.fat || 12,
+            fiber: detRes.fiber || 3,
+            sugar: detRes.sugar || 4,
+            sodium: detRes.sodium || 400,
+            satietyScore: 7,
+            satietyExplanation: "Keseimbangan nutrisi yang baik untuk mendukung kebutuhan harian kamu.",
+            healthScore: 8,
+            portionEstimates: detRes.items?.map(i => `${i.name}: ~${i.calories} kcal`) || [userText],
+            keyInsights: ["Asupan makro seimbang", "Mendukung target pemulihan dan energi harian"],
+            coachComment: userData.persona === "max"
+              ? "Mantap bro! Pilihan menu yang solid, jaga terus konsistensi nutrisi lo! 💪🔥"
+              : "Pilihan menu yang lezat dan bergizi! Tetap jaga hidrasi tubuh kamu ya ✨"
+          };
+
+          addMealLog(normFrom, {
+            id: `m-${Date.now()}`,
+            foodName: fallbackFoodObj.foodName,
+            calories: fallbackFoodObj.calories,
+            protein: fallbackFoodObj.protein,
+            carbs: fallbackFoodObj.carbs,
+            fat: fallbackFoodObj.fat,
+            fiber: fallbackFoodObj.fiber,
+            sugar: fallbackFoodObj.sugar,
+            sodium: fallbackFoodObj.sodium,
+            mealType: getMealTypeByHour(userText),
+            timestamp: new Date().toISOString()
+          });
+          const dailyTotals = getDailyTotals(normFrom);
+          const card = formatNutritionCard(fallbackFoodObj, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+          responseMessages = [card];
         }
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];

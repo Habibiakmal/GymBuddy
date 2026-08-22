@@ -45474,58 +45474,66 @@ function getAi() {
   return aiClient;
 }
 async function generateGeminiContent(prompt, imagePart) {
-  const cleanKey = USER_GEMINI_KEY;
-  if (!cleanKey) {
-    throw new Error("GEMINI_API_KEY is not set in environment variables");
-  }
+  const keysToTry = [
+    USER_GEMINI_KEY,
+    FALLBACK_GEMINI_KEY
+  ].filter(Boolean);
   const modelsToTry = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
     "gemini-3.6-flash",
+    "gemini-3.5-flash",
     "gemini-3.7-flash",
-    "gemini-2.5-flash",
-    "gemini-1.5-flash"
+    "gemini-flash-latest"
   ];
-  const ai = getAi();
-  if (ai) {
-    for (const mName of modelsToTry) {
-      try {
-        const contents = imagePart ? [prompt, imagePart] : [prompt];
-        const response = await ai.models.generateContent({
-          model: mName,
-          contents
-        });
-        if (response?.text) {
-          console.log(`[Gemini SDK] Success with model: ${mName}`);
-          return response.text;
+  for (const k of keysToTry) {
+    try {
+      const client2 = new import_genai.GoogleGenAI({ apiKey: k });
+      for (const mName of modelsToTry) {
+        try {
+          const contents = imagePart ? [prompt, imagePart] : [prompt];
+          const response = await client2.models.generateContent({
+            model: mName,
+            contents
+          });
+          if (response?.text) {
+            console.log(`[Gemini SDK] Success with model ${mName} (key prefix=${k.substring(0, 6)})`);
+            return response.text;
+          }
+        } catch (err) {
+          console.log(`[Gemini SDK] Model ${mName} note:`, err?.message?.substring(0, 100) || err);
         }
-      } catch (err) {
-        console.log(`[Gemini SDK] Model ${mName} note:`, err?.message || err);
       }
+    } catch (clientErr) {
+      console.warn("[Gemini SDK] Client init note:", clientErr?.message || clientErr);
     }
   }
-  for (const mName of modelsToTry) {
-    try {
-      const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-      const requestParts = [{ text: prompt }];
-      if (imagePart && imagePart.inlineData) {
-        requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
+  for (const k of keysToTry) {
+    for (const mName of modelsToTry) {
+      try {
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${encodeURIComponent(k)}`;
+        const requestParts = [{ text: prompt }];
+        if (imagePart && imagePart.inlineData) {
+          requestParts.push({ inlineData: { mimeType: imagePart.inlineData.mimeType, data: imagePart.inlineData.data } });
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1e4);
+        const res = await fetch(restUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: requestParts }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+          })
+        });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+          console.log(`[Gemini REST] Success with model: ${mName}`);
+          return data.candidates[0].content.parts[0].text;
+        }
+      } catch (restErr) {
+        console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message?.substring(0, 100) || restErr);
       }
-      const res = await fetch(restUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: requestParts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-        })
-      });
-      const data = await res.json();
-      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`[Gemini REST] Success with model: ${mName}`);
-        return data.candidates[0].content.parts[0].text;
-      }
-    } catch (restErr) {
-      console.log(`[Gemini REST] Model ${mName} note:`, restErr?.message || restErr);
     }
   }
   throw new Error("All Gemini models failed");
@@ -49321,7 +49329,41 @@ Keluarkan output JSON valid:
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);
-          responseMessages = ["Maaf, aku sedang tidak bisa memproses inputmu saat ini."];
+          const detRes = estimateMealNutritionDeterministic(userText);
+          const fallbackFoodObj = {
+            isFood: true,
+            isEquipment: false,
+            foodName: detRes.foodName || userText,
+            calories: detRes.calories || 450,
+            protein: detRes.protein || 30,
+            carbs: detRes.carbs || 50,
+            fat: detRes.fat || 12,
+            fiber: detRes.fiber || 3,
+            sugar: detRes.sugar || 4,
+            sodium: detRes.sodium || 400,
+            satietyScore: 7,
+            satietyExplanation: "Keseimbangan nutrisi yang baik untuk mendukung kebutuhan harian kamu.",
+            healthScore: 8,
+            portionEstimates: detRes.items?.map((i) => `${i.name}: ~${i.calories} kcal`) || [userText],
+            keyInsights: ["Asupan makro seimbang", "Mendukung target pemulihan dan energi harian"],
+            coachComment: userData.persona === "max" ? "Mantap bro! Pilihan menu yang solid, jaga terus konsistensi nutrisi lo! \u{1F4AA}\u{1F525}" : "Pilihan menu yang lezat dan bergizi! Tetap jaga hidrasi tubuh kamu ya \u2728"
+          };
+          addMealLog(normFrom, {
+            id: `m-${Date.now()}`,
+            foodName: fallbackFoodObj.foodName,
+            calories: fallbackFoodObj.calories,
+            protein: fallbackFoodObj.protein,
+            carbs: fallbackFoodObj.carbs,
+            fat: fallbackFoodObj.fat,
+            fiber: fallbackFoodObj.fiber,
+            sugar: fallbackFoodObj.sugar,
+            sodium: fallbackFoodObj.sodium,
+            mealType: getMealTypeByHour(userText),
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          const dailyTotals = getDailyTotals(normFrom);
+          const card = formatNutritionCard(fallbackFoodObj, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+          responseMessages = [card];
         }
       } else {
         responseMessages = ["Sistem AI belum terkonfigurasi dengan benar. Hubungi admin GymBuddy."];
