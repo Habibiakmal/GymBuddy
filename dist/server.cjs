@@ -47313,67 +47313,79 @@ ${mealListStr}
 \u{1F4AC} *${coachName}*:
 "${quote}"`;
 }
-function generateMealRecommendations(userData) {
-  const { name, targetCalories, goalTitle, persona } = userData;
+function generateMealRecommendations(userData, rawPhone, userText) {
+  const { name, targetCalories, proteinGrams, carbGrams, fatGrams, goalTitle, persona } = userData;
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
-  const targetPagi = Math.round(targetCalories * 0.25);
-  const targetSiang = Math.round(targetCalories * 0.35);
-  const targetMalam = Math.round(targetCalories * 0.3);
-  const targetSnack = Math.round(targetCalories * 0.1);
-  if (persona === "max") {
-    return `\u{1F37D}\uFE0F *REKOMENDASI MENU MAKANAN HARI INI FOR ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
-
-\u{1F305} *Makan Pagi (~${targetPagi} kcal)*:
-\u2022 \u{1F373} 3 Butir Telur Rebus / Orak-arik
-\u2022 \u{1F35E} 2 Tangkup Roti Gandum Utuh
-\u2022 \u2615 Kopi Hitam / Teh Hijau Tanpa Gula
-_Makro: ~35g Protein, ~30g Karbo, ~12g Lemak_
-
-\u2600\uFE0F *Makan Siang (~${targetSiang} kcal)*:
-\u2022 \u{1F357} 150g Dada Ayam Panggang / Bakar Kecap
-\u2022 \u{1F35A} 150g Nasi Merah / Nasi Putih Porsi Terkontrol
-\u2022 \u{1F966} 1 Mangkok Tumis Brokoli / Buncis Lada Hitam
-_Makro: ~45g Protein, ~45g Karbo, ~10g Lemak_
-
-\u{1F319} *Makan Malam (~${targetMalam} kcal)*:
-\u2022 \u{1F41F} 150g Ikan Gurame / Salmon / Daging Sapi Cincang Low Fat
-\u2022 \u{1F954} 150g Kentang Rebus / Ubi Kukus
-\u2022 \u{1F957} Salad Sayur Segar + Perasan Lemon
-_Makro: ~40g Protein, ~35g Karbo, ~12g Lemak_
-
-\u{1F34E} *Camilan Sehat (~${targetSnack} kcal)*:
-\u2022 \u{1F34C} 1 Buah Pisang + 1 Scoop Whey Protein / Greek Yogurt
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"Nih menu juara buat capai target lo. Gak usah bikin alasan, patuhi porsinya & bantai hari ini! \u{1F525}"`;
-  } else {
-    return `\u{1F33F}\u{1F957} *REKOMENDASI MENU SEHAT HARI INI UNTUK ${name.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
-
-\u{1F305} *Makan Pagi / Breakfast (~${targetPagi} kcal)*:
-\u2022 \u{1F963} Oatmeal hangat dengan potongan pisang & 1 sdm madu
-\u2022 \u{1F95A} 2 butir telur rebus (tinggi protein & bikin kenyang)
-\u2022 \u{1F375} Teh hijau atau air putih hangat
-
-\u2600\uFE0F *Makan Siang / Lunch (~${targetSiang} kcal)*:
-\u2022 \u{1F357} 150g Dada Ayam Tumis Wijen atau Sup Ayam Bening
-\u2022 \u{1F35A} 1 centong Nasi Merah / Nasi Utuh
-\u2022 \u{1F966} Tumis buncis, wortel, dan jagung manis
-
-\u{1F319} *Makan Malam / Dinner (~${targetMalam} kcal)*:
-\u2022 \u{1F41F} Ikan Panggang Teppan / Pepes Tahu Ayam
-\u2022 \u{1F954} 1 buah kentang panggang ukuran sedang
-\u2022 \u{1F957} Salad hijau segar dengan sedikit olive oil
-
-\u{1F34E} *Camilan Sehat / Snack (~${targetSnack} kcal)*:
-\u2022 \u{1F34F} 1 buah Apel Merah atau 1 porsi Greek Yogurt rendah lemak
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"Nikmati setiap porsi makanmu ya ${name}! Nutrisi yang seimbang adalah bentuk kasih sayang untuk tubuhmu \u{1F331}\u2728"`;
+  const todayStr = getTodayDateStr();
+  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, sodium: 0, logs: [] };
+  const remainingCal = Math.max(0, targetCalories - totals.calories);
+  const remainingProt = Math.max(0, proteinGrams - totals.protein);
+  const remainingCarb = Math.max(0, carbGrams - totals.carbs);
+  const remainingFat = Math.max(0, fatGrams - totals.fat);
+  const currentSodium = totals.sodium || 0;
+  const lower = (userText || "").toLowerCase();
+  const isNight = lower.includes("malam") || lower.includes("dinner");
+  const isLunch = lower.includes("siang") || lower.includes("lunch");
+  const isBreakfast = lower.includes("pagi") || lower.includes("sarapan") || lower.includes("breakfast");
+  const isSnack = lower.includes("snack") || lower.includes("camilan") || lower.includes("cemilan");
+  let mealContextLabel = "Hari Ini";
+  if (isNight) mealContextLabel = "Makan Malam (Dinner)";
+  else if (isLunch) mealContextLabel = "Makan Siang (Lunch)";
+  else if (isBreakfast) mealContextLabel = "Sarapan (Breakfast)";
+  else if (isSnack) mealContextLabel = "Camilan Sehat (Snack)";
+  const macroGuidance = [];
+  if (currentSodium > 2e3) {
+    macroGuidance.push(`\u26A0\uFE0F *Sodium Tinggi (${currentSodium.toLocaleString("id-ID")} mg)*: Pilih menu minim garam/kecap dan hindari kuah asin.`);
   }
+  if (remainingProt > 20) {
+    macroGuidance.push(`\u{1F356} *Protein*: Butuh ~${remainingProt}g lagi untuk menunjang otot & rasa kenyang.`);
+  }
+  if (remainingFat < 15 && remainingFat > 0) {
+    macroGuidance.push(`\u{1F953} *Sisa Lemak Tipis (${remainingFat}g)*: Utamakan metode rebus, kukus, atau panggang tanpa minyak.`);
+  }
+  let recommendedMenu = "";
+  if (isNight || remainingCal > 0 && remainingCal <= 650 && totals.calories > 0) {
+    const mealCal = Math.min(remainingCal, 500) || 450;
+    recommendedMenu = `\u{1F319} *Menu Makan Malam Rekomendasi (~${mealCal} kcal)*:
+\u2022 \u{1F357} 150g Dada Ayam Panggang / Pepes Ikan Bening (~165 kcal, P:31g)
+\u2022 \u{1F35A} 1 centong Nasi Putih / 150g Kentang Rebus (~130 kcal, C:28g)
+\u2022 \u{1F966} 1 Mangkok Sayur Bening Bayam & Jagung Manis (~60 kcal)
+\u2022 \u{1F4A7} Air Putih 1-2 Gelas Besar`;
+  } else if (isLunch) {
+    const mealCal = Math.min(remainingCal, 650) || 550;
+    recommendedMenu = `\u2600\uFE0F *Menu Makan Siang Rekomendasi (~${mealCal} kcal)*:
+\u2022 \u{1F969} 120g Daging Sapi Lada Hitam Low Fat / Ayam Bakar Dada (~220 kcal, P:28g)
+\u2022 \u{1F35A} 1.5 centong Nasi Merah / Nasi Putih (~180 kcal, C:38g)
+\u2022 \u{1F957} Tumis Buncis & Wortel Sedikit Minyak (~70 kcal)`;
+  } else if (isBreakfast) {
+    recommendedMenu = `\u{1F305} *Menu Sarapan Rekomendasi (~380 kcal)*:
+\u2022 \u{1F373} 2 Telur Rebus + 1 Putih Telur (~170 kcal, P:18g)
+\u2022 \u{1F35E} 2 Tangkup Roti Gandum Utuh (~150 kcal, C:26g)
+\u2022 \u2615 Kopi / Teh Tanpa Gula`;
+  } else {
+    recommendedMenu = `\u{1F305} *Pagi (~${Math.round(targetCalories * 0.25)} kcal)*: 2 Telur Rebus + Roti Gandum / Oatmeal
+\u2600\uFE0F *Siang (~${Math.round(targetCalories * 0.35)} kcal)*: 150g Dada Ayam / Ikan + Nasi + Sayur Segar
+\u{1F319} *Malam (~${Math.round(targetCalories * 0.3)} kcal)*: Pepes Ikan / Ayam Kukus + Kentang / Sayur Bening
+\u{1F34E} *Snack (~${Math.round(targetCalories * 0.1)} kcal)*: 1 Buah Apel / Greek Yogurt`;
+  }
+  const adviceQuote = persona === "max" ? remainingCal < 300 ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! \u{1F525}" : "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! \u{1F4AA}" : remainingCal < 300 ? "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! \u2728" : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini \u{1F331}\u2728";
+  return `\u{1F37D}\uFE0F *REKOMENDASI MENU ${mealContextLabel.toUpperCase()}*
+\u{1F3AF} *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
+
+\u{1F4CA} *Status Nutrisi Hari Ini*:
+\u2022 Sisa Kalori: *~${remainingCal} kcal* (${totals.calories}/${targetCalories} kcal)
+\u2022 Sisa Protein: *~${remainingProt}g* (${totals.protein}/${proteinGrams}g)
+\u2022 Sisa Lemak: *~${remainingFat}g* (${totals.fat}/${fatGrams}g)
+\u2022 Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* ${currentSodium > 2e3 ? "\u{1F534} (Melebihi Batas)" : "\u{1F7E2} (Aman)"}
+
+` + (macroGuidance.length > 0 ? `${macroGuidance.join("\n")}
+
+` : "") + `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+${recommendedMenu}
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4AC} *${coachName}*:
+"${adviceQuote}"`;
 }
 function formatEquipmentCard(parsedAi, userData) {
   const persona = userData.persona === "mia" || userData.persona === "nikita" ? "mia" : "max";
@@ -47490,12 +47502,154 @@ Berikut daftar gerakan yang terjadwal untukmu:
 
 Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
 }
+var ADDITIONAL_ACTIVITY_MAP = [
+  { keywords: ["berenang", "swimming", "renang"], name: "Berenang (Swimming)", icon: "\u{1F3CA}\u200D\u2642\uFE0F", category: "cardio", met: 8 },
+  { keywords: ["lari", "running", "jogging", "joging"], name: "Lari (Running)", icon: "\u{1F3C3}\u200D\u2642\uFE0F", category: "cardio", met: 9.5 },
+  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking"], name: "Jalan Kaki (Walking)", icon: "\u{1F6B6}\u200D\u2642\uFE0F", category: "cardio", met: 3.8 },
+  { keywords: ["sepeda", "bersepeda", "cycling", "gowes"], name: "Bersepeda (Cycling)", icon: "\u{1F6B4}\u200D\u2642\uFE0F", category: "cardio", met: 7.5 },
+  { keywords: ["badminton", "bulutangkis"], name: "Badminton", icon: "\u{1F3F8}", category: "sports", met: 7 },
+  { keywords: ["futsal", "sepak bola", "football", "soccer"], name: "Futsal / Sepak Bola", icon: "\u26BD", category: "sports", met: 8.5 },
+  { keywords: ["basket", "basketball"], name: "Basket", icon: "\u{1F3C0}", category: "sports", met: 8 },
+  { keywords: ["tenis", "tennis", "padel"], name: "Tenis / Padel", icon: "\u{1F3BE}", category: "sports", met: 7.5 },
+  { keywords: ["yoga"], name: "Yoga", icon: "\u{1F9D8}\u200D\u2640\uFE0F", category: "flexibility", met: 3.5 },
+  { keywords: ["pilates"], name: "Pilates", icon: "\u{1F9D8}", category: "flexibility", met: 4 },
+  { keywords: ["zumba", "dance", "aerobik", "aerobic"], name: "Zumba / Aerobik", icon: "\u{1F483}", category: "cardio", met: 6.5 },
+  { keywords: ["treadmill"], name: "Treadmill", icon: "\u{1F3C3}", category: "cardio", met: 8.5 },
+  { keywords: ["skipping", "lompat tali", "jumping rope"], name: "Lompat Tali", icon: "\u{1FAA2}", category: "cardio", met: 10 },
+  { keywords: ["boxing", "tinju", "muay thai"], name: "Boxing / Muay Thai", icon: "\u{1F94A}", category: "martial_arts", met: 9 },
+  { keywords: ["hiking", "naik gunung"], name: "Hiking", icon: "\u{1F9D7}", category: "outdoor", met: 6.5 },
+  { keywords: ["workout", "olahraga", "latihan tambahan", "home workout", "gym"], name: "Olahraga Tambahan", icon: "\u{1F3CB}\uFE0F", category: "general", met: 6 }
+];
+function handleAdditionalActivityLogging(rawPhone, userText, userData) {
+  const phone = normalizePhone(rawPhone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const lower = userText.toLowerCase().trim();
+  if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
+    return null;
+  }
+  const dateInfo = parseDateFromQuery(userText);
+  const targetDate = dateInfo.dateStr;
+  const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+  const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+  let existingActivities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+  if (!Array.isArray(existingActivities)) existingActivities = [];
+  const deleteMatch = lower.match(/(?:hapus|delete|batal(?:kan)?)\s+(?:aktivitas\s*)?(?:olahraga\s*)?([a-z\s]+)/i);
+  if (deleteMatch) {
+    const actQuery = deleteMatch[1].trim();
+    const matchedToDelete = ADDITIONAL_ACTIVITY_MAP.find((a) => a.keywords.some((k) => actQuery.includes(k)));
+    if (matchedToDelete && existingActivities.length > 0) {
+      const initLen = existingActivities.length;
+      existingActivities = existingActivities.filter((a) => !a.activityName.toLowerCase().includes(matchedToDelete.keywords[0]));
+      if (existingActivities.length < initLen) {
+        dbData.dailyLogs[actKey] = existingActivities;
+        dbData.dailyLogs[altActKey] = existingActivities;
+        saveDb();
+        return [
+          `\u{1F5D1}\uFE0F *AKTIVITAS TAMBAHAN DIHAPUS*
+-----------------------------
+\u2705 Catatan *${matchedToDelete.name}* ${matchedToDelete.icon} telah dihapus dari riwayat latihan ${dateInfo.label}.
+
+Dashboard web sudah otomatis diperbarui. \u2728`
+        ];
+      }
+    }
+  }
+  let matchedAct = null;
+  for (const act of ADDITIONAL_ACTIVITY_MAP) {
+    if (act.keywords.some((k) => lower.includes(k))) {
+      matchedAct = act;
+      break;
+    }
+  }
+  if (!matchedAct) return null;
+  let duration = void 0;
+  const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)/i);
+  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)/i);
+  if (minMatch) {
+    duration = parseInt(minMatch[1], 10);
+  } else if (hourMatch) {
+    duration = Math.round(parseFloat(hourMatch[1].replace(",", ".")) * 60);
+  } else if (lower.includes("setengah jam")) {
+    duration = 30;
+  }
+  let distance = void 0;
+  const kmMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilo|kilometer)/i);
+  if (kmMatch) {
+    distance = parseFloat(kmMatch[1].replace(",", "."));
+  }
+  const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
+  const weight = userData.weight || 70;
+  const durHours = duration ? duration / 60 : distance ? distance / 10 : 0.5;
+  const calBurn = Math.round(matchedAct.met * weight * durHours);
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  if (isEdit && existingActivities.length > 0) {
+    const existingIndex = existingActivities.findIndex((a) => a.activityName.toLowerCase().includes(matchedAct.keywords[0]));
+    if (existingIndex !== -1) {
+      if (duration) existingActivities[existingIndex].durationMinutes = duration;
+      if (distance) existingActivities[existingIndex].distanceKm = distance;
+      existingActivities[existingIndex].estimatedCaloriesBurned = calBurn;
+      dbData.dailyLogs[actKey] = existingActivities;
+      dbData.dailyLogs[altActKey] = existingActivities;
+      saveDb();
+      return [
+        `\u270F\uFE0F *AKTIVITAS TAMBAHAN DIPERBARUI*
+-----------------------------
+\u2705 Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${distance ? ` (${distance} km)` : ""} (~${calBurn} kcal estimasi).
+
+Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
+      ];
+    }
+  }
+  const newActivity = {
+    id: `act-${Date.now()}`,
+    activityName: matchedAct.name,
+    category: matchedAct.category,
+    icon: matchedAct.icon,
+    durationMinutes: duration,
+    distanceKm: distance,
+    estimatedCaloriesBurned: calBurn,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    status: "completed"
+  };
+  existingActivities.push(newActivity);
+  dbData.dailyLogs[actKey] = existingActivities;
+  dbData.dailyLogs[altActKey] = existingActivities;
+  saveDb();
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
+  const todayDayName = dayNames[currentDayIdx];
+  const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
+  const isRest = !todayRoutine || todayRoutine.focus.toLowerCase().includes("rest") || todayRoutine.focus.toLowerCase().includes("istirahat") || (todayRoutine.exercises || []).length === 0;
+  const scheduleNote = isRest ? `Hari ini memang jadwal *Rest Day* kamu. Aktivitas tambahan ini sangat bagus untuk pemulihan aktif tanpa membebani otot! \u{1F33F}` : `Jadwal latihan utama kamu (*${todayRoutine.focus}*) tetap tersimpan di Dashboard.`;
+  const details = [];
+  if (duration) details.push(`\u23F1\uFE0F Durasi: *${duration} menit*`);
+  if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
+  details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
+  const comment = userData.persona === "max" ? "Mantap bro! Aktivitas ekstra lo udah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}" : "Bagus banget tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728";
+  return [
+    `\u{1F3C5} *AKTIVITAS TAMBAHAN DICATAT*
+-----------------------------
+\u2705 *${matchedAct.name}* ${matchedAct.icon}
+${details.join(" \u2022 ")}
+
+\u{1F4A1} *Status Program*: ${scheduleNote}
+
+\u{1F4AC} *${coachName}*:
+"${comment}"`
+  ];
+}
 function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const lower = userText.toLowerCase().trim();
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
+  }
+  const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
+  if (additionalActResp) {
+    return additionalActResp;
   }
   const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|set|\bsets\b)/i);
   if (!hasWorkoutSignal) {
@@ -48553,22 +48707,60 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const targetDate = req.query.date || getLocalDateStr();
     const key = `gymbuddy_exercises_${phone}_${targetDate}`;
     const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
     const exercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-    res.json({ success: true, phone, date: targetDate, exercises });
+    const activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    res.json({ success: true, phone, date: targetDate, exercises, activities });
   });
   app.post("/api/user/:phone/exercises", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const targetDate = req.body?.date || req.query.date || getLocalDateStr();
-    const { exercises } = req.body;
+    const { exercises, activities } = req.body;
     const key = `gymbuddy_exercises_${phone}_${targetDate}`;
     const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
     if (Array.isArray(exercises)) {
       dbData.dailyLogs[key] = exercises;
       dbData.dailyLogs[altKey] = exercises;
+    }
+    if (Array.isArray(activities)) {
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
+    }
+    saveDb();
+    res.json({
+      success: true,
+      phone,
+      date: targetDate,
+      exercises: dbData.dailyLogs[key] || [],
+      activities: dbData.dailyLogs[actKey] || []
+    });
+  });
+  app.get("/api/user/:phone/activities", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    const activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    res.json({ success: true, phone, date: targetDate, activities });
+  });
+  app.post("/api/user/:phone/activities", import_express.default.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.body?.date || req.query.date || getLocalDateStr();
+    const { activities } = req.body;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    if (Array.isArray(activities)) {
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
       saveDb();
     }
-    res.json({ success: true, phone, date: targetDate, exercises: dbData.dailyLogs[key] || [] });
+    res.json({ success: true, phone, date: targetDate, activities: dbData.dailyLogs[actKey] || [] });
   });
   app.post("/api/user/:phone/reminder", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
@@ -48890,7 +49082,7 @@ https://gymbuddygroup.com`
             const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
             responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
           } else if (isRecommendationMessage) {
-            responseMessages = [generateMealRecommendations(userData)];
+            responseMessages = [generateMealRecommendations(userData, from, userText)];
           } else if (isCheckSummaryMessage) {
             const parsedDate = parseDateFromQuery(userText);
             const totals = getDailyTotals(from, parsedDate.dateStr);
@@ -49329,7 +49521,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
       } else if (isProgressHistoryMessage) {
         responseMessages = [formatProgressHistoryCard(normFrom)];
       } else if (isRecommendationMessage) {
-        responseMessages = [generateMealRecommendations(userData)];
+        responseMessages = [generateMealRecommendations(userData, normFrom, userText)];
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
         const totals = getDailyTotals(normFrom, parsedDate.dateStr);

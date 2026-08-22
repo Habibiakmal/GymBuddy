@@ -2360,69 +2360,97 @@ ${mealListStr}
 "${quote}"`;
 }
 
-function generateMealRecommendations(userData: ReturnType<typeof calculateUserData>): string {
-  const { name, targetCalories, goalTitle, persona } = userData;
+function generateMealRecommendations(
+  userData: ReturnType<typeof calculateUserData>,
+  rawPhone?: string,
+  userText?: string
+): string {
+  const { name, targetCalories, proteinGrams, carbGrams, fatGrams, goalTitle, persona } = userData;
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
 
-  const targetPagi = Math.round(targetCalories * 0.25);
-  const targetSiang = Math.round(targetCalories * 0.35);
-  const targetMalam = Math.round(targetCalories * 0.30);
-  const targetSnack = Math.round(targetCalories * 0.10);
+  const todayStr = getTodayDateStr();
+  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, sodium: 0, logs: [] };
+  
+  const remainingCal = Math.max(0, targetCalories - totals.calories);
+  const remainingProt = Math.max(0, proteinGrams - totals.protein);
+  const remainingCarb = Math.max(0, carbGrams - totals.carbs);
+  const remainingFat = Math.max(0, fatGrams - totals.fat);
+  const currentSodium = (totals as any).sodium || 0;
 
-  if (persona === "max") {
-    return `🍽️ *REKOMENDASI MENU MAKANAN HARI INI FOR ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
+  const lower = (userText || "").toLowerCase();
+  const isNight = lower.includes("malam") || lower.includes("dinner");
+  const isLunch = lower.includes("siang") || lower.includes("lunch");
+  const isBreakfast = lower.includes("pagi") || lower.includes("sarapan") || lower.includes("breakfast");
+  const isSnack = lower.includes("snack") || lower.includes("camilan") || lower.includes("cemilan");
 
-🌅 *Makan Pagi (~${targetPagi} kcal)*:
-• 🍳 3 Butir Telur Rebus / Orak-arik
-• 🍞 2 Tangkup Roti Gandum Utuh
-• ☕ Kopi Hitam / Teh Hijau Tanpa Gula
-_Makro: ~35g Protein, ~30g Karbo, ~12g Lemak_
+  let mealContextLabel = "Hari Ini";
+  if (isNight) mealContextLabel = "Makan Malam (Dinner)";
+  else if (isLunch) mealContextLabel = "Makan Siang (Lunch)";
+  else if (isBreakfast) mealContextLabel = "Sarapan (Breakfast)";
+  else if (isSnack) mealContextLabel = "Camilan Sehat (Snack)";
 
-☀️ *Makan Siang (~${targetSiang} kcal)*:
-• 🍗 150g Dada Ayam Panggang / Bakar Kecap
-• 🍚 150g Nasi Merah / Nasi Putih Porsi Terkontrol
-• 🥦 1 Mangkok Tumis Brokoli / Buncis Lada Hitam
-_Makro: ~45g Protein, ~45g Karbo, ~10g Lemak_
-
-🌙 *Makan Malam (~${targetMalam} kcal)*:
-• 🐟 150g Ikan Gurame / Salmon / Daging Sapi Cincang Low Fat
-• 🥔 150g Kentang Rebus / Ubi Kukus
-• 🥗 Salad Sayur Segar + Perasan Lemon
-_Makro: ~40g Protein, ~35g Karbo, ~12g Lemak_
-
-🍎 *Camilan Sehat (~${targetSnack} kcal)*:
-• 🍌 1 Buah Pisang + 1 Scoop Whey Protein / Greek Yogurt
-
------------------------------
-💬 *${coachName}*:
-"Nih menu juara buat capai target lo. Gak usah bikin alasan, patuhi porsinya & bantai hari ini! 🔥"`;
-  } else {
-    return `🌿🥗 *REKOMENDASI MENU SEHAT HARI INI UNTUK ${name.toUpperCase()}*
-🎯 *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
-
-🌅 *Makan Pagi / Breakfast (~${targetPagi} kcal)*:
-• 🥣 Oatmeal hangat dengan potongan pisang & 1 sdm madu
-• 🥚 2 butir telur rebus (tinggi protein & bikin kenyang)
-• 🍵 Teh hijau atau air putih hangat
-
-☀️ *Makan Siang / Lunch (~${targetSiang} kcal)*:
-• 🍗 150g Dada Ayam Tumis Wijen atau Sup Ayam Bening
-• 🍚 1 centong Nasi Merah / Nasi Utuh
-• 🥦 Tumis buncis, wortel, dan jagung manis
-
-🌙 *Makan Malam / Dinner (~${targetMalam} kcal)*:
-• 🐟 Ikan Panggang Teppan / Pepes Tahu Ayam
-• 🥔 1 buah kentang panggang ukuran sedang
-• 🥗 Salad hijau segar dengan sedikit olive oil
-
-🍎 *Camilan Sehat / Snack (~${targetSnack} kcal)*:
-• 🍏 1 buah Apel Merah atau 1 porsi Greek Yogurt rendah lemak
-
------------------------------
-💬 *${coachName}*:
-"Nikmati setiap porsi makanmu ya ${name}! Nutrisi yang seimbang adalah bentuk kasih sayang untuk tubuhmu 🌱✨"`;
+  // Targeted nutrition insights
+  const macroGuidance: string[] = [];
+  if (currentSodium > 2000) {
+    macroGuidance.push(`⚠️ *Sodium Tinggi (${currentSodium.toLocaleString("id-ID")} mg)*: Pilih menu minim garam/kecap dan hindari kuah asin.`);
   }
+  if (remainingProt > 20) {
+    macroGuidance.push(`🍖 *Protein*: Butuh ~${remainingProt}g lagi untuk menunjang otot & rasa kenyang.`);
+  }
+  if (remainingFat < 15 && remainingFat > 0) {
+    macroGuidance.push(`🥓 *Sisa Lemak Tipis (${remainingFat}g)*: Utamakan metode rebus, kukus, atau panggang tanpa minyak.`);
+  }
+
+  // Dynamic menu options
+  let recommendedMenu = "";
+  if (isNight || (remainingCal > 0 && remainingCal <= 650 && totals.calories > 0)) {
+    const mealCal = Math.min(remainingCal, 500) || 450;
+    recommendedMenu = `🌙 *Menu Makan Malam Rekomendasi (~${mealCal} kcal)*:\n` +
+      `• 🍗 150g Dada Ayam Panggang / Pepes Ikan Bening (~165 kcal, P:31g)\n` +
+      `• 🍚 1 centong Nasi Putih / 150g Kentang Rebus (~130 kcal, C:28g)\n` +
+      `• 🥦 1 Mangkok Sayur Bening Bayam & Jagung Manis (~60 kcal)\n` +
+      `• 💧 Air Putih 1-2 Gelas Besar`;
+  } else if (isLunch) {
+    const mealCal = Math.min(remainingCal, 650) || 550;
+    recommendedMenu = `☀️ *Menu Makan Siang Rekomendasi (~${mealCal} kcal)*:\n` +
+      `• 🥩 120g Daging Sapi Lada Hitam Low Fat / Ayam Bakar Dada (~220 kcal, P:28g)\n` +
+      `• 🍚 1.5 centong Nasi Merah / Nasi Putih (~180 kcal, C:38g)\n` +
+      `• 🥗 Tumis Buncis & Wortel Sedikit Minyak (~70 kcal)`;
+  } else if (isBreakfast) {
+    recommendedMenu = `🌅 *Menu Sarapan Rekomendasi (~380 kcal)*:\n` +
+      `• 🍳 2 Telur Rebus + 1 Putih Telur (~170 kcal, P:18g)\n` +
+      `• 🍞 2 Tangkup Roti Gandum Utuh (~150 kcal, C:26g)\n` +
+      `• ☕ Kopi / Teh Tanpa Gula`;
+  } else {
+    // General all-day menu
+    recommendedMenu = `🌅 *Pagi (~${Math.round(targetCalories*0.25)} kcal)*: 2 Telur Rebus + Roti Gandum / Oatmeal\n` +
+      `☀️ *Siang (~${Math.round(targetCalories*0.35)} kcal)*: 150g Dada Ayam / Ikan + Nasi + Sayur Segar\n` +
+      `🌙 *Malam (~${Math.round(targetCalories*0.30)} kcal)*: Pepes Ikan / Ayam Kukus + Kentang / Sayur Bening\n` +
+      `🍎 *Snack (~${Math.round(targetCalories*0.10)} kcal)*: 1 Buah Apel / Greek Yogurt`;
+  }
+
+  const adviceQuote = persona === "max"
+    ? (remainingCal < 300 
+        ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! 🔥"
+        : "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! 💪")
+    : (remainingCal < 300
+        ? "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! ✨"
+        : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini 🌱✨");
+
+  return (
+    `🍽️ *REKOMENDASI MENU ${mealContextLabel.toUpperCase()}*\n` +
+    `🎯 *Goal*: ${goalTitle} (${targetCalories} kcal/hari)\n\n` +
+    `📊 *Status Nutrisi Hari Ini*:\n` +
+    `• Sisa Kalori: *~${remainingCal} kcal* (${totals.calories}/${targetCalories} kcal)\n` +
+    `• Sisa Protein: *~${remainingProt}g* (${totals.protein}/${proteinGrams}g)\n` +
+    `• Sisa Lemak: *~${remainingFat}g* (${totals.fat}/${fatGrams}g)\n` +
+    `• Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* ${currentSodium > 2000 ? "🔴 (Melebihi Batas)" : "🟢 (Aman)"}\n\n` +
+    (macroGuidance.length > 0 ? `${macroGuidance.join("\n")}\n\n` : "") +
+    `━━━━━━━━━━━━━━\n` +
+    `${recommendedMenu}\n\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `💬 *${coachName}*:\n"${adviceQuote}"`
+  );
 }
 
 function formatEquipmentCard(parsedAi: any, userData: ReturnType<typeof calculateUserData>): string {
@@ -2571,6 +2599,188 @@ function generateWorkoutRecommendations(userData: ReturnType<typeof calculateUse
   );
 }
 
+interface AdditionalActivity {
+  id: string;
+  activityName: string;
+  category: string;
+  icon: string;
+  durationMinutes?: number;
+  distanceKm?: number;
+  estimatedCaloriesBurned?: number;
+  timestamp: string;
+  status: "completed";
+}
+
+const ADDITIONAL_ACTIVITY_MAP = [
+  { keywords: ["berenang", "swimming", "renang"], name: "Berenang (Swimming)", icon: "🏊‍♂️", category: "cardio", met: 8 },
+  { keywords: ["lari", "running", "jogging", "joging"], name: "Lari (Running)", icon: "🏃‍♂️", category: "cardio", met: 9.5 },
+  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking"], name: "Jalan Kaki (Walking)", icon: "🚶‍♂️", category: "cardio", met: 3.8 },
+  { keywords: ["sepeda", "bersepeda", "cycling", "gowes"], name: "Bersepeda (Cycling)", icon: "🚴‍♂️", category: "cardio", met: 7.5 },
+  { keywords: ["badminton", "bulutangkis"], name: "Badminton", icon: "🏸", category: "sports", met: 7 },
+  { keywords: ["futsal", "sepak bola", "football", "soccer"], name: "Futsal / Sepak Bola", icon: "⚽", category: "sports", met: 8.5 },
+  { keywords: ["basket", "basketball"], name: "Basket", icon: "🏀", category: "sports", met: 8 },
+  { keywords: ["tenis", "tennis", "padel"], name: "Tenis / Padel", icon: "🎾", category: "sports", met: 7.5 },
+  { keywords: ["yoga"], name: "Yoga", icon: "🧘‍♀️", category: "flexibility", met: 3.5 },
+  { keywords: ["pilates"], name: "Pilates", icon: "🧘", category: "flexibility", met: 4 },
+  { keywords: ["zumba", "dance", "aerobik", "aerobic"], name: "Zumba / Aerobik", icon: "💃", category: "cardio", met: 6.5 },
+  { keywords: ["treadmill"], name: "Treadmill", icon: "🏃", category: "cardio", met: 8.5 },
+  { keywords: ["skipping", "lompat tali", "jumping rope"], name: "Lompat Tali", icon: "🪢", category: "cardio", met: 10 },
+  { keywords: ["boxing", "tinju", "muay thai"], name: "Boxing / Muay Thai", icon: "🥊", category: "martial_arts", met: 9 },
+  { keywords: ["hiking", "naik gunung"], name: "Hiking", icon: "🧗", category: "outdoor", met: 6.5 },
+  { keywords: ["workout", "olahraga", "latihan tambahan", "home workout", "gym"], name: "Olahraga Tambahan", icon: "🏋️", category: "general", met: 6 }
+];
+
+function handleAdditionalActivityLogging(
+  rawPhone: string,
+  userText: string,
+  userData: ReturnType<typeof calculateUserData>
+): string[] | null {
+  const phone = normalizePhone(rawPhone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+  const lower = userText.toLowerCase().trim();
+
+  // Guard: Questions or tutorials
+  if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
+    return null;
+  }
+
+  // Parse target date (e.g. "kemarin aku berenang 45 menit")
+  const dateInfo = parseDateFromQuery(userText);
+  const targetDate = dateInfo.dateStr;
+  const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+  const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+
+  let existingActivities: AdditionalActivity[] = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+  if (!Array.isArray(existingActivities)) existingActivities = [];
+
+  // Check DELETE command (e.g. "hapus swimming tadi", "hapus berenang")
+  const deleteMatch = lower.match(/(?:hapus|delete|batal(?:kan)?)\s+(?:aktivitas\s*)?(?:olahraga\s*)?([a-z\s]+)/i);
+  if (deleteMatch) {
+    const actQuery = deleteMatch[1].trim();
+    const matchedToDelete = ADDITIONAL_ACTIVITY_MAP.find(a => a.keywords.some(k => actQuery.includes(k)));
+    if (matchedToDelete && existingActivities.length > 0) {
+      const initLen = existingActivities.length;
+      existingActivities = existingActivities.filter(a => !a.activityName.toLowerCase().includes(matchedToDelete.keywords[0]));
+      if (existingActivities.length < initLen) {
+        dbData.dailyLogs[actKey] = existingActivities;
+        dbData.dailyLogs[altActKey] = existingActivities;
+        saveDb();
+        return [
+          `🗑️ *AKTIVITAS TAMBAHAN DIHAPUS*\n-----------------------------\n` +
+          `✅ Catatan *${matchedToDelete.name}* ${matchedToDelete.icon} telah dihapus dari riwayat latihan ${dateInfo.label}.\n\n` +
+          `Dashboard web sudah otomatis diperbarui. ✨`
+        ];
+      }
+    }
+  }
+
+  // Match activity type
+  let matchedAct = null;
+  for (const act of ADDITIONAL_ACTIVITY_MAP) {
+    if (act.keywords.some(k => lower.includes(k))) {
+      matchedAct = act;
+      break;
+    }
+  }
+
+  if (!matchedAct) return null;
+
+  // Extract duration
+  let duration: number | undefined = undefined;
+  const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)/i);
+  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)/i);
+  if (minMatch) {
+    duration = parseInt(minMatch[1], 10);
+  } else if (hourMatch) {
+    duration = Math.round(parseFloat(hourMatch[1].replace(",", ".")) * 60);
+  } else if (lower.includes("setengah jam")) {
+    duration = 30;
+  }
+
+  // Extract distance
+  let distance: number | undefined = undefined;
+  const kmMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilo|kilometer)/i);
+  if (kmMatch) {
+    distance = parseFloat(kmMatch[1].replace(",", "."));
+  }
+
+  // Check if message is an edit/correction (e.g. "berenang tadi sebenarnya 60 menit")
+  const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
+
+  // Calorie Burn Estimation (MET * Weight * Hours)
+  const weight = userData.weight || 70;
+  const durHours = duration ? duration / 60 : (distance ? (distance / 10) : 0.5);
+  const calBurn = Math.round(matchedAct.met * weight * durHours);
+
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+  if (isEdit && existingActivities.length > 0) {
+    const existingIndex = existingActivities.findIndex(a => a.activityName.toLowerCase().includes(matchedAct!.keywords[0]));
+    if (existingIndex !== -1) {
+      if (duration) existingActivities[existingIndex].durationMinutes = duration;
+      if (distance) existingActivities[existingIndex].distanceKm = distance;
+      existingActivities[existingIndex].estimatedCaloriesBurned = calBurn;
+
+      dbData.dailyLogs[actKey] = existingActivities;
+      dbData.dailyLogs[altActKey] = existingActivities;
+      saveDb();
+
+      return [
+        `✏️ *AKTIVITAS TAMBAHAN DIPERBARUI*\n-----------------------------\n` +
+        `✅ Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${distance ? ` (${distance} km)` : ""} (~${calBurn} kcal estimasi).\n\n` +
+        `Data terbaru sudah langsung tersimpan di Dashboard! 🚀`
+      ];
+    }
+  }
+
+  // Add new activity
+  const newActivity: AdditionalActivity = {
+    id: `act-${Date.now()}`,
+    activityName: matchedAct.name,
+    category: matchedAct.category,
+    icon: matchedAct.icon,
+    durationMinutes: duration,
+    distanceKm: distance,
+    estimatedCaloriesBurned: calBurn,
+    timestamp: new Date().toISOString(),
+    status: "completed"
+  };
+
+  existingActivities.push(newActivity);
+  dbData.dailyLogs[actKey] = existingActivities;
+  dbData.dailyLogs[altActKey] = existingActivities;
+  saveDb();
+
+  const goal = userData.goal || "healthy";
+  const schedule = getDefaultWeeklySchedule(goal);
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const currentDayIdx = new Date().getDay();
+  const todayDayName = dayNames[currentDayIdx];
+  const todayRoutine = schedule.find(s => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
+  const isRest = !todayRoutine || todayRoutine.focus.toLowerCase().includes("rest") || todayRoutine.focus.toLowerCase().includes("istirahat") || (todayRoutine.exercises || []).length === 0;
+
+  const scheduleNote = isRest
+    ? `Hari ini memang jadwal *Rest Day* kamu. Aktivitas tambahan ini sangat bagus untuk pemulihan aktif tanpa membebani otot! 🌿`
+    : `Jadwal latihan utama kamu (*${todayRoutine.focus}*) tetap tersimpan di Dashboard.`;
+
+  const details: string[] = [];
+  if (duration) details.push(`⏱️ Durasi: *${duration} menit*`);
+  if (distance) details.push(`📍 Jarak: *${distance} km*`);
+  details.push(`🔥 Estimasi Bakar: *~${calBurn} kcal*`);
+
+  const comment = userData.persona === "max"
+    ? "Mantap bro! Aktivitas ekstra lo udah tercatat. Tetap jaga hidrasi & makan bergizi! 🔥"
+    : "Bagus banget tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya ✨";
+
+  return [
+    `🏅 *AKTIVITAS TAMBAHAN DICATAT*\n-----------------------------\n` +
+    `✅ *${matchedAct.name}* ${matchedAct.icon}\n` +
+    `${details.join(" • ")}\n\n` +
+    `💡 *Status Program*: ${scheduleNote}\n\n` +
+    `💬 *${coachName}*:\n"${comment}"`
+  ];
+}
+
 function handleWorkoutProgressLogging(
   rawPhone: string,
   userText: string,
@@ -2583,6 +2793,12 @@ function handleWorkoutProgressLogging(
   // Guard: if message is a question or request for tutorial, do not log
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
+  }
+
+  // Check additional activity first (e.g. "aku tadi berenang 45 menit", "lari 5 km", "hapus swimming")
+  const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
+  if (additionalActResp) {
+    return additionalActResp;
   }
 
   // Check if message indicates progress or completion of workout
@@ -3870,30 +4086,71 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, schedule: calculated.workoutSchedule });
   });
 
-  // REST API: Get/Update Daily Exercise Checklist (Cross-Device Sync)
+  // REST API: Get/Update Daily Exercise Checklist & Additional Activities (Cross-Device Sync)
   app.get("/api/user/:phone/exercises", (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
     const key = `gymbuddy_exercises_${phone}_${targetDate}`;
     const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
     const exercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-    res.json({ success: true, phone, date: targetDate, exercises });
+    const activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    res.json({ success: true, phone, date: targetDate, exercises, activities });
   });
 
   app.post("/api/user/:phone/exercises", express.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = req.body?.date || (req.query.date as string) || getLocalDateStr();
-    const { exercises } = req.body;
+    const { exercises, activities } = req.body;
     const key = `gymbuddy_exercises_${phone}_${targetDate}`;
     const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
     if (Array.isArray(exercises)) {
       dbData.dailyLogs[key] = exercises;
       dbData.dailyLogs[altKey] = exercises;
+    }
+    if (Array.isArray(activities)) {
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
+    }
+    saveDb();
+    res.json({
+      success: true,
+      phone,
+      date: targetDate,
+      exercises: dbData.dailyLogs[key] || [],
+      activities: dbData.dailyLogs[actKey] || []
+    });
+  });
+
+  // REST API: Get/Update Additional Activities specifically
+  app.get("/api/user/:phone/activities", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const targetDate = (req.query.date as string) || getLocalDateStr();
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    const activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    res.json({ success: true, phone, date: targetDate, activities });
+  });
+
+  app.post("/api/user/:phone/activities", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const targetDate = req.body?.date || (req.query.date as string) || getLocalDateStr();
+    const { activities } = req.body;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    if (Array.isArray(activities)) {
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
       saveDb();
     }
-    res.json({ success: true, phone, date: targetDate, exercises: dbData.dailyLogs[key] || [] });
+    res.json({ success: true, phone, date: targetDate, activities: dbData.dailyLogs[actKey] || [] });
   });
 
   // REST API: Update Reminder Settings for Dashboard & WhatsApp Sync
@@ -4312,7 +4569,7 @@ const mediaUrl = mediaRes.data.url;
             const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
             responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
           } else if (isRecommendationMessage) {
-            responseMessages = [generateMealRecommendations(userData)];
+            responseMessages = [generateMealRecommendations(userData, from, userText)];
           } else if (isCheckSummaryMessage) {
             const parsedDate = parseDateFromQuery(userText);
             const totals = getDailyTotals(from, parsedDate.dateStr);
@@ -4853,7 +5110,7 @@ function escapeXml(unsafe: string): string {
       } else if (isProgressHistoryMessage) {
         responseMessages = [formatProgressHistoryCard(normFrom)];
       } else if (isRecommendationMessage) {
-        responseMessages = [generateMealRecommendations(userData)];
+        responseMessages = [generateMealRecommendations(userData, normFrom, userText)];
       } else if (isCheckSummaryMessage) {
         const parsedDate = parseDateFromQuery(userText);
         const totals = getDailyTotals(normFrom, parsedDate.dateStr);

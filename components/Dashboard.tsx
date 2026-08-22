@@ -144,6 +144,18 @@ interface DaySchedule {
   exercises: WorkoutExercise[];
 }
 
+interface AdditionalActivity {
+  id: string;
+  activityName: string;
+  category?: string;
+  icon?: string;
+  durationMinutes?: number;
+  distanceKm?: number;
+  estimatedCaloriesBurned?: number;
+  timestamp: string;
+  status: "completed";
+}
+
 type FeelState = "bad" | "sick" | "not_great" | "okay" | "good" | "great";
 
 // Helper function to check if item name is liquid / drink
@@ -1292,6 +1304,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     return todayScheduleObj.exercises;
   });
 
+  const [activities, setActivities] = useState<AdditionalActivity[]>([]);
   const [activeWorkoutDetail, setActiveWorkoutDetail] = useState<WorkoutExercise | null>(null);
   const [showExerciseExplorerModal, setShowExerciseExplorerModal] = useState(false);
   const [explorerSearch, setExplorerSearch] = useState("");
@@ -1803,15 +1816,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         setExercises(todayScheduleObj.exercises);
       }
 
-      // Query server for latest checklist state (cross-device sync)
+      // Query server for latest checklist state & additional activities (cross-device sync)
       if (_normPhone) {
         const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
         fetch(`${API_BASE_URL}/api/user/${_normPhone}/exercises?date=${selectedDate}`)
           .then(r => r.ok ? r.json() : null)
           .then(data => {
-            if (data && Array.isArray(data.exercises) && data.exercises.length > 0) {
-              setExercises(data.exercises);
-              localStorage.setItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`, JSON.stringify(data.exercises));
+            if (data) {
+              if (Array.isArray(data.exercises) && data.exercises.length > 0) {
+                setExercises(data.exercises);
+                localStorage.setItem(`gymbuddy_exercises_${_normPhone}_${selectedDate}`, JSON.stringify(data.exercises));
+              }
+              if (Array.isArray(data.activities)) {
+                setActivities(data.activities);
+              }
             }
           })
           .catch(() => {});
@@ -3618,7 +3636,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             </div>
 
             {!showFullWeeklyOverview ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {exercises.map((ex) => {
                   const percent = ex.targetSets > 0 ? Math.round((ex.completedSets / ex.targetSets) * 100) : 0;
                   const isDone = percent === 100;
@@ -3686,6 +3705,41 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   );
                 })}
               </div>
+
+              {activities.length > 0 && (
+                <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-[#121722] border border-white/[0.06] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                      <span>🏅</span>
+                      <span>{isEN ? "Additional Activities (Logged via WhatsApp)" : "Aktivitas Tambahan Hari Ini"}</span>
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                      {activities.length} {isEN ? "Activity" : "Aktivitas"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activities.map((act) => (
+                      <div key={act.id} className="flex items-center justify-between p-3 rounded-xl bg-[#18202E] border border-white/[0.06]">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl">{act.icon || "🏅"}</span>
+                          <div>
+                            <p className="font-extrabold text-xs sm:text-sm text-white">{act.activityName}</p>
+                            <p className="text-[11px] text-neutral-400 font-medium">
+                              {act.durationMinutes ? `${act.durationMinutes} menit` : ""}
+                              {act.distanceKm ? ` • ${act.distanceKm} km` : ""}
+                              {act.estimatedCaloriesBurned ? ` • ~${act.estimatedCaloriesBurned} kcal` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black">
+                          ✅ {isEN ? "Done" : "Selesai"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
             ) : (
               <div className="space-y-4">
                 {weeklySchedule.map((daySch) => {
