@@ -46735,9 +46735,10 @@ function addMealLog(rawPhone, meal, targetDateStr) {
 }
 function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan") {
   const phone = normalizePhone(rawPhone);
-  const user = getUserProfile(phone);
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const user = getUserProfile(phone) || getUserProfile(altPhone);
   if (!user) return null;
-  const history = dbData.weeklyProgress[phone] || [];
+  const history = dbData.weeklyProgress[phone] || dbData.weeklyProgress[altPhone] || [];
   const startWeight = Number(user.startWeight) || currentWeight;
   const lastEntry = history.length > 0 ? history[history.length - 1] : null;
   const lastWeight = lastEntry ? Number(lastEntry.weight) : startWeight;
@@ -46762,9 +46763,21 @@ function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan")
     dbData.weeklyProgress[phone] = [];
   }
   dbData.weeklyProgress[phone].push(entry);
+  dbData.weeklyProgress[altPhone] = dbData.weeklyProgress[phone];
   user.weight = currentWeight;
+  user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   dbData.users[phone] = user;
+  dbData.users[altPhone] = user;
   saveDb();
+  saveUserProfile(phone, user);
+  saveUserDocument({
+    userId: `usr_${phone}`,
+    phone,
+    ...user,
+    weight: currentWeight,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).catch(() => {
+  });
   return { entry, history: dbData.weeklyProgress[phone], userData: calculateUserData(user) };
 }
 function formatWeeklyProgressCard(progressResult) {
@@ -47883,13 +47896,15 @@ async function startServer() {
   });
   app.get("/api/user/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
-    const user = await findUserByPhoneOrId(phone) || getUserProfile(phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const user = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone);
     if (!user) {
       return res.status(404).json({ error: "User profile not found in database" });
     }
     const calculated = calculateUserData(user);
     const streak = getStreakCount(phone);
     const waterCups = getWaterCups(phone);
+    const history = dbData.weeklyProgress[phone] || dbData.weeklyProgress[altPhone] || [];
     res.json({
       ...user,
       ...calculated,
@@ -47897,6 +47912,7 @@ async function startServer() {
       profile: { ...user, ...calculated },
       userData: calculated,
       calculated,
+      history,
       streak,
       waterCups
     });
