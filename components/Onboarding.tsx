@@ -91,9 +91,50 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   const [gender, setGender] = useState<"pria" | "wanita">("pria");
   const [weight, setWeight] = useState("65");
   const [height, setHeight] = useState("170");
+  const [dob, setDob] = useState("");
   const [age, setAge] = useState("25");
   const [userTargetWeight, setUserTargetWeight] = useState("");
   const [allergies, setAllergies] = useState<string[]>(["none"]);
+
+  // Health Profile State
+  const [healthStatus, setHealthStatus] = useState<"no_condition" | "has_condition" | "prefer_not_to_say">("no_condition");
+  const [healthConditions, setHealthConditions] = useState<string[]>([]);
+  const [otherCondition, setOtherCondition] = useState("");
+
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob);
+    if (newDob && /^\d{4}-\d{2}-\d{2}$/.test(newDob)) {
+      const d = new Date(newDob);
+      if (!isNaN(d.getTime())) {
+        const today = new Date();
+        let calculated = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+          calculated--;
+        }
+        if (calculated >= 10 && calculated <= 120) {
+          setAge(String(calculated));
+        }
+      }
+    }
+  };
+
+  const toggleHealthCondition = (conditionName: string) => {
+    setHealthConditions((prev) => {
+      if (prev.includes(conditionName)) {
+        return prev.filter((c) => c !== conditionName);
+      } else {
+        return [...prev, conditionName];
+      }
+    });
+  };
+
+  const getAgeGroupLabel = (ageNum: number) => {
+    if (ageNum < 13) return isEN ? "Child (<13 yrs)" : "Anak (<13 th)";
+    if (ageNum <= 17) return isEN ? "Teen (13-17 yrs)" : "Remaja (13-17 th)";
+    if (ageNum < 60) return isEN ? "Adult (18-59 yrs)" : "Dewasa (18-59 th)";
+    return isEN ? "Older Adult (60+ yrs)" : "Lansia (60+ th)";
+  };
 
   const toggleAllergy = (allergyId: string) => {
     setAllergies((prev) => {
@@ -186,6 +227,16 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           aiRecommendedTargetWeight: aiRecommendedW,
           height: Number(height) || 165,
           age: Number(age) || 25,
+          dob,
+          healthProfile: {
+            dob,
+            age: Number(age) || 25,
+            hasCondition: healthStatus,
+            conditions: healthStatus === "has_condition" ? healthConditions : [],
+            otherCondition: healthStatus === "has_condition" ? otherCondition : "",
+            isCompleted: true,
+            completedAt: new Date().toISOString()
+          },
           activityLevel,
           experience,
           satisfaction,
@@ -247,7 +298,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
         clearTimeout(timeout);
       };
     }
-  }, [step, phone, name, goal, goalEvent, goalSecondary, emotionalVision, gender, weight, height, age, activityLevel, experience, satisfaction, challenges, persona, selectedPlan, selectedFeature]);
+  }, [step, phone, name, goal, goalEvent, goalSecondary, emotionalVision, gender, weight, height, age, dob, healthStatus, healthConditions, otherCondition, activityLevel, experience, satisfaction, challenges, persona, selectedPlan, selectedFeature]);
 
   const handleNext = () => setStep((p) => Math.min(p + 1, 14));
   const handlePrev = () => setStep((p) => Math.max(p - 1, 1));
@@ -988,21 +1039,47 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     </div>
                   </div>
 
-                  {/* Age */}
-                  <div>
-                    <label className="block text-xs font-['Inter'] font-bold text-neutral-400 uppercase tracking-wider mb-2">
-                      {isEN ? "Age (Years)" : "Usia (Tahun)"}
-                    </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
-                      <input
-                        type="number"
-                        min="1"
-                        value={age}
-                        onChange={(e) => setAge(e.target.value.replace(/-/g, ''))}
-                        placeholder="25"
-                        className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
-                      />
+                  {/* Date of Birth & Age */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-['Inter'] font-bold text-neutral-400 uppercase tracking-wider">
+                          {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                        <input
+                          type="date"
+                          max={new Date().toISOString().split("T")[0]}
+                          value={dob}
+                          onChange={(e) => handleDobChange(e.target.value)}
+                          className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-sm sm:text-base font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-['Inter'] font-bold text-neutral-400 uppercase tracking-wider">
+                          {isEN ? "Age (Years)" : "Usia (Tahun)"}
+                        </label>
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                          {getAgeGroupLabel(Number(age) || 25)}
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                        <input
+                          type="number"
+                          min="10"
+                          max="120"
+                          value={age}
+                          onChange={(e) => setAge(e.target.value.replace(/-/g, ''))}
+                          placeholder="25"
+                          className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1218,6 +1295,97 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Health Profile Personalization Question */}
+                  <div className="pt-4 space-y-3.5 border-t border-neutral-800">
+                    <div className="flex items-center gap-2">
+                      <HeartPulse size={16} className="text-[#D4FF00]" />
+                      <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                        {isEN ? "Health Profile & Medical Considerations" : "Profil Kesehatan & Kondisi Khusus"}
+                      </label>
+                    </div>
+                    <p className="text-xs text-neutral-400">
+                      {isEN
+                        ? "Do you have any health conditions we should consider when creating your nutrition and workout recommendations?"
+                        : "Apakah kamu memiliki kondisi kesehatan yang perlu diperhatikan AI saat membuat rekomendasi nutrisi dan latihan?"}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { id: "no_condition", label: isEN ? "No health conditions" : "Tidak ada kondisi khusus", icon: "✨" },
+                        { id: "has_condition", label: isEN ? "Yes, I have conditions" : "Ya, ada kondisi kesehatan", icon: "🩺" },
+                        { id: "prefer_not_to_say", label: isEN ? "Prefer not to say" : "Tidak ingin menyebutkan", icon: "🔒" }
+                      ].map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setHealthStatus(st.id as any)}
+                          className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                            healthStatus === st.id
+                              ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm"
+                              : "bg-[#111620] border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                          }`}
+                        >
+                          <span>{st.icon}</span>
+                          <span className="truncate">{st.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Expandable condition checklist when "has_condition" is selected */}
+                    {healthStatus === "has_condition" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="p-4 rounded-xl bg-[#0D121B] border border-neutral-800 space-y-3"
+                      >
+                        <span className="text-xs font-bold text-neutral-300 block">
+                          {isEN ? "Select all applicable conditions:" : "Pilih semua kondisi yang sesuai:"}
+                        </span>
+                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                          {[
+                            { id: "Diabetes", label: "Diabetes", icon: "🩸" },
+                            { id: "High blood pressure", label: isEN ? "High blood pressure" : "Hipertensi / Tekanan Darah", icon: "🫀" },
+                            { id: "High cholesterol", label: isEN ? "High cholesterol" : "Kolesterol Tinggi", icon: "🧈" },
+                            { id: "Heart condition", label: isEN ? "Heart condition" : "Kondisi Jantung", icon: "❤️" },
+                            { id: "Kidney condition", label: isEN ? "Kidney condition" : "Kondisi Ginjal", icon: "🫘" },
+                            { id: "Liver condition", label: isEN ? "Liver condition" : "Kondisi Hati / Liver", icon: "🩺" },
+                            { id: "Asthma", label: isEN ? "Asthma / Respiratory" : "Asma / Pernafasan", icon: "🫁" },
+                            { id: "Arthritis", label: isEN ? "Arthritis / Joint Issue" : "Radang / Masalah Sendi", icon: "🦴" }
+                          ].map((cond) => {
+                            const isChecked = healthConditions.includes(cond.id);
+                            return (
+                              <button
+                                key={cond.id}
+                                type="button"
+                                onClick={() => toggleHealthCondition(cond.id)}
+                                className={`p-2.5 rounded-lg border text-xs font-medium text-left flex items-center gap-2 cursor-pointer transition-all ${
+                                  isChecked
+                                    ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white"
+                                    : "bg-[#111620] border-neutral-800 text-neutral-400 hover:border-neutral-700"
+                                }`}
+                              >
+                                <span>{cond.icon}</span>
+                                <span className="truncate flex-1">{cond.label}</span>
+                                {isChecked && <Check size={14} className="text-[#D4FF00]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Other Condition input */}
+                        <div className="pt-2">
+                          <input
+                            type="text"
+                            value={otherCondition}
+                            onChange={(e) => setOtherCondition(e.target.value)}
+                            placeholder={isEN ? "Other health condition (optional)..." : "Kondisi kesehatan lainnya (opsional)..."}
+                            className="w-full bg-[#111620] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 </div>
               </motion.div>

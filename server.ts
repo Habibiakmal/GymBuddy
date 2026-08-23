@@ -1280,12 +1280,73 @@ function getDefaultWorkoutSchedule(goal: string, equipment?: string, injuries?: 
   }
 }
 
+function calculateAgeFromDob(dobStr?: string, fallbackAge: number = 25): { age: number; ageGroup: "Anak" | "Remaja" | "Dewasa" | "Lansia"; ageGroupKey: "child" | "teen" | "adult" | "older_adult" } {
+  let calculatedAge = Math.max(10, Number(fallbackAge) || 25);
+  if (dobStr && /^\d{4}-\d{2}-\d{2}$/.test(dobStr)) {
+    const dob = new Date(dobStr);
+    if (!isNaN(dob.getTime())) {
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      if (age >= 10 && age <= 120) {
+        calculatedAge = age;
+      }
+    }
+  }
+
+  let ageGroup: "Anak" | "Remaja" | "Dewasa" | "Lansia" = "Dewasa";
+  let ageGroupKey: "child" | "teen" | "adult" | "older_adult" = "adult";
+
+  if (calculatedAge < 13) {
+    ageGroup = "Anak";
+    ageGroupKey = "child";
+  } else if (calculatedAge <= 17) {
+    ageGroup = "Remaja";
+    ageGroupKey = "teen";
+  } else if (calculatedAge < 60) {
+    ageGroup = "Dewasa";
+    ageGroupKey = "adult";
+  } else {
+    ageGroup = "Lansia";
+    ageGroupKey = "older_adult";
+  }
+
+  return { age: calculatedAge, ageGroup, ageGroupKey };
+}
+
 function calculateUserData(profile: any) {
   const name = profile?.name || "Member";
   const weight = Math.max(30, Number(profile?.weight) || 65);
   const startWeight = Math.max(30, Number(profile?.startWeight) || weight);
   const height = Math.max(100, Number(profile?.height) || 170);
-  const age = Math.max(10, Number(profile?.age) || 25);
+
+  const dob = profile?.dob || profile?.birthDate || profile?.healthProfile?.dob || "";
+  const rawAge = Number(profile?.age) || Number(profile?.healthProfile?.age) || 25;
+  const { age, ageGroup, ageGroupKey } = calculateAgeFromDob(dob, rawAge);
+
+  const rawHp = profile?.healthProfile || {};
+  const hasCondition = rawHp.hasCondition || (rawHp.conditions && rawHp.conditions.length > 0 ? "has_condition" : (rawHp.isCompleted ? "no_condition" : "unanswered"));
+  const conditions: string[] = Array.isArray(rawHp.conditions) ? rawHp.conditions : [];
+  const otherCondition = rawHp.otherCondition || "";
+  const isHealthProfileCompleted = Boolean(rawHp.isCompleted);
+
+  const activeConditionsList: string[] = [...conditions];
+  if (otherCondition && otherCondition.trim()) {
+    activeConditionsList.push(otherCondition.trim());
+  }
+
+  let healthConditionsSummary = "Tidak ada kondisi kesehatan khusus / Sehat";
+  if (hasCondition === "has_condition" && activeConditionsList.length > 0) {
+    healthConditionsSummary = activeConditionsList.join(", ");
+  } else if (hasCondition === "prefer_not_to_say") {
+    healthConditionsSummary = "User memilih tidak menyebutkan (Gunakan panduan netral & aman)";
+  } else if (hasCondition === "no_condition") {
+    healthConditionsSummary = "Tidak ada riwayat kondisi kesehatan";
+  }
+
   const gender = (profile?.gender || "pria").toLowerCase();
   const isMale = gender === "pria" || gender === "male";
   const goal = profile?.goal || "maintain";
@@ -1388,7 +1449,22 @@ function calculateUserData(profile: any) {
     startWeight,
     targetWeight,
     height,
+    dob,
     age,
+    ageGroup,
+    ageGroupKey,
+    healthProfile: {
+      dob,
+      age,
+      ageGroup,
+      ageGroupKey,
+      hasCondition,
+      conditions,
+      otherCondition,
+      isCompleted: isHealthProfileCompleted,
+      completedAt: rawHp.completedAt || ""
+    },
+    healthConditionsSummary,
     gender: isMale ? "Pria" : "Wanita",
     goal,
     goalTitle,
@@ -3191,6 +3267,70 @@ async function startServer() {
     });
   });
 
+  // Save or update Health Profile
+  app.post("/api/user/:phone/health-profile", async (req, res) => {
+    try {
+      const phone = normalizePhone(req.params.phone);
+      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+      const user = getUserProfile(phone) || getUserProfile(altPhone) || (await findUserByPhoneOrId(phone)) || {};
+      
+      const { dob, age, hasCondition, conditions, otherCondition, isCompleted } = req.body;
+      
+      const updatedHealthProfile = {
+        dob: dob !== undefined ? dob : (user.dob || user.healthProfile?.dob || ""),
+        age: Number(age) || user.age || user.healthProfile?.age || 25,
+        hasCondition: hasCondition || "no_condition",
+        conditions: Array.isArray(conditions) ? conditions : [],
+        otherCondition: otherCondition || "",
+        isCompleted: isCompleted !== undefined ? Boolean(isCompleted) : true,
+        completedAt: new Date().toISOString()
+      };
+
+      // Derive age from dob if provided
+      if (updatedHealthProfile.dob) {
+        const { age: derivedAge } = calculateAgeFromDob(updatedHealthProfile.dob, updatedHealthProfile.age);
+        updatedHealthProfile.age = derivedAge;
+        user.age = derivedAge;
+        user.dob = updatedHealthProfile.dob;
+      }
+
+      user.healthProfile = updatedHealthProfile;
+      user.updatedAt = new Date().toISOString();
+
+      saveUserProfile(phone, user);
+      if (altPhone !== phone) {
+        saveUserProfile(altPhone, user);
+      }
+      saveDb();
+
+      // Persist directly to Firestore
+      try {
+        await saveUserDocument({
+          userId: `usr_${phone}`,
+          phone: phone,
+          ...user,
+          updatedAt: new Date()
+        });
+      } catch (fErr: any) {
+        console.warn("[Firestore] saveUserDocument healthProfile sync note:", fErr?.message || fErr);
+      }
+
+      const calculated = calculateUserData(user);
+      console.log(`[Health Profile] Updated for ${phone}: Age ${calculated.age} (${calculated.ageGroup}), Conditions: ${calculated.healthConditionsSummary}`);
+
+      res.json({
+        success: true,
+        message: "Health profile saved successfully",
+        healthProfile: updatedHealthProfile,
+        calculated,
+        user: { ...user, ...calculated }
+      });
+    } catch (e: any) {
+      console.error("[Health Profile] Error saving:", e);
+      res.status(500).json({ success: false, error: e.message || "Failed to save health profile" });
+    }
+  });
+
   // REST API: Delete entire user account and all associated data (Permanent Wipe)
   app.delete("/api/user/:phone", async (req, res) => {
     const rawPhone = req.params.phone;
@@ -4700,10 +4840,19 @@ const mediaUrl = mediaRes.data.url;
               const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama: ${userData.name}
+- Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
+- Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
+
+ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
+1. DILARANG KERAS mendiagnosis pengguna (misal jika lutut sakit, jangan simpulkan arthritis).
+2. DILARANG membuat klaim medis absolut ("karena kamu punya diabetes kamu tidak boleh makan X").
+3. Berikan saran kontekstual, hati-hati, dan aman (misal: jika ada riwayat hipertensi, perhatikan batas natrium; jika lansia atau ada cedera sendi, prioritaskan latihan low-impact, mobilitas, dan pemulihan).
+4. Jika ada keluhan akut atau risiko tinggi, arahkan dengan sopan untuk berkonsultasi dengan tenaga medis.
+5. JANGAN menyebut kondisi kesehatan pada kalimat motivasi kasual yang tidak relevan.
 
 ${personaInstruction}
 
@@ -5244,10 +5393,19 @@ Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingat
         const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama: ${userData.name}
+- Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
+- Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
+
+ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
+1. DILARANG KERAS mendiagnosis pengguna (misal jika lutut sakit, jangan simpulkan arthritis).
+2. DILARANG membuat klaim medis absolut ("karena kamu punya diabetes kamu tidak boleh makan X").
+3. Berikan saran kontekstual, hati-hati, dan aman (misal: jika ada riwayat hipertensi, perhatikan batas natrium; jika lansia atau ada cedera sendi, prioritaskan latihan low-impact, mobilitas, dan pemulihan).
+4. Jika ada keluhan akut atau risiko tinggi, arahkan dengan sopan untuk berkonsultasi dengan tenaga medis.
+5. JANGAN menyebut kondisi kesehatan pada kalimat motivasi kasual yang tidak relevan.
 
 ${personaInstruction}
 ${serviceInstruction}

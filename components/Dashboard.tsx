@@ -1090,6 +1090,136 @@ export default function Dashboard({
     setTimeout(() => setReminderNotificationMsg(null), 3500);
   };
 
+  // Health Profile Personalization State
+  const [showHealthProfileModal, setShowHealthProfileModal] = useState(false);
+  const [healthDob, setHealthDob] = useState<string>("");
+  const [healthAge, setHealthAge] = useState<string>("25");
+  const [healthStatus, setHealthStatus] = useState<"no_condition" | "has_condition" | "prefer_not_to_say">("no_condition");
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  const [healthOtherCondition, setHealthOtherCondition] = useState<string>("");
+  const [isSavingHealthProfile, setIsSavingHealthProfile] = useState(false);
+
+  // Sync state when activeUser changes or modal opens
+  useEffect(() => {
+    if (activeUser) {
+      const hp = activeUser.healthProfile || {};
+      setHealthDob(activeUser.dob || hp.dob || "");
+      setHealthAge(String(activeUser.age || hp.age || 25));
+      const initStatus = hp.hasCondition || (hp.conditions && hp.conditions.length > 0 ? "has_condition" : (hp.isCompleted ? "no_condition" : "no_condition"));
+      setHealthStatus(initStatus as any);
+      setSelectedConditions(Array.isArray(hp.conditions) ? hp.conditions : []);
+      setHealthOtherCondition(hp.otherCondition || "");
+    }
+  }, [activeUser, showHealthProfileModal]);
+
+  // Existing user auto-prompt check: prompt on load if health profile is not complete
+  useEffect(() => {
+    const phone = activeUser?.phone || activeUser?.normalizedPhone;
+    if (!phone) return;
+    const hp = activeUser?.healthProfile;
+    const isCompleted = Boolean(hp?.isCompleted);
+    const dismissed = sessionStorage.getItem(`gymbuddy_health_modal_dismissed_${phone}`);
+    if (!isCompleted && !dismissed) {
+      setShowHealthProfileModal(true);
+    }
+  }, [activeUser?.phone, activeUser?.healthProfile?.isCompleted]);
+
+  const handleHealthDobChange = (newDob: string) => {
+    setHealthDob(newDob);
+    if (newDob && /^\d{4}-\d{2}-\d{2}$/.test(newDob)) {
+      const d = new Date(newDob);
+      if (!isNaN(d.getTime())) {
+        const today = new Date();
+        let calculated = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+          calculated--;
+        }
+        if (calculated >= 10 && calculated <= 120) {
+          setHealthAge(String(calculated));
+        }
+      }
+    }
+  };
+
+  const toggleDashboardHealthCondition = (conditionId: string) => {
+    setSelectedConditions((prev) => {
+      if (prev.includes(conditionId)) {
+        return prev.filter((c) => c !== conditionId);
+      } else {
+        return [...prev, conditionId];
+      }
+    });
+  };
+
+  const getDashboardAgeGroupLabel = (ageNum: number) => {
+    if (ageNum < 13) return isEN ? "Child (<13 yrs)" : "Anak (<13 th)";
+    if (ageNum <= 17) return isEN ? "Teen (13-17 yrs)" : "Remaja (13-17 th)";
+    if (ageNum < 60) return isEN ? "Adult (18-59 yrs)" : "Dewasa (18-59 th)";
+    return isEN ? "Older Adult (60+ yrs)" : "Lansia (60+ th)";
+  };
+
+  const handleSaveHealthProfile = async () => {
+    setIsSavingHealthProfile(true);
+    const derivedAge = Number(healthAge) || 25;
+    const cleanConditions = healthStatus === "has_condition" ? selectedConditions : [];
+    const cleanOther = healthStatus === "has_condition" ? healthOtherCondition.trim() : "";
+
+    const updatedHealthProfile = {
+      dob: healthDob,
+      age: derivedAge,
+      hasCondition: healthStatus,
+      conditions: cleanConditions,
+      otherCondition: cleanOther,
+      isCompleted: true,
+      completedAt: new Date().toISOString()
+    };
+
+    const updatedUser: UserProfileData = {
+      ...activeUser,
+      dob: healthDob || activeUser.dob,
+      age: derivedAge,
+      healthProfile: updatedHealthProfile
+    };
+
+    setLiveUser(updatedUser);
+
+    const norm = normalizePhone(activeUser.phone || "");
+    if (norm) {
+      try {
+        localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(updatedUser));
+        localStorage.setItem("gymbuddy_last_user", JSON.stringify(updatedUser));
+        localStorage.setItem("gymbuddy_active_session", JSON.stringify(updatedUser));
+      } catch (e) {}
+
+      try {
+        const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+        await fetch(`${API_BASE_URL}/api/user/${norm}/health-profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedHealthProfile)
+        });
+      } catch (e) {
+        console.warn("Failed to sync health profile to backend:", e);
+      }
+    }
+
+    if (activeUser?.phone) {
+      sessionStorage.setItem(`gymbuddy_health_modal_dismissed_${activeUser.phone}`, "true");
+    }
+    setIsSavingHealthProfile(false);
+    setShowHealthProfileModal(false);
+    setReminderNotificationMsg(lang === "EN" ? "Health profile updated successfully! ✨" : "Profil kesehatan berhasil disimpan! ✨");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
+  const handleDismissHealthModal = () => {
+    if (activeUser?.phone) {
+      sessionStorage.setItem(`gymbuddy_health_modal_dismissed_${activeUser.phone}`, "true");
+    }
+    setShowHealthProfileModal(false);
+  };
+
   // 5-Tab Mobile Navigation State
   const [activeTab, setActiveTab] = useState<"home" | "workouts" | "progress" | "profile">("home");
   const [showScanModal, setShowScanModal] = useState(false);
@@ -2691,6 +2821,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   : "bg-neutral-800 text-neutral-500"
               }`}>
                 {notifSettings.permissionGranted ? (isEN ? "ACTIVE" : "AKTIF") : "OFF"}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setShowHealthProfileModal(true)}
+              className="w-full px-4 py-2.5 rounded-2xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <HeartPulse size={16} className="text-[#D4FF00] group-hover:text-black transition-colors" />
+                <span>{isEN ? "Health Profile" : "Profil Kesehatan"}</span>
+              </div>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/10 text-neutral-300 group-hover:bg-black/20 group-hover:text-black">
+                {activeUser.healthProfile?.conditions && activeUser.healthProfile.conditions.length > 0
+                  ? `${activeUser.healthProfile.conditions.length} ${isEN ? "Conditions" : "Kondisi"}`
+                  : (activeUser.healthProfile?.isCompleted ? (isEN ? "Healthy" : "Sehat") : (isEN ? "Setup" : "Atur"))}
               </span>
             </button>
 
@@ -8144,6 +8289,213 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   className="w-full py-2.5 rounded-xl bg-[#181818] hover:bg-[#222222] border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <span>🌟 {isEN ? "Unlock All-Access (Both Plans)" : "Buka Akses Penuh (Kedua Paket)"}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* HEALTH PROFILE PERSONALIZATION MODAL (Existing Users Prompt & Profile Edit) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showHealthProfileModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#181818] border border-white/[0.08] rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl space-y-5 text-white max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-white/[0.08] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00]">
+                    <HeartPulse size={22} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#D4FF00] block">
+                      {isEN ? "Health Personalization" : "Personalisasi Kesehatan"}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-white">
+                      {isEN ? "Help Us Personalize GymBuddy" : "Personalisasi GymBuddy Kamu"}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDismissHealthModal}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg cursor-pointer transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Friendly Explanation Banner */}
+              <div className="p-3.5 rounded-2xl bg-[#222222] border border-white/[0.08] space-y-1">
+                <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                  {isEN
+                    ? "Your age and health details help AI Nutritionist and AI Workout Coach provide safe, age-appropriate, and context-aware guidance."
+                    : "Informasi usia dan kondisi kesehatan membantu Nutritionist AI & Workout Coach AI memberikan panduan yang aman dan tepat sesuai kondisi fisikmu."}
+                </p>
+              </div>
+
+              {/* Section 1: Date of Birth & Age */}
+              <div className="space-y-3">
+                <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                  {isEN ? "1. Date of Birth & Age" : "1. Tanggal Lahir & Usia"}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[11px] font-semibold text-neutral-400 block mb-1.5">
+                      {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                    </span>
+                    <div className="relative">
+                      <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
+                      <input
+                        type="date"
+                        max={new Date().toISOString().split("T")[0]}
+                        value={healthDob}
+                        onChange={(e) => handleHealthDobChange(e.target.value)}
+                        className="w-full bg-[#111620] border border-white/[0.08] rounded-xl pl-10 pr-3 py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-semibold text-neutral-400">
+                        {isEN ? "Age (Years)" : "Usia (Tahun)"}
+                      </span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                        {getDashboardAgeGroupLabel(Number(healthAge) || 25)}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min="10"
+                      max="120"
+                      value={healthAge}
+                      onChange={(e) => setHealthAge(e.target.value.replace(/-/g, ''))}
+                      placeholder="25"
+                      className="w-full bg-[#111620] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm font-black text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Health Conditions Question */}
+              <div className="space-y-3 pt-3 border-t border-white/[0.08]">
+                <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                  {isEN ? "2. Health Conditions" : "2. Kondisi Kesehatan"}
+                </label>
+                <p className="text-xs text-neutral-400">
+                  {isEN
+                    ? "Do you have any health conditions we should consider when creating your nutrition and workout recommendations?"
+                    : "Apakah kamu memiliki kondisi kesehatan yang perlu dipertimbangkan saat AI membuat rekomendasi?"}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: "no_condition", label: isEN ? "No health conditions" : "Tidak ada kondisi", icon: "✨" },
+                    { id: "has_condition", label: isEN ? "Yes, I have conditions" : "Ya, ada kondisi", icon: "🩺" },
+                    { id: "prefer_not_to_say", label: isEN ? "Prefer not to say" : "Tidak ingin menyebutkan", icon: "🔒" }
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setHealthStatus(st.id as any)}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        healthStatus === st.id
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00] shadow-sm font-black"
+                          : "bg-[#111620] border-white/[0.08] text-neutral-300 hover:border-neutral-700"
+                      }`}
+                    >
+                      <span>{st.icon}</span>
+                      <span className="truncate">{st.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Condition Selection Tags */}
+                {healthStatus === "has_condition" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="p-4 rounded-2xl bg-[#111620] border border-white/[0.08] space-y-3"
+                  >
+                    <span className="text-xs font-bold text-neutral-300 block">
+                      {isEN ? "Select all applicable conditions:" : "Pilih kondisi kesehatan yang berlaku:"}
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: "Diabetes", label: "Diabetes", icon: "🩸" },
+                        { id: "High blood pressure", label: isEN ? "High blood pressure" : "Hipertensi", icon: "🫀" },
+                        { id: "High cholesterol", label: isEN ? "High cholesterol" : "Kolesterol Tinggi", icon: "🧈" },
+                        { id: "Heart condition", label: isEN ? "Heart condition" : "Kondisi Jantung", icon: "❤️" },
+                        { id: "Kidney condition", label: isEN ? "Kidney condition" : "Kondisi Ginjal", icon: "🫘" },
+                        { id: "Liver condition", label: isEN ? "Liver condition" : "Kondisi Hati", icon: "🩺" },
+                        { id: "Asthma", label: isEN ? "Asthma / Respiratory" : "Asma / Pernafasan", icon: "🫁" },
+                        { id: "Arthritis", label: isEN ? "Arthritis / Joint Issue" : "Radang Sendi", icon: "🦴" }
+                      ].map((cond) => {
+                        const isChecked = selectedConditions.includes(cond.id);
+                        return (
+                          <button
+                            key={cond.id}
+                            type="button"
+                            onClick={() => toggleDashboardHealthCondition(cond.id)}
+                            className={`p-2.5 rounded-xl border text-xs font-bold text-left flex items-center justify-between gap-1.5 cursor-pointer transition-all ${
+                              isChecked
+                                ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white"
+                                : "bg-[#181818] border-white/[0.08] text-neutral-400 hover:border-neutral-700 hover:text-white"
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5 truncate">
+                              <span>{cond.icon}</span>
+                              <span className="truncate">{cond.label}</span>
+                            </span>
+                            {isChecked && <Check size={14} className="text-[#D4FF00] shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pt-2">
+                      <input
+                        type="text"
+                        value={healthOtherCondition}
+                        onChange={(e) => setHealthOtherCondition(e.target.value)}
+                        placeholder={isEN ? "Other condition (optional free text)..." : "Kondisi lainnya (opsional)..."}
+                        className="w-full bg-[#181818] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-3 border-t border-white/[0.08]">
+                <button
+                  type="button"
+                  disabled={isSavingHealthProfile}
+                  onClick={handleSaveHealthProfile}
+                  className="w-full py-3.5 rounded-2xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={16} />
+                  <span>
+                    {isSavingHealthProfile
+                      ? (isEN ? "Saving Profile..." : "Menyimpan...")
+                      : (isEN ? "Save & Personalize" : "Simpan & Personalisasi")}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDismissHealthModal}
+                  className="w-full py-2.5 rounded-xl bg-transparent hover:bg-white/5 text-neutral-400 hover:text-white font-bold text-xs transition-all cursor-pointer"
+                >
+                  <span>{isEN ? "Skip for Now" : "Lewati Dulu"}</span>
                 </button>
               </div>
             </motion.div>
