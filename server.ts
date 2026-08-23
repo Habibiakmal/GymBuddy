@@ -2267,125 +2267,183 @@ ${sodBar}${sodiumTip}
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
-  const { name, weight, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, activeService, equipment, injuries, customInjury } = userData;
+  const {
+    name,
+    gender,
+    age,
+    ageGroup,
+    weight,
+    targetWeight,
+    goalTitle,
+    persona,
+    targetCalories,
+    proteinGrams,
+    carbGrams,
+    fatGrams,
+    fiberGrams,
+    activeService,
+    equipment,
+    injuries,
+    customInjury,
+    healthConditionsSummary
+  } = userData;
 
   const isMax = persona === "max";
   const showNutrition = activeService === "nutritionist" || activeService === "both";
   const showWorkout = activeService === "workout" || activeService === "both";
 
+  const isFemale = (gender || "").toLowerCase() === "wanita" || (gender || "").toLowerCase() === "female";
+  const ageNum = Number(age) || 25;
+  const isLansia = ageNum >= 60;
+  const isAnak = ageNum < 13;
+  const isRemaja = ageNum >= 13 && ageNum <= 17;
+  const isDewasa = ageNum >= 18 && ageNum < 60;
+
+  const cleanName = (name || "Member").trim();
+
   const eqText = equipment === "bodyweight"
-    ? "Tanpa Alat / Rumah"
+    ? "Tanpa Alat / Bodyweight"
     : equipment === "dumbbells"
     ? "Dumbbell di Rumah"
     : "Alat Gym Lengkap";
 
-  const injList = Array.isArray(injuries) ? injuries.filter((i: string) => i !== "none") : [];
-  if (customInjury) injList.push(customInjury);
-  const injText = injList.length > 0 ? injList.join(", ") : "Sehat (Tanpa Cedera)";
-
-  if (isMax) {
-    let summarySection = `📊 SUMMARY STRATEGI LO:\n🎯 Goal: ${goalTitle}\n`;
-    if (showNutrition) {
-      summarySection += `🔥 Target Kalori: ${targetCalories} kcal/hari\n🍖 Protein: ${proteinGrams}g/hari\n🍚 Karbo: ${carbGrams}g/hari\n🥓 Lemak: ${fatGrams}g/hari\n🥬 Serat: ${fiberGrams}g/hari\n`;
-    }
-    summarySection += `⚖️ Target BB: ${weight}kg → ${targetWeight}kg`;
-    if (showWorkout) {
-      summarySection += `\n🏋️ Alat: ${eqText}\n🩹 Kondisi Fisik: ${injText}`;
-    }
-
-    let guides: string[] = [];
-    if (showNutrition) {
-      guides.push(
-`Nutrition AI 🥦
-• Kirim foto/chat makanan lo ke sini.
-• Gue bakal breakdown makro & kalorinya + catat progress harian lo.
-• Kalo mau cek sisa kalori / rekap kemarin, bilang "rekap kemarin"!
-• Kalo butuh ide makan, bilang "rekomendasi makanan"!
-• Kalo mau catat berat badan mingguan, bilang "update bb 75"!`
-      );
-    }
-
-    if (showWorkout) {
-      guides.push(
-`AI Coach 🏋️‍♂️
-• Kirim foto form latihan / foto alat gym atau tanya menu workout.
-• Gue kasih feedback tajam dan jadwal latihan disesuaikan alat (${eqText}) & kondisi tubuh lo (${injText}).`
-      );
-    }
-
-    const firstItemPrompt = showNutrition && showWorkout
-      ? "foto makanan atau pertanyaan workout"
-      : showNutrition
-      ? "foto makanan"
-      : "pertanyaan workout";
-
-    return [
-`💪🔥 Woy ${name}! Gue Max, AI Coach & Nutritionist lo mulai sekarang. Welcome to GymBuddy AI!
-Integrasi WhatsApp AI & Dashboard siap bantu capai target kebugaran lo.
-
-${summarySection}
-
-Gue di sini buat pastiin lo stay on track, no excuse! 🛑
-
-${guides.join("\n\n")}
-
-Tips dari gue:
-Konsistensi > Motivasi. Kalo lo males, inget kenapa lo mulai.
-
-Udah siap? Ayo kirim ${firstItemPrompt} pertama lo sekarang! 🔥`
-    ];
-  } else {
-    let summarySection = `📊 SUMMARY RENCANA KAMU:\n🎯 Goal: ${goalTitle}\n`;
-    if (showNutrition) {
-      summarySection += `🔥 Target Kalori: ${targetCalories} kcal/hari\n🍖 Protein: ${proteinGrams}g/hari\n🍚 Karbo: ${carbGrams}g/hari\n🥓 Lemak: ${fatGrams}g/hari\n🥬 Serat: ${fiberGrams}g/hari\n`;
-    }
-    summarySection += `⚖️ Target BB: ${weight}kg → ${targetWeight}kg`;
-    if (showWorkout) {
-      summarySection += `\n🏋️ Alat: ${eqText}\n🩹 Kondisi Fisik: ${injText}`;
-    }
-
-    let guides: string[] = [];
-    if (showNutrition) {
-      guides.push(
-`Nutrition AI 🥗
-• Tinggal kirim foto makanan atau ketik apa yang kamu makan hari ini.
-• Aku bantu hitung kalori, nutrisi, & rekap konsumsi harianmu.
-• Kamu bisa tanya sisa kalori lewat "rekap kemarin"!
-• Minta rekomendasi makan sehat lewat "rekomendasi makanan"!
-• Kamu juga bisa update berat badanmu lewat "update bb 75"!`
-      );
-    }
-
-    if (showWorkout) {
-      guides.push(
-`AI Coach 🧘‍♀️
-• Kirim foto/video latihan atau foto alat gym untuk rekomendasi.
-• Aku akan kasih saran yang aman dan rekomendasi yang nyaman buat tubuhmu.`
-      );
-    }
-
-    const firstItemPrompt = showNutrition && showWorkout
-      ? "foto makanan atau latihan"
-      : showNutrition
-      ? "foto makanan"
-      : "pertanyaan latihan";
-
-    return [
-`🌿 Halo ${name}! Saya Coach Mia, AI Coach & Nutritionist kamu. Selamat datang di GymBuddy AI! ✨
-Integrasi WhatsApp AI & Dashboard siap menemani dan memantau nutrisi & kebugaran kamu secara langsung.
-
-${summarySection}
-
-Saya siap mendampingi perjalanan kebugaran kamu dengan saran yang aman, halus, dan nyaman untuk tubuhmu.
-
-${guides.join("\n\n")}
-
-Pesan dari Coach Mia:
-Dengarkan kondisi tubuhmu dengan baik, setiap progres kecil sangat berharga! 🌱
-
-Yuk, kita mulai! Coba kirim ${firstItemPrompt} pertama kamu sekarang! ✨`
-    ];
+  // Health and physical condition summary
+  let conditionText = healthConditionsSummary || "";
+  if (!conditionText || conditionText === "Tidak ada kondisi khusus / Sehat") {
+    const injList = Array.isArray(injuries) ? injuries.filter((i: string) => i !== "none") : [];
+    if (customInjury) injList.push(customInjury);
+    conditionText = injList.length > 0 ? injList.join(", ") : "Sehat & Prima";
   }
+
+  // 1. Personalized Greeting based on Name + Gender + Age Group + Persona
+  let greeting = "";
+  if (isMax) {
+    if (isLansia) {
+      const honorific = isFemale ? "Bu" : "Pak";
+      greeting = `Halo ${honorific} ${cleanName}! Setup GymBuddy Anda sudah selesai. 💪 Saya Coach Max, siap mendampingi target kebugaran Anda dengan panduan yang aman, terukur, dan terarah.`;
+    } else if (isAnak) {
+      greeting = `Halo ${cleanName}! Setup GymBuddy kamu sudah beres! 🌟 Aku Coach Max, siap bantu kamu makin sehat, aktif, dan bugar!`;
+    } else if (isFemale) {
+      greeting = `Alright ${cleanName}! Setup GymBuddy kamu sudah selesai. 💪 Gue Coach Max, siap bantu dan kawal progress kebugaran kamu to-the-point!`;
+    } else {
+      greeting = `Yo ${cleanName}! Setup GymBuddy lo udah beres. 💪 Gue Coach Max, siap bantu lo push limit dan capai target kebugaran!`;
+    }
+  } else {
+    // Coach Mia
+    if (isLansia) {
+      const honorific = isFemale ? "Bu" : "Pak";
+      greeting = `Hai ${honorific} ${cleanName}, selamat datang di GymBuddy AI! ✨ Saya Coach Mia. Setup rencana kebugaran Anda sudah selesai, dan saya siap mendampingi perjalanan sehat Anda dengan nyaman dan aman.`;
+    } else if (isAnak) {
+      greeting = `Hai ${cleanName}! Selamat datang di GymBuddy AI! ✨ Aku Coach Mia, senang sekali bisa nemenin kamu belajar hidup sehat dan aktif setiap hari!`;
+    } else {
+      greeting = `Hai ${cleanName}! Setup GymBuddy kamu sudah selesai. ✨ Saya Coach Mia, AI Coach & Nutritionist kamu. Senang sekali bisa mendampingi perjalanan kebugaranmu!`;
+    }
+  }
+
+  // 2. Summary of Onboarding Data (Clean, verified data only - NO fake history)
+  const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
+  const ageGroupLabel = ageGroup || (isLansia ? "Lansia" : isAnak ? "Anak" : isRemaja ? "Remaja" : "Dewasa");
+
+  let summarySection = `📋 *SUMMARY HASIL ONBOARDING:*\n` +
+    `• *Nama*: ${cleanName}\n` +
+    `• *Gender*: ${genderLabel}\n` +
+    `• *Usia*: ${ageNum} tahun (${ageGroupLabel})\n` +
+    `• *Goal Utama*: ${goalTitle}\n`;
+
+  if (showNutrition) {
+    summarySection += `• *Target Kalori*: ${targetCalories.toLocaleString("id-ID")} kcal/hari\n` +
+      `• *Target Makro*: Protein ${proteinGrams}g | Karbo ${carbGrams}g | Lemak ${fatGrams}g | Serat ${fiberGrams}g\n`;
+  }
+  summarySection += `• *Target Berat Badan*: ${weight} kg → ${targetWeight} kg\n`;
+  if (showWorkout) {
+    summarySection += `• *Equipment*: ${eqText}\n`;
+  }
+  summarySection += `• *Kondisi Kesehatan / Fisik*: ${conditionText}`;
+
+  // 3. Explanation of Personalization
+  let personalizationExplain = "";
+  if (isMax) {
+    if (isLansia) {
+      personalizationExplain = `Saya akan menyesuaikan seluruh rekomendasi makanan dan latihan berdasarkan profil, kondisi tubuh, equipment, dan progress Anda secara terukur dan aman.`;
+    } else if (isFemale) {
+      personalizationExplain = `Gue bakal menyesuaikan rekomendasi makanan dan workout berdasarkan goal, usia, kondisi tubuh, equipment, dan progress kamu.`;
+    } else {
+      personalizationExplain = `Gue bakal menyesuaikan rekomendasi makanan dan workout berdasarkan goal, usia, kondisi tubuh, equipment, dan progress lo.`;
+    }
+  } else {
+    if (isLansia) {
+      personalizationExplain = `Saya akan menyesuaikan rekomendasi nutrisi dan panduan latihan berdasarkan profil kesehatan, kebutuhan tubuh, serta kenyamanan Anda.`;
+    } else {
+      personalizationExplain = `Aku akan menyesuaikan rekomendasi makanan dan workout berdasarkan profil, target, kondisi tubuh, dan progress kamu agar tetap nyaman dan konsisten.`;
+    }
+  }
+
+  // 4. Nutrition AI Guide
+  let nutritionGuide = "";
+  if (showNutrition) {
+    if (isMax) {
+      const pronoun = isFemale || isLansia ? "kamu" : "lo";
+      nutritionGuide = `🥦 *Nutrition AI*\n` +
+        `• *Catat Makanan via Chat*: Cukup ketik menu makan atau kirim foto makanan ${pronoun}.\n` +
+        `• *Estimasi Makro Real-Time*: Kalori & makro langsung dihitung otomatis ke dashboard.\n` +
+        `• *Cek Progress & Rekap*: Ketik *"rekap kemarin"* untuk cek sisa kalori atau evaluasi.\n` +
+        `• *Rekomendasi Makanan*: Ketik *"rekomendasi makanan"* kapan pun butuh ide menu sehat.\n` +
+        `• *Update Berat Badan*: Ketik *"update bb ${weight}"* saat timbang mingguan.`;
+    } else {
+      nutritionGuide = `🥗 *Nutrition AI*\n` +
+        `• *Catat Makanan via Chat*: Cukup ketik apa yang kamu makan atau kirim foto makananmu.\n` +
+        `• *Estimasi Nutrisi Real-Time*: Kalori, protein, karbo & lemak langsung dihitung otomatis.\n` +
+        `• *Cek Progress & Rekap*: Ketik *"rekap kemarin"* untuk melihat rekap konsumsi harian.\n` +
+        `• *Rekomendasi Makanan Sehat*: Ketik *"rekomendasi makanan"* saat bingung memilih menu.\n` +
+        `• *Update Berat Badan*: Ketik *"update bb ${weight}"* untuk mencatat progres BB kamu.`;
+    }
+  }
+
+  // 5. Workout Coach Guide & Spontaneous Activities Note
+  let workoutGuide = "";
+  if (showWorkout) {
+    if (isMax) {
+      const pronoun = isFemale || isLansia ? "kamu" : "lo";
+      workoutGuide = `🏋️‍♂️ *AI Workout Coach*\n` +
+        `• *Cek Workout & Biomechanics*: Tanya menu latihan harian, tips gerakan, atau kirim foto alat gym.\n` +
+        `• *Log Set Latihan*: Catat set yang selesai langsung dari chat atau dashboard.\n` +
+        `• *Olahraga Bebas / Di Luar Jadwal*: Jadwal latihan bukan batasan! Kalo ${pronoun} berenang, lari, jalan santai, sepedaan, basket, atau badminton, tinggal lapor di sini (contoh: *"tadi renang 45 menit"*) dan otomatis masuk ke dashboard sebagai aktivitas tambahan!`;
+    } else {
+      workoutGuide = `🧘‍♀️ *AI Workout Coach*\n` +
+        `• *Cek Workout & Panduan Gerakan*: Tanyakan menu latihan, cara pakai alat, atau cek form gerakan yang aman.\n` +
+        `• *Log Latihan Harian*: Catat set latihan yang sudah kamu selesaikan secara mudah.\n` +
+        `• *Olahraga Bebas di Luar Jadwal*: Jadwal latihan bukan batasan ya! Jika kamu jalan santai, lari, renang, sepedaan, atau yoga, cukup chat aku (misal: *"tadi lari pagi 30 menit"*) dan langsung tercatat rapi di dashboard kamu!`;
+    }
+  }
+
+  // 6. Final CTA
+  let cta = "";
+  if (isMax) {
+    if (isLansia) {
+      cta = `Kalau sudah siap, Anda bisa mulai dengan mengirimkan menu makanan pertama atau menanyakan panduan latihan. 💪`;
+    } else if (isFemale) {
+      cta = `Udah siap? Kirim makanan pertama kamu atau tanya saya soal workout sekarang! 🔥`;
+    } else {
+      cta = `Udah siap? Kirim makanan pertama lo atau tanya gue soal workout sekarang! 🔥`;
+    }
+  } else {
+    if (isLansia) {
+      cta = `Jika sudah siap, silakan mulai dengan mengirimkan foto/menu makanan pertama atau pertanyaan latihan Anda. ✨`;
+    } else {
+      cta = `Yuk kita mulai! Coba kirim foto makanan pertama atau pertanyaan latihan kamu sekarang ya! ✨`;
+    }
+  }
+
+  const sections = [
+    greeting,
+    summarySection,
+    personalizationExplain,
+    nutritionGuide,
+    workoutGuide,
+    cta
+  ].filter(Boolean);
+
+  return [sections.join("\n\n")];
 }
 
 function formatHistoricalFoodLog(
@@ -4828,24 +4886,41 @@ const mediaUrl = mediaRes.data.url;
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
 - BATASAN MUTLAK:
   • DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
-  • Hindari pujian berlebihan atau kata klise yang diulang-ulang (seperti "Coach Mia bangga denganmu!").
+  • Hindari pujian berlebihan atau kata klise yang diulang-ulang.
   • Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.`
                 : `PERSONA COACH MAX:
 - Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
-- Gaya Bicara: Bahasa gaul Jakarta / bro (lo/gue) yang santai tapi berbobot.
+- Gaya Bicara:
+  • Untuk user LAKI-LAKI: Bahasa santai (lo/gue) atau bro yang percaya diri.
+  • Untuk user PEREMPUAN: Percaya diri, direct, dan natural (kamu/aku atau kamu/gue). JANGAN PERNAH memanggil perempuan dengan "bro", "woy bro", atau "bang".
+  • Untuk user LANSIA (60+ th): Tetap tegas namun santun dan respectful (Pak/Bu [Nama], Anda/kamu), tanpa slang jalanan.
 - BATASAN MUTLAK:
   • Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   • Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
 
+              const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+              const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
+
               const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama: ${userData.name}
+- Gender: ${genderLabel}
 - Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
 - Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
+
+ATURAN KOMUNIKASI & PERSONALISASI GENDER/USIA:
+1. SESUAIKAN SAPAAN DENGAN GENDER & USIA:
+   - DILARANG memanggil semua user dengan "bro", "woy bro", "bang", atau "mas" secara default.
+   - User Perempuan: Gunakan sapaan alami seperti "Hai ${userData.name}", "Halo ${userData.name}", atau "kamu/aku". DILARANG memanggil perempuan dengan "bro".
+   - User Laki-laki: Boleh gunakan sapaan santai "lo/gue" atau "bro" jika persona Max, atau "kamu/aku" jika persona Mia.
+   - User Lansia (60+ th): Gunakan bahasa yang sopan, santun, dan respectful (Pak/Bu ${userData.name}, Anda/kamu), hindari slang jalanan.
+   - User Anak (<13 th): Gunakan bahasa yang sederhana, ceria, dan mudah dipahami.
+2. DILARANG MEMBUAT STEREOTIP GENDER ("cewek biasanya...", "cowok harusnya...").
+3. Nama user harus digunakan secara natural, jangan dipaksakan di setiap kalimat.
 
 ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 1. DILARANG KERAS mendiagnosis pengguna (misal jika lutut sakit, jangan simpulkan arthritis).
@@ -5284,12 +5359,35 @@ function escapeXml(unsafe: string): string {
         }
 
         if (userProfile.hasReceivedWelcome) {
+          const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
+          const ageNum = Number(userProfile.age) || 25;
+          const isLansia = ageNum >= 60;
+          const cleanName = (userData.name || "Member").trim();
           const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-          const shortWelcome = userData.persona === "max"
-            ? `🔥 *WOY ${userData.name.toUpperCase()}!* ${coachName} siap mendampingi lo!\n\n` +
-              `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`
-            : `✨ *HALO ${userData.name.toUpperCase()}!* ${coachName} di sini! 🥰\n\n` +
-              `Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan? Silakan kirim kapan saja ya! 🌿`;
+
+          let shortWelcome = "";
+          if (userData.persona === "max") {
+            if (isLansia) {
+              const honorific = isFemale ? "Bu" : "Pak";
+              shortWelcome = `🔥 *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi Anda.\n\n` +
+                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau tanya panduan latihan? Kirim saja langsung di sini! 💪`;
+            } else if (isFemale) {
+              shortWelcome = `🔥 *HALO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi kamu!\n\n` +
+                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
+            } else {
+              shortWelcome = `🔥 *YO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi lo!\n\n` +
+                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
+            }
+          } else {
+            if (isLansia) {
+              const honorific = isFemale ? "Bu" : "Pak";
+              shortWelcome = `✨ *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} di sini. 🥰\n\n` +
+                `Silakan kirim makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan kapan saja ya! 🌿`;
+            } else {
+              shortWelcome = `✨ *HALO ${cleanName.toUpperCase()}!* ${coachName} di sini! 🥰\n\n` +
+                `Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan? Silakan kirim kapan saja ya! 🌿`;
+            }
+          }
           responseMessages = [shortWelcome];
         } else {
           userProfile.hasReceivedWelcome = true;
@@ -5325,9 +5423,10 @@ function escapeXml(unsafe: string): string {
           mealType: getMealTypeByHour(userText)
         };
         addMealLog(normFrom, waterEntry);
+        const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
         const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
         const comment = userData.persona === "max" 
-          ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥"
+          ? (isFemale ? "Mantap! Jaga terus hidrasi tubuh kamu biar metabolisme makin kencang! 🔥" : "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥")
           : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar ✨";
         responseMessages = [
           `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
@@ -5368,11 +5467,14 @@ function escapeXml(unsafe: string): string {
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
 - BATASAN MUTLAK:
   • DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
-  • Hindari pujian berlebihan atau kata klise yang diulang-ulang (seperti "Coach Mia bangga denganmu!").
+  • Hindari pujian berlebihan atau kata klise yang diulang-ulang.
   • Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.`
           : `PERSONA COACH MAX:
 - Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
-- Gaya Bicara: Bahasa gaul Jakarta / bro (lo/gue) yang santai tapi berbobot.
+- Gaya Bicara:
+  • Untuk user LAKI-LAKI: Bahasa santai (lo/gue) atau bro yang percaya diri.
+  • Untuk user PEREMPUAN: Percaya diri, direct, dan natural (kamu/aku atau kamu/gue). JANGAN PERNAH memanggil perempuan dengan "bro", "woy bro", atau "bang".
+  • Untuk user LANSIA (60+ th): Tetap tegas namun santun dan respectful (Pak/Bu [Nama], Anda/kamu), tanpa slang jalanan.
 - BATASAN MUTLAK:
   • Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   • Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
@@ -5390,9 +5492,13 @@ Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingat
 "💡 *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Workout Coach. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Nutritionist penuh! 🥦"`
           : `BATASAN LAYANAN PENGGUNA: User berlangganan Paket Premium (All-Access). Berikan pendampingan penuh untuk nutrisi maupun latihan.`;
 
+        const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+        const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
+
         const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama: ${userData.name}
+- Gender: ${genderLabel}
 - Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
 - Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
