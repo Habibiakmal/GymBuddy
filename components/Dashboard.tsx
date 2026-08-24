@@ -4871,7 +4871,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 <button
                   type="button"
-                  onClick={() => setShowHealthProfileModal(true)}
+                  onClick={() => setShowEditProfileModal(true)}
                   className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
                 >
                   <Edit3 size={14} />
@@ -4921,7 +4921,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 <button
                   type="button"
-                  onClick={() => setShowHealthProfileModal(true)}
+                  onClick={() => setShowEditProfileModal(true)}
                   className="px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
                 >
                   <Edit3 size={14} className="text-[#D4FF00]" />
