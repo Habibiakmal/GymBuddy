@@ -1831,24 +1831,56 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   }, [activeUser, showEditProfileModal]);
 
   const handleSaveProfileChanges = () => {
+    const derivedAge = Number(profAge) || 25;
+    const cleanConditions = healthStatus === "has_condition" ? selectedConditions : [];
+    const cleanOther = healthStatus === "has_condition" ? healthOtherCondition.trim() : "";
+
+    const updatedHealthProfile = {
+      dob: healthDob,
+      age: derivedAge,
+      hasCondition: healthStatus,
+      conditions: cleanConditions,
+      otherCondition: cleanOther,
+      isCompleted: true,
+      completedAt: new Date().toISOString()
+    };
+
     const updated: UserProfileData = {
       ...activeUser,
       name: profName.trim() || activeUser.name,
       gender: profGender,
-      age: Number(profAge) || 25,
+      age: derivedAge,
+      dob: healthDob || activeUser.dob,
       height: Number(profHeight) || 170,
       weight: Number(profWeight) || 70,
       targetWeight: Number(profTargetWeight) || 65,
       activityLevel: profActivity,
-      persona: profPersona
+      persona: profPersona,
+      healthProfile: updatedHealthProfile
     };
     setLiveUser(updated);
     try {
       localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(updated));
       localStorage.setItem("gymbuddy_active_session", JSON.stringify(updated));
+      localStorage.setItem("gymbuddy_last_user", JSON.stringify(updated));
     } catch (e) {}
+
+    if (normPhone) {
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/health-profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedHealthProfile)
+      }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated)
+      }).catch(() => {});
+    }
+
     setShowEditProfileModal(false);
-    setReminderNotificationMsg(isEN ? "Profile updated successfully! ✨" : "Profil berhasil diperbarui! ✨");
+    setReminderNotificationMsg(isEN ? "Profile & health details saved! ✨" : "Profil & riwayat kesehatan berhasil disimpan! ✨");
     setTimeout(() => setReminderNotificationMsg(null), 3500);
   };
 
@@ -7648,6 +7680,129 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </div>
                     </button>
                   </div>
+                </div>
+
+                {/* Date of Birth & Age Group */}
+                <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-neutral-300">
+                      {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                    </label>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                      {getDashboardAgeGroupLabel(Number(profAge) || 25)}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
+                    <input
+                      type="date"
+                      max={new Date().toISOString().split("T")[0]}
+                      value={healthDob}
+                      onChange={(e) => {
+                        handleHealthDobChange(e.target.value);
+                        if (e.target.value && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) {
+                          const d = new Date(e.target.value);
+                          if (!isNaN(d.getTime())) {
+                            const today = new Date();
+                            let calcAge = today.getFullYear() - d.getFullYear();
+                            const m = today.getMonth() - d.getMonth();
+                            if (m < 0 || (m === 0 && today.getDate() < d.getDate())) calcAge--;
+                            if (calcAge >= 10 && calcAge <= 120) setProfAge(String(calcAge));
+                          }
+                        }
+                      }}
+                      className="w-full bg-[#181818] border border-white/[0.08] rounded-xl pl-10 pr-3 py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                </div>
+
+                {/* Health Conditions Section */}
+                <div className="space-y-2.5 pt-2 border-t border-white/[0.08]">
+                  <div>
+                    <label className="text-xs font-bold text-neutral-300 block">
+                      {isEN ? "Health Conditions & Medical History" : "Kondisi Kesehatan & Riwayat Penyakit"}
+                    </label>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      {isEN
+                        ? "Helps AI safely tailor workouts, avoid joint risks, and manage sodium/sugar."
+                        : "Membantu AI menyesuaikan latihan yang ramah sendi dan mengontrol natrium/gula secara aman."}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: "no_condition", label: isEN ? "No conditions" : "Tidak ada kondisi", icon: "✨" },
+                      { id: "has_condition", label: isEN ? "Yes, have conditions" : "Ya, ada kondisi", icon: "🩺" },
+                      { id: "prefer_not_to_say", label: isEN ? "Prefer not to say" : "Rahasiakan", icon: "🔒" }
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setHealthStatus(st.id as any)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          healthStatus === st.id
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-sm"
+                            : "bg-[#181818] border-white/[0.08] text-neutral-300 hover:border-neutral-700"
+                        }`}
+                      >
+                        <span>{st.icon}</span>
+                        <span className="truncate">{st.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Checklist of conditions when has_condition is selected */}
+                  {healthStatus === "has_condition" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="p-3.5 rounded-2xl bg-[#111620] border border-white/[0.08] space-y-2.5"
+                    >
+                      <span className="text-[11px] font-bold text-neutral-300 block">
+                        {isEN ? "Select all applicable conditions:" : "Pilih kondisi kesehatan yang kamu miliki:"}
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: "Diabetes", label: "Diabetes", icon: "🩸" },
+                          { id: "High blood pressure", label: isEN ? "High blood pressure" : "Hipertensi", icon: "🫀" },
+                          { id: "High cholesterol", label: isEN ? "High cholesterol" : "Kolesterol Tinggi", icon: "🧈" },
+                          { id: "Heart condition", label: isEN ? "Heart condition" : "Kondisi Jantung", icon: "❤️" },
+                          { id: "Kidney condition", label: isEN ? "Kidney condition" : "Kondisi Ginjal", icon: "🫘" },
+                          { id: "Liver condition", label: isEN ? "Liver condition" : "Kondisi Hati", icon: "🩺" },
+                          { id: "Asthma", label: isEN ? "Asthma / Respiratory" : "Asma / Nafas", icon: "🫁" },
+                          { id: "Arthritis", label: isEN ? "Arthritis / Joint Issue" : "Radang Sendi / Cedera", icon: "🦴" }
+                        ].map((cond) => {
+                          const isChecked = selectedConditions.includes(cond.id);
+                          return (
+                            <button
+                              key={cond.id}
+                              type="button"
+                              onClick={() => toggleDashboardHealthCondition(cond.id)}
+                              className={`p-2 rounded-xl border text-xs font-bold text-left flex items-center justify-between gap-1.5 cursor-pointer transition-all ${
+                                isChecked
+                                  ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white"
+                                  : "bg-[#181818] border-white/[0.08] text-neutral-400 hover:text-white"
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                <span>{cond.icon}</span>
+                                <span className="truncate">{cond.label}</span>
+                              </span>
+                              {isChecked && <Check size={14} className="text-[#D4FF00] shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={healthOtherCondition}
+                        onChange={(e) => setHealthOtherCondition(e.target.value)}
+                        placeholder={isEN ? "Other condition (optional)..." : "Kondisi lainnya (opsional)..."}
+                        className="w-full bg-[#181818] border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                      />
+                    </motion.div>
+                  )}
                 </div>
               </div>
 
