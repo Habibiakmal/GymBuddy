@@ -1304,8 +1304,9 @@ IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
        "portionNote": "Bukan makanan atau minuman",
        "items": []
      }
-1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
-   Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
+1. PARSE & SPLIT & DEKONSTRUKSI: Pisahkan setiap item makanan/minuman individu secara spesifik.
+   - Untuk makanan komposit / kombo (misal "roti isi sosis keju" atau "nasi ayam sambal lalapan"):
+     Pecah menjadi komponen individual: (1) Roti/Nasi, (2) Isian/Filling (sosis/ayam), (3) Topping/Keju, (4) Sambal/Saus, (5) Sayur/Lalapan.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
    - JANGAN mengasumsikan mentega/krim/minyak/dressing berlebih kecuali ada indikasi jelas.
    - Jika ada saus/dressing yang tidak diketahui jumlahnya, catat pada portionNote: "Estimasi ini belum memasukkan saus/dressing tambahan".
@@ -1316,9 +1317,10 @@ IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
    - Roti: ~60g (2 lembar roti tawar standar).
    - Telur: ~50g per 1 butir besar.
    - Sosis: ~50g per 1 buah sosis masak.
-   - Nasi putih: ~180g (1 piring / 1.5 centong).
+   - Nasi putih piring standar: ~180g (1 piring / 1.5 centong).
+   - Nasi bungkus (kertas/daun padang/warteg): ±250–300g.
    - Ayam goreng: ~120g (1 potong paha/dada).
-   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "udang 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
+   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "sosis 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
 4. HITUNG NUTRISI PER-ITEM berdasarkan standar USDA / TKPI:
    - Hitung gram berat, calories, protein, carbs, fat, fiber, sugar per-item.
 5. AKUMULASIKAN TOTAL: Jumlahkan seluruh nutrisi dari tiap-tiap item.

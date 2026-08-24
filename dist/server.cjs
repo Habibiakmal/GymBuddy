@@ -4,6 +4,10 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -20,8 +24,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // server.ts
+var server_exports = {};
+__export(server_exports, {
+  splitWhatsAppMessage: () => splitWhatsAppMessage
+});
+module.exports = __toCommonJS(server_exports);
 var import_express = __toESM(require("express"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
 var import_path3 = __toESM(require("path"), 1);
@@ -43975,8 +43985,9 @@ IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
        "portionNote": "Bukan makanan atau minuman",
        "items": []
      }
-1. PARSE & SPLIT: Pisahkan setiap item makanan/minuman individu secara spesifik.
-   Contoh: "Pasta, kentang goreng, roti" -> Pisahkan menjadi 3 item independen: (1) Pasta, (2) Kentang goreng, (3) Roti.
+1. PARSE & SPLIT & DEKONSTRUKSI: Pisahkan setiap item makanan/minuman individu secara spesifik.
+   - Untuk makanan komposit / kombo (misal "roti isi sosis keju" atau "nasi ayam sambal lalapan"):
+     Pecah menjadi komponen individual: (1) Roti/Nasi, (2) Isian/Filling (sosis/ayam), (3) Topping/Keju, (4) Sambal/Saus, (5) Sayur/Lalapan.
 2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
    - JANGAN mengasumsikan mentega/krim/minyak/dressing berlebih kecuali ada indikasi jelas.
    - Jika ada saus/dressing yang tidak diketahui jumlahnya, catat pada portionNote: "Estimasi ini belum memasukkan saus/dressing tambahan".
@@ -43987,9 +43998,10 @@ IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
    - Roti: ~60g (2 lembar roti tawar standar).
    - Telur: ~50g per 1 butir besar.
    - Sosis: ~50g per 1 buah sosis masak.
-   - Nasi putih: ~180g (1 piring / 1.5 centong).
+   - Nasi putih piring standar: ~180g (1 piring / 1.5 centong).
+   - Nasi bungkus (kertas/daun padang/warteg): \xB1250\u2013300g.
    - Ayam goreng: ~120g (1 potong paha/dada).
-   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "udang 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
+   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "sosis 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
 4. HITUNG NUTRISI PER-ITEM berdasarkan standar USDA / TKPI:
    - Hitung gram berat, calories, protein, carbs, fat, fiber, sugar per-item.
 5. AKUMULASIKAN TOTAL: Jumlahkan seluruh nutrisi dari tiap-tiap item.
@@ -45369,29 +45381,149 @@ process.on("uncaughtException", (err) => {
 });
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
-async function sendWhatsAppAsync(to, body, customFrom, mediaUrl) {
+function splitWhatsAppMessage(text, maxSafeLength = 1400) {
+  if (!text || typeof text !== "string") return [];
+  const trimmed = text.trim();
+  if (trimmed.length <= maxSafeLength) {
+    return [trimmed];
+  }
+  const sectionSplitRegex = /(?=(?:\r?\n)*(?:━{5,}|─{5,}|-{5,}|={5,}))|(?:\r?\n){2,}/;
+  let rawSections = trimmed.split(sectionSplitRegex).map((s) => s.trim()).filter(Boolean);
+  if (rawSections.length === 0 || rawSections.length === 1 && rawSections[0] === trimmed) {
+    rawSections = trimmed.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+  }
+  const paragraphs = [];
+  for (const sec of rawSections) {
+    if (sec.length <= maxSafeLength) {
+      paragraphs.push(sec);
+    } else {
+      const lines = sec.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      paragraphs.push(...lines);
+    }
+  }
+  const listItems = [];
+  for (const para of paragraphs) {
+    if (para.length <= maxSafeLength) {
+      listItems.push(para);
+    } else {
+      const bulletParts = para.split(/(?=(?:^|\n)(?:[•\-\*]|\d+\.|\([a-z0-9]\))\s+)/i).map((b) => b.trim()).filter(Boolean);
+      if (bulletParts.length > 1) {
+        listItems.push(...bulletParts);
+      } else {
+        listItems.push(para);
+      }
+    }
+  }
+  const sentences = [];
+  for (const item of listItems) {
+    if (item.length <= maxSafeLength) {
+      sentences.push(item);
+    } else {
+      const sentenceParts = item.split(/(?<=[.!?])\s+(?=[A-Z0-9\u00C0-\u024F\u{1F300}-\u{1FAFF}*_"'])/u).map((s) => s.trim()).filter(Boolean);
+      if (sentenceParts.length > 1) {
+        sentences.push(...sentenceParts);
+      } else {
+        sentences.push(item);
+      }
+    }
+  }
+  const atomicUnits = [];
+  for (const sent of sentences) {
+    if (sent.length <= maxSafeLength) {
+      atomicUnits.push(sent);
+    } else {
+      const wordParts = sent.split(/\s+/).filter(Boolean);
+      atomicUnits.push(...wordParts);
+    }
+  }
+  const chunks = [];
+  let currentChunk = "";
+  for (const unit of atomicUnits) {
+    const unitStr = unit.trim();
+    if (!unitStr) continue;
+    if (unitStr.length > maxSafeLength) {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+        currentChunk = "";
+      }
+      for (let i = 0; i < unitStr.length; i += maxSafeLength) {
+        chunks.push(unitStr.slice(i, i + maxSafeLength).trim());
+      }
+      continue;
+    }
+    const testJoin = currentChunk ? currentChunk.includes("\n") || unitStr.startsWith("\u2501") || unitStr.startsWith("\u2500") || unitStr.startsWith("\u2022") || unitStr.startsWith("-") || unitStr.startsWith("*") ? `${currentChunk}
+
+${unitStr}` : `${currentChunk}
+${unitStr}` : unitStr;
+    if (testJoin.length <= maxSafeLength) {
+      currentChunk = testJoin;
+    } else {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
+      currentChunk = unitStr;
+    }
+  }
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  return chunks.filter((c) => c.length > 0);
+}
+async function sendSingleTwilioMessage(to, body, customFrom, mediaUrl) {
   const client2 = getTwilio();
   if (!client2) {
     console.warn("[Twilio Client] Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN");
     return null;
   }
-  try {
-    const fromPhone = customFrom || process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
-    const payload = {
-      from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
-      to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
-      body
-    };
-    if (mediaUrl && (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png") || mediaUrl.endsWith(".webp"))) {
-      payload.mediaUrl = [mediaUrl];
-    }
-    const res = await client2.messages.create(payload);
-    console.log(`[Twilio WA] Sent instant message to ${to}, SID: ${res.sid} \u2705`);
-    return res;
-  } catch (err) {
-    console.warn(`[Twilio WA] Note: REST message to ${to} warning:`, err?.message || err);
-    return null;
+  const fromPhone = customFrom || process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+  const payload = {
+    from: fromPhone.startsWith("whatsapp:") ? fromPhone : `whatsapp:${fromPhone}`,
+    to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
+    body
+  };
+  if (mediaUrl && (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png") || mediaUrl.endsWith(".webp"))) {
+    payload.mediaUrl = [mediaUrl];
   }
+  return await client2.messages.create(payload);
+}
+async function sendWhatsAppAsync(to, body, customFrom, mediaUrl) {
+  if (!body && !mediaUrl) return null;
+  const chunks = splitWhatsAppMessage(body || "", 1400);
+  if (chunks.length === 0 && mediaUrl) {
+    chunks.push("");
+  }
+  if (chunks.length === 0) return null;
+  const results = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const isFirstWithMedia = i === 0 && Boolean(mediaUrl);
+    const mediaForThisChunk = isFirstWithMedia ? mediaUrl : void 0;
+    try {
+      const res = await sendSingleTwilioMessage(to, chunk, customFrom, mediaForThisChunk);
+      results.push(res);
+      console.log(`[Twilio WA] Sent chunk ${i + 1}/${chunks.length} to ${to}, SID: ${res?.sid} \u2705`);
+    } catch (err) {
+      console.warn(`[Twilio WA] Chunk ${i + 1}/${chunks.length} note:`, err?.message || err);
+      if (err?.code === 21617 || String(err?.message || "").includes("1600") || String(err?.message || "").includes("limit")) {
+        console.log(`[Twilio WA] Safe retry: splitting chunk into smaller 700-char parts...`);
+        const subChunks = splitWhatsAppMessage(chunk, 700);
+        for (let j = 0; j < subChunks.length; j++) {
+          try {
+            const subMedia = i === 0 && j === 0 && mediaUrl ? mediaUrl : void 0;
+            const subRes = await sendSingleTwilioMessage(to, subChunks[j], customFrom, subMedia);
+            results.push(subRes);
+            await new Promise((r) => setTimeout(r, 450));
+          } catch (subErr) {
+            console.error(`[Twilio WA] Sub-chunk fallback failed:`, subErr?.message || subErr);
+          }
+        }
+      }
+    }
+    if (i < chunks.length - 1) {
+      await new Promise((r) => setTimeout(r, 450));
+    }
+  }
+  return results[0] || null;
 }
 var twilioClient = null;
 function getTwilio() {
@@ -48570,10 +48702,11 @@ ${cleanedAdvice}` : buildFallbackAdvice();
   });
   app.post("/api/ai/analyze-meal-image", import_express.default.json({ limit: "25mb" }), async (req, res) => {
     try {
-      const { imageBase64, mimeType = "image/jpeg" } = req.body;
+      const { imageBase64, mimeType = "image/jpeg", text, description } = req.body;
       if (!imageBase64) {
         return res.status(400).json({ success: false, error: "Image base64 data is required" });
       }
+      const userTextContext = String(text || description || "").trim();
       const cleanBase64 = imageBase64.replace(/^data:image\/[a-z0-9+]+;base64,/i, "");
       const imagePart = {
         inlineData: {
@@ -48582,9 +48715,10 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         }
       };
       const prompt = `KAMU ADALAH SISTEM VISION AI PAKAR NUTRISI GYMBUDDY.
-TUGASMU: Analisis gambar yang dikirim pengguna dengan sangat teliti.
+TUGASMU: Analisis gambar makanan/minuman yang dikirim pengguna dengan sangat teliti.
+${userTextContext ? `DESKRIPSI/KONTEKS USER: "${userTextContext}". (Gunakan teks ini sebagai ground truth utama untuk nama makanan, isian/filling yang tersembunyi, dan porsi).` : ""}
 
-1. PERIKSA APAKAH INI MAKANAN / MINUMAN ATAU BUKAN.
+1. PERIKSA APAKAH INI MAKANAN / MINUMAN ATAU BUKAN:
 - Jika gambar adalah benda mati, laptop, hp, manusia, selfie, ruangan, pemandangan, hewan, atau BUKAN MAKANAN/MINUMAN:
   Keluarkan JSON:
   {
@@ -48599,13 +48733,10 @@ TUGASMU: Analisis gambar yang dikirim pengguna dengan sangat teliti.
   }
 
 2. JIKA GAMBAR ADALAH MAKANAN ATAU MINUMAN:
-- Kenali jenis makanan/minuman secara spesifik dan akurat.
-- Estimasi porsi standar orang Indonesia dewasa.
-- Hitung kalori & makronutrisi: (protein \xD7 4) + (carbs \xD7 4) + (fat \xD7 9) = calories.
+- DEKONSTRUKSI MAKANAN KOMPOSIT: Pecah makanan kombinasi menjadi komponen individual (Main Food, Isian/Filling seperti sosis di dalam roti, Topping seperti keju, Saus, Side dish).
+- ESTIMASI PORSI REALISTIS DARI VISUAL CUES: Gunakan petunjuk visual seperti ukuran wadah/bungkus (misal 'nasi bungkus' biasanya \xB1250\u2013300g), piring, dan ketebalan potongan.
+- Hitung kalori & makronutrisi konsisten: (protein \xD7 4) + (carbs \xD7 4) + (fat \xD7 9) = calories.
 - Tentukan jika minuman (Americano, Teh, Air, Kopi, Jus, Boba, dll.) dengan isHydration=true.
-  * Americano / Kopi Hitam: calories: 5, protein: 0, carbs: 1, fat: 0, isHydration: true, volumeMl: 250
-  * Cafe Latte / Kopi Susu: calories: 130, protein: 5, carbs: 12, fat: 6, isHydration: true, volumeMl: 250
-  * Air Putih / Mineral: calories: 0, protein: 0, carbs: 0, fat: 0, isHydration: true, volumeMl: 250
 
 Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 {
@@ -48618,7 +48749,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   "fiber": 3,
   "isHydration": false,
   "volumeMl": 0,
-  "portion": "1 Porsi Standar (~300g)",
+  "portion": "1 Porsi (\xB1250\u2013300g)",
+  "portionEstimates": [
+    "\u2022 Komponen 1: ~100g",
+    "\u2022 Komponen 2: ~50g"
+  ],
   "mealType": "lunch"
 }`;
       try {
@@ -49648,13 +49783,19 @@ Keluarkan output JSON valid:
       const weightMatch = matchPureWeightLog(userText);
       const waterMatch = matchPureWaterLog(userText);
       const isResetMessage = lowerText.includes("reset akun") || lowerText.includes("hapus akun") || lowerText.includes("reset data") || lowerText.includes("hapus data saya");
+      const isDeleteMealMessage = Boolean(
+        lowerText.match(/^(?:hapus|delete|batal(?:kan)?)\s+(?:log\s+)?(?:makan(?:an)?|food|nutrisi)(?:\s+terakhir)?$/i) || lowerText === "hapus log terakhir" || lowerText === "hapus makan terakhir" || lowerText === "hapus makanan terakhir" || lowerText === "batal catat makanan"
+      );
+      const isMealCorrection = Boolean(
+        lowerText.startsWith("koreksi:") || lowerText.startsWith("koreksi ") || lowerText.startsWith("edit makanan:") || lowerText.startsWith("ganti makanan:")
+      );
       let responseMessages = [];
       let mediaUrlToSend = void 0;
       const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
         matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
-      console.log(`[Twilio WA] \u2705 Step: routing. isReset=${isResetMessage}, isWeekly=${isWeeklyScheduleQuery}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
+      console.log(`[Twilio WA] \u2705 Step: routing. isReset=${isResetMessage}, isDeleteMeal=${isDeleteMealMessage}, isWeekly=${isWeeklyScheduleQuery}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
       if (isResetMessage) {
         const normPhone = normalizePhone(normFrom);
         if (dbData.users[normPhone]) {
@@ -49679,6 +49820,41 @@ Semua profil dan riwayat kamu telah dibersihkan dari database GymBuddy AI.
 
 Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! \u2728`
         ];
+      } else if (isDeleteMealMessage) {
+        const todayStr = getTodayDateStr();
+        const key = `${normFrom}_${todayStr}`;
+        const altPhone = normFrom.startsWith("0") ? "62" + normFrom.substring(1) : normFrom.startsWith("62") ? "0" + normFrom.substring(2) : normFrom;
+        const altKey = `${altPhone}_${todayStr}`;
+        const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+        const foodLogs = logs.filter((l) => !l.isHydration && !isPlainWaterName(l.foodName));
+        if (foodLogs.length > 0) {
+          const lastMeal = foodLogs[foodLogs.length - 1];
+          dbData.dailyLogs[key] = (dbData.dailyLogs[key] || []).filter((m) => m.id !== lastMeal.id);
+          if (dbData.dailyLogs[altKey]) {
+            dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== lastMeal.id);
+          }
+          saveDb();
+          if (lastMeal.id) {
+            deleteFoodLog(normFrom, lastMeal.id).catch(() => {
+            });
+          }
+          const updatedTotals = getDailyTotals(normFrom, todayStr);
+          const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+          responseMessages = [
+            `\u{1F5D1}\uFE0F *LOG MAKANAN DIHAPUS*
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari log hari ini.
+
+\u{1F4CA} *Status Kalori Hari Ini*: ${updatedTotals.calories}/${userData.targetCalories} kcal
+
+\u{1F4AC} *${coachName}*:
+"Sip, catatannya sudah aku hapus ya! Kalau ada makanan lain yang mau dicatat, kirim saja langsung."`
+          ];
+        } else {
+          responseMessages = [
+            `\u2139\uFE0F Belum ada catatan makanan hari ini yang bisa dihapus.`
+          ];
+        }
       } else if (isWeeklyScheduleQuery) {
         responseMessages = [generateWeeklyWorkoutSchedule(userData)];
       } else if (isWorkoutScheduleQuery) {
@@ -49828,6 +50004,26 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
       } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
         responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
       } else {
+        if (isMealCorrection) {
+          const correctionDetail = userText.replace(/^(?:koreksi\s*:?|edit\s+makanan\s*:?|ganti\s+makanan\s*:?)\s*/i, "").trim();
+          const todayStr = getTodayDateStr();
+          const key = `${normFrom}_${todayStr}`;
+          const altPhone = normFrom.startsWith("0") ? "62" + normFrom.substring(1) : normFrom.startsWith("62") ? "0" + normFrom.substring(2) : normFrom;
+          const altKey = `${altPhone}_${todayStr}`;
+          const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+          const foodLogs = logs.filter((l) => !l.isHydration && !isPlainWaterName(l.foodName));
+          const lastMeal = foodLogs[foodLogs.length - 1];
+          if (lastMeal && lastMeal.id) {
+            dbData.dailyLogs[key] = (dbData.dailyLogs[key] || []).filter((m) => m.id !== lastMeal.id);
+            if (dbData.dailyLogs[altKey]) {
+              dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== lastMeal.id);
+            }
+            deleteFoodLog(normFrom, lastMeal.id).catch(() => {
+            });
+          }
+          userText = lastMeal ? `${lastMeal.foodName}, koreksi porsi/komposisi: ${correctionDetail}` : correctionDetail;
+          console.log(`[Twilio WA] Applied meal correction. Combined query: "${userText}"`);
+        }
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
@@ -49871,49 +50067,87 @@ ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 4. Jika ada keluhan akut atau risiko tinggi, arahkan dengan sopan untuk berkonsultasi dengan tenaga medis.
 5. JANGAN menyebut kondisi kesehatan pada kalimat motivasi kasual yang tidak relevan.
 
+ATURAN PENANGANAN REFERENSI TIDAK DIKENAL & OUT-OF-CONTEXT INPUT:
+1. JANGAN MENGARANG IDENTITAS/KONTEKS (NO HALLUCINATED ENTITIES):
+   - Jika pengguna menyebut nama orang, tokoh, produk, karakter, atau entitas yang tidak memiliki konteks yang cukup (contoh: "Aku mau jadi si A", "Menurut kamu aku bisa kayak A nggak?", "Aku pengen punya badan kayak X", "Targetku seperti A", "Makananku kayak si B"):
+     \u2022 DILARANG MENGARANG siapa itu A/B/X (profesi, prestasi, bentuk badan, kebiasaan, kepribadian).
+     \u2022 DILARANG pura-pura tahu ("A tentu punya...", "A memang dikenal sebagai...", "Si A adalah role model hebat!").
+     \u2022 DILARANG forced positivity ("Wah keren banget! Kamu pasti bisa seperti A!").
+     \u2022 TANYAKAN KLARIFIKASI SECARA SINGKAT & ALAMI:
+       Contoh Coach Max: "Si A yang lo maksud siapa nih bro? Kasih tahu namanya atau sedikit konteks tentang dia biar gue nggak salah nangkep. \u{1F4AA}"
+       Contoh Coach Mia: "Si A yang kamu maksud siapa ya? \u{1F604} Boleh kasih tahu namanya atau sedikit konteks tentang dia biar aku nggak salah paham \u2728"
+       Jika konteks fisik/latihan: "Si A yang kamu maksud siapa? Kalau kamu kasih tahu nama atau bentuk tubuh/goal yang kamu maksud, aku bisa bantu breakdown targetnya."
+       Jika konteks makanan: "Si A yang kamu maksud siapa? Kalau kamu punya contoh menu atau pola makannya, kirim aja dan aku bisa bantu analisis."
+2. BEDAKAN KNOWN CONTEXT VS UNKNOWN CONTEXT:
+   - Figur publik dunia yang sangat umum/terkenal (contoh: "Cristiano Ronaldo", "The Rock"): Pahami konteksnya tanpa klaim medis/personal berlebihan.
+   - Nama spesifik/entitas tak dikenal: WAJIB minta klarifikasi singkat. Jangan berasumsi.
+3. JANGAN MEMAKSAKAN SEMUA PERNYATAAN MENJADI JAWABAN FITNESS:
+   - Jika user hanya membuat pernyataan ("Aku mau jadi si A"), jangan otomatis menganggap user meminta workout/nutrition plan lengkap. Tanyakan konteksnya terlebih dahulu.
+4. KEJUJURAN TERHADAP KONTEKS (ACCURACY > FORCED HELPFULNESS):
+   - Konteks cukup: Berikan jawaban langsung.
+   - Konteks sebagian: Jawab yang diketahui + minta klarifikasi yang belum jelas.
+   - Konteks kurang / entitas tidak dikenal: Tanyakan klarifikasi dengan ramah.
+   - Input di luar kapabilitas: Jelaskan secara singkat dan ramah.
+
 ${personaInstruction}
 ${serviceInstruction}
 
 TUGASMU:
-User mengirim pesan/foto di WhatsApp: "${userText}"
+User mengirim ${imagePart ? "FOTO MAKANAN/MINUMAN BESERTA PESAN" : "PESAN TEKS"} di WhatsApp: "${userText}"
 
-PRINSIP UTAMA:
-1. Akurasi ilmiah selalu diutamakan.
-2. Konsistensi kalori: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
-3. Hindari kepastian palsu jika porsi atau saus tidak diketahui secara pasti.
+PRINSIP WAJIB ANALISIS MAKANAN (MULTI-MODAL IMAGE + TEXT):
+1. GABUNGKAN FOTO + DESKRIPSI TEXT SEBAGAI SINGLE COMBINED INPUT:
+   - Jika ada teks yang menyertai foto (misal "roti isi sosis topping keju" atau "nasi ayam bakar sambal lalapan"), TEKS TERSEBUT ADALAH GROUND TRUTH UTAMA.
+   - SEMUA komponen yang disebutkan user WAJIB dihitung, meskipun salah satu komponen (seperti sosis di dalam roti) tertutup atau hanya terlihat sebagian.
+   - Jangan pernah mengabaikan teks user atau hanya mengandalkan deteksi visual semata.
+2. DEKONSTRUKSI MAKANAN KOMBINASI / BERLAPIS:
+   - Identifikasi dan hitung setiap komponen individual: Main Food, Filling (isian), Topping, Sauce, Condiment, Side Dish.
+   - Contoh "Roti isi sosis keju": (1) Roti (~60g), (2) Sosis (~50g), (3) Keju topping (~15g).
+   - Contoh "Nasi ayam goreng sambal lalapan": (1) Nasi putih, (2) Ayam goreng, (3) Sambal, (4) Lalapan sayur.
+   - Rincikan komponen tersebut di array 'portionEstimates'.
+3. ESTIMASI PORSI REALISTIS DARI VISUAL CUES & HINDARI KEPASTIAN PALSU:
+   - Gunakan petunjuk visual seperti ukuran wadah/bungkus (misal 'nasi bungkus' biasanya \xB1250\u2013300g, bukan 180g), piring, sendok/garpu, ketebalan potongan, dan jumlah item.
+   - Jangan menganggap estimasi visual sebagai timbangan pasti; sajikan estimasi dalam format realistis (misal: '\u2022 Nasi bungkus: \xB1250\u2013300g', '\u2022 Sosis: 1 buah (~50g)').
+   - Jangan menambahkan bahan yang tidak terlihat dan tidak disebutkan (jangan mengarang mayones, mentega tebal, atau gula kecuali terlihat/disebutkan).
+4. KONSISTENSI KALORI: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+5. KLARIFIKASI INTERAKTIF JIKA HANYA FOTO & MAKANAN SANGAT AMBIGU:
+   - Jika user HANYA mengirim foto (tanpa teks) dan makanan memiliki isian tertutup / tidak jelas (misal sandwich tertutup, bungkusan misteri, mangkok sup kental):
+     Set "needsClarification": true dan sediakan "clarificationQuestion" ramah dari coach (${isMia ? "Coach Mia" : "Coach Max"}).
 
-Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman, seperti "pisang 2 buah", "makan ayam", dll)
-PASTIKAN "isFood": true dan selalu berikan angka estimasi realistis (calories > 0, protein, carbs, fat, fiber, sodium dalam mg).
+Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman)
 Keluarkan output JSON valid:
 {
   "isFood": true,
   "isEquipment": false,
-  "foodName": "Nama Makanan/Minuman",
-  "calories": 210,
-  "protein": 20,
-  "carbs": 30,
-  "fat": 5,
-  "fiber": 2,
-  "sugar": 4,
-  "sodium": 350,
+  "needsClarification": false,
+  "clarificationQuestion": "",
+  "foodName": "Nama Lengkap Makanan / Kombo",
+  "calories": 420,
+  "protein": 24,
+  "carbs": 48,
+  "fat": 14,
+  "fiber": 3,
+  "sugar": 5,
+  "sodium": 420,
+  "confidenceLevel": 88,
   "satietyScore": 7,
-  "satietyExplanation": "Penjelasan singkat efek kenyang makanan ini",
+  "satietyExplanation": "Penjelasan efek kenyang berdasarkan protein, serat, dan makro",
   "healthScore": 8,
   "portionEstimates": [
-    "Komponen 1 (perkiraan porsi/kalori)",
-    "Komponen 2 (perkiraan porsi/kalori)"
+    "\u2022 Roti: ~60g (~150 kcal)",
+    "\u2022 Sosis: 1 buah (~50g, ~160 kcal)",
+    "\u2022 Keju: topping (~15g, ~60 kcal)"
   ],
   "keyInsights": [
-    "Insight positif 1",
-    "Insight positif 2"
+    "Sumber protein solid untuk pemulihan",
+    "Porsi dan komposisi makro terkontrol"
   ],
-  "coachComment": "Komentar singkat khas persona coach"
+  "coachComment": "Komentar ramah khas persona coach"
 }
 
 Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
-Jika ini foto alat gym (misal Dumbbell, Leg Press, Smith Machine, Cable Machine, Foam Roller, Barbell, Treadmill, dll.) atau pertanyaan mengenai alat latihan:
-Evaluasi apakah alat ini COCOK untuk goal pengguna saat ini (${userData.goalTitle}).
-Jika TIDAK cocok (misal alat powerlifting berat untuk goal pemula/fat loss), set isAlignedWithGoal = false dan berikan pesan ramah/sopan ("Kayaknya alat tsb bukan untuk kita dulu...").
+Jika ini foto alat gym atau pertanyaan alat latihan:
+Evaluasi apakah alat ini COCOK untuk goal pengguna (${userData.goalTitle}).
 Keluarkan output JSON valid:
 {
   "isFood": false,
@@ -49929,16 +50163,18 @@ Keluarkan output JSON valid:
       "techniqueTip": "Tips eksekusi teknik"
     }
   ],
-  "politeRedirection": "Pesan ramah jika tidak cocok (misal: 'Kayaknya alat ini kurang cocok untuk goal kita dulu ya...')",
+  "politeRedirection": "Pesan ramah jika tidak cocok",
   "coachComment": "Komentar khas persona coach"
 }
 
-Kategori 3: PERTANYAAN UMUM / WORKOUT REKLAMASI LAINNYA
+Kategori 3: PERTANYAAN UMUM / OBROLAN / REFERENSI TIDAK DIKENAL / OUT-OF-CONTEXT
+- Jika ada nama orang/entitas yang tidak dikenal (misal "si A", "Budi"), tanyakan klarifikasi secara natural tanpa mengarang identitas mereka.
+- Jika pengguna bertanya hal umum atau berdiskusi, jawab secara ramah, jujur terhadap konteks, dan sesuai persona coach tanpa memaksakan menu/program jika tidak diminta.
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": false,
-  "generalReply": "Pesan balasan coach yang alami dan sesuai persona"
+  "generalReply": "Pesan balasan coach yang alami, jujur terhadap konteks, dan sesuai persona"
 }
 `;
         try {
@@ -49950,54 +50186,59 @@ Keluarkan output JSON valid:
           }
           const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
           if (parsed.isFood) {
-            addMealLog(normFrom, {
-              id: `m-${Date.now()}`,
-              foodName: parsed.foodName || "Makanan",
-              calories: Number(parsed.calories) || 0,
-              protein: Number(parsed.protein) || 0,
-              carbs: Number(parsed.carbs) || 0,
-              fat: Number(parsed.fat) || 0,
-              fiber: Number(parsed.fiber) || 0,
-              sugar: Number(parsed.sugar) || 0,
-              sodium: Number(parsed.sodium) || 0,
-              mealType: getMealTypeByHour(userText || parsed.mealType),
-              timestamp: (/* @__PURE__ */ new Date()).toISOString()
-            });
-            const dailyTotals = getDailyTotals(normFrom);
-            const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
-            responseMessages = [card];
-            if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
-              const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-              const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
-              const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-              const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
-              cardMediaCache.set(cardId, {
+            if (parsed.needsClarification && !userText.trim()) {
+              const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
+              responseMessages = [parsed.clarificationQuestion || defaultClarification];
+            } else {
+              addMealLog(normFrom, {
+                id: `m-${Date.now()}`,
                 foodName: parsed.foodName || "Makanan",
                 calories: Number(parsed.calories) || 0,
                 protein: Number(parsed.protein) || 0,
                 carbs: Number(parsed.carbs) || 0,
                 fat: Number(parsed.fat) || 0,
-                sodium: Number(parsed.sodium) || 0,
                 fiber: Number(parsed.fiber) || 0,
                 sugar: Number(parsed.sugar) || 0,
-                mealType: mealTypeStr,
-                dateStr,
-                dailyTargetCalories: userData.targetCalories || 1966,
-                consumedTodayCalories: dailyTotals.calories,
-                dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
-                dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
-                dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
-                insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
-                imageBufferOrBase64: photoDataUri,
-                createdAt: Date.now()
+                sodium: Number(parsed.sodium) || 0,
+                mealType: getMealTypeByHour(userText || parsed.mealType),
+                timestamp: (/* @__PURE__ */ new Date()).toISOString()
               });
-              const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-              const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
-              const dynamicOrigin = `${proto}://${host}`;
-              const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
-              mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
-            } else {
-              mediaUrlToSend = "";
+              const dailyTotals = getDailyTotals(normFrom);
+              const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+              responseMessages = [card];
+              if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
+                const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+                const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+                const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
+                cardMediaCache.set(cardId, {
+                  foodName: parsed.foodName || "Makanan",
+                  calories: Number(parsed.calories) || 0,
+                  protein: Number(parsed.protein) || 0,
+                  carbs: Number(parsed.carbs) || 0,
+                  fat: Number(parsed.fat) || 0,
+                  sodium: Number(parsed.sodium) || 0,
+                  fiber: Number(parsed.fiber) || 0,
+                  sugar: Number(parsed.sugar) || 0,
+                  mealType: mealTypeStr,
+                  dateStr,
+                  dailyTargetCalories: userData.targetCalories || 1966,
+                  consumedTodayCalories: dailyTotals.calories,
+                  dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
+                  dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
+                  dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
+                  insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
+                  imageBufferOrBase64: photoDataUri,
+                  createdAt: Date.now()
+                });
+                const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+                const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
+                const dynamicOrigin = `${proto}://${host}`;
+                const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
+                mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
+              } else {
+                mediaUrlToSend = "";
+              }
             }
           } else if (isEquipmentMatch) {
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
@@ -50050,11 +50291,14 @@ Keluarkan output JSON valid:
           responseMessages = [card];
         }
       }
-      const finalMsg = responseMessages[0] || "Sip, data kamu sudah tercatat!";
-      if (mediaUrlToSend && mediaUrlToSend.startsWith("http")) {
-        await sendWhatsAppAsync(rawFrom, finalMsg, req.body?.To, mediaUrlToSend);
-      } else {
-        await sendWhatsAppAsync(rawFrom, finalMsg, req.body?.To);
+      const messagesToSend = responseMessages && responseMessages.length > 0 ? responseMessages : ["Sip, data kamu sudah tercatat!"];
+      for (let mIdx = 0; mIdx < messagesToSend.length; mIdx++) {
+        const msg = messagesToSend[mIdx];
+        const media = mIdx === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("http") ? mediaUrlToSend : void 0;
+        await sendWhatsAppAsync(rawFrom, msg, req.body?.To, media);
+        if (mIdx < messagesToSend.length - 1) {
+          await new Promise((r) => setTimeout(r, 450));
+        }
       }
       return res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
     } catch (error) {
@@ -50415,4 +50659,8 @@ ${mistakes}
   });
 }
 startServer();
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  splitWhatsAppMessage
+});
 //# sourceMappingURL=server.cjs.map
