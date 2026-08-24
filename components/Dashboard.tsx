@@ -2938,7 +2938,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       </aside>
 
       {/* RIGHT MAIN CONTENT CONTAINER */}
-      <main className="flex-1 bg-[#151515] sm:bg-[#151515] border-0 sm:border sm:border-white/[0.08] rounded-none sm:rounded-3xl px-3.5 sm:px-6 md:px-8 pt-[max(env(safe-area-inset-top),2.75rem)] sm:pt-6 md:pt-8 pb-28 lg:pb-8 space-y-5 overflow-y-auto shadow-sm text-white">
+      <main className="flex-1 bg-[#151515] sm:bg-[#151515] border-0 sm:border sm:border-white/[0.08] rounded-none sm:rounded-3xl px-3.5 sm:px-6 md:px-8 pt-[max(env(safe-area-inset-top),2.75rem)] sm:pt-6 md:pt-8 pb-36 lg:pb-8 space-y-5 overflow-y-auto shadow-sm text-white">
         {/* ========================================================================= */}
         {/* TAB 1: HOME (DASHBOARD RINGKASAN) */}
         {/* ========================================================================= */}
@@ -4226,56 +4226,44 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {activeTab === "workouts" && (() => {
           const workoutTabContent = (
             <div className="space-y-5">
-              {/* Top Navigation Back to Home Bar */}
-              <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveTab("home")}
-                className="px-3.5 py-2 rounded-xl bg-[#181818] hover:bg-[#222222] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
-              >
-                <ArrowLeft size={16} className="text-[#D4FF00]" />
-                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
-              </button>
-            </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#222222] border border-white/[0.08] rounded-2xl p-4 sm:p-5">
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                    <Dumbbell size={22} className="text-[#D4FF00]" />
+                    <span>{isEN ? "Gym Schedule & Workouts" : "Jadwal & Latihan Gym"}</span>
+                  </h1>
+                  <p className="text-xs text-neutral-400 font-semibold mt-0.5">
+                    {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% {isEN ? "Completed" : "Selesai"})
+                  </p>
+                </div>
 
-            <div className="flex items-center justify-between bg-[#222222] border border-white/[0.08] rounded-2xl p-4 sm:p-5">
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <Dumbbell size={22} className="text-[#D4FF00]" />
-                  <span>{isEN ? "Gym Schedule & Workouts" : "Jadwal & Latihan Gym"}</span>
-                </h1>
-                <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                  {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% {isEN ? "Completed" : "Selesai"})
-                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setShowWatchConnectModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title={isEN ? "Connect Apple Watch (Magic Link)" : "Hubungkan ke Apple Watch (Magic Link)"}
+                  >
+                    <Watch size={14} className="text-[#D4FF00]" />
+                    <span className="hidden sm:inline">Apple Watch</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowExerciseExplorerModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/40 text-[#D4FF00] font-bold text-xs hover:bg-[#D4FF00]/25 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <BookOpen size={14} />
+                    <span>{isEN ? "Exercise Library (GIFs)" : "Kamus Alat (GIF Guide)"}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
+                    className="px-3 py-1.5 rounded-xl bg-[#181818] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Layers size={14} />
+                    <span>{showFullWeeklyOverview ? (isEN ? "View Today" : "Lihat Hari Ini") : (isEN ? "7-Day Schedule" : "Jadwal 7 Hari")}</span>
+                  </button>
+                </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowWatchConnectModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title={isEN ? "Connect Apple Watch (Magic Link)" : "Hubungkan ke Apple Watch (Magic Link)"}
-                >
-                  <Watch size={14} className="text-[#D4FF00]" />
-                  <span className="hidden sm:inline">Apple Watch</span>
-                </button>
-
-                <button
-                  onClick={() => setShowExerciseExplorerModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/40 text-[#D4FF00] font-bold text-xs hover:bg-[#D4FF00]/25 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <BookOpen size={14} />
-                  <span>{isEN ? "Exercise Library (GIFs)" : "Kamus Alat (GIF Guide)"}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowFullWeeklyOverview(!showFullWeeklyOverview)}
-                  className="px-3 py-1.5 rounded-xl bg-[#181818] border border-white/[0.08] text-neutral-300 font-bold text-xs hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Layers size={14} />
-                  <span>{showFullWeeklyOverview ? (isEN ? "View Today" : "Lihat Hari Ini") : (isEN ? "7-Day Schedule" : "Jadwal 7 Hari")}</span>
-                </button>
-              </div>
-            </div>
 
             {!showFullWeeklyOverview ? (
               <>
@@ -4424,18 +4412,6 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         if (!hasWorkoutAccess) {
           return (
             <div className="space-y-5">
-              {/* Top Navigation Back to Home Bar */}
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("home")}
-                  className="px-3.5 py-2 rounded-xl bg-[#181818] hover:bg-[#222222] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
-                >
-                  <ArrowLeft size={16} className="text-[#D4FF00]" />
-                  <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
-                </button>
-              </div>
-
               {/* Locked Full View with Live Preview */}
               <div className="relative overflow-hidden rounded-3xl min-h-[550px] group">
                 <div className="opacity-35 filter blur-[0.5px] pointer-events-none select-none transition-all">
@@ -4487,44 +4463,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {activeTab === "progress" && (
           <div className="space-y-5">
-            {/* Top Navigation Back to Home Bar */}
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveTab("home")}
-                className="px-3.5 py-2 rounded-xl bg-[#181818] hover:bg-[#222222] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
-              >
-                <ArrowLeft size={16} className="text-[#D4FF00]" />
-                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
-              </button>
-
-              <div className="flex items-center gap-1.5 bg-[#222222] border border-white/[0.08] p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setChartTimeframe("7d")}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                    chartTimeframe === "7d"
-                      ? "bg-[#D4FF00] text-black shadow-xs"
-                      : "text-neutral-400 hover:text-white"
-                  }`}
-                >
-                  {isEN ? "7 Days" : "7 Hari"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartTimeframe("30d")}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                    chartTimeframe === "30d"
-                      ? "bg-[#D4FF00] text-black shadow-xs"
-                      : "text-neutral-400 hover:text-white"
-                  }`}
-                >
-                  {isEN ? "30 Days" : "30 Hari"}
-                </button>
-              </div>
-            </div>
-
-            {/* Header Card */}
+            {/* Header Bar with Timeframe Toggle */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#222222] border border-white/[0.08] rounded-2xl p-4 sm:p-5">
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -4536,10 +4475,35 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-[#181818] border border-white/[0.08] p-1 rounded-xl shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setChartTimeframe("7d")}
+                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      chartTimeframe === "7d"
+                        ? "bg-[#D4FF00] text-black shadow-xs"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {isEN ? "7 Days" : "7 Hari"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartTimeframe("30d")}
+                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      chartTimeframe === "30d"
+                        ? "bg-[#D4FF00] text-black shadow-xs"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {isEN ? "30 Days" : "30 Hari"}
+                  </button>
+                </div>
+
                 <button
                   onClick={() => setShowUpdateWeightModal(true)}
-                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1.5 active:scale-98"
                 >
                   <Edit3 size={14} />
                   <span>{isEN ? "Log Weight" : "Perbarui Berat"}</span>
@@ -4834,27 +4798,27 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         {/* ========================================================================= */}
         {activeTab === "profile" && (
           <div className="space-y-5">
-            {/* Top Navigation Back to Home Bar */}
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveTab("home")}
-                className="px-3.5 py-2 rounded-xl bg-[#181818] hover:bg-[#222222] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
-              >
-                <ArrowLeft size={16} className="text-[#D4FF00]" />
-                <span>{isEN ? "Back to Dashboard" : "Kembali ke Dashboard"}</span>
-              </button>
+            {/* Mobile-First Profile Header Bar */}
+            <div className="flex items-center justify-between pb-1">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  {isEN ? "Profile & Settings" : "Profil & Pengaturan"}
+                </h1>
+                <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                  {isEN ? "Manage biometrics, targets & coach persona" : "Kelola data fisik, target nutrisi & preferensi coach"}
+                </p>
+              </div>
 
               <button
                 onClick={toggleLanguage}
-                className="px-3.5 py-1.5 bg-[#181818] border border-white/[0.08] rounded-xl text-xs font-bold text-neutral-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 bg-[#222222] hover:bg-[#2a2a2a] border border-white/[0.08] rounded-xl text-xs font-bold text-neutral-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
               >
                 <Globe size={14} className="text-[#D4FF00]" />
                 <span>{lang}</span>
               </button>
             </div>
 
-            {/* User Profile Header Card */}
+            {/* 1. User Profile Header Card */}
             <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
@@ -4872,15 +4836,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <button
                   type="button"
                   onClick={() => setShowEditProfileModal(true)}
-                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  className="w-full sm:w-auto px-4 py-2.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-98"
                 >
                   <Edit3 size={14} />
                   <span>{isEN ? "Edit Personal Info" : "Edit Data Personal"}</span>
                 </button>
               </div>
 
-              {/* Personal Details Pills */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 border-t border-white/[0.08]">
+              {/* Personal Details 4-Pill Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-white/[0.08]">
                 <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-3">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Height" : "Tinggi Badan"}</span>
                   <span className="text-sm font-black text-white">{activeUser.height || 170} cm</span>
@@ -4900,7 +4864,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
             </div>
 
-            {/* Health & Medical Profile Card */}
+            {/* 2. Health & Medical Profile Card */}
             <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -4922,7 +4886,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <button
                   type="button"
                   onClick={() => setShowEditProfileModal(true)}
-                  className="px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                  className="w-full sm:w-auto px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
                 >
                   <Edit3 size={14} className="text-[#D4FF00]" />
                   <span>{isEN ? "Manage Health Profile" : "Atur Profil Kesehatan"}</span>
@@ -4948,7 +4912,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
             </div>
 
-            {/* Custom Macro & Nutrition Target Adjuster Card */}
+            {/* 3. Custom Macro & Nutrition Target Adjuster Card */}
             <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
@@ -4968,7 +4932,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <button
                   type="button"
                   onClick={() => setShowCustomTargetsModal(true)}
-                  className="px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
                   <Sliders size={14} className="text-[#D4FF00]" />
                   <span>{isEN ? "Adjust Targets" : "Atur Target Kustom"}</span>
@@ -5004,7 +4968,53 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
             </div>
 
-            {/* Affiliate Program Hub Card */}
+            {/* 4. Active Goal & AI Coach Hub Card */}
+            <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Goal Item */}
+                <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-lg">
+                      🎯
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{isEN ? "Active Goal" : "Goal Utama Aktif"}</span>
+                      <h4 className="text-sm font-black text-white">{goalTitle}</h4>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowGoalEditModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-[#222222] hover:bg-[#2a2a2a] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {isEN ? "Change" : "Ganti"}
+                  </button>
+                </div>
+
+                {/* Coach Item */}
+                <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-lg shadow-sm">
+                      {isMaxPersona ? "🏋️" : "✨"}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{isEN ? "AI Coach" : "Pelatih AI"}</span>
+                      <h4 className="text-sm font-black text-white">{coachName}</h4>
+                    </div>
+                  </div>
+                  <a
+                    href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-[#25D366] hover:bg-[#1ebd59] text-black font-extrabold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <MessageSquare size={14} />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Affiliate Program Hub Card */}
             <div className="bg-[#222222] border border-[#D4FF00]/30 rounded-2xl p-5 shadow-md space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -5027,7 +5037,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <button
                   type="button"
                   onClick={() => setShowAffiliateModal(true)}
-                  className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
+                  className="w-full sm:w-auto px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
                 >
                   <Gift size={14} />
                   <span>Buka Dashboard Afiliasi</span>
@@ -5044,7 +5054,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <button
                     type="button"
                     onClick={handleCopyReferral}
-                    className="px-3 py-1.5 bg-[#181818] hover:bg-[#222222] text-white border border-white/[0.08] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    className="w-full sm:w-auto px-3 py-1.5 bg-[#181818] hover:bg-[#222222] text-white border border-white/[0.08] rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     {referralCopied ? <Check size={13} className="text-[#D4FF00]" /> : <Copy size={13} />}
                     <span>{referralCopied ? "Tersalin!" : "Salin Link"}</span>
@@ -5053,69 +5063,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
             </div>
 
-            {/* Coach Persona Card */}
-            <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-xl shadow-sm">
-                    {isMaxPersona ? "🏋️" : "✨"}
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-base text-white">{coachName}</h3>
-                    <p className="text-xs text-[#D4FF00] font-bold">{isMaxPersona ? "Pelatih Gym" : "Nutritionist"}</p>
-                  </div>
-                </div>
-
-                <a
-                  href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-[#25D366] hover:bg-[#1ebd59] text-black font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-                >
-                  <MessageSquare size={15} />
-                  <span>WhatsApp Coach</span>
-                </a>
-              </div>
-            </div>
-
-            {/* Current Active Goal Banner */}
-            <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-lg">
-                  🎯
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{isEN ? "Active Main Goal" : "Goal Utama Aktif"}</span>
-                  <h4 className="text-sm sm:text-base font-black text-white">{goalTitle}</h4>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowGoalEditModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-[#181818] hover:bg-[#222222] text-neutral-200 border border-white/[0.08] hover:border-[#D4FF00]/40 text-xs font-bold transition-all cursor-pointer"
-              >
-                {isEN ? "Change" : "Ganti"}
-              </button>
-            </div>
-
-            {/* Quick Links & Landing Page */}
-            <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-4 shadow-xs">
-              <button
-                onClick={onBackToHome}
-                className="w-full py-3 px-4 rounded-xl bg-[#181818] hover:bg-[#222222] text-white font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <ArrowLeft size={16} className="text-[#D4FF00]" />
-                  <span>Kembali ke Halaman Depan (Landing Page)</span>
-                </div>
-                <ChevronRight size={16} className="text-neutral-500" />
-              </button>
-            </div>
-
-            {/* Account Settings & Logout */}
+            {/* 6. Account Settings & Logout */}
             <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs flex items-center justify-between">
               <button
                 onClick={handleDeleteAccount}
-                className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1.5 cursor-pointer py-2"
               >
                 <Trash2 size={15} />
                 <span>{t.removeAccount}</span>
@@ -5123,7 +5075,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               <button
                 onClick={onLogout}
-                className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer transition-all"
+                className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-98"
               >
                 <LogOut size={15} />
                 <span>{t.logout}</span>
