@@ -3157,8 +3157,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-white font-mono text-[11px]">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${protDiff <= 0 ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-400"}`}>
-                                {protDiff <= 0 ? `+${Math.abs(protDiff)}g` : `${protDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${protDiff < 0 ? "bg-amber-400/20 text-amber-400" : protDiff === 0 ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-400"}`}>
+                                {protDiff < 0 ? `+${Math.abs(protDiff)}g` : protDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${protDiff}g ${isEN ? "rem." : "sisa"}`}
                               </span>
                             </div>
                           </div>
@@ -3179,8 +3179,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-white font-mono text-[11px]">{totalCarbsConsumed} <span className="text-neutral-500 font-normal">/ {targetCarbs}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${carbDiff <= 0 ? "bg-amber-400/20 text-amber-400" : "bg-white/5 text-neutral-400"}`}>
-                                {carbDiff <= 0 ? `+${Math.abs(carbDiff)}g` : `${carbDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${carbDiff < 0 ? "bg-amber-400/20 text-amber-400" : carbDiff === 0 ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-400"}`}>
+                                {carbDiff < 0 ? `+${Math.abs(carbDiff)}g` : carbDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${carbDiff}g ${isEN ? "rem." : "sisa"}`}
                               </span>
                             </div>
                           </div>
@@ -3201,8 +3201,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-white font-mono text-[11px]">{totalFatConsumed} <span className="text-neutral-500 font-normal">/ {targetFat}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${fatDiff <= 0 ? "bg-rose-400/20 text-rose-400" : "bg-white/5 text-neutral-400"}`}>
-                                {fatDiff <= 0 ? `+${Math.abs(fatDiff)}g` : `${fatDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${fatDiff < 0 ? "bg-rose-400/20 text-rose-400" : fatDiff === 0 ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-400"}`}>
+                                {fatDiff < 0 ? `+${Math.abs(fatDiff)}g` : fatDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${fatDiff}g ${isEN ? "rem." : "sisa"}`}
                               </span>
                             </div>
                           </div>

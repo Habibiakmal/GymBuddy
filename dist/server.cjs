@@ -42882,46 +42882,48 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
 var NUTRITION_DATABASE = [
   // ── GRAINS & STARCHES ──────────────────────────────────────────
   {
+    id: "usda_pasta_cooked",
     keywords: ["pasta", "spaghetti", "macaroni", "fettuccine", "penne", "mie pasta"],
     normalizedName: "Pasta (Cooked)",
     category: "grain",
     defaultServingGrams: 180,
-    // Standard adult cooked portion
     servingUnit: "porsi sedang (cooked)",
-    per100g: { calories: 158, protein: 5.8, carbs: 30.9, fat: 0.9, fiber: 1.8, sugar: 0.6 },
+    per100g: { calories: 158, protein: 5.8, carbs: 30.9, fat: 0.9, fiber: 1.8, sugar: 0.6, sodium: 1 },
     cookingVariants: {
-      creamy: { calories: 220, protein: 7, carbs: 28, fat: 9.5, fiber: 1.5, sugar: 1.2 },
-      carbonara: { calories: 240, protein: 8.5, carbs: 27, fat: 11, fiber: 1.4, sugar: 1 },
-      bolognese: { calories: 175, protein: 8, carbs: 26, fat: 4.5, fiber: 2, sugar: 2.5 },
-      aglio: { calories: 180, protein: 5.8, carbs: 30, fat: 4.5, fiber: 1.8, sugar: 0.5 }
+      creamy: { calories: 220, protein: 7, carbs: 28, fat: 9.5, fiber: 1.5, sugar: 1.2, sodium: 320 },
+      carbonara: { calories: 240, protein: 8.5, carbs: 27, fat: 11, fiber: 1.4, sugar: 1, sodium: 450 },
+      bolognese: { calories: 175, protein: 8, carbs: 26, fat: 4.5, fiber: 2, sugar: 2.5, sodium: 380 },
+      aglio: { calories: 180, protein: 5.8, carbs: 30, fat: 4.5, fiber: 1.8, sugar: 0.5, sodium: 210 }
     },
     source: "USDA"
   },
   {
+    id: "usda_french_fries",
     keywords: ["kentang goreng", "french fries", "fries", "pommes frites"],
     normalizedName: "Kentang Goreng (French Fries)",
     category: "snack",
     defaultServingGrams: 100,
-    // Regular serving
     servingUnit: "porsi regular",
-    per100g: { calories: 312, protein: 3.4, carbs: 41.4, fat: 15, fiber: 3.8, sugar: 0.3 },
+    per100g: { calories: 312, protein: 3.4, carbs: 41.4, fat: 15, fiber: 3.8, sugar: 0.3, sodium: 210 },
     cookingVariants: {
-      rebus: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9 },
-      panggang: { calories: 93, protein: 2.5, carbs: 21, fat: 0.2, fiber: 2.2, sugar: 1.2 }
+      rebus: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9, sodium: 4 },
+      panggang: { calories: 93, protein: 2.5, carbs: 21, fat: 0.2, fiber: 2.2, sugar: 1.2, sodium: 10 }
     },
     source: "USDA"
   },
   {
+    id: "usda_potato_boiled",
     keywords: ["kentang", "potato", "kentang rebus", "mashed potato"],
     normalizedName: "Kentang Rebus / Mashed",
     category: "grain",
     defaultServingGrams: 150,
     servingUnit: "1 butir sedang",
-    per100g: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9 },
+    per100g: { calories: 87, protein: 1.9, carbs: 20.1, fat: 0.1, fiber: 1.8, sugar: 0.9, sodium: 4 },
     source: "USDA"
   },
   {
-    keywords: ["roti", "roti tawar", "white bread", "bread", "toast", "roti gandum"],
+    id: "usda_white_bread",
+    keywords: ["roti", "roti tawar", "white bread", "bread", "toast", "roti isi", "roti tawar putih"],
     normalizedName: "Roti Tawar",
     category: "grain",
     defaultServingGrams: 60,
@@ -42929,676 +42931,791 @@ var NUTRITION_DATABASE = [
     perPieceGrams: 30,
     // 1 slice ~30g
     servingUnit: "2 lembar",
-    per100g: { calories: 265, protein: 9, carbs: 49, fat: 3.2, fiber: 2.7, sugar: 5 },
+    per100g: { calories: 265, protein: 9, carbs: 49, fat: 3.2, fiber: 2.7, sugar: 5, sodium: 490 },
     cookingVariants: {
-      butter: { calories: 340, protein: 8, carbs: 46, fat: 14, fiber: 2.5, sugar: 5.5 },
-      gandum: { calories: 247, protein: 13, carbs: 41, fat: 3.4, fiber: 6, sugar: 4.3 }
+      butter: { calories: 340, protein: 8, carbs: 46, fat: 14, fiber: 2.5, sugar: 5.5, sodium: 520 },
+      gandum: { calories: 247, protein: 13, carbs: 41, fat: 3.4, fiber: 6, sugar: 4.3, sodium: 450 }
     },
     source: "USDA"
   },
   {
+    id: "usda_whole_wheat_bread",
+    keywords: ["roti gandum", "whole wheat bread", "wheat bread", "gandum"],
+    normalizedName: "Roti Gandum",
+    category: "grain",
+    defaultServingGrams: 60,
+    perPieceGrams: 30,
+    servingUnit: "2 lembar",
+    per100g: { calories: 247, protein: 13, carbs: 41, fat: 3.4, fiber: 6, sugar: 4.3, sodium: 450 },
+    source: "USDA"
+  },
+  {
+    id: "usda_oatmeal_cooked",
     keywords: ["oatmeal", "oats", "havermut", "quaker oats"],
     normalizedName: "Oatmeal (Cooked)",
     category: "grain",
     defaultServingGrams: 200,
-    // 1 bowl cooked
     servingUnit: "1 mangkuk",
-    per100g: { calories: 71, protein: 2.5, carbs: 12, fat: 1.5, fiber: 1.7, sugar: 0.3 },
+    per100g: { calories: 71, protein: 2.5, carbs: 12, fat: 1.5, fiber: 1.7, sugar: 0.3, sodium: 49 },
     source: "USDA"
   },
   {
-    keywords: ["nasi putih", "nasi", "rice", "white rice", "nasi liwet"],
+    id: "tkpi_nasi_putih",
+    keywords: ["nasi putih", "nasi", "rice", "white rice", "nasi liwet", "nasi bungkus"],
     normalizedName: "Nasi Putih (Cooked)",
     category: "grain",
     defaultServingGrams: 180,
-    // 1 piring / 1.5 centong
     servingUnit: "1 porsi / centong",
-    per100g: { calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3, fiber: 0.4, sugar: 0.1 },
+    per100g: { calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3, fiber: 0.4, sugar: 0.1, sodium: 1 },
     source: "TKPI"
   },
   {
+    id: "tkpi_nasi_merah",
     keywords: ["nasi merah", "brown rice", "red rice"],
     normalizedName: "Nasi Merah (Cooked)",
     category: "grain",
     defaultServingGrams: 180,
     servingUnit: "1 porsi",
-    per100g: { calories: 111, protein: 2.6, carbs: 23, fat: 0.9, fiber: 1.8, sugar: 0.2 },
+    per100g: { calories: 111, protein: 2.6, carbs: 23, fat: 0.9, fiber: 1.8, sugar: 0.2, sodium: 2 },
     source: "TKPI"
   },
   {
+    id: "tkpi_nasi_goreng",
     keywords: ["nasi goreng", "fried rice"],
     normalizedName: "Nasi Goreng Komplit",
     category: "grain",
     defaultServingGrams: 250,
     servingUnit: "1 piring komplit",
-    per100g: { calories: 195, protein: 6.5, carbs: 25, fat: 7.8, fiber: 1.2, sugar: 1.5 },
+    per100g: { calories: 195, protein: 6.5, carbs: 25, fat: 7.8, fiber: 1.2, sugar: 1.5, sodium: 480 },
     source: "TKPI"
   },
   {
+    id: "usda_rice_bowl_chicken",
     keywords: ["rice bowl ayam", "nasi bowl ayam", "chicken rice bowl", "ricebowl ayam", "nasi rice bowl ayam", "rice bowl chicken"],
     normalizedName: "Rice Bowl Ayam (Chicken Rice Bowl)",
     category: "grain",
     defaultServingGrams: 350,
     servingUnit: "1 rice bowl",
-    per100g: { calories: 165, protein: 9.7, carbs: 19.4, fat: 5.1, fiber: 0.9, sugar: 0.8 },
+    per100g: { calories: 165, protein: 9.7, carbs: 19.4, fat: 5.1, fiber: 0.9, sugar: 0.8, sodium: 390 },
     source: "USDA"
   },
   {
+    id: "usda_rice_bowl_beef",
     keywords: ["rice bowl sapi", "nasi bowl sapi", "beef rice bowl", "ricebowl sapi", "nasi rice bowl sapi", "rice bowl beef", "gyudon"],
     normalizedName: "Rice Bowl Sapi (Beef Rice Bowl)",
     category: "grain",
     defaultServingGrams: 350,
     servingUnit: "1 rice bowl",
-    per100g: { calories: 177, protein: 9.1, carbs: 18.5, fat: 6.8, fiber: 0.7, sugar: 1.1 },
+    per100g: { calories: 177, protein: 9.1, carbs: 18.5, fat: 6.8, fiber: 0.7, sugar: 1.1, sodium: 450 },
     source: "USDA"
   },
   {
+    id: "usda_rice_bowl_teriyaki",
     keywords: ["rice bowl teriyaki", "nasi bowl teriyaki", "chicken teriyaki rice bowl"],
     normalizedName: "Rice Bowl Teriyaki",
     category: "grain",
     defaultServingGrams: 350,
     servingUnit: "1 rice bowl",
-    per100g: { calories: 160, protein: 8.5, carbs: 20, fat: 4.8, fiber: 0.7, sugar: 2.2 },
+    per100g: { calories: 160, protein: 8.5, carbs: 20, fat: 4.8, fiber: 0.7, sugar: 2.2, sodium: 520 },
     source: "USDA"
   },
   {
+    id: "usda_rice_bowl_katsu",
     keywords: ["rice bowl katsu", "nasi bowl katsu", "katsu rice bowl", "chicken katsu rice bowl"],
     normalizedName: "Rice Bowl Chicken Katsu",
     category: "grain",
     defaultServingGrams: 380,
     servingUnit: "1 rice bowl",
-    per100g: { calories: 178, protein: 7.3, carbs: 20, fat: 7.3, fiber: 0.8, sugar: 1.3 },
+    per100g: { calories: 178, protein: 7.3, carbs: 20, fat: 7.3, fiber: 0.8, sugar: 1.3, sodium: 490 },
     source: "USDA"
   },
   {
+    id: "usda_rice_bowl_combo",
     keywords: ["rice bowl", "nasi bowl", "ricebowl", "donburi", "poke bowl", "pokebowl"],
     normalizedName: "Rice Bowl Combo",
     category: "grain",
     defaultServingGrams: 350,
     servingUnit: "1 rice bowl",
-    per100g: { calories: 157, protein: 7.4, carbs: 18.5, fat: 5.1, fiber: 0.8, sugar: 0.9 },
+    per100g: { calories: 157, protein: 7.4, carbs: 18.5, fat: 5.1, fiber: 0.8, sugar: 0.9, sodium: 410 },
     source: "USDA"
   },
   {
+    id: "tkpi_nasi_padang",
     keywords: ["nasi padang", "nasi ramas"],
     normalizedName: "Nasi Padang Komplit",
     category: "grain",
     defaultServingGrams: 300,
     servingUnit: "1 porsi bungkus/piring",
-    per100g: { calories: 235, protein: 11.5, carbs: 22, fat: 11.5, fiber: 1.5, sugar: 1 },
+    per100g: { calories: 235, protein: 11.5, carbs: 22, fat: 11.5, fiber: 1.5, sugar: 1, sodium: 720 },
     source: "TKPI"
   },
   {
+    id: "tkpi_nasi_uduk",
     keywords: ["nasi uduk", "nasi kuning"],
     normalizedName: "Nasi Uduk / Kuning",
     category: "grain",
     defaultServingGrams: 180,
     servingUnit: "1 porsi",
-    per100g: { calories: 165, protein: 3.2, carbs: 28.5, fat: 4.5, fiber: 0.6, sugar: 0.5 },
+    per100g: { calories: 165, protein: 3.2, carbs: 28.5, fat: 4.5, fiber: 0.6, sugar: 0.5, sodium: 240 },
     source: "TKPI"
   },
   {
+    id: "tkpi_mie_goreng",
     keywords: ["mie goreng", "indomie goreng", "bihun goreng", "kwetiau goreng"],
     normalizedName: "Mie Goreng (1 Porsi)",
     category: "grain",
     defaultServingGrams: 180,
     servingUnit: "1 porsi",
-    per100g: { calories: 215, protein: 5.5, carbs: 29.5, fat: 8.5, fiber: 1.5, sugar: 2.5 },
+    per100g: { calories: 215, protein: 5.5, carbs: 29.5, fat: 8.5, fiber: 1.5, sugar: 2.5, sodium: 620 },
     source: "TKPI"
   },
   {
+    id: "tkpi_mie_kuah",
     keywords: ["mie kuah", "mie rebus", "indomie rebus", "ramen"],
     normalizedName: "Mie Kuah / Rebus",
     category: "grain",
     defaultServingGrams: 220,
     servingUnit: "1 mangkuk",
-    per100g: { calories: 145, protein: 4, carbs: 22, fat: 4.5, fiber: 1, sugar: 1.2 },
+    per100g: { calories: 145, protein: 4, carbs: 22, fat: 4.5, fiber: 1, sugar: 1.2, sodium: 850 },
     source: "TKPI"
   },
   // ── PROTEINS & MEATS ──────────────────────────────────────────
   {
+    id: "usda_chicken_meal",
     keywords: ["chicken meal", "chicken", "ayam", "olahan ayam", "daging ayam"],
     normalizedName: "Chicken Meal (Dada/Paha)",
     category: "protein",
     defaultServingGrams: 150,
     perPieceGrams: 150,
     servingUnit: "1 porsi (~150g)",
-    per100g: { calories: 190, protein: 26, carbs: 0, fat: 9, fiber: 0, sugar: 0 },
+    per100g: { calories: 190, protein: 26, carbs: 0, fat: 9, fiber: 0, sugar: 0, sodium: 74 },
     source: "USDA"
   },
   {
+    id: "usda_fried_chicken",
     keywords: ["ayam goreng", "fried chicken", "ayam kfc", "ayam crispy"],
     normalizedName: "Ayam Goreng (Dada/Paha + Kulit)",
     category: "protein",
     defaultServingGrams: 120,
-    // 1 piece cooked
     perPieceGrams: 120,
     servingUnit: "1 potong sedang",
-    per100g: { calories: 246, protein: 24.5, carbs: 3.5, fat: 14.8, fiber: 0, sugar: 0 },
+    per100g: { calories: 246, protein: 24.5, carbs: 3.5, fat: 14.8, fiber: 0, sugar: 0, sodium: 290 },
     source: "USDA"
   },
   {
-    keywords: ["dada ayam", "ayam rebus", "chicken breast", "ayam panggang", "ayam grill", "ayam kukus"],
+    id: "usda_chicken_breast_grilled",
+    keywords: ["dada ayam", "ayam rebus", "chicken breast", "ayam panggang", "ayam grill", "ayam kukus", "ayam bakar"],
     normalizedName: "Dada Ayam (Cooked/Grilled)",
     category: "protein",
     defaultServingGrams: 120,
     perPieceGrams: 120,
     servingUnit: "1 potong dada",
-    per100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 },
+    per100g: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0, sodium: 74 },
     source: "USDA"
   },
   {
+    id: "tkpi_ayam_geprek",
     keywords: ["ayam geprek"],
     normalizedName: "Ayam Geprek Crispy + Sambal",
     category: "protein",
     defaultServingGrams: 140,
     perPieceGrams: 140,
     servingUnit: "1 potong geprek",
-    per100g: { calories: 265, protein: 22, carbs: 8.5, fat: 16, fiber: 0.8, sugar: 0.5 },
+    per100g: { calories: 265, protein: 22, carbs: 8.5, fat: 16, fiber: 0.8, sugar: 0.5, sodium: 480 },
     source: "TKPI"
   },
   {
+    id: "tkpi_bebek_goreng",
     keywords: ["bebek goreng", "bebek bakar", "duck"],
     normalizedName: "Bebek Goreng / Bakar",
     category: "protein",
     defaultServingGrams: 140,
     perPieceGrams: 140,
     servingUnit: "1 potong paha/dada",
-    per100g: { calories: 337, protein: 19, carbs: 0, fat: 28, fiber: 0, sugar: 0 },
+    per100g: { calories: 337, protein: 19, carbs: 0, fat: 28, fiber: 0, sugar: 0, sodium: 220 },
     source: "TKPI"
   },
   {
+    id: "tkpi_kulit_ayam",
     keywords: ["kulit ayam", "kulit", "chicken skin"],
     normalizedName: "Kulit Ayam Goreng Crispy",
     category: "fat",
     defaultServingGrams: 40,
     servingUnit: "1 porsi kecil",
-    per100g: { calories: 450, protein: 15, carbs: 4, fat: 42, fiber: 0, sugar: 0 },
+    per100g: { calories: 450, protein: 15, carbs: 4, fat: 42, fiber: 0, sugar: 0, sodium: 340 },
     source: "TKPI"
   },
   {
+    id: "tkpi_usus_goreng",
     keywords: ["usus", "usus goreng", "jeroan"],
     normalizedName: "Usus Goreng",
     category: "protein",
     defaultServingGrams: 40,
     servingUnit: "1 tusuk / porsi",
-    per100g: { calories: 310, protein: 22, carbs: 2, fat: 24, fiber: 0, sugar: 0 },
+    per100g: { calories: 310, protein: 22, carbs: 2, fat: 24, fiber: 0, sugar: 0, sodium: 290 },
     source: "TKPI"
   },
   {
+    id: "usda_chicken_nugget",
     keywords: ["nugget", "chicken nugget", "nugget ayam"],
     normalizedName: "Chicken Nugget",
     category: "protein",
     defaultServingGrams: 80,
-    // 4 pcs
     perPieceGrams: 20,
     servingUnit: "4 pcs",
-    per100g: { calories: 296, protein: 15, carbs: 14, fat: 20, fiber: 0.8, sugar: 0.5 },
+    per100g: { calories: 296, protein: 15, carbs: 14, fat: 20, fiber: 0.8, sugar: 0.5, sodium: 560 },
     source: "USDA"
   },
   {
+    id: "usda_sausage_cooked",
     keywords: ["sosis", "sausage", "bratwurst", "hot dog"],
     normalizedName: "Sosis (Cooked)",
     category: "protein",
     defaultServingGrams: 50,
-    // 1 standard sausage
     perPieceGrams: 50,
     servingUnit: "1 buah sedang",
-    per100g: { calories: 301, protein: 12, carbs: 3, fat: 27, fiber: 0, sugar: 1.2 },
+    per100g: { calories: 301, protein: 12, carbs: 3, fat: 27, fiber: 0, sugar: 1.2, sodium: 850 },
     source: "USDA"
   },
   {
+    id: "usda_egg_boiled",
     keywords: ["telur", "telur rebus", "egg", "boiled egg", "telor"],
     normalizedName: "Telur Ayam Rebus",
     category: "protein",
     defaultServingGrams: 50,
-    // 1 large egg
     perPieceGrams: 50,
     servingUnit: "1 butir",
-    per100g: { calories: 155, protein: 12.6, carbs: 1.1, fat: 10.6, fiber: 0, sugar: 1.1 },
+    per100g: { calories: 155, protein: 12.6, carbs: 1.1, fat: 10.6, fiber: 0, sugar: 1.1, sodium: 124 },
     cookingVariants: {
-      goreng: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1 },
-      ceplok: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1 },
-      dadar: { calories: 200, protein: 13, carbs: 1.5, fat: 15.5, fiber: 0, sugar: 1 }
+      goreng: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1, sodium: 180 },
+      ceplok: { calories: 195, protein: 13.5, carbs: 1.2, fat: 15, fiber: 0, sugar: 1, sodium: 180 },
+      dadar: { calories: 200, protein: 13, carbs: 1.5, fat: 15.5, fiber: 0, sugar: 1, sodium: 210 }
     },
     source: "USDA"
   },
   {
+    id: "usda_egg_fried",
     keywords: ["telur goreng", "telur ceplok", "telur dadar", "omelet", "fried egg"],
     normalizedName: "Telur Goreng / Ceplok / Dadar",
     category: "protein",
     defaultServingGrams: 55,
     perPieceGrams: 55,
     servingUnit: "1 butir",
-    per100g: { calories: 196, protein: 13.6, carbs: 0.8, fat: 15.3, fiber: 0, sugar: 0.8 },
+    per100g: { calories: 196, protein: 13.6, carbs: 0.8, fat: 15.3, fiber: 0, sugar: 0.8, sodium: 180 },
     source: "USDA"
   },
   {
+    id: "usda_egg_white",
+    keywords: ["putih telur", "egg white"],
+    normalizedName: "Putih Telur (Cooked)",
+    category: "protein",
+    defaultServingGrams: 35,
+    perPieceGrams: 35,
+    servingUnit: "1 butir",
+    per100g: { calories: 52, protein: 10.9, carbs: 0.7, fat: 0.2, fiber: 0, sugar: 0.7, sodium: 166 },
+    source: "USDA"
+  },
+  {
+    id: "usda_shrimp_cooked",
     keywords: ["udang", "shrimp", "prawn"],
     normalizedName: "Udang (Cooked)",
     category: "protein",
     defaultServingGrams: 60,
-    // ~4-5 pieces
     perPieceGrams: 15,
-    // 1 piece ~15g
     servingUnit: "4 buah (60g)",
-    per100g: { calories: 99, protein: 24, carbs: 0.2, fat: 0.3, fiber: 0, sugar: 0 },
+    per100g: { calories: 99, protein: 24, carbs: 0.2, fat: 0.3, fiber: 0, sugar: 0, sodium: 111 },
     cookingVariants: {
-      goreng: { calories: 180, protein: 20, carbs: 6, fat: 8.5, fiber: 0, sugar: 0 }
+      goreng: { calories: 180, protein: 20, carbs: 6, fat: 8.5, fiber: 0, sugar: 0, sodium: 290 }
     },
     source: "USDA"
   },
   {
+    id: "tkpi_cumi_cooked",
     keywords: ["cumi", "squid", "calamari", "cumi goreng"],
     normalizedName: "Cumi-Cumi (Cooked)",
     category: "protein",
     defaultServingGrams: 80,
     servingUnit: "1 porsi",
-    per100g: { calories: 140, protein: 25, carbs: 3, fat: 3.5, fiber: 0, sugar: 0 },
+    per100g: { calories: 140, protein: 25, carbs: 3, fat: 3.5, fiber: 0, sugar: 0, sodium: 240 },
     source: "TKPI"
   },
   {
+    id: "tkpi_beef_rendang",
     keywords: ["daging sapi", "beef", "sapi", "rendang", "steak"],
     normalizedName: "Daging Sapi / Rendang",
     category: "protein",
     defaultServingGrams: 80,
     perPieceGrams: 80,
     servingUnit: "1 potong sedang",
-    per100g: { calories: 250, protein: 26, carbs: 2, fat: 15, fiber: 0, sugar: 0.5 },
+    per100g: { calories: 250, protein: 26, carbs: 2, fat: 15, fiber: 0, sugar: 0.5, sodium: 320 },
     source: "TKPI"
   },
   {
+    id: "tkpi_goat_cooked",
     keywords: ["kambing", "daging kambing", "gulai kambing"],
     normalizedName: "Daging Kambing (Cooked)",
     category: "protein",
     defaultServingGrams: 80,
     servingUnit: "1 porsi",
-    per100g: { calories: 230, protein: 25, carbs: 0, fat: 14, fiber: 0, sugar: 0 },
+    per100g: { calories: 230, protein: 25, carbs: 0, fat: 14, fiber: 0, sugar: 0, sodium: 86 },
     source: "TKPI"
   },
   {
+    id: "tkpi_fish_cooked",
     keywords: ["ikan", "fish", "salmon", "tuna", "ikan lele", "ikan bakar", "ikan goreng", "ikan gurame", "ikan kembung"],
     normalizedName: "Ikan (Cooked/Bakar)",
     category: "protein",
     defaultServingGrams: 100,
     perPieceGrams: 100,
     servingUnit: "1 ekor / potong",
-    per100g: { calories: 160, protein: 22, carbs: 1, fat: 7.5, fiber: 0, sugar: 0 },
+    per100g: { calories: 160, protein: 22, carbs: 1, fat: 7.5, fiber: 0, sugar: 0, sodium: 90 },
     source: "TKPI"
   },
   {
+    id: "tkpi_tahu",
     keywords: ["tahu", "tofu", "tahu goreng", "tahu kukus"],
     normalizedName: "Tahu",
     category: "protein",
     defaultServingGrams: 80,
     perPieceGrams: 40,
     servingUnit: "2 potong",
-    per100g: { calories: 110, protein: 9.5, carbs: 3.5, fat: 6.5, fiber: 1.2, sugar: 0.5 },
+    per100g: { calories: 110, protein: 9.5, carbs: 3.5, fat: 6.5, fiber: 1.2, sugar: 0.5, sodium: 12 },
     source: "TKPI"
   },
   {
+    id: "tkpi_tempe",
     keywords: ["tempe", "tempeh", "tempe goreng", "tempe bacem"],
     normalizedName: "Tempe",
     category: "protein",
     defaultServingGrams: 70,
     perPieceGrams: 35,
     servingUnit: "2 potong",
-    per100g: { calories: 195, protein: 18.5, carbs: 9, fat: 10.5, fiber: 3.5, sugar: 1 },
+    per100g: { calories: 195, protein: 18.5, carbs: 9, fat: 10.5, fiber: 3.5, sugar: 1, sodium: 9 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_perkedel",
+    keywords: ["perkedel", "perkedel kentang", "perkedel daging"],
+    normalizedName: "Perkedel Kentang",
+    category: "snack",
+    defaultServingGrams: 50,
+    perPieceGrams: 50,
+    servingUnit: "1 buah",
+    per100g: { calories: 190, protein: 4.5, carbs: 26, fat: 8, fiber: 1.5, sugar: 0.5, sodium: 320 },
     source: "TKPI"
   },
   // ── INDONESIAN DISHES & STREET FOOD ───────────────────────────
   {
+    id: "tkpi_sate_ayam",
     keywords: ["sate ayam", "satay"],
     normalizedName: "Sate Ayam + Bumbu Kacang (5 Tusuk)",
     category: "protein",
     defaultServingGrams: 150,
     servingUnit: "5 tusuk + bumbu",
-    per100g: { calories: 230, protein: 18, carbs: 9.5, fat: 13.5, fiber: 1.2, sugar: 4.5 },
+    per100g: { calories: 230, protein: 18, carbs: 9.5, fat: 13.5, fiber: 1.2, sugar: 4.5, sodium: 450 },
     source: "TKPI"
   },
   {
+    id: "tkpi_bakso",
     keywords: ["bakso", "bakso sapi", "mie bakso"],
     normalizedName: "Bakso Sapi Kuah Komplit",
     category: "protein",
     defaultServingGrams: 350,
-    // 1 mangkuk
     servingUnit: "1 mangkuk komplit",
-    per100g: { calories: 120, protein: 7.5, carbs: 11, fat: 4.5, fiber: 0.8, sugar: 1 },
+    per100g: { calories: 120, protein: 7.5, carbs: 11, fat: 4.5, fiber: 0.8, sugar: 1, sodium: 680 },
     source: "TKPI"
   },
   {
+    id: "tkpi_soto_ayam",
     keywords: ["soto", "soto ayam", "soto daging", "soto betawi"],
     normalizedName: "Soto Ayam / Sapi (1 Mangkuk)",
     category: "protein",
     defaultServingGrams: 300,
     servingUnit: "1 mangkuk",
-    per100g: { calories: 105, protein: 6.5, carbs: 8, fat: 4.5, fiber: 0.6, sugar: 1.2 },
+    per100g: { calories: 105, protein: 6.5, carbs: 8, fat: 4.5, fiber: 0.6, sugar: 1.2, sodium: 580 },
     source: "TKPI"
   },
   {
+    id: "tkpi_batagor",
     keywords: ["batagor", "batagor bandung"],
     normalizedName: "Batagor Bandung (1 Porsi)",
     category: "snack",
     defaultServingGrams: 180,
     servingUnit: "1 porsi komplit",
-    per100g: { calories: 255, protein: 11, carbs: 25, fat: 12, fiber: 1.5, sugar: 3.5 },
+    per100g: { calories: 255, protein: 11, carbs: 25, fat: 12, fiber: 1.5, sugar: 3.5, sodium: 520 },
     source: "TKPI"
   },
   {
+    id: "tkpi_siomay",
     keywords: ["siomay", "siomay bandung"],
     normalizedName: "Siomay Bandung (1 Porsi)",
     category: "snack",
     defaultServingGrams: 180,
     servingUnit: "1 porsi komplit",
-    per100g: { calories: 210, protein: 12, carbs: 22, fat: 8, fiber: 1.8, sugar: 3 },
+    per100g: { calories: 210, protein: 12, carbs: 22, fat: 8, fiber: 1.8, sugar: 3, sodium: 490 },
     source: "TKPI"
   },
   {
+    id: "tkpi_pempek",
     keywords: ["pempek", "empek empek", "pempek kapal selam"],
     normalizedName: "Pempek Palembang + Cuko",
     category: "snack",
     defaultServingGrams: 200,
     servingUnit: "1 porsi",
-    per100g: { calories: 190, protein: 9.5, carbs: 28, fat: 4, fiber: 0.5, sugar: 5 },
+    per100g: { calories: 190, protein: 9.5, carbs: 28, fat: 4, fiber: 0.5, sugar: 5, sodium: 610 },
     source: "TKPI"
   },
   {
+    id: "tkpi_gado_gado",
     keywords: ["gado gado", "gado-gado", "pecel", "lotek"],
     normalizedName: "Gado-Gado / Pecel Sayur",
     category: "vegetable",
     defaultServingGrams: 250,
     servingUnit: "1 porsi komplit",
-    per100g: { calories: 135, protein: 5.5, carbs: 16, fat: 5.5, fiber: 3.2, sugar: 4 },
+    per100g: { calories: 135, protein: 5.5, carbs: 16, fat: 5.5, fiber: 3.2, sugar: 4, sodium: 380 },
     source: "TKPI"
   },
   {
+    id: "tkpi_martabak_manis",
     keywords: ["martabak manis", "terang bulan"],
     normalizedName: "Martabak Manis (1 Potong)",
     category: "snack",
     defaultServingGrams: 75,
-    // 1 slice
     servingUnit: "1 potong",
-    per100g: { calories: 360, protein: 6.5, carbs: 48, fat: 16, fiber: 1.2, sugar: 26 },
+    per100g: { calories: 360, protein: 6.5, carbs: 48, fat: 16, fiber: 1.2, sugar: 26, sodium: 240 },
     source: "TKPI"
   },
   {
+    id: "tkpi_martabak_telur",
     keywords: ["martabak telur", "martabak telor"],
     normalizedName: "Martabak Telur (2 Potong)",
     category: "snack",
     defaultServingGrams: 120,
     servingUnit: "2 potong",
-    per100g: { calories: 260, protein: 12, carbs: 14, fat: 17, fiber: 0.8, sugar: 1 },
+    per100g: { calories: 260, protein: 12, carbs: 14, fat: 17, fiber: 0.8, sugar: 1, sodium: 420 },
     source: "TKPI"
   },
   {
+    id: "tkpi_pisang_goreng",
     keywords: ["pisang goreng"],
     normalizedName: "Pisang Goreng (2 Pcs)",
     category: "snack",
     defaultServingGrams: 100,
-    // 2 pcs
     servingUnit: "2 buah",
-    per100g: { calories: 252, protein: 2, carbs: 42, fat: 8.5, fiber: 2.5, sugar: 18 },
+    per100g: { calories: 252, protein: 2, carbs: 42, fat: 8.5, fiber: 2.5, sugar: 18, sodium: 110 },
     source: "TKPI"
   },
   {
+    id: "tkpi_gorengan",
     keywords: ["gorengan", "bakwan", "bala-bala", "tahu isi", "cireng"],
     normalizedName: "Gorengan / Bakwan (2 Pcs)",
     category: "snack",
     defaultServingGrams: 90,
     servingUnit: "2 buah",
-    per100g: { calories: 280, protein: 4.5, carbs: 30, fat: 16, fiber: 1.8, sugar: 1.5 },
+    per100g: { calories: 280, protein: 4.5, carbs: 30, fat: 16, fiber: 1.8, sugar: 1.5, sodium: 340 },
     source: "TKPI"
   },
   {
+    id: "usda_burger",
     keywords: ["burger", "cheeseburger", "beef burger"],
     normalizedName: "Burger Daging Sapi",
     category: "grain",
     defaultServingGrams: 180,
-    // 1 burger
     servingUnit: "1 buah burger",
-    per100g: { calories: 260, protein: 13, carbs: 24, fat: 12.5, fiber: 1.2, sugar: 4 },
+    per100g: { calories: 260, protein: 13, carbs: 24, fat: 12.5, fiber: 1.2, sugar: 4, sodium: 490 },
     source: "USDA"
   },
   {
+    id: "usda_pizza_slice",
     keywords: ["pizza"],
     normalizedName: "Pizza (1 Slice)",
     category: "grain",
     defaultServingGrams: 110,
-    // 1 slice regular
     servingUnit: "1 potong (slice)",
-    per100g: { calories: 266, protein: 11.5, carbs: 32, fat: 10, fiber: 2.3, sugar: 3.5 },
+    per100g: { calories: 266, protein: 11.5, carbs: 32, fat: 10, fiber: 2.3, sugar: 3.5, sodium: 590 },
     source: "USDA"
   },
   // ── VEGETABLES & SPECIALTIES ──────────────────────────────────
   {
+    id: "tkpi_daun_singkong",
+    keywords: ["daun singkong", "gulai daun singkong", "sayur daun singkong"],
+    normalizedName: "Daun Singkong Rebus / Gulai",
+    category: "vegetable",
+    defaultServingGrams: 100,
+    servingUnit: "1 mangkuk kecil",
+    per100g: { calories: 73, protein: 6.8, carbs: 9, fat: 1.2, fiber: 4, sugar: 0.8, sodium: 180 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_jengkol",
     keywords: ["jengkol", "semur jengkol", "jengkol goreng", "rendang jengkol"],
     normalizedName: "Jengkol (Cooked)",
     category: "vegetable",
     defaultServingGrams: 60,
-    // ~4-5 keping
     servingUnit: "1 porsi (4-5 keping)",
-    per100g: { calories: 192, protein: 5.4, carbs: 34, fat: 3.2, fiber: 5.8, sugar: 1.5 },
+    per100g: { calories: 192, protein: 5.4, carbs: 34, fat: 3.2, fiber: 5.8, sugar: 1.5, sodium: 40 },
     source: "TKPI"
   },
   {
+    id: "tkpi_petai",
     keywords: ["petai", "pete"],
     normalizedName: "Petai / Pete (1 Papan)",
     category: "vegetable",
     defaultServingGrams: 50,
     servingUnit: "1 papan",
-    per100g: { calories: 142, protein: 9, carbs: 22, fat: 1.5, fiber: 4.5, sugar: 2 },
+    per100g: { calories: 142, protein: 9, carbs: 22, fat: 1.5, fiber: 4.5, sugar: 2, sodium: 25 },
     source: "TKPI"
   },
   {
+    id: "tkpi_sayur_asem",
     keywords: ["sayur asem", "sayur asam"],
     normalizedName: "Sayur Asem",
     category: "vegetable",
     defaultServingGrams: 150,
-    // 1 mangkuk sedang
     servingUnit: "1 mangkuk",
-    per100g: { calories: 43, protein: 1.5, carbs: 8, fat: 0.6, fiber: 2, sugar: 2.5 },
+    per100g: { calories: 43, protein: 1.5, carbs: 8, fat: 0.6, fiber: 2, sugar: 2.5, sodium: 310 },
     source: "TKPI"
   },
   {
-    keywords: ["sayur", "sop sayur", "tumis kangkung", "capcay", "bayam", "kangkung"],
+    id: "tkpi_sayuran_sop",
+    keywords: ["sayur", "sop sayur", "tumis kangkung", "capcay", "bayam", "kangkung", "lalapan", "lalapan sayur"],
     normalizedName: "Sayuran / Tumis / Sop",
     category: "vegetable",
     defaultServingGrams: 120,
     servingUnit: "1 mangkuk / porsi",
-    per100g: { calories: 50, protein: 2.2, carbs: 6.5, fat: 1.8, fiber: 2.5, sugar: 2 },
+    per100g: { calories: 50, protein: 2.2, carbs: 6.5, fat: 1.8, fiber: 2.5, sugar: 2, sodium: 240 },
     source: "TKPI"
   },
   {
-    keywords: ["sambal", "sambel", "sambal terasi", "sambal bawang"],
+    id: "tkpi_sambal",
+    keywords: ["sambal", "sambel", "sambal terasi", "sambal bawang", "sambal geprek", "saus sambal"],
     normalizedName: "Sambal",
-    category: "snack",
+    category: "condiment",
     defaultServingGrams: 20,
-    // 1 sendok makan
     servingUnit: "1 sdm",
-    per100g: { calories: 120, protein: 2, carbs: 12, fat: 7, fiber: 2.5, sugar: 5 },
+    per100g: { calories: 120, protein: 2, carbs: 12, fat: 7, fiber: 2.5, sugar: 5, sodium: 850 },
     source: "TKPI"
   },
   {
+    id: "tkpi_kerupuk",
     keywords: ["kerupuk", "krupuk"],
     normalizedName: "Kerupuk (2 Pcs)",
     category: "snack",
     defaultServingGrams: 30,
     servingUnit: "2 keping",
-    per100g: { calories: 480, protein: 3.5, carbs: 68, fat: 21, fiber: 1, sugar: 1 },
+    per100g: { calories: 480, protein: 3.5, carbs: 68, fat: 21, fiber: 1, sugar: 1, sodium: 540 },
     source: "TKPI"
   },
   // ── FRUITS ────────────────────────────────────────────────────
   {
+    id: "usda_banana",
     keywords: ["pisang", "banana"],
     normalizedName: "Pisang (1 Buah Sedang)",
     category: "fruit",
     defaultServingGrams: 118,
     servingUnit: "1 buah sedang",
-    per100g: { calories: 89, protein: 1.1, carbs: 22.8, fat: 0.3, fiber: 2.6, sugar: 12.2 },
+    per100g: { calories: 89, protein: 1.1, carbs: 22.8, fat: 0.3, fiber: 2.6, sugar: 12.2, sodium: 1 },
     source: "USDA"
   },
   {
+    id: "usda_apple",
     keywords: ["apel", "apple"],
     normalizedName: "Apel (1 Buah Sedang)",
     category: "fruit",
     defaultServingGrams: 180,
     servingUnit: "1 buah sedang",
-    per100g: { calories: 52, protein: 0.3, carbs: 13.8, fat: 0.2, fiber: 2.4, sugar: 10.4 },
+    per100g: { calories: 52, protein: 0.3, carbs: 13.8, fat: 0.2, fiber: 2.4, sugar: 10.4, sodium: 1 },
     source: "USDA"
   },
   {
+    id: "usda_avocado",
     keywords: ["alpukat", "avocado"],
     normalizedName: "Alpukat (1/2 Buah)",
     category: "fruit",
     defaultServingGrams: 100,
     servingUnit: "1/2 buah",
-    per100g: { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, sugar: 0.7 },
+    per100g: { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, sugar: 0.7, sodium: 7 },
     source: "USDA"
   },
   {
+    id: "usda_watermelon",
     keywords: ["semangka", "watermelon"],
     normalizedName: "Semangka (1 Potong)",
     category: "fruit",
     defaultServingGrams: 200,
     servingUnit: "1 potong besar",
-    per100g: { calories: 30, protein: 0.6, carbs: 7.6, fat: 0.2, fiber: 0.4, sugar: 6.2 },
+    per100g: { calories: 30, protein: 0.6, carbs: 7.6, fat: 0.2, fiber: 0.4, sugar: 6.2, sodium: 1 },
     source: "USDA"
   },
-  // ── DAIRY, NUTS & SPREADS ──────────────────────────────────────
+  // ── DAIRY, NUTS, FATS & TOPPINGS ──────────────────────────────
   {
+    id: "usda_milk_uht",
     keywords: ["susu", "milk", "susu uht", "fresh milk"],
     normalizedName: "Susu Sapi / UHT (1 Gelas)",
     category: "dairy",
     defaultServingGrams: 250,
     servingUnit: "1 gelas (250ml)",
-    per100g: { calories: 60, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 4.8 },
+    per100g: { calories: 60, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 4.8, sodium: 43 },
     isHydration: true,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
-    keywords: ["keju", "cheese", "cheddar"],
+    id: "usda_cheese",
+    keywords: ["keju", "cheese", "cheddar", "topping keju", "keju slice", "keju parut", "mozzarella"],
     normalizedName: "Keju (1 Slice)",
     category: "dairy",
     defaultServingGrams: 20,
+    perPieceGrams: 20,
     servingUnit: "1 lembar (20g)",
-    per100g: { calories: 403, protein: 25, carbs: 1.3, fat: 33, fiber: 0, sugar: 0.5 },
+    per100g: { calories: 403, protein: 25, carbs: 1.3, fat: 33, fiber: 0, sugar: 0.5, sodium: 650 },
     source: "USDA"
   },
   {
+    id: "usda_mayonnaise",
+    keywords: ["mayones", "mayonnaise", "mayo"],
+    normalizedName: "Mayones (1 Sdm)",
+    category: "fat",
+    defaultServingGrams: 15,
+    servingUnit: "1 sendok makan",
+    per100g: { calories: 680, protein: 1, carbs: 0.6, fat: 75, fiber: 0, sugar: 0.6, sodium: 635 },
+    source: "USDA"
+  },
+  {
+    id: "usda_butter",
+    keywords: ["butter", "mentega", "margarine", "margarin"],
+    normalizedName: "Butter / Mentega (1 Sdm)",
+    category: "fat",
+    defaultServingGrams: 14,
+    servingUnit: "1 sendok makan",
+    per100g: { calories: 717, protein: 0.9, carbs: 0.1, fat: 81, fiber: 0, sugar: 0.1, sodium: 580 },
+    source: "USDA"
+  },
+  {
+    id: "usda_almonds",
     keywords: ["almond", "kacang almond", "kacang tanah", "kacang"],
     normalizedName: "Kacang-kacangan (1 Genggam)",
     category: "snack",
     defaultServingGrams: 30,
     servingUnit: "1 genggam (30g)",
-    per100g: { calories: 579, protein: 21, carbs: 21.5, fat: 49.9, fiber: 12.5, sugar: 4.3 },
+    per100g: { calories: 579, protein: 21, carbs: 21.5, fat: 49.9, fiber: 12.5, sugar: 4.3, sodium: 1 },
     source: "USDA"
   },
   {
+    id: "usda_peanut_butter",
     keywords: ["selai kacang", "peanut butter"],
     normalizedName: "Selai Kacang (1 Sdm)",
     category: "fat",
     defaultServingGrams: 16,
     servingUnit: "1 sendok makan",
-    per100g: { calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9 },
+    per100g: { calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9, sodium: 450 },
     source: "USDA"
   },
   // ── BEVERAGES ──────────────────────────────────────────────────
   {
+    id: "usda_water_mineral",
     keywords: ["mineral water 500ml", "mineral water", "air putih", "air mineral", "plain water", "aqua", "le minerale", "vit", "cleo", "air"],
     normalizedName: "Air Mineral (Water)",
     category: "beverage",
     defaultServingGrams: 500,
     servingUnit: "500 ml",
-    per100g: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 },
+    per100g: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 5 },
     isHydration: true,
     defaultVolumeMl: 500,
     source: "USDA"
   },
   {
+    id: "usda_black_coffee",
     keywords: ["americano / kopi hitam", "americano 500ml", "americano", "espresso", "kopi hitam", "black coffee", "kopi o", "long black", "kopi tubruk tawar", "kopi"],
     normalizedName: "Americano / Kopi Hitam",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
-    per100g: { calories: 2, protein: 0.12, carbs: 0.4, fat: 0, fiber: 0, sugar: 0 },
+    per100g: { calories: 2, protein: 0.12, carbs: 0.4, fat: 0, fiber: 0, sugar: 0, sodium: 2 },
     isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
+    id: "usda_orange_juice",
     keywords: ["orange juice 250ml", "orange juice", "jus jeruk", "es jeruk"],
     normalizedName: "Orange Juice",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
-    per100g: { calories: 45, protein: 0.7, carbs: 10.4, fat: 0.2, fiber: 0.2, sugar: 8.4 },
+    per100g: { calories: 45, protein: 0.7, carbs: 10.4, fat: 0.2, fiber: 0.2, sugar: 8.4, sodium: 1 },
     isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
+    id: "usda_latte_coffee",
     keywords: ["kopi susu", "latte", "cappuccino", "flat white"],
     normalizedName: "Kopi Susu / Latte",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
-    per100g: { calories: 60, protein: 2, carbs: 7.2, fat: 2.5, fiber: 0, sugar: 5.6 },
+    per100g: { calories: 60, protein: 2, carbs: 7.2, fat: 2.5, fiber: 0, sugar: 5.6, sodium: 45 },
     isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
+    id: "usda_boba_tea",
     keywords: ["boba", "boba milk tea", "bubble tea"],
     normalizedName: "Boba Milk Tea (1 Cup)",
     category: "beverage",
     defaultServingGrams: 450,
     servingUnit: "450 ml",
-    per100g: { calories: 75, protein: 1, carbs: 16.5, fat: 1, fiber: 0.2, sugar: 14 },
+    per100g: { calories: 75, protein: 1, carbs: 16.5, fat: 1, fiber: 0.2, sugar: 14, sodium: 40 },
     isHydration: false,
     defaultVolumeMl: 450,
     source: "USDA"
   },
   {
+    id: "tkpi_sweet_tea",
     keywords: ["teh manis", "es teh manis", "teh kotak", "teh botol"],
     normalizedName: "Es Teh Manis",
     category: "beverage",
     defaultServingGrams: 300,
     servingUnit: "300 ml",
-    per100g: { calories: 32, protein: 0, carbs: 8, fat: 0, fiber: 0, sugar: 7.5 },
+    per100g: { calories: 32, protein: 0, carbs: 8, fat: 0, fiber: 0, sugar: 7.5, sodium: 5 },
     isHydration: false,
     defaultVolumeMl: 300,
     source: "TKPI"
   },
   {
+    id: "usda_green_tea",
     keywords: ["teh tawar", "green tea", "teh hijau", "ocha"],
     normalizedName: "Teh Tawar / Green Tea",
     category: "beverage",
     defaultServingGrams: 250,
     servingUnit: "250 ml",
-    per100g: { calories: 1, protein: 0, carbs: 0.2, fat: 0, fiber: 0, sugar: 0 },
+    per100g: { calories: 1, protein: 0, carbs: 0.2, fat: 0, fiber: 0, sugar: 0, sodium: 1 },
     isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
   {
+    id: "tkpi_fruit_juice",
     keywords: ["jus buah", "jus alpukat", "jus mangga", "juice"],
     normalizedName: "Jus Buah Segar",
     category: "beverage",
     defaultServingGrams: 300,
     servingUnit: "300 ml",
-    per100g: { calories: 55, protein: 0.8, carbs: 13, fat: 0.5, fiber: 1.5, sugar: 11 },
+    per100g: { calories: 55, protein: 0.8, carbs: 13, fat: 0.5, fiber: 1.5, sugar: 11, sodium: 5 },
     isHydration: false,
     defaultVolumeMl: 300,
     source: "TKPI"
   },
   {
+    id: "usda_whey_protein",
     keywords: ["whey", "protein shake", "susu protein"],
     normalizedName: "Whey Protein Shake",
     category: "beverage",
     defaultServingGrams: 300,
     servingUnit: "300 ml",
-    per100g: { calories: 45, protein: 8, carbs: 1, fat: 0.6, fiber: 0.2, sugar: 0.5 },
+    per100g: { calories: 45, protein: 8, carbs: 1, fat: 0.6, fiber: 0.2, sugar: 0.5, sodium: 60 },
     isHydration: false,
     defaultVolumeMl: 300,
     source: "USDA"
@@ -43658,7 +43775,7 @@ function parseQuantityAndUnit(text) {
   if (cleaned.match(/\bgoreng|crispy|fried\b/i)) cookingMethod = "fried";
   else if (cleaned.match(/\brebus|kukus|boiled|steamed\b/i)) cookingMethod = "boiled";
   else if (cleaned.match(/\bbakar|panggang|grilled|roasted\b/i)) cookingMethod = "grilled";
-  else if (cleaned.match(/\bcreamy|carbonara|keju\b/i)) cookingMethod = "creamy";
+  else if (cleaned.match(/\bcreamy|carbonara\b/i)) cookingMethod = "creamy";
   else if (cleaned.match(/\bmentah|raw\b/i)) cookingMethod = "raw";
   return { quantity, explicitGrams, explicitVolumeMl, multiplier, cookingMethod, cleanedText: cleaned };
 }
@@ -43666,16 +43783,11 @@ function splitFoodItems(rawInput) {
   if (!rawInput) return [];
   const prefixRegex = /^(?:sore\s*ini|siang\s*ini|pagi\s*ini|malam\s*ini|tadi\s*pagi|tadi\s*siang|tadi\s*sore|tadi\s*malam|kemarin|barusan|tadi|lagi|sedang|habis|baru|aku|saya|gue|gw|kami|kita|pengen|mau|udah|sudah|sempat)?\s*(?:makan|minum|ngemil|sarapan|lunch|dinner|breakfast|snack|konsumsi|santap|pesan|order|habisin)?\s*(?:aku|saya|gue|gw)?\s*(?:makan|minum)?\s*/i;
   let cleaned = rawInput.trim().replace(prefixRegex, "").trim();
-  const rawParts = cleaned.split(/[,+&;\n]|\s+dan\s+|\s+plus\s+/i).map((p) => p.trim()).filter((p) => p.length > 0);
+  let decomposed = cleaned.replace(/\b(?:isi|isian|topping|toping|taburan|pakai|pake|dengan|with|plus|dan|serta|beserta)\b/gi, ", ");
+  const rawParts = decomposed.split(/[,+&;\n]/).map((p) => p.trim()).filter((p) => p.length > 0);
   const finalItems = [];
   for (const part of rawParts) {
-    const lowerPart = part.toLowerCase();
-    const isUnifiedRiceDish = /^nasi\s+(goreng|uduk|kuning|liwet|padang|merah|putih|ayam|bebek|hainam|campur|kotak|box|gudeg|timbel|bakar|bungkus|soto|rawon|pecel|lemak|kapau|bali|palembang|grombyang|tempong|megono|jinggo|langgi|tutug|ampok|gila|mawut|gandul|bogana|tutug\s*oncom|cumi|lele|ikan|tongkol|teriyaki|geprek|rendang|semur|balado|sambal|telur|tahu|tempe|opor|bakmoy|ambeng|tutug|bowl)/i.test(lowerPart) || lowerPart.includes("rice bowl") || lowerPart.includes("donburi");
-    const nasiWordCount = part.trim().split(/\s+/).length;
-    const isNamedDish = /^nasi\s+/i.test(part) && nasiWordCount >= 3;
-    if (/^nasi\s+/i.test(part) && !isUnifiedRiceDish && !isNamedDish) {
-      finalItems.push(part);
-    } else {
+    if (part.length > 0) {
       finalItems.push(part);
     }
   }
@@ -43689,27 +43801,11 @@ function calculateSingleItemNutrition(rawItemText) {
   for (const ref of NUTRITION_DATABASE) {
     for (const kw of ref.keywords) {
       if (lower.includes(kw)) {
-        const score = kw.length;
+        let score = kw.length;
+        if (ref.source === "TKPI") score += 2;
         if (score > bestScore) {
           bestScore = score;
           matchedRef = ref;
-        }
-      }
-    }
-  }
-  let secondaryProteinRef = null;
-  if (matchedRef && (matchedRef.normalizedName.includes("Nasi Putih") || matchedRef.normalizedName.includes("Nasi Merah"))) {
-    const proteinKeywords = ["ayam", "chicken", "sapi", "beef", "daging", "telur", "egg", "katsu", "teriyaki", "ikan", "fish"];
-    if (proteinKeywords.some((pk) => lower.includes(pk))) {
-      for (const ref of NUTRITION_DATABASE) {
-        if (ref.category === "protein" || ref.normalizedName.includes("Ayam") || ref.normalizedName.includes("Sapi")) {
-          for (const kw of ref.keywords) {
-            if (lower.includes(kw)) {
-              secondaryProteinRef = ref;
-              break;
-            }
-          }
-          if (secondaryProteinRef) break;
         }
       }
     }
@@ -43765,28 +43861,32 @@ function calculateSingleItemNutrition(rawItemText) {
     } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
       per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
     }
-    let factor = targetGrams2 / 100;
-    let protein = Math.round(per100g.protein * factor * 10) / 10;
-    let carbs = Math.round(per100g.carbs * factor * 10) / 10;
-    let fat2 = Math.round(per100g.fat * factor * 10) / 10;
-    let fiber = Math.round(per100g.fiber * factor * 10) / 10;
-    let sugar = Math.round(per100g.sugar * factor * 10) / 10;
-    if (secondaryProteinRef) {
-      const pGrams = secondaryProteinRef.defaultServingGrams || 100;
-      const pFactor = pGrams / 100;
-      protein = Math.round((protein + secondaryProteinRef.per100g.protein * pFactor) * 10) / 10;
-      carbs = Math.round((carbs + secondaryProteinRef.per100g.carbs * pFactor) * 10) / 10;
-      fat2 = Math.round((fat2 + secondaryProteinRef.per100g.fat * pFactor) * 10) / 10;
-      fiber = Math.round((fiber + secondaryProteinRef.per100g.fiber * pFactor) * 10) / 10;
-      sugar = Math.round((sugar + secondaryProteinRef.per100g.sugar * pFactor) * 10) / 10;
-      targetGrams2 += pGrams;
-    }
+    const factor = targetGrams2 / 100;
+    const protein = Math.round(per100g.protein * factor * 10) / 10;
+    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
+    const fat2 = Math.round(per100g.fat * factor * 10) / 10;
+    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
+    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    const baseSodium = per100g.sodium !== void 0 ? per100g.sodium : matchedRef.category === "condiment" ? 400 : 50;
+    const sodium = Math.round(baseSodium * factor);
     const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
-    const rawCal = Math.round(per100g.calories * factor + (secondaryProteinRef ? secondaryProteinRef.per100g.calories * (secondaryProteinRef.defaultServingGrams / 100) : 0));
+    const rawCal = Math.round(per100g.calories * factor);
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
+    const portionConf = portionType2 === "user_provided" ? 95 : 75;
+    const dbConf = bestScore > 5 ? 95 : 85;
     return {
+      foodName: rawItemText.trim(),
+      normalizedName: matchedRef.normalizedName,
       food_name: rawItemText.trim(),
-      normalized_food_name: secondaryProteinRef ? `${matchedRef.normalizedName} + ${secondaryProteinRef.normalizedName}` : matchedRef.normalizedName,
+      normalized_food_name: matchedRef.normalizedName,
+      databaseId: matchedRef.id || `db_${matchedRef.source.toLowerCase()}_${matchedRef.normalizedName.replace(/\s+/g, "_").toLowerCase()}`,
+      source: matchedRef.source,
+      data_source: matchedRef.source,
+      referenceAmount: 100,
+      referenceUnit: "g",
+      actualAmount: Math.round(targetGrams2),
+      actualUnit: isBeverage || isWater ? "ml" : "g",
+      cookingMethod,
       cooking_method: cookingMethod,
       estimated_quantity: quantity,
       estimated_weight_grams: Math.round(targetGrams2),
@@ -43800,10 +43900,14 @@ function calculateSingleItemNutrition(rawItemText) {
       fat: fat2,
       fiber,
       sugar,
+      sodium,
+      isHydration: isWater,
       is_hydration: isWater,
-      // ONLY plain water is treated as is_hydration
+      volumeMl: targetVolumeMl2,
       volume_ml: targetVolumeMl2,
-      data_source: matchedRef.source,
+      recognitionConfidence: 95,
+      databaseMatchConfidence: dbConf,
+      portionConfidence: portionConf,
       confidence: portionType2 === "user_provided" ? "high" : "medium",
       notes: `${displayUnit2} (${matchedRef.source})`
     };
@@ -43811,8 +43915,18 @@ function calculateSingleItemNutrition(rawItemText) {
   const nonFoodPattern = /\b(?:laptop|notebook|macbook|komputer|computer|pc|mouse|keyboard|monitor|cpu|printer|gadget|hp|handphone|smartphone|iphone|android|samsung|xiaomi|oppo|vivo|ipad|tablet|charger|kabel|headphone|earphone|headset|powerbank|baterai|batre|tws|airpods|speaker|tv|televisi|kamera|camera|tripod|flashdisk|harddisk|ssd|ram|flashdrive|modem|router|meja|kursi|lemari|pintu|jendela|kasur|bantal|guling|selimut|karpet|lantai|tembok|dinding|atap|genteng|lampu|kipas|ac|kulkas|mesin\s*cuci|setrika|sapu|pel|ember|gayung|sikat|odol|pasta\s*gigi|sabun|shampoo|sampo|parfum|handuk|sisir|cermin|kaca|baju|kaos|kemeja|celana|rok|jaket|hoodie|sweater|jas|gamis|jilbab|hijab|topi|helm|sepatu|sandal|kaos\s*kaki|tas|ransel|dompet|koper|ikat\s*pinggang|sabuk|jam\s*tangan|gelang|kalung|cincin|anting|kacamata|mobil|motor|sepeda|skuter|truk|bus|angkot|becak|helm|kunci|gembok|buku|novel|komik|majalah|koran|pulpen|bolpoin|pensil|penghapus|penggaris|gunting|cutter|kertas|karton|kardus|plastik|besi|baja|kayu|batu|pasir|semen|tanah|kucing|anjing|kelinci|hamster|burung|ikan\s*cupang|hewan|binatang|manusia|orang|teman|pacar|anak|gedung|rumah|kantor|toko|jalan|jembatan|uang|duit|koin|kartu|atm|ktp|sim|paspor|rokok|vape|pod|liquid|korek)\b/i;
   if (nonFoodPattern.test(cleanedText)) {
     return {
+      foodName: rawItemText.trim(),
+      normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
       food_name: rawItemText.trim(),
       normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      databaseId: "non_food",
+      source: "verified_nutrition_database",
+      data_source: "verified_nutrition_database",
+      referenceAmount: 0,
+      referenceUnit: "-",
+      actualAmount: 0,
+      actualUnit: "-",
+      cookingMethod: void 0,
       cooking_method: void 0,
       estimated_quantity: quantity,
       estimated_weight_grams: 0,
@@ -43826,9 +43940,14 @@ function calculateSingleItemNutrition(rawItemText) {
       fat: 0,
       fiber: 0,
       sugar: 0,
+      sodium: 0,
+      isHydration: false,
       is_hydration: false,
+      volumeMl: 0,
       volume_ml: 0,
-      data_source: "verified_nutrition_database",
+      recognitionConfidence: 99,
+      databaseMatchConfidence: 99,
+      portionConfidence: 99,
       confidence: "high",
       notes: "Objek ini bukan makanan atau minuman"
     };
@@ -43836,17 +43955,27 @@ function calculateSingleItemNutrition(rawItemText) {
   const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
   const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
   const itemType = isWaterGuess ? "water" : isBeverageGuess ? "beverage" : "food";
-  let targetGrams = explicitGrams || explicitVolumeMl || Math.round((isBeverageGuess ? 250 : 100) * multiplier * quantity);
-  let targetVolumeMl = isBeverageGuess ? targetGrams : void 0;
-  let portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
-  let displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
+  const targetGrams = explicitGrams || explicitVolumeMl || Math.round((isBeverageGuess ? 250 : 100) * multiplier * quantity);
+  const targetVolumeMl = isBeverageGuess ? targetGrams : void 0;
+  const portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
+  const displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
   const prot = Math.round((isBeverageGuess ? 0 : 4) * (targetGrams / 100) * 10) / 10;
   const carb = Math.round((isBeverageGuess ? 5 : 15) * (targetGrams / 100) * 10) / 10;
   const fat = Math.round((isBeverageGuess ? 0 : 3) * (targetGrams / 100) * 10) / 10;
   const cal = Math.round(prot * 4 + carb * 4 + fat * 9);
   return {
+    foodName: rawItemText.trim(),
+    normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
     food_name: rawItemText.trim(),
     normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    databaseId: "ai_estimate_fallback",
+    source: "ai_estimation",
+    data_source: "ai_estimation",
+    referenceAmount: 100,
+    referenceUnit: "g",
+    actualAmount: targetGrams,
+    actualUnit: isBeverageGuess ? "ml" : "g",
+    cookingMethod,
     cooking_method: cookingMethod,
     estimated_quantity: quantity,
     estimated_weight_grams: targetGrams,
@@ -43860,11 +43989,51 @@ function calculateSingleItemNutrition(rawItemText) {
     fat,
     fiber: 0,
     sugar: isBeverageGuess ? 4 : 1,
+    sodium: isBeverageGuess ? 10 : 150,
+    isHydration: isWaterGuess,
     is_hydration: isWaterGuess,
+    volumeMl: targetVolumeMl,
     volume_ml: targetVolumeMl,
-    data_source: "ai_estimation",
+    recognitionConfidence: 60,
+    databaseMatchConfidence: 50,
+    portionConfidence: portionType === "user_provided" ? 90 : 50,
     confidence: "low",
     notes: "Estimasi generik"
+  };
+}
+function validateNutrientSanity(data) {
+  const errors = [];
+  const cals = Number(data.calories) || 0;
+  const prot = Number(data.protein) || 0;
+  const carbs = Number(data.carbs) || 0;
+  const fat = Number(data.fat) || 0;
+  const fiber = Number(data.fiber) || 0;
+  const sugar = Number(data.sugar) || 0;
+  const sodium = Number(data.sodium) || 0;
+  if (cals < 0) errors.push(`Calories cannot be negative: ${cals}`);
+  if (prot < 0) errors.push(`Protein cannot be negative: ${prot}`);
+  if (carbs < 0) errors.push(`Carbohydrates cannot be negative: ${carbs}`);
+  if (fat < 0) errors.push(`Fat cannot be negative: ${fat}`);
+  if (fiber < 0) errors.push(`Fiber cannot be negative: ${fiber}`);
+  if (sugar < 0) errors.push(`Sugar cannot be negative: ${sugar}`);
+  if (sodium < 0) errors.push(`Sodium cannot be negative: ${sodium}`);
+  if (sugar > carbs + 0.1) {
+    errors.push(`Sugar (${sugar}g) cannot exceed total Carbohydrates (${carbs}g)`);
+  }
+  if (fiber > carbs + 0.1) {
+    errors.push(`Fiber (${fiber}g) cannot exceed total Carbohydrates (${carbs}g)`);
+  }
+  const atwaterKcal = prot * 4 + carbs * 4 + fat * 9;
+  if (cals > 0 && atwaterKcal > 0) {
+    const diff = Math.abs(cals - atwaterKcal);
+    const maxAllowedDiff = Math.max(80, cals * 0.4);
+    if (diff > maxAllowedDiff) {
+      errors.push(`Calorie inconsistency: reported ${cals} kcal vs macro sum ${atwaterKcal} kcal (diff: ${diff})`);
+    }
+  }
+  return {
+    isValid: errors.length === 0,
+    errors
   };
 }
 function isGenericMealInput(text) {
@@ -43889,188 +44058,322 @@ function isGenericMealInput(text) {
   }
   return { isGeneric: false, mealType: "", suggestedOptions: [] };
 }
-function estimateMealNutritionDeterministic(input) {
-  const debugLogs = [];
-  debugLogs.push(`[NutritionEngine] Raw input: "${input}"`);
-  const genericCheck = isGenericMealInput(input);
-  const rawItems = splitFoodItems(input);
-  debugLogs.push(`[NutritionEngine] Parsed ${rawItems.length} items: [${rawItems.join(" | ")}]`);
-  const items = [];
+function calculateCompositeNutrition(components) {
+  const componentResults = [];
+  const traceability = [];
   let sumProtein = 0;
   let sumCarbs = 0;
   let sumFat = 0;
   let sumFiber = 0;
   let sumSugar = 0;
+  let sumSodium = 0;
   let totalVolumeMl = 0;
   let isHydration = false;
-  let hasUserProvidedPortion = false;
-  for (const rawItem of rawItems) {
-    const itemNutr = calculateSingleItemNutrition(rawItem);
-    items.push(itemNutr);
-    if (itemNutr.portion_type === "user_provided") {
-      hasUserProvidedPortion = true;
+  let minPortionConf = 100;
+  let minDbConf = 100;
+  let minRecogConf = 100;
+  for (const comp of components) {
+    let compText = "";
+    if (typeof comp === "string") {
+      compText = comp;
+    } else {
+      const qStr = comp.grams ? `${comp.grams}g` : comp.quantity ? `${comp.quantity} ` : "";
+      compText = `${qStr}${comp.name} ${comp.cookingMethod || ""}`.trim();
     }
-    sumProtein += Number(itemNutr.protein) || 0;
-    sumCarbs += Number(itemNutr.carbs) || 0;
-    sumFat += Number(itemNutr.fat) || 0;
-    sumFiber += Number(itemNutr.fiber) || 0;
-    sumSugar += Number(itemNutr.sugar) || 0;
-    if (itemNutr.is_hydration) {
+    const item = calculateSingleItemNutrition(compText);
+    componentResults.push(item);
+    sumProtein += item.protein;
+    sumCarbs += item.carbs;
+    sumFat += item.fat;
+    sumFiber += item.fiber;
+    sumSugar += item.sugar;
+    sumSodium += item.sodium;
+    if (item.isHydration) {
       isHydration = true;
-      totalVolumeMl += itemNutr.volume_ml || 0;
+      totalVolumeMl += item.volumeMl || 0;
     }
-    debugLogs.push(
-      `  -> Item: "${itemNutr.normalized_food_name}" | Portion: ${itemNutr.display_unit || itemNutr.estimated_weight_grams + "g"} | Cal: ${itemNutr.calories} kcal (P:${itemNutr.protein}g, C:${itemNutr.carbs}g, F:${itemNutr.fat}g, Fib:${itemNutr.fiber}g, Sug:${itemNutr.sugar}g) [${itemNutr.data_source}]`
-    );
+    minPortionConf = Math.min(minPortionConf, item.portionConfidence);
+    minDbConf = Math.min(minDbConf, item.databaseMatchConfidence);
+    minRecogConf = Math.min(minRecogConf, item.recognitionConfidence);
+    traceability.push(`\u2022 [${item.source}] ${item.normalizedName} (${item.actualAmount}${item.actualUnit}) -> ${item.calories} kcal | P:${item.protein}g C:${item.carbs}g F:${item.fat}g Sug:${item.sugar}g Na:${item.sodium}mg`);
   }
   const validatedProtein = Math.round(sumProtein * 10) / 10;
   const validatedCarbs = Math.round(sumCarbs * 10) / 10;
   const validatedFat = Math.round(sumFat * 10) / 10;
   const validatedFiber = Math.round(sumFiber * 10) / 10;
   const validatedSugar = Math.round(sumSugar * 10) / 10;
+  const validatedSodium = Math.round(sumSodium);
   const validatedCalories = Math.round(validatedProtein * 4 + validatedCarbs * 4 + validatedFat * 9);
-  debugLogs.push(
-    `[NutritionEngine] ATWATER SUM TOTAL: ${validatedCalories} kcal | Protein: ${validatedProtein}g | Carbs: ${validatedCarbs}g | Fat: ${validatedFat}g | Fiber: ${validatedFiber}g | Sugar: ${validatedSugar}g`
-  );
-  const cleanTitle = items.length === 1 ? items[0].normalized_food_name : items.map((i) => i.normalized_food_name.split("(")[0].trim()).slice(0, 3).join(" + ") + (items.length > 3 ? ` + ${items.length - 3} lainnya` : "");
-  const dynamicPortionNote = items.length === 1 ? "1 meal detected" : `${items.length} food items detected`;
-  const explicitGramMatch = input.match(/(\d+(?:[\.,]\d+)?)\s*(?:g|gr|gram|grams)\b/i);
-  const portionDisplayLabel = explicitGramMatch ? `Portion: ${parseFloat(explicitGramMatch[1].replace(",", "."))} g` : hasUserProvidedPortion ? "Portion: User provided" : "Portion: Estimated";
-  const confidence = genericCheck.isGeneric ? "low" : hasUserProvidedPortion || items.some((i) => i.confidence === "high") ? "high" : "medium";
-  return {
-    foodName: input.trim() || cleanTitle,
+  const sanity = validateNutrientSanity({
     calories: validatedCalories,
     protein: validatedProtein,
     carbs: validatedCarbs,
     fat: validatedFat,
     fiber: validatedFiber,
     sugar: validatedSugar,
-    sodium: void 0,
-    // Unknown sodium is kept as undefined (rendered as "Not estimated" in UI)
+    sodium: validatedSodium
+  });
+  const overallConf = minPortionConf >= 85 && minDbConf >= 85 ? "high" : minPortionConf >= 65 ? "medium" : "low";
+  const title = componentResults.length === 1 ? componentResults[0].normalizedName : componentResults.map((c) => c.normalizedName.split("(")[0].trim()).join(" + ");
+  const portionNote = componentResults.length === 1 ? "1 item detected" : `${componentResults.length} components detected`;
+  return {
+    foodName: title,
+    calories: validatedCalories,
+    protein: validatedProtein,
+    carbs: validatedCarbs,
+    fat: validatedFat,
+    fiber: validatedFiber,
+    sugar: validatedSugar,
+    sodium: validatedSodium,
     isHydration,
     volumeMl: totalVolumeMl,
     mealType: "lunch",
-    portionNote: dynamicPortionNote,
-    items,
-    calculatedFromItems: true,
-    confidence,
+    portionNote,
+    components: componentResults,
+    calculatedFromComponents: true,
+    recognitionConfidence: minRecogConf,
+    databaseMatchConfidence: minDbConf,
+    portionConfidence: minPortionConf,
+    overallConfidence: overallConf,
+    traceabilityLog: traceability,
+    sanityValid: sanity.isValid,
+    sanityErrors: sanity.errors
+  };
+}
+function calculateFoodNutrition(input, explicitComponents) {
+  const genericCheck = isGenericMealInput(input);
+  const itemsToCalc = explicitComponents && explicitComponents.length > 0 ? explicitComponents : splitFoodItems(input);
+  const compositeRes = calculateCompositeNutrition(itemsToCalc);
+  const displayTitle = input.trim() || compositeRes.foodName;
+  return {
+    ...compositeRes,
+    foodName: displayTitle,
     needsClarification: genericCheck.isGeneric,
     clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : void 0,
     suggestedOptions: genericCheck.suggestedOptions,
-    portionDisplayLabel,
-    debugLog: debugLogs
+    portionDisplayLabel: `Portion: ${compositeRes.components.map((c) => `${c.actualAmount}${c.actualUnit}`).join(" + ")}`
   };
+}
+function estimateMealNutritionDeterministic(input) {
+  const res = calculateFoodNutrition(input);
+  return {
+    ...res,
+    items: res.components,
+    calculatedFromItems: res.calculatedFromComponents,
+    debugLog: res.traceabilityLog
+  };
+}
+function calculateNutrientStatus(current, target, isUpperLimit = false) {
+  const c = Math.max(0, Number(current) || 0);
+  const t = Math.max(0, Number(target) || 0);
+  if (t === 0) {
+    return {
+      current: c,
+      target: t,
+      percentage: 0,
+      percentageExact: 0,
+      status: isUpperLimit ? "under_limit" : "under_target",
+      statusText: isUpperLimit ? "Dalam Batas" : "Belum Cukup",
+      statusBadge: isUpperLimit ? "\u{1F7E2} Dalam Batas" : "\u{1F7E1} Belum Cukup",
+      remaining: 0,
+      isOver: false,
+      isReached: false,
+      isUnder: true
+    };
+  }
+  const percentageExact = c / t * 100;
+  const percentage = Math.round(percentageExact);
+  const remaining = t - c;
+  if (isUpperLimit) {
+    if (c > t) {
+      return {
+        current: c,
+        target: t,
+        percentage,
+        percentageExact,
+        status: "over_limit",
+        statusText: "Melebihi Batas",
+        statusBadge: "\u{1F534} Melebihi Batas",
+        remaining,
+        isOver: true,
+        isReached: false,
+        isUnder: false
+      };
+    } else if (c === t) {
+      return {
+        current: c,
+        target: t,
+        percentage: 100,
+        percentageExact: 100,
+        status: "at_limit",
+        statusText: "Di Batas Maksimal",
+        statusBadge: "\u{1F7E1} Di Batas Maksimal",
+        remaining: 0,
+        isOver: false,
+        isReached: true,
+        isUnder: false
+      };
+    } else if (percentageExact >= 80) {
+      return {
+        current: c,
+        target: t,
+        percentage,
+        percentageExact,
+        status: "near_limit",
+        statusText: "Mendekati Batas",
+        statusBadge: "\u{1F7E1} Mendekati Batas",
+        remaining,
+        isOver: false,
+        isReached: false,
+        isUnder: true
+      };
+    } else {
+      return {
+        current: c,
+        target: t,
+        percentage,
+        percentageExact,
+        status: "under_limit",
+        statusText: "Dalam Batas",
+        statusBadge: "\u{1F7E2} Dalam Batas",
+        remaining,
+        isOver: false,
+        isReached: false,
+        isUnder: true
+      };
+    }
+  }
+  if (c < t) {
+    return {
+      current: c,
+      target: t,
+      percentage,
+      percentageExact,
+      status: "under_target",
+      statusText: "Belum Cukup",
+      statusBadge: "\u{1F7E1} Belum Cukup",
+      remaining,
+      isOver: false,
+      isReached: false,
+      isUnder: true
+    };
+  } else if (c === t) {
+    return {
+      current: c,
+      target: t,
+      percentage: 100,
+      percentageExact: 100,
+      status: "reached",
+      statusText: "Tercapai",
+      statusBadge: "\u2705 Tercapai",
+      remaining: 0,
+      isOver: false,
+      isReached: true,
+      isUnder: false
+    };
+  } else {
+    return {
+      current: c,
+      target: t,
+      percentage,
+      percentageExact,
+      status: "over_target",
+      statusText: "Melebihi Target",
+      statusBadge: "\u{1F534} Melebihi Target",
+      remaining,
+      isOver: true,
+      isReached: false,
+      isUnder: false
+    };
+  }
+}
+function calculateDailyNutritionSummary(dailyTotals, userTargets) {
+  const targetCal = Number(userTargets?.targetCalories) || 2e3;
+  const targetProt = Number(userTargets?.proteinGrams) || 120;
+  const targetCarb = Number(userTargets?.carbGrams) || 240;
+  const targetFat = Number(userTargets?.fatGrams) || 65;
+  const targetFiber = Number(userTargets?.fiberGrams) || 30;
+  const targetSugar = Number(userTargets?.sugarLimit) || 50;
+  const targetSodium = Number(userTargets?.sodiumLimit) || 2e3;
+  const currentCal = Number(dailyTotals?.calories) || 0;
+  const currentProt = Number(dailyTotals?.protein) || 0;
+  const currentCarb = Number(dailyTotals?.carbs) || 0;
+  const currentFat = Number(dailyTotals?.fat) || 0;
+  const currentFiber = Number(dailyTotals?.fiber) || 0;
+  const currentSugar = Number(dailyTotals?.sugar) || 0;
+  const currentSodium = Number(dailyTotals?.sodium) || 0;
+  return {
+    calories: calculateNutrientStatus(currentCal, targetCal, false),
+    protein: calculateNutrientStatus(currentProt, targetProt, false),
+    carbs: calculateNutrientStatus(currentCarb, targetCarb, false),
+    fat: calculateNutrientStatus(currentFat, targetFat, false),
+    fiber: calculateNutrientStatus(currentFiber, targetFiber, false),
+    sugar: calculateNutrientStatus(currentSugar, targetSugar, true),
+    sodium: calculateNutrientStatus(currentSodium, targetSodium, true),
+    rawTotals: {
+      calories: currentCal,
+      protein: currentProt,
+      carbs: currentCarb,
+      fat: currentFat,
+      fiber: currentFiber,
+      sugar: currentSugar,
+      sodium: currentSodium
+    },
+    userTargets: {
+      targetCalories: targetCal,
+      proteinGrams: targetProt,
+      carbGrams: targetCarb,
+      fatGrams: targetFat,
+      fiberGrams: targetFiber,
+      sugarLimit: targetSugar,
+      sodiumLimit: targetSodium
+    }
+  };
+}
+function makeProgressBar(current, target, length = 10) {
+  if (!target || target <= 0) return `[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 0% \xB7 \u{1F7E1} Belum Cukup`;
+  const statusInfo = calculateNutrientStatus(current, target, false);
+  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
+  const filledCount = Math.min(length, Math.max(0, Math.floor(cappedPercent / 100 * length)));
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
+  return `[${bar}] ${statusInfo.percentage}% \xB7 ${statusInfo.statusBadge}`;
+}
+function makeSodiumProgressBar(current, limit = 2e3, length = 10) {
+  if (!limit || limit <= 0) limit = 2e3;
+  const statusInfo = calculateNutrientStatus(current, limit, true);
+  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
+  const filledCount = Math.min(length, Math.max(0, Math.floor(cappedPercent / 100 * length)));
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
+  return `[${bar}] ${statusInfo.percentage}% \xB7 ${statusInfo.statusBadge}`;
 }
 function buildGeminiNutritionPrompt(cleanText) {
   return `Kamu adalah Senior Clinical Nutritionist AI GymBuddy.
-TUGAS WAJIB: Lakukan analisis Bottom-Up Nutrition Estimation untuk input makanan/minuman berikut:
+TUGAS: Lakukan dekonstruksi makanan/minuman dan identifikasi komponen individual untuk input:
 "${cleanText}"
 
-IKUTI 7 LANGKAH PIPELINE WAJIB (JANGAN DILEWATI):
-0. PERIKSA APAKAH INI MAKANAN/MINUMAN:
-   - Jika input adalah barang elektronik (laptop, komputer, hp, mouse), perabotan (meja, kursi), kendaraan, pakaian, atau hal lain yang BUKAN MAKANAN/MINUMAN:
-     Keluarkan JSON:
-     {
-       "isFood": false,
-       "foodName": "${cleanText}",
-       "calories": 0,
-       "protein": 0,
-       "carbs": 0,
-       "fat": 0,
-       "fiber": 0,
-       "sugar": 0,
-       "isHydration": false,
-       "volumeMl": 0,
-       "mealType": "snack",
-       "portionNote": "Bukan makanan atau minuman",
-       "items": []
-     }
-1. PARSE & SPLIT & DEKONSTRUKSI: Pisahkan setiap item makanan/minuman individu secara spesifik.
-   - Untuk makanan komposit / kombo (misal "roti isi sosis keju" atau "nasi ayam sambal lalapan"):
-     Pecah menjadi komponen individual: (1) Roti/Nasi, (2) Isian/Filling (sosis/ayam), (3) Topping/Keju, (4) Sambal/Saus, (5) Sayur/Lalapan.
-2. METODE MASAK: Pahami cara memasak (rebus vs goreng vs panggang vs creamy).
-   - JANGAN mengasumsikan mentega/krim/minyak/dressing berlebih kecuali ada indikasi jelas.
-   - Jika ada saus/dressing yang tidak diketahui jumlahnya, catat pada portionNote: "Estimasi ini belum memasukkan saus/dressing tambahan".
-3. ESTIMASI PORSI REALISTIS (HINDARI KEPASTIAN PALSU):
-   - Gunakan porsi standar wajar (misal: "sekitar 60g", bukan angka desimal palsu "63.7g").
-   - Pasta: ~180g porsi matang / cooked (bukan mentah).
-   - Kentang goreng: ~100g porsi saji sedang.
-   - Roti: ~60g (2 lembar roti tawar standar).
-   - Telur: ~50g per 1 butir besar.
-   - Sosis: ~50g per 1 buah sosis masak.
-   - Nasi putih piring standar: ~180g (1 piring / 1.5 centong).
-   - Nasi bungkus (kertas/daun padang/warteg): \xB1250\u2013300g.
-   - Ayam goreng: ~120g (1 potong paha/dada).
-   - Jika user menyebutkan kuantitas eksplisit (misal "2 telur", "150g chicken", "sosis 2 buah"), GUNAKAN KUANTITAS TERSEBUT!
-4. HITUNG NUTRISI PER-ITEM berdasarkan standar USDA / TKPI:
-   - Hitung gram berat, calories, protein, carbs, fat, fiber, sugar per-item.
-5. AKUMULASIKAN TOTAL: Jumlahkan seluruh nutrisi dari tiap-tiap item.
-   - Total Calories = Sum(Calories tiap item)
-   - Total Protein = Sum(Protein tiap item)
-   - Total Carbs = Sum(Carbs tiap item)
-   - Total Fat = Sum(Fat tiap item)
-   - Total Fiber = Sum(Fiber tiap item)
-   - Total Sugar = Sum(Sugar tiap item)
-6. VERIFIKASI KALORI: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+IKUTI ATURAN:
+1. IDENTIFIKASI KOMPONEN INDIVIDUAL (DEKOMPOSISI):
+   - Pisahkan setiap item makanan/minuman, isian, topping, dan saus secara spesifik.
+   - Contoh "Roti isi sosis topping keju" -> (1) Roti, (2) Sosis, (3) Keju.
+   - Contoh "Nasi ayam bumbu, perkedel, dan daun singkong" -> (1) Nasi putih, (2) Ayam, (3) Perkedel, (4) Daun singkong.
+2. JANGAN MENGHILANGKAN INFORMASI YANG DISEBUTKAN USER:
+   - Jika user menyebutkan bahan secara eksplisit (misal "isi sosis topping keju"), seluruh komponen tersebut WAJIB dimasukkan ke dalam daftar item.
+3. JANGAN MENGARANG INGREDIEN TERSEMBUNYI YANG TIDAK TERLIHAT / TIDAK DISEBUTKAN.
+4. ESTIMASI KUANTITAS DAN UNIT YANG REALISTIS.
 
-KEMBALIKAN HANYA JSON VALID (TANPA MARKDOWN):
+Keluarkan JSON valid:
 {
   "foodName": "Nama Lengkap Makanan / Kombo",
-  "calories": 755,
-  "protein": 19,
-  "carbs": 126,
-  "fat": 19,
-  "fiber": 9,
-  "sugar": 5,
-  "isHydration": false,
-  "volumeMl": 0,
-  "mealType": "lunch",
-  "portionNote": "Porsi standar komplit",
-  "items": [
+  "isFood": true,
+  "portionNote": "Porsi teridentifikasi",
+  "components": [
     {
-      "food_name": "Pasta",
-      "normalized_food_name": "Pasta (Cooked)",
-      "estimated_quantity": 1,
-      "estimated_weight_grams": 180,
-      "serving_unit": "porsi sedang (cooked)",
-      "calories": 284,
-      "protein": 10,
-      "carbs": 56,
-      "fat": 2,
-      "fiber": 3,
-      "sugar": 1,
-      "data_source": "USDA",
-      "confidence": "high"
-    },
-    {
-      "food_name": "Kentang goreng",
-      "normalized_food_name": "Kentang Goreng (French Fries)",
-      "estimated_quantity": 1,
-      "estimated_weight_grams": 100,
-      "serving_unit": "porsi regular",
-      "calories": 312,
-      "protein": 3,
-      "carbs": 41,
-      "fat": 15,
-      "fiber": 4,
-      "sugar": 0,
-      "data_source": "USDA",
-      "confidence": "high"
-    },
-    {
-      "food_name": "Roti",
-      "normalized_food_name": "Roti Tawar (2 Lembar)",
-      "estimated_quantity": 2,
-      "estimated_weight_grams": 60,
-      "serving_unit": "2 lembar",
-      "calories": 159,
-      "protein": 5,
-      "carbs": 29,
-      "fat": 2,
-      "fiber": 2,
-      "sugar": 3,
-      "data_source": "USDA",
-      "confidence": "high"
+      "name": "Nama Item",
+      "quantity": 1,
+      "unit": "porsi / potong / lembar / gram / ml",
+      "cookingMethod": "fried / boiled / grilled / steamed / raw / standard"
     }
   ]
 }`;
@@ -44136,9 +44439,9 @@ function generateNutritionCardSvg(data) {
   const targetProt = Math.round(Number(data.dailyTargetProtein) || 150);
   const targetCarb = Math.round(Number(data.dailyTargetCarbs) || 275);
   const targetFat = Math.round(Number(data.dailyTargetFat) || 67);
-  const calPercentage = Math.min(100, Math.max(0, Math.round(consumedCal / targetCal * 100)));
-  const isOver = remainingCal < 0;
-  const statusPillText = isOver ? `over ${Math.abs(remainingCal).toLocaleString("id-ID")} kkal` : `sisa ${remainingCal.toLocaleString("id-ID")} kkal`;
+  const calPercentage = Math.round(consumedCal / targetCal * 100);
+  const isOver = consumedCal > targetCal;
+  const statusPillText = isOver ? `Melebihi target | +${(consumedCal - targetCal).toLocaleString("id-ID")} kkal` : remainingCal === 0 ? `Target tercapai` : `sisa ${remainingCal.toLocaleString("id-ID")} kkal`;
   const protPercentage = Math.min(100, Math.max(0, Math.round(protein / targetProt * 100)));
   const carbPercentage = Math.min(100, Math.max(0, Math.round(carbs / targetCarb * 100)));
   const fatPercentage = Math.min(100, Math.max(0, Math.round(fat / targetFat * 100)));
@@ -44211,16 +44514,24 @@ function generateNutritionCardSvg(data) {
     `).join("")}
   </g>
 
-  <!-- 3. STATUS BADGE PILL ("On track | sisa 1.269 kkal") -->
+  <!-- 3. STATUS BADGE PILL -->
   <g id="statusBadge" transform="translate(${paddingX}, ${badgeY})">
-    <rect width="260" height="34" rx="17" fill="#121721" stroke="#222A38" stroke-width="1.2"/>
-    <!-- Checkmark Circle -->
-    <circle cx="20" cy="17" r="9" fill="#D4FF00"/>
-    <path d="M16.5 17l2.5 2.5 4.5-5" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-    
-    <text x="36" y="22" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">On track</text>
-    <text x="96" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
-    <text x="108" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">${escapeXml(statusPillText)}</text>
+    <rect width="${isOver ? 310 : 270}" height="34" rx="17" fill="#121721" stroke="#222A38" stroke-width="1.2"/>
+    ${isOver ? `
+      <!-- Red Alert Circle -->
+      <circle cx="20" cy="17" r="9" fill="#EF4444"/>
+      <text x="20" y="21" text-anchor="middle" fill="#FFFFFF" font-family="Arial" font-size="12" font-weight="bold">!</text>
+      <text x="36" y="22" fill="#EF4444" font-family="Arial" font-size="13" font-weight="bold">Melebihi target</text>
+      <text x="135" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
+      <text x="145" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">+${(consumedCal - targetCal).toLocaleString("id-ID")} kkal</text>
+    ` : `
+      <!-- Neon Lime Checkmark Circle -->
+      <circle cx="20" cy="17" r="9" fill="#D4FF00"/>
+      <path d="M16.5 17l2.5 2.5 4.5-5" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="36" y="22" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">On track</text>
+      <text x="96" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
+      <text x="108" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">${escapeXml(statusPillText)}</text>
+    `}
   </g>
 
   <!-- 4. FOOD PHOTO CONTAINER -->
@@ -47122,44 +47433,6 @@ async function sendMetaWhatsappMessage(to, bodyText) {
     console.error("Error sending Meta WhatsApp message:", err);
   }
 }
-function makeProgressBar(current, target, length = 10) {
-  if (!target || target <= 0) return `[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 0% \xB7 \u26AA Belum Cukup`;
-  const rawPercent = Math.round(current / target * 100);
-  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
-  const filledCount = Math.min(length, Math.max(0, Math.round(cappedPercent / 100 * length)));
-  const emptyCount = Math.max(0, length - filledCount);
-  const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
-  let statusText = "";
-  if (rawPercent >= 100) {
-    statusText = "\u2705 Tercapai";
-  } else if (rawPercent >= 75) {
-    statusText = "\u{1F7E2} Hampir Cukup";
-  } else if (rawPercent >= 40) {
-    statusText = "\u{1F7E1} Sedang";
-  } else {
-    statusText = "\u26AA Belum Cukup";
-  }
-  return `[${bar}] ${rawPercent}% \xB7 ${statusText}`;
-}
-function makeSodiumProgressBar(current, limit = 2e3, length = 10) {
-  if (!limit || limit <= 0) limit = 2e3;
-  const rawPercent = Math.round(current / limit * 100);
-  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
-  const filledCount = Math.min(length, Math.max(0, Math.round(cappedPercent / 100 * length)));
-  const emptyCount = Math.max(0, length - filledCount);
-  const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
-  let statusText = "";
-  if (rawPercent > 100) {
-    statusText = "\u{1F534} Melebihi Batas";
-  } else if (rawPercent === 100) {
-    statusText = "\u{1F7E1} Di Batas Maksimal";
-  } else if (rawPercent >= 80) {
-    statusText = "\u{1F7E1} Mendekati Batas";
-  } else {
-    statusText = "\u{1F7E2} Dalam Batas";
-  }
-  return `[${bar}] ${rawPercent}% \xB7 ${statusText}`;
-}
 function parseDateFromQuery(userText) {
   const lower = userText.toLowerCase().trim();
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
@@ -47239,14 +47512,13 @@ function parseDateFromQuery(userText) {
 }
 function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const rawFoodName = String(parsedAi?.foodName || "Analisis Makanan").trim();
-  const rawPortion = parsedAi?.portion || parsedAi?.portionWeight || (Array.isArray(parsedAi?.portionEstimates) && parsedAi?.portionEstimates[0] ? parsedAi.portionEstimates[0] : null) || parsedAi?.portionDetail || "1 porsi";
-  const portionStr = String(rawPortion).trim();
   const calories = Number(parsedAi?.calories) || 0;
   const protein = Number(parsedAi?.protein) || 0;
   const carbs = Number(parsedAi?.carbs) || 0;
   const fat = Number(parsedAi?.fat) || 0;
   const fiber = Number(parsedAi?.fiber) || 0;
   const sugar = Number(parsedAi?.sugar) || 0;
+  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
   const fatKcal = fat * 9;
@@ -47255,10 +47527,6 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const carbPercent = Math.round(carbKcal / totalMacroKcal * 100);
   const fatPercent = Math.round(fatKcal / totalMacroKcal * 100);
   const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi?.confidenceLevel) || (String(inputSource).toLowerCase().includes("foto") ? 88 : 92)));
-  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi?.satietyScore) || 5));
-  const healthScore = Math.min(10, Math.max(1, Number(parsedAi?.healthScore) || 8));
-  let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
-  satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
   const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
   let portionDetailText = "";
   if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
@@ -47271,20 +47539,6 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   } else {
     portionDetailText = `\u2022 1 Porsi Standar (~${calories} kcal)`;
   }
-  let insightsFormatted = "";
-  if (Array.isArray(parsedAi?.keyInsights) && parsedAi.keyInsights.length > 0) {
-    insightsFormatted = parsedAi.keyInsights.map((i) => {
-      const cleanInsight = String(i || "").trim();
-      if (!cleanInsight) return "";
-      if (cleanInsight.startsWith("\u{1F7E2}") || cleanInsight.startsWith("\u{1F7E1}") || cleanInsight.startsWith("\u{1F534}")) {
-        return cleanInsight;
-      }
-      return `\u{1F7E2} ${cleanInsight}`;
-    }).filter(Boolean).join("\n");
-  } else {
-    insightsFormatted = `\u{1F7E2} Asupan nutrisi seimbang untuk mendukung target kamu
-\u{1F7E2} Distribusi makronutrisi sesuai target harian`;
-  }
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
   const wibIso = wibNow.toISOString();
   const [wibDatePart, wibTimePart] = wibIso.split("T");
@@ -47294,22 +47548,36 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const timeStr = wibTimePart.substring(0, 5).replace(":", ".");
   const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
-  const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}")).replace(/^["“]|["”]$/g, "").trim();
-  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
   const totalTodayCal = dailyTotals.calories;
   const targetCal = userData.targetCalories || 2e3;
-  const calBar = makeProgressBar(totalTodayCal, targetCal);
   const totalTodayProt = dailyTotals.protein;
   const targetProt = userData.proteinGrams || 120;
-  const protBar = makeProgressBar(totalTodayProt, targetProt);
   const totalTodayCarb = dailyTotals.carbs;
   const targetCarb = userData.carbGrams || 240;
-  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
   const totalTodayFat = dailyTotals.fat;
   const targetFat = userData.fatGrams || 65;
-  const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const totalTodaySodium = dailyTotals.sodium || 0;
+  const nutritionSummary = calculateDailyNutritionSummary(
+    { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium },
+    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2e3 }
+  );
+  const calBar = makeProgressBar(totalTodayCal, targetCal);
+  const protBar = makeProgressBar(totalTodayProt, targetProt);
+  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
+  const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const sodBar = makeSodiumProgressBar(totalTodaySodium, 2e3);
+  let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
+  if (!coachComment || nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver) {
+    if (nutritionSummary.calories.isOver && nutritionSummary.protein.isUnder) {
+      coachComment = isMia ? "Kalori, karbohidrat, dan lemak kamu sudah melewati target hari ini. Kalau masih perlu makan nanti, pilih opsi yang lebih ringan dan prioritaskan kebutuhan protein ya \u2728" : "Kalori, karbo, dan lemak lo udah tembus target hari ini bro! Kalau masih butuh asupan, pilih yang ringan dan prioritaskan sumber protein bersih! \u{1F4AA}\u{1F525}";
+    } else if (nutritionSummary.calories.isOver) {
+      coachComment = isMia ? "Kalori harian kamu sudah terpenuhi dan sedikit melewati target. Cukupi asupan air putih dan istirahat optimal ya \u2728" : "Kalori harian lo udah melampaui target bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan gas recovery! \u26A1";
+    } else if (nutritionSummary.sodium.isOver) {
+      coachComment = isMia ? "Asupan natrium hari ini sudah melebihi batas anjuran. Yuk imbangi dengan minum air putih yang cukup dan pilih menu rendah garam ya \u2728" : "Sodium lo udah nembus batas harian bro! Imbangi langsung dengan minum air putih 500ml-1L sekarang dan kurangi kuah asin! \u{1F4A7}";
+    } else {
+      coachComment = isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}";
+    }
+  }
   const sodiumTip = totalTodaySodium > 2e3 ? `
 
 \u{1F4A1} *Catatan Natrium*: Asupan natrium kamu hari ini (${totalTodaySodium.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg. Untuk makanan berikutnya, prioritaskan opsi lebih rendah sodium dan cukupi minum air putih ya.` : "";
@@ -47634,12 +47902,17 @@ function generateMealRecommendations(userData, rawPhone, userText) {
   const { name, targetCalories, proteinGrams, carbGrams, fatGrams, goalTitle, persona } = userData;
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const todayStr = getTodayDateStr();
-  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, sodium: 0, logs: [] };
-  const remainingCal = Math.max(0, targetCalories - totals.calories);
-  const remainingProt = Math.max(0, proteinGrams - totals.protein);
-  const remainingCarb = Math.max(0, carbGrams - totals.carbs);
-  const remainingFat = Math.max(0, fatGrams - totals.fat);
+  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
   const currentSodium = totals.sodium || 0;
+  const nutritionSummary = calculateDailyNutritionSummary(
+    { calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fat: totals.fat, fiber: totals.fiber, sodium: currentSodium },
+    { targetCalories, proteinGrams, carbGrams, fatGrams, sodiumLimit: 2e3 }
+  );
+  const calStatus = nutritionSummary.calories;
+  const protStatus = nutritionSummary.protein;
+  const carbStatus = nutritionSummary.carbs;
+  const fatStatus = nutritionSummary.fat;
+  const sodStatus = nutritionSummary.sodium;
   const lower = (userText || "").toLowerCase();
   const isNight = lower.includes("malam") || lower.includes("dinner");
   const isLunch = lower.includes("siang") || lower.includes("lunch");
@@ -47651,25 +47924,41 @@ function generateMealRecommendations(userData, rawPhone, userText) {
   else if (isBreakfast) mealContextLabel = "Sarapan (Breakfast)";
   else if (isSnack) mealContextLabel = "Camilan Sehat (Snack)";
   const macroGuidance = [];
-  if (currentSodium > 2e3) {
-    macroGuidance.push(`\u26A0\uFE0F *Sodium Tinggi (${currentSodium.toLocaleString("id-ID")} mg)*: Pilih menu minim garam/kecap dan hindari kuah asin.`);
+  if (sodStatus.isOver) {
+    macroGuidance.push(`\u26A0\uFE0F *Sodium Melebihi Batas (${currentSodium.toLocaleString("id-ID")}/2,000 mg)*: Hindari kuah asin, kecap, dan makanan olahan. Cukupi asupan air putih.`);
   }
-  if (remainingProt > 20) {
-    macroGuidance.push(`\u{1F356} *Protein*: Butuh ~${remainingProt}g lagi untuk menunjang otot & rasa kenyang.`);
+  if (calStatus.isOver) {
+    macroGuidance.push(`\u26A0\uFE0F *Kalori Melebihi Target (${totals.calories}/${targetCalories} kcal)*: Utamakan menu ringan dan hindari tambahan minyak atau karbohidrat tinggi.`);
   }
-  if (remainingFat < 15 && remainingFat > 0) {
-    macroGuidance.push(`\u{1F953} *Sisa Lemak Tipis (${remainingFat}g)*: Utamakan metode rebus, kukus, atau panggang tanpa minyak.`);
+  if (protStatus.isUnder && protStatus.remaining > 15) {
+    macroGuidance.push(`\u{1F356} *Protein Masih Kurang (${protStatus.remaining}g)*: Prioritaskan sumber protein bersih rendah lemak.`);
+  }
+  if (fatStatus.isOver) {
+    macroGuidance.push(`\u{1F953} *Lemak Melebihi Target (${totals.fat}/${fatGrams}g)*: Hindari gorengan dan pilih olahan kukus/rebus.`);
   }
   let recommendedMenu = "";
-  if (isNight || remainingCal > 0 && remainingCal <= 650 && totals.calories > 0) {
-    const mealCal = Math.min(remainingCal, 500) || 450;
+  if (calStatus.isOver) {
+    if (protStatus.isUnder) {
+      recommendedMenu = `\u{1F319} *Menu Ringan Tinggi Protein (Fokus Defisit Protein)*:
+\u2022 \u{1F357} 100g Dada Ayam Rebus / Kukus (~135 kcal, P:26g, F:2g)
+\u2022 \u{1F95A} 2 Putih Telur Rebus (~34 kcal, P:7g)
+\u2022 \u{1F957} Lalapan Selada / Timun Segar (~15 kcal)
+\u2022 \u{1F4A7} Air Putih Dingin 1-2 Gelas`;
+    } else {
+      recommendedMenu = `\u{1F319} *Rekomendasi Pemulihan & Hidrasi*:
+\u2022 \u{1F4A7} Air Putih 500ml - 1 Liter
+\u2022 \u{1F375} Teh Hijau / Chamomile Hangat Tanpa Gula (~0 kcal)
+\u2022 \u{1F634} Istirahat dan tidur optimal untuk recovery`;
+    }
+  } else if (isNight || calStatus.remaining > 0 && calStatus.remaining <= 650 && totals.calories > 0) {
+    const mealCal = Math.min(calStatus.remaining, 500) || 450;
     recommendedMenu = `\u{1F319} *Menu Makan Malam Rekomendasi (~${mealCal} kcal)*:
 \u2022 \u{1F357} 150g Dada Ayam Panggang / Pepes Ikan Bening (~165 kcal, P:31g)
 \u2022 \u{1F35A} 1 centong Nasi Putih / 150g Kentang Rebus (~130 kcal, C:28g)
 \u2022 \u{1F966} 1 Mangkok Sayur Bening Bayam & Jagung Manis (~60 kcal)
 \u2022 \u{1F4A7} Air Putih 1-2 Gelas Besar`;
   } else if (isLunch) {
-    const mealCal = Math.min(remainingCal, 650) || 550;
+    const mealCal = Math.min(calStatus.remaining, 650) || 550;
     recommendedMenu = `\u2600\uFE0F *Menu Makan Siang Rekomendasi (~${mealCal} kcal)*:
 \u2022 \u{1F969} 120g Daging Sapi Lada Hitam Low Fat / Ayam Bakar Dada (~220 kcal, P:28g)
 \u2022 \u{1F35A} 1.5 centong Nasi Merah / Nasi Putih (~180 kcal, C:38g)
@@ -47685,15 +47974,26 @@ function generateMealRecommendations(userData, rawPhone, userText) {
 \u{1F319} *Malam (~${Math.round(targetCalories * 0.3)} kcal)*: Pepes Ikan / Ayam Kukus + Kentang / Sayur Bening
 \u{1F34E} *Snack (~${Math.round(targetCalories * 0.1)} kcal)*: 1 Buah Apel / Greek Yogurt`;
   }
-  const adviceQuote = persona === "max" ? remainingCal < 300 ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! \u{1F525}" : "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! \u{1F4AA}" : remainingCal < 300 ? "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! \u2728" : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini \u{1F331}\u2728";
+  let adviceQuote = "";
+  if (calStatus.isOver) {
+    adviceQuote = persona === "max" ? "Kalori lo udah tembus target hari ini bro! Kunci disiplin lo, cukupi air putih dan kalau masih butuh asupan pilih yang murni protein tanpa minyak! \u{1F525}" : "Kalori kamu sudah melewati target harian hari ini. Yuk cukupi hidrasi dengan air putih dan pilih opsi sangat ringan ya \u2728";
+  } else if (calStatus.remaining < 300) {
+    adviceQuote = persona === "max" ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! \u{1F525}" : "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! \u2728";
+  } else {
+    adviceQuote = persona === "max" ? "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! \u{1F4AA}" : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini \u{1F331}\u2728";
+  }
+  const calDisplay = calStatus.isOver ? `\u2022 Kalori: *${totals.calories}/${targetCalories} kcal* (${calStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : calStatus.isReached ? `\u2022 Kalori: *${totals.calories}/${targetCalories} kcal* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Kalori: *~${calStatus.remaining} kcal* (${totals.calories}/${targetCalories} kcal \xB7 \u{1F7E1} Belum Cukup)`;
+  const protDisplay = protStatus.isOver ? `\u2022 Protein: *${totals.protein}/${proteinGrams}g* (${protStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : protStatus.isReached ? `\u2022 Protein: *${totals.protein}/${proteinGrams}g* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Protein: *~${protStatus.remaining}g* (${totals.protein}/${proteinGrams}g \xB7 \u{1F7E1} Belum Cukup)`;
+  const fatDisplay = fatStatus.isOver ? `\u2022 Lemak: *${totals.fat}/${fatGrams}g* (${fatStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : fatStatus.isReached ? `\u2022 Lemak: *${totals.fat}/${fatGrams}g* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Lemak: *~${fatStatus.remaining}g* (${totals.fat}/${fatGrams}g \xB7 \u{1F7E1} Belum Cukup)`;
+  const sodDisplay = `\u2022 Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* (${sodStatus.statusBadge})`;
   return `\u{1F37D}\uFE0F *REKOMENDASI MENU ${mealContextLabel.toUpperCase()}*
 \u{1F3AF} *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
 
 \u{1F4CA} *Status Nutrisi Hari Ini*:
-\u2022 Sisa Kalori: *~${remainingCal} kcal* (${totals.calories}/${targetCalories} kcal)
-\u2022 Sisa Protein: *~${remainingProt}g* (${totals.protein}/${proteinGrams}g)
-\u2022 Sisa Lemak: *~${remainingFat}g* (${totals.fat}/${fatGrams}g)
-\u2022 Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* ${currentSodium > 2e3 ? "\u{1F534} (Melebihi Batas)" : "\u{1F7E2} (Aman)"}
+${calDisplay}
+${protDisplay}
+${fatDisplay}
+${sodDisplay}
 
 ` + (macroGuidance.length > 0 ? `${macroGuidance.join("\n")}
 
@@ -48512,11 +48812,39 @@ async function startServer() {
   });
   app.post("/api/ai/next-step", import_express.default.json(), async (req, res) => {
     try {
-      const { phone, calories, protein, carbs, fat, targetCalories, targetProtein, targetCarbs, targetFat, goal, persona, name, mealName } = req.body;
-      const remCal = Math.max(0, (Number(targetCalories) || 2e3) - (Number(calories) || 0));
-      const remProt = Math.max(0, (Number(targetProtein) || 150) - (Number(protein) || 0));
-      const remCarb = Math.max(0, (Number(targetCarbs) || 200) - (Number(carbs) || 0));
-      const remFat = Math.max(0, (Number(targetFat) || 60) - (Number(fat) || 0));
+      const {
+        phone,
+        calories,
+        protein,
+        carbs,
+        fat,
+        targetCalories: rawTargetCalories,
+        targetProtein: rawTargetProtein,
+        targetCarbs: rawTargetCarbs,
+        targetFat: rawTargetFat,
+        goal,
+        persona,
+        name,
+        mealName,
+        sodium
+      } = req.body;
+      const currCal = Number(calories) || 0;
+      const currProt = Number(protein) || 0;
+      const currCarb = Number(carbs) || 0;
+      const currFat = Number(fat) || 0;
+      const currSodium = Number(sodium) || 0;
+      const targetCal = Number(rawTargetCalories) || 2e3;
+      const targetProt = Number(rawTargetProtein) || 150;
+      const targetCarb = Number(rawTargetCarbs) || 200;
+      const targetFat = Number(rawTargetFat) || 60;
+      const nutritionSummary = calculateDailyNutritionSummary(
+        { calories: currCal, protein: currProt, carbs: currCarb, fat: currFat, sodium: currSodium },
+        { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2e3 }
+      );
+      const remCal = nutritionSummary.calories.remaining;
+      const remProt = nutritionSummary.protein.remaining;
+      const remCarb = nutritionSummary.carbs.remaining;
+      const remFat = nutritionSummary.fat.remaining;
       let wibHour = 12;
       try {
         wibHour = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()), 10);
@@ -48528,20 +48856,20 @@ async function startServer() {
       const coachName = isMia ? "Coach Mia" : "Coach Max";
       const goalStr = goal === "lose" ? "menurunkan berat badan" : goal === "gain" ? "menaikkan massa otot" : "menjaga berat badan ideal";
       const buildFallbackAdvice = () => {
-        const calPercent = Number(calories) / (Number(targetCalories) || 2e3);
         let advice = "";
-        if (remProt > Number(targetProtein) * 0.8) {
-          advice = isMia ? `Protein kamu hari ini masih sangat rendah. Untuk meal berikutnya, prioritaskan sumber protein berkualitas \u2014 dada ayam rebus/panggang, telur rebus, atau tahu kukus. Minumnya air putih dulu ya biar metabolisme tetap optimal! \u{1F4AA}` : `Protein lo masih rendah banget! Next meal, gue rekomendasiin langsung serang protein dulu \u2014 dada ayam panggang, ikan bakar, atau telur rebus 3 biji. Jangan lupa minum air putih 500ml sekarang bro! \u{1F4A7}`;
-        } else if (remProt > remCarb && remProt > remFat && remProt > 30) {
+        if (nutritionSummary.sodium.isOver) {
+          advice = isMia ? `Asupan natrium hari ini sudah melebihi batas 2.000 mg (${currSodium.toLocaleString("id-ID")} mg). Untuk meal selanjutnya, utamakan air putih dingin dan menu tawar/rendah garam seperti dada ayam rebus atau sayur bening ya \u2728` : `Sodium lo udah tembus ${currSodium.toLocaleString("id-ID")} mg bro (melebihi batas anjuran)! Next meal, hindari makanan berkuah asin atau saus kecap, dan minum air putih minimal 500ml sekarang! \u{1F4A7}`;
+        } else if (nutritionSummary.calories.isOver) {
+          if (nutritionSummary.protein.isUnder) {
+            advice = isMia ? `Kalori harian kamu sudah melewati target (${currCal}/${targetCal} kcal), tetapi kebutuhan protein masih kurang ${remProt}g. Jika masih ingin makan di waktu ${timeLabel}, pilih yang murni protein tanpa minyak seperti 2 putih telur rebus atau 100g dada ayam kukus ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Tapi protein masih kurang ${remProt}g. Kalau laper, pilih yang murni protein tanpa lemak/minyak \u2014 putih telur rebus atau dada ayam kukus! \u{1F4AA}\u{1F525}`;
+          } else {
+            advice = isMia ? `Kalori harian kamu sudah terpenuhi dan sedikit melewati target (${currCal}/${targetCal} kcal). Untuk waktu ${timeLabel} ini, cukup minum air putih atau teh tawar hangat, lalu fokus istirahat optimal ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Kunci porsi makan lo hari ini. Minum air putih yang banyak dan fokus recovery buat besok! \u{1F4AF}`;
+          }
+        } else if (remProt > 25) {
           const foodSugg = goal === "lose" ? isMia ? "dada ayam panggang, ikan tuna, atau putih telur" : "dada ayam grill, ikan bakar, atau tuna kalengan" : isMia ? "dada ayam + nasi merah, susu, atau protein shake" : "chicken rice bowl, tuna + nasi, atau mass gainer shake";
           advice = isMia ? `Sisa protein kamu hari ini masih *${remProt}g* \u2014 lumayan banyak ya. Untuk meal ${timeLabel} berikutnya, fokuskan ke ${foodSugg}. Ini penting banget buat recovery dan perkembangan ototmu! \u2728` : `Bro, masih kurang *${remProt}g protein* nih. Next meal lo harus fokus ke ${foodSugg}. Otot lo butuh ini buat tumbuh! Gas jangan skip makan! \u{1F525}`;
-        } else if (calPercent > 0.85) {
+        } else if (nutritionSummary.calories.percentage >= 85) {
           advice = isMia ? `Kalori kamu udah hampir mencapai target hari ini! Kalau masih lapar di waktu ${timeLabel}, pilih camilan ringan aja ya \u2014 buah segar, salad, atau yogurt tanpa gula. Hindari yang berat supaya tetap di jalur ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target! Kalau laper ${timeLabel} ini, pilih yang ringan aja \u2014 buah, salad, atau yogurt. Jangan kalap makan berat lagi ya bro, kita lagi ngejer goal ${goalStr}! \u{1F4AF}`;
-        } else if (wibHour >= 13 && wibHour <= 15) {
-          const proteinSugg = goal === "gain" ? isMia ? "protein shake atau susu full cream" : "protein shake atau susu coklat" : isMia ? "teh hijau atau air lemon" : "air putih dingin atau teh tanpa gula";
-          advice = isMia ? `Waktu ${timeLabel} ini biasanya energi mulai turun. Yuk minum dulu \u2014 ${proteinSugg} sangat bagus buat menjaga energi! Kalau belum makan siang, pilih yang tinggi protein dan serat ya supaya kenyang lebih lama. \u{1F375}` : `${timeLabel.charAt(0).toUpperCase() + timeLabel.slice(1)} ini waktu yang rawan mager bro! Minum dulu \u2014 ${proteinSugg}. Kalau belum makan siang, langsung cari yang protein-nya tinggi ya! \u{1F4AA}`;
-        } else if (remFat < 10 && remFat > 0) {
-          advice = isMia ? `Lemak sehat kamu hari ini udah hampir terpenuhi. Untuk meal selanjutnya, pilih yang rendah lemak \u2014 dada ayam tanpa kulit, ikan rebus, atau sayuran kukus dengan sedikit olive oil. Tetap jaga keseimbangan nutrisinya ya! \u{1F966}` : `Lemak lo udah hampir habis jatahnya hari ini. Next meal, pilih yang low-fat aja \u2014 dada ayam tanpa kulit, ikan kukus, atau salad sayur. Jaga makro lo bro! \u26A1`;
         } else {
           const goalAdvice = goal === "lose" ? isMia ? "makanan tinggi serat dan protein rendah kalori \u2014 sayur, ayam rebus, atau ikan panggang" : "yang tinggi protein dan serat \u2014 ayam panggang, ikan, atau salad protein" : goal === "gain" ? isMia ? "karbohidrat kompleks dan protein \u2014 nasi merah, kentang, dada ayam, atau protein shake" : "combo karbo + protein \u2014 nasi + ayam geprek, atau chicken rice bowl ukuran besar" : isMia ? "makanan seimbang \u2014 nasi, lauk berprotein, dan sayuran" : "makanan seimbang \u2014 nasi + ayam/ikan + sayur, klasik tapi efektif";
           advice = isMia ? `Untuk meal ${timeLabel} berikutnya, ${coachName} saranin pilih ${goalAdvice}. Ini pas banget buat mendukung tujuanmu ${goalStr}! Jangan lupa minum air putih minimal 250ml sebelum makan ya. \u{1F4A7}\u2728` : `Next meal ${timeLabel} ini, lo butuh ${goalAdvice}. Itu yang paling optimal buat goal lo ${goalStr}! Dan minum air putih sekarang \u2014 jangan tunggu haus. Gas! \u{1F4AA}\u{1F525}`;
@@ -48561,28 +48889,28 @@ DATA USER:
 - Makanan baru saja dikonsumsi: "${mealName || "Makanan"}"
 - Waktu sekarang: ${timeLabel} (pukul ${wibHour}:xx WIB)
 
-SISA KEBUTUHAN NUTRISI HARI INI (setelah makan ini):
-- Kalori tersisa: ${remCal} kcal
-- Protein tersisa: ${remProt}g
-- Karbohidrat tersisa: ${remCarb}g
-- Lemak tersisa: ${remFat}g
+STATUS NUTRISI RESMI (SINGLE SOURCE OF TRUTH DARI BACKEND):
+${JSON.stringify({
+        calories: { current: currCal, target: targetCal, percentage: nutritionSummary.calories.percentage, status: nutritionSummary.calories.status, remaining: remCal },
+        protein: { current: currProt, target: targetProt, percentage: nutritionSummary.protein.percentage, status: nutritionSummary.protein.status, remaining: remProt },
+        carbs: { current: currCarb, target: targetCarb, percentage: nutritionSummary.carbs.percentage, status: nutritionSummary.carbs.status, remaining: remCarb },
+        fat: { current: currFat, target: targetFat, percentage: nutritionSummary.fat.percentage, status: nutritionSummary.fat.status, remaining: remFat },
+        sodium: { current: currSodium, limit: 2e3, percentage: nutritionSummary.sodium.percentage, status: nutritionSummary.sodium.status }
+      }, null, 2)}
 
 PERSONA:
 ${isMia ? "Coach Mia: Perempuan, hangat, supportif, profesional. Tidak pernah bilang 'sayang/cinta/beb'. Sapaan sopan (kamu/aku)." : "Coach Max: Pria, tegas, penuh energi, gaya Jakarta gaul (lo/gue). Motivasional tapi realistis."}
 
-TUGAS:
-Berikan saran singkat (MAX 3 kalimat) tentang apa yang SEBAIKNYA DIMAKAN atau DIMINUM pada meal/snack selanjutnya berdasarkan:
-1. Sisa kebutuhan nutrisi hari ini (fokus pada makro yang paling defisit)
-2. Waktu (${timeLabel} \u2014 apakah ini saatnya snack, makan besar, atau cukup minum dulu?)
-3. Goal user (${goalStr})
-4. Sesuatu yang SPESIFIK dan ACTIONABLE \u2014 sebut nama makanan konkret, bukan generik
+ATURAN REKOMENDASI (PRIORITAS MUTLAK):
+1. Jika Kalori/Karbo/Lemak berstatus "over_target" (nilai > target):
+   - JANGAN PERNAH mengatakan "kalori masih tersisa" atau "karbohidrat masih aman".
+   - Nyatakan dengan jelas bahwa kalori/makro telah melebihi target.
+   - Jika protein masih kurang ("under_target"), rekomendasikan HANYA opsi sangat ringan tinggi protein (misal putih telur, dada ayam rebus) tanpa tambahan karbohidrat, lemak, atau sodium tinggi.
+   - Jika protein sudah tercapai, rekomendasikan hidrasi (air putih/teh tawar) dan istirahat.
+2. Jika Sodium berstatus "over_limit", ingatkan untuk minum air putih dan hindari kuah asin/saus.
+3. Berikan saran singkat (MAX 3 kalimat) yang spesifik dan actionable.
 
-PENTING:
-- Jangan copy/paste referensi apapun. Kreasikan sendiri dengan gaya ${coachName}.
-- Boleh pakai emoji 1-2 buah saja.
-- Output HANYA teks saran polos (bukan JSON). Mulai dengan "\u{1F3AF}" atau emoji relevan.
-- Kalau remCal < 200, sarankan hanya minuman/camilan ringan saja.
-- Kalau protein adalah defisit terbesar, itu harus jadi fokus utama saran.`;
+Output HANYA teks saran polos (bukan JSON). Mulai dengan "\u{1F3AF}".`;
       try {
         const rawAdvice = await generateGeminiContent(prompt);
         const cleanedAdvice = (rawAdvice || "").replace(/```/g, "").trim();
@@ -48641,49 +48969,53 @@ ${cleanedAdvice}` : buildFallbackAdvice();
             portionNote: "Bukan makanan"
           });
         }
-        const itemsToUse = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
-        let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
-        for (const it of itemsToUse) {
-          sumCal += Number(it.calories) || 0;
-          sumProt += Number(it.protein) || 0;
-          sumCarb += Number(it.carbs) || 0;
-          sumFat += Number(it.fat) || 0;
-          sumFib += Number(it.fiber) || 0;
-          sumSug += Number(it.sugar) || 0;
-        }
-        const protein = Math.round(sumProt * 10) / 10;
-        const carbs = Math.round(sumCarb * 10) / 10;
-        const fat = Math.round(sumFat * 10) / 10;
-        const fiber = Math.round(sumFib * 10) / 10;
-        const sugar = Math.round(sumSug * 10) / 10;
+        const rawCompNames = Array.isArray(parsed.components) && parsed.components.length > 0 ? parsed.components.map((c) => c.name ? `${c.quantity ? `${c.quantity} ` : ""}${c.name} ${c.cookingMethod || ""}` : String(c)) : Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items.map((i) => i.food_name || i.normalized_food_name || i.foodName || String(i)) : void 0;
+        const calculatedNutrition = calculateFoodNutrition(cleanText, rawCompNames);
         const genericCheck = isGenericMealInput(cleanText);
-        const isLowConfidence = genericCheck.isGeneric || parsed.confidence === "low" || deterministicResult.needsClarification;
-        const rawSodium = parsed.sodium !== void 0 && parsed.sodium !== null ? Number(parsed.sodium) : void 0;
-        const sodium = rawSodium !== void 0 && !isNaN(rawSodium) && rawSodium > 0 ? rawSodium : void 0;
-        const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
+        const isLowConfidence = genericCheck.isGeneric || calculatedNutrition.overallConfidence === "low" || calculatedNutrition.needsClarification;
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
-          calories: isLowConfidence ? void 0 : atwaterCal,
-          protein: isLowConfidence ? void 0 : protein,
-          carbs: isLowConfidence ? void 0 : carbs,
-          fat: isLowConfidence ? void 0 : fat,
-          fiber: isLowConfidence ? void 0 : fiber,
-          sugar: isLowConfidence ? void 0 : sugar,
-          sodium: isLowConfidence ? void 0 : sodium,
-          isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
-          volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
-          mealType: parsed.mealType,
-          portionNote: itemsToUse.length === 1 ? "1 meal detected" : `${itemsToUse.length} food items detected`,
-          items: itemsToUse,
-          confidence: isLowConfidence ? "low" : parsed.confidence || deterministicResult.confidence || "medium",
+          calories: isLowConfidence ? void 0 : calculatedNutrition.calories,
+          protein: isLowConfidence ? void 0 : calculatedNutrition.protein,
+          carbs: isLowConfidence ? void 0 : calculatedNutrition.carbs,
+          fat: isLowConfidence ? void 0 : calculatedNutrition.fat,
+          fiber: isLowConfidence ? void 0 : calculatedNutrition.fiber,
+          sugar: isLowConfidence ? void 0 : calculatedNutrition.sugar,
+          sodium: isLowConfidence ? void 0 : calculatedNutrition.sodium,
+          isHydration: Boolean(calculatedNutrition.isHydration),
+          volumeMl: Number(calculatedNutrition.volumeMl) || 0,
+          mealType: parsed.mealType || calculatedNutrition.mealType,
+          portionNote: calculatedNutrition.portionNote,
+          items: calculatedNutrition.components.map((c) => ({
+            food_name: c.foodName,
+            normalized_food_name: c.normalizedName,
+            database_id: c.databaseId,
+            data_source: c.source,
+            estimated_quantity: 1,
+            estimated_weight_grams: c.actualAmount,
+            serving_unit: `${c.actualAmount}${c.actualUnit}`,
+            display_unit: `${c.actualAmount}${c.actualUnit}`,
+            cooking_method: c.cookingMethod,
+            calories: c.calories,
+            protein: c.protein,
+            carbs: c.carbs,
+            fat: c.fat,
+            fiber: c.fiber,
+            sugar: c.sugar,
+            sodium: c.sodium,
+            confidence: c.portionConfidence >= 85 ? "high" : "medium",
+            notes: c.notes
+          })),
+          confidence: isLowConfidence ? "low" : calculatedNutrition.overallConfidence,
           needsClarification: isLowConfidence,
           clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
           suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
-          portionDisplayLabel: deterministicResult.portionDisplayLabel,
-          debugLog: deterministicResult.debugLog
+          portionDisplayLabel: calculatedNutrition.portionDisplayLabel,
+          debugLog: calculatedNutrition.traceabilityLog,
+          sanityValid: calculatedNutrition.sanityValid
         });
       } catch (aiErr) {
         console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
@@ -49603,19 +49935,34 @@ Keluarkan output JSON valid:
                   parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
                 }
                 if (parsed.isFood) {
+                  const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
+                  const calcNutr = calculateFoodNutrition(finalFoodName);
                   addMealLog(from, {
                     id: `m-${Date.now()}`,
-                    foodName: parsed.foodName || "Makanan",
-                    calories: Number(parsed.calories) || 0,
-                    protein: Number(parsed.protein) || 0,
-                    carbs: Number(parsed.carbs) || 0,
-                    fat: Number(parsed.fat) || 0,
-                    fiber: Number(parsed.fiber) || 0,
+                    foodName: finalFoodName,
+                    calories: calcNutr.calories,
+                    protein: calcNutr.protein,
+                    carbs: calcNutr.carbs,
+                    fat: calcNutr.fat,
+                    fiber: calcNutr.fiber,
+                    sugar: calcNutr.sugar,
+                    sodium: calcNutr.sodium,
                     mealType: parsed.mealType || getMealTypeByHour(),
                     timestamp: (/* @__PURE__ */ new Date()).toISOString()
                   });
                   const dailyTotals = getDailyTotals(from);
-                  const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+                  const card = formatNutritionCard({
+                    ...parsed,
+                    foodName: finalFoodName,
+                    calories: calcNutr.calories,
+                    protein: calcNutr.protein,
+                    carbs: calcNutr.carbs,
+                    fat: calcNutr.fat,
+                    fiber: calcNutr.fiber,
+                    sugar: calcNutr.sugar,
+                    sodium: calcNutr.sodium,
+                    portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
+                  }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
                   responseMessages = [card];
                 } else if (parsed.isEquipment) {
                   const eqCard = formatEquipmentCard(parsed, userData);
@@ -50190,21 +50537,34 @@ Keluarkan output JSON valid:
               const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
               responseMessages = [parsed.clarificationQuestion || defaultClarification];
             } else {
+              const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
+              const calcNutr = calculateFoodNutrition(finalFoodName);
               addMealLog(normFrom, {
                 id: `m-${Date.now()}`,
-                foodName: parsed.foodName || "Makanan",
-                calories: Number(parsed.calories) || 0,
-                protein: Number(parsed.protein) || 0,
-                carbs: Number(parsed.carbs) || 0,
-                fat: Number(parsed.fat) || 0,
-                fiber: Number(parsed.fiber) || 0,
-                sugar: Number(parsed.sugar) || 0,
-                sodium: Number(parsed.sodium) || 0,
+                foodName: finalFoodName,
+                calories: calcNutr.calories,
+                protein: calcNutr.protein,
+                carbs: calcNutr.carbs,
+                fat: calcNutr.fat,
+                fiber: calcNutr.fiber,
+                sugar: calcNutr.sugar,
+                sodium: calcNutr.sodium,
                 mealType: getMealTypeByHour(userText || parsed.mealType),
                 timestamp: (/* @__PURE__ */ new Date()).toISOString()
               });
               const dailyTotals = getDailyTotals(normFrom);
-              const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+              const card = formatNutritionCard({
+                ...parsed,
+                foodName: finalFoodName,
+                calories: calcNutr.calories,
+                protein: calcNutr.protein,
+                carbs: calcNutr.carbs,
+                fat: calcNutr.fat,
+                fiber: calcNutr.fiber,
+                sugar: calcNutr.sugar,
+                sodium: calcNutr.sodium,
+                portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
+              }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
               responseMessages = [card];
               if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
                 const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -50212,14 +50572,14 @@ Keluarkan output JSON valid:
                 const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
                 const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
                 cardMediaCache.set(cardId, {
-                  foodName: parsed.foodName || "Makanan",
-                  calories: Number(parsed.calories) || 0,
-                  protein: Number(parsed.protein) || 0,
-                  carbs: Number(parsed.carbs) || 0,
-                  fat: Number(parsed.fat) || 0,
-                  sodium: Number(parsed.sodium) || 0,
-                  fiber: Number(parsed.fiber) || 0,
-                  sugar: Number(parsed.sugar) || 0,
+                  foodName: finalFoodName,
+                  calories: calcNutr.calories,
+                  protein: calcNutr.protein,
+                  carbs: calcNutr.carbs,
+                  fat: calcNutr.fat,
+                  sodium: calcNutr.sodium,
+                  fiber: calcNutr.fiber,
+                  sugar: calcNutr.sugar,
                   mealType: mealTypeStr,
                   dateStr,
                   dailyTargetCalories: userData.targetCalories || 1966,

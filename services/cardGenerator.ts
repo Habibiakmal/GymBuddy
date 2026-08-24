@@ -100,11 +100,13 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
   const targetCarb = Math.round(Number(data.dailyTargetCarbs) || 275);
   const targetFat = Math.round(Number(data.dailyTargetFat) || 67);
 
-  const calPercentage = Math.min(100, Math.max(0, Math.round((consumedCal / targetCal) * 100)));
-  const isOver = remainingCal < 0;
+  const calPercentage = Math.round((consumedCal / targetCal) * 100);
+  const isOver = consumedCal > targetCal;
   const statusPillText = isOver
-    ? `over ${Math.abs(remainingCal).toLocaleString("id-ID")} kkal`
-    : `sisa ${remainingCal.toLocaleString("id-ID")} kkal`;
+    ? `Melebihi target | +${(consumedCal - targetCal).toLocaleString("id-ID")} kkal`
+    : (remainingCal === 0
+        ? `Target tercapai`
+        : `sisa ${remainingCal.toLocaleString("id-ID")} kkal`);
 
   const protPercentage = Math.min(100, Math.max(0, Math.round((protein / targetProt) * 100)));
   const carbPercentage = Math.min(100, Math.max(0, Math.round((carbs / targetCarb) * 100)));
@@ -189,16 +191,24 @@ export function generateNutritionCardSvg(data: NutritionCardData): string {
     `).join("")}
   </g>
 
-  <!-- 3. STATUS BADGE PILL ("On track | sisa 1.269 kkal") -->
+  <!-- 3. STATUS BADGE PILL -->
   <g id="statusBadge" transform="translate(${paddingX}, ${badgeY})">
-    <rect width="260" height="34" rx="17" fill="#121721" stroke="#222A38" stroke-width="1.2"/>
-    <!-- Checkmark Circle -->
-    <circle cx="20" cy="17" r="9" fill="#D4FF00"/>
-    <path d="M16.5 17l2.5 2.5 4.5-5" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-    
-    <text x="36" y="22" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">On track</text>
-    <text x="96" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
-    <text x="108" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">${escapeXml(statusPillText)}</text>
+    <rect width="${isOver ? 310 : 270}" height="34" rx="17" fill="#121721" stroke="#222A38" stroke-width="1.2"/>
+    ${isOver ? `
+      <!-- Red Alert Circle -->
+      <circle cx="20" cy="17" r="9" fill="#EF4444"/>
+      <text x="20" y="21" text-anchor="middle" fill="#FFFFFF" font-family="Arial" font-size="12" font-weight="bold">!</text>
+      <text x="36" y="22" fill="#EF4444" font-family="Arial" font-size="13" font-weight="bold">Melebihi target</text>
+      <text x="135" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
+      <text x="145" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">+${(consumedCal - targetCal).toLocaleString("id-ID")} kkal</text>
+    ` : `
+      <!-- Neon Lime Checkmark Circle -->
+      <circle cx="20" cy="17" r="9" fill="#D4FF00"/>
+      <path d="M16.5 17l2.5 2.5 4.5-5" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="36" y="22" fill="#D4FF00" font-family="Arial" font-size="13" font-weight="bold">On track</text>
+      <text x="96" y="21" fill="#3A4454" font-family="Arial" font-size="13">|</text>
+      <text x="108" y="22" fill="#8E95A5" font-family="Arial" font-size="12.5" font-weight="bold">${escapeXml(statusPillText)}</text>
+    `}
   </g>
 
   <!-- 4. FOOD PHOTO CONTAINER -->

@@ -30,7 +30,19 @@ import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
-import { estimateMealNutritionDeterministic, buildGeminiNutritionPrompt, isGenericMealInput } from "./services/nutritionEngine";
+import {
+  estimateMealNutritionDeterministic,
+  calculateFoodNutrition,
+  calculateCompositeNutrition,
+  calculateSingleItemNutrition,
+  calculateNutrientStatus,
+  calculateDailyNutritionSummary,
+  makeProgressBar,
+  makeSodiumProgressBar,
+  validateNutrientSanity,
+  buildGeminiNutritionPrompt,
+  isGenericMealInput
+} from "./services/nutritionEngine";
 import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
 // Twilio configuration (strictly from environment variables)
@@ -2162,50 +2174,6 @@ async function sendTwilioWhatsappMessage(to: string, bodyText: string) {
   }
 }
 
-function makeProgressBar(current: number, target: number, length: number = 10): string {
-  if (!target || target <= 0) return `[░░░░░░░░░░] 0% · ⚪ Belum Cukup`;
-  const rawPercent = Math.round((current / target) * 100);
-  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
-  const filledCount = Math.min(length, Math.max(0, Math.round((cappedPercent / 100) * length)));
-  const emptyCount = Math.max(0, length - filledCount);
-  const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
-
-  let statusText = "";
-  if (rawPercent >= 100) {
-    statusText = "✅ Tercapai";
-  } else if (rawPercent >= 75) {
-    statusText = "🟢 Hampir Cukup";
-  } else if (rawPercent >= 40) {
-    statusText = "🟡 Sedang";
-  } else {
-    statusText = "⚪ Belum Cukup";
-  }
-
-  return `[${bar}] ${rawPercent}% · ${statusText}`;
-}
-
-function makeSodiumProgressBar(current: number, limit: number = 2000, length: number = 10): string {
-  if (!limit || limit <= 0) limit = 2000;
-  const rawPercent = Math.round((current / limit) * 100);
-  const cappedPercent = Math.min(100, Math.max(0, rawPercent));
-  const filledCount = Math.min(length, Math.max(0, Math.round((cappedPercent / 100) * length)));
-  const emptyCount = Math.max(0, length - filledCount);
-  const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
-
-  let statusText = "";
-  if (rawPercent > 100) {
-    statusText = "🔴 Melebihi Batas";
-  } else if (rawPercent === 100) {
-    statusText = "🟡 Di Batas Maksimal";
-  } else if (rawPercent >= 80) {
-    statusText = "🟡 Mendekati Batas";
-  } else {
-    statusText = "🟢 Dalam Batas";
-  }
-
-  return `[${bar}] ${rawPercent}% · ${statusText}`;
-}
-
 function parseDateFromQuery(userText: string): { dateStr: string; label: string; isYesterday: boolean; isToday: boolean; isSpecificDate: boolean } {
   const lower = userText.toLowerCase().trim();
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
@@ -2280,8 +2248,6 @@ function formatNutritionCard(
   dailyTotals: ReturnType<typeof getDailyTotals>
 ): string {
   const rawFoodName = String(parsedAi?.foodName || "Analisis Makanan").trim();
-  const rawPortion = parsedAi?.portion || parsedAi?.portionWeight || (Array.isArray(parsedAi?.portionEstimates) && parsedAi?.portionEstimates[0] ? parsedAi.portionEstimates[0] : null) || parsedAi?.portionDetail || "1 porsi";
-  const portionStr = String(rawPortion).trim();
 
   const calories = Number(parsedAi?.calories) || 0;
   const protein = Number(parsedAi?.protein) || 0;
@@ -2289,6 +2255,7 @@ function formatNutritionCard(
   const fat = Number(parsedAi?.fat) || 0;
   const fiber = Number(parsedAi?.fiber) || 0;
   const sugar = Number(parsedAi?.sugar) || 0;
+  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
 
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
@@ -2300,12 +2267,6 @@ function formatNutritionCard(
   const fatPercent = Math.round((fatKcal / totalMacroKcal) * 100);
 
   const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi?.confidenceLevel) || (String(inputSource).toLowerCase().includes("foto") ? 88 : 92)));
-
-  const satietyScore = Math.min(10, Math.max(1, Number(parsedAi?.satietyScore) || 5));
-  const healthScore = Math.min(10, Math.max(1, Number(parsedAi?.healthScore) || 8));
-
-  let satietyExplanation = String(parsedAi?.satietyExplanation || "Tingkat kepuasan nutrisi makanan ini berdasarkan protein, serat, lemak, volume makanan, dan komposisi karbohidrat.");
-  satietyExplanation = satietyExplanation.replace(/^\[|\]$/g, "").trim();
 
   const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
   
@@ -2323,20 +2284,6 @@ function formatNutritionCard(
     portionDetailText = `• 1 Porsi Standar (~${calories} kcal)`;
   }
 
-  let insightsFormatted = "";
-  if (Array.isArray(parsedAi?.keyInsights) && parsedAi.keyInsights.length > 0) {
-    insightsFormatted = parsedAi.keyInsights.map((i: any) => {
-      const cleanInsight = String(i || "").trim();
-      if (!cleanInsight) return "";
-      if (cleanInsight.startsWith("🟢") || cleanInsight.startsWith("🟡") || cleanInsight.startsWith("🔴")) {
-        return cleanInsight;
-      }
-      return `🟢 ${cleanInsight}`;
-    }).filter(Boolean).join("\n");
-  } else {
-    insightsFormatted = `🟢 Asupan nutrisi seimbang untuk mendukung target kamu\n🟢 Distribusi makronutrisi sesuai target harian`;
-  }
-
   // Always display time in WIB (UTC+7)
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
   const wibIso = wibNow.toISOString();
@@ -2348,28 +2295,51 @@ function formatNutritionCard(
 
   const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
   const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
-  const coachComment = String(parsedAi?.coachComment || (isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨" : "Mantap bro! Jaga terus disiplin makro lo! 💪")).replace(/^["“]|["”]$/g, "").trim();
-
-  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
 
   const totalTodayCal = dailyTotals.calories;
   const targetCal = userData.targetCalories || 2000;
-  const calBar = makeProgressBar(totalTodayCal, targetCal);
-
   const totalTodayProt = dailyTotals.protein;
   const targetProt = userData.proteinGrams || 120;
-  const protBar = makeProgressBar(totalTodayProt, targetProt);
-
   const totalTodayCarb = dailyTotals.carbs;
   const targetCarb = userData.carbGrams || 240;
-  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
-
   const totalTodayFat = dailyTotals.fat;
   const targetFat = userData.fatGrams || 65;
-  const fatBar = makeProgressBar(totalTodayFat, targetFat);
-
   const totalTodaySodium = (dailyTotals as any).sodium || 0;
+
+  // Single Source of Truth Nutrition Summary
+  const nutritionSummary = calculateDailyNutritionSummary(
+    { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium },
+    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2000 }
+  );
+
+  const calBar = makeProgressBar(totalTodayCal, targetCal);
+  const protBar = makeProgressBar(totalTodayProt, targetProt);
+  const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
+  const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const sodBar = makeSodiumProgressBar(totalTodaySodium, 2000);
+
+  // Status-aware coach comment
+  let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
+  if (!coachComment || nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver) {
+    if (nutritionSummary.calories.isOver && nutritionSummary.protein.isUnder) {
+      coachComment = isMia
+        ? "Kalori, karbohidrat, dan lemak kamu sudah melewati target hari ini. Kalau masih perlu makan nanti, pilih opsi yang lebih ringan dan prioritaskan kebutuhan protein ya ✨"
+        : "Kalori, karbo, dan lemak lo udah tembus target hari ini bro! Kalau masih butuh asupan, pilih yang ringan dan prioritaskan sumber protein bersih! 💪🔥";
+    } else if (nutritionSummary.calories.isOver) {
+      coachComment = isMia
+        ? "Kalori harian kamu sudah terpenuhi dan sedikit melewati target. Cukupi asupan air putih dan istirahat optimal ya ✨"
+        : "Kalori harian lo udah melampaui target bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan gas recovery! ⚡";
+    } else if (nutritionSummary.sodium.isOver) {
+      coachComment = isMia
+        ? "Asupan natrium hari ini sudah melebihi batas anjuran. Yuk imbangi dengan minum air putih yang cukup dan pilih menu rendah garam ya ✨"
+        : "Sodium lo udah nembus batas harian bro! Imbangi langsung dengan minum air putih 500ml-1L sekarang dan kurangi kuah asin! 💧";
+    } else {
+      coachComment = isMia
+        ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨"
+        : "Mantap bro! Jaga terus disiplin makro lo! 💪";
+    }
+  }
+
   const sodiumTip = totalTodaySodium > 2000
     ? `\n\n💡 *Catatan Natrium*: Asupan natrium kamu hari ini (${totalTodaySodium.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg. Untuk makanan berikutnya, prioritaskan opsi lebih rendah sodium dan cukupi minum air putih ya.`
     : "";
@@ -2744,13 +2714,20 @@ function generateMealRecommendations(
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
 
   const todayStr = getTodayDateStr();
-  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, sodium: 0, logs: [] };
+  const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
   
-  const remainingCal = Math.max(0, targetCalories - totals.calories);
-  const remainingProt = Math.max(0, proteinGrams - totals.protein);
-  const remainingCarb = Math.max(0, carbGrams - totals.carbs);
-  const remainingFat = Math.max(0, fatGrams - totals.fat);
   const currentSodium = (totals as any).sodium || 0;
+
+  const nutritionSummary = calculateDailyNutritionSummary(
+    { calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fat: totals.fat, fiber: totals.fiber, sodium: currentSodium },
+    { targetCalories, proteinGrams, carbGrams, fatGrams, sodiumLimit: 2000 }
+  );
+
+  const calStatus = nutritionSummary.calories;
+  const protStatus = nutritionSummary.protein;
+  const carbStatus = nutritionSummary.carbs;
+  const fatStatus = nutritionSummary.fat;
+  const sodStatus = nutritionSummary.sodium;
 
   const lower = (userText || "").toLowerCase();
   const isNight = lower.includes("malam") || lower.includes("dinner");
@@ -2764,29 +2741,45 @@ function generateMealRecommendations(
   else if (isBreakfast) mealContextLabel = "Sarapan (Breakfast)";
   else if (isSnack) mealContextLabel = "Camilan Sehat (Snack)";
 
-  // Targeted nutrition insights
+  // Targeted nutrition insights following priority hierarchy
   const macroGuidance: string[] = [];
-  if (currentSodium > 2000) {
-    macroGuidance.push(`⚠️ *Sodium Tinggi (${currentSodium.toLocaleString("id-ID")} mg)*: Pilih menu minim garam/kecap dan hindari kuah asin.`);
+  if (sodStatus.isOver) {
+    macroGuidance.push(`⚠️ *Sodium Melebihi Batas (${currentSodium.toLocaleString("id-ID")}/2,000 mg)*: Hindari kuah asin, kecap, dan makanan olahan. Cukupi asupan air putih.`);
   }
-  if (remainingProt > 20) {
-    macroGuidance.push(`🍖 *Protein*: Butuh ~${remainingProt}g lagi untuk menunjang otot & rasa kenyang.`);
+  if (calStatus.isOver) {
+    macroGuidance.push(`⚠️ *Kalori Melebihi Target (${totals.calories}/${targetCalories} kcal)*: Utamakan menu ringan dan hindari tambahan minyak atau karbohidrat tinggi.`);
   }
-  if (remainingFat < 15 && remainingFat > 0) {
-    macroGuidance.push(`🥓 *Sisa Lemak Tipis (${remainingFat}g)*: Utamakan metode rebus, kukus, atau panggang tanpa minyak.`);
+  if (protStatus.isUnder && protStatus.remaining > 15) {
+    macroGuidance.push(`🍖 *Protein Masih Kurang (${protStatus.remaining}g)*: Prioritaskan sumber protein bersih rendah lemak.`);
+  }
+  if (fatStatus.isOver) {
+    macroGuidance.push(`🥓 *Lemak Melebihi Target (${totals.fat}/${fatGrams}g)*: Hindari gorengan dan pilih olahan kukus/rebus.`);
   }
 
-  // Dynamic menu options
+  // Dynamic menu recommendation matching remaining requirements
   let recommendedMenu = "";
-  if (isNight || (remainingCal > 0 && remainingCal <= 650 && totals.calories > 0)) {
-    const mealCal = Math.min(remainingCal, 500) || 450;
+  if (calStatus.isOver) {
+    if (protStatus.isUnder) {
+      recommendedMenu = `🌙 *Menu Ringan Tinggi Protein (Fokus Defisit Protein)*:\n` +
+        `• 🍗 100g Dada Ayam Rebus / Kukus (~135 kcal, P:26g, F:2g)\n` +
+        `• 🥚 2 Putih Telur Rebus (~34 kcal, P:7g)\n` +
+        `• 🥗 Lalapan Selada / Timun Segar (~15 kcal)\n` +
+        `• 💧 Air Putih Dingin 1-2 Gelas`;
+    } else {
+      recommendedMenu = `🌙 *Rekomendasi Pemulihan & Hidrasi*:\n` +
+        `• 💧 Air Putih 500ml - 1 Liter\n` +
+        `• 🍵 Teh Hijau / Chamomile Hangat Tanpa Gula (~0 kcal)\n` +
+        `• 😴 Istirahat dan tidur optimal untuk recovery`;
+    }
+  } else if (isNight || (calStatus.remaining > 0 && calStatus.remaining <= 650 && totals.calories > 0)) {
+    const mealCal = Math.min(calStatus.remaining, 500) || 450;
     recommendedMenu = `🌙 *Menu Makan Malam Rekomendasi (~${mealCal} kcal)*:\n` +
       `• 🍗 150g Dada Ayam Panggang / Pepes Ikan Bening (~165 kcal, P:31g)\n` +
       `• 🍚 1 centong Nasi Putih / 150g Kentang Rebus (~130 kcal, C:28g)\n` +
       `• 🥦 1 Mangkok Sayur Bening Bayam & Jagung Manis (~60 kcal)\n` +
       `• 💧 Air Putih 1-2 Gelas Besar`;
   } else if (isLunch) {
-    const mealCal = Math.min(remainingCal, 650) || 550;
+    const mealCal = Math.min(calStatus.remaining, 650) || 550;
     recommendedMenu = `☀️ *Menu Makan Siang Rekomendasi (~${mealCal} kcal)*:\n` +
       `• 🥩 120g Daging Sapi Lada Hitam Low Fat / Ayam Bakar Dada (~220 kcal, P:28g)\n` +
       `• 🍚 1.5 centong Nasi Merah / Nasi Putih (~180 kcal, C:38g)\n` +
@@ -2797,29 +2790,55 @@ function generateMealRecommendations(
       `• 🍞 2 Tangkup Roti Gandum Utuh (~150 kcal, C:26g)\n` +
       `• ☕ Kopi / Teh Tanpa Gula`;
   } else {
-    // General all-day menu
     recommendedMenu = `🌅 *Pagi (~${Math.round(targetCalories*0.25)} kcal)*: 2 Telur Rebus + Roti Gandum / Oatmeal\n` +
       `☀️ *Siang (~${Math.round(targetCalories*0.35)} kcal)*: 150g Dada Ayam / Ikan + Nasi + Sayur Segar\n` +
       `🌙 *Malam (~${Math.round(targetCalories*0.30)} kcal)*: Pepes Ikan / Ayam Kukus + Kentang / Sayur Bening\n` +
       `🍎 *Snack (~${Math.round(targetCalories*0.10)} kcal)*: 1 Buah Apel / Greek Yogurt`;
   }
 
-  const adviceQuote = persona === "max"
-    ? (remainingCal < 300 
-        ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! 🔥"
-        : "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! 💪")
-    : (remainingCal < 300
-        ? "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! ✨"
-        : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini 🌱✨");
+  let adviceQuote = "";
+  if (calStatus.isOver) {
+    adviceQuote = persona === "max"
+      ? "Kalori lo udah tembus target hari ini bro! Kunci disiplin lo, cukupi air putih dan kalau masih butuh asupan pilih yang murni protein tanpa minyak! 🔥"
+      : "Kalori kamu sudah melewati target harian hari ini. Yuk cukupi hidrasi dengan air putih dan pilih opsi sangat ringan ya ✨";
+  } else if (calStatus.remaining < 300) {
+    adviceQuote = persona === "max"
+      ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! 🔥"
+      : "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! ✨";
+  } else {
+    adviceQuote = persona === "max"
+      ? "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! 💪"
+      : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini 🌱✨";
+  }
+
+  const calDisplay = calStatus.isOver
+    ? `• Kalori: *${totals.calories}/${targetCalories} kcal* (${calStatus.percentage}% · 🔴 Melebihi Target)`
+    : calStatus.isReached
+      ? `• Kalori: *${totals.calories}/${targetCalories} kcal* (100% · ✅ Target Tercapai)`
+      : `• Sisa Kalori: *~${calStatus.remaining} kcal* (${totals.calories}/${targetCalories} kcal · 🟡 Belum Cukup)`;
+
+  const protDisplay = protStatus.isOver
+    ? `• Protein: *${totals.protein}/${proteinGrams}g* (${protStatus.percentage}% · 🔴 Melebihi Target)`
+    : protStatus.isReached
+      ? `• Protein: *${totals.protein}/${proteinGrams}g* (100% · ✅ Target Tercapai)`
+      : `• Sisa Protein: *~${protStatus.remaining}g* (${totals.protein}/${proteinGrams}g · 🟡 Belum Cukup)`;
+
+  const fatDisplay = fatStatus.isOver
+    ? `• Lemak: *${totals.fat}/${fatGrams}g* (${fatStatus.percentage}% · 🔴 Melebihi Target)`
+    : fatStatus.isReached
+      ? `• Lemak: *${totals.fat}/${fatGrams}g* (100% · ✅ Target Tercapai)`
+      : `• Sisa Lemak: *~${fatStatus.remaining}g* (${totals.fat}/${fatGrams}g · 🟡 Belum Cukup)`;
+
+  const sodDisplay = `• Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* (${sodStatus.statusBadge})`;
 
   return (
     `🍽️ *REKOMENDASI MENU ${mealContextLabel.toUpperCase()}*\n` +
     `🎯 *Goal*: ${goalTitle} (${targetCalories} kcal/hari)\n\n` +
     `📊 *Status Nutrisi Hari Ini*:\n` +
-    `• Sisa Kalori: *~${remainingCal} kcal* (${totals.calories}/${targetCalories} kcal)\n` +
-    `• Sisa Protein: *~${remainingProt}g* (${totals.protein}/${proteinGrams}g)\n` +
-    `• Sisa Lemak: *~${remainingFat}g* (${totals.fat}/${fatGrams}g)\n` +
-    `• Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* ${currentSodium > 2000 ? "🔴 (Melebihi Batas)" : "🟢 (Aman)"}\n\n` +
+    `${calDisplay}\n` +
+    `${protDisplay}\n` +
+    `${fatDisplay}\n` +
+    `${sodDisplay}\n\n` +
     (macroGuidance.length > 0 ? `${macroGuidance.join("\n")}\n\n` : "") +
     `━━━━━━━━━━━━━━\n` +
     `${recommendedMenu}\n\n` +
@@ -3839,12 +3858,44 @@ async function startServer() {
   // Returns a short, personalized "what to eat/drink next" tip from the coach.
   app.post("/api/ai/next-step", express.json(), async (req, res) => {
     try {
-      const { phone, calories, protein, carbs, fat, targetCalories, targetProtein, targetCarbs, targetFat, goal, persona, name, mealName } = req.body;
+      const {
+        phone,
+        calories,
+        protein,
+        carbs,
+        fat,
+        targetCalories: rawTargetCalories,
+        targetProtein: rawTargetProtein,
+        targetCarbs: rawTargetCarbs,
+        targetFat: rawTargetFat,
+        goal,
+        persona,
+        name,
+        mealName,
+        sodium
+      } = req.body;
 
-      const remCal  = Math.max(0, (Number(targetCalories) || 2000) - (Number(calories) || 0));
-      const remProt = Math.max(0, (Number(targetProtein)  || 150)  - (Number(protein)  || 0));
-      const remCarb = Math.max(0, (Number(targetCarbs)    || 200)  - (Number(carbs)    || 0));
-      const remFat  = Math.max(0, (Number(targetFat)      || 60)   - (Number(fat)      || 0));
+      const currCal = Number(calories) || 0;
+      const currProt = Number(protein) || 0;
+      const currCarb = Number(carbs) || 0;
+      const currFat = Number(fat) || 0;
+      const currSodium = Number(sodium) || 0;
+
+      const targetCal = Number(rawTargetCalories) || 2000;
+      const targetProt = Number(rawTargetProtein) || 150;
+      const targetCarb = Number(rawTargetCarbs) || 200;
+      const targetFat = Number(rawTargetFat) || 60;
+
+      // Centralized Single Source of Truth
+      const nutritionSummary = calculateDailyNutritionSummary(
+        { calories: currCal, protein: currProt, carbs: currCarb, fat: currFat, sodium: currSodium },
+        { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2000 }
+      );
+
+      const remCal = nutritionSummary.calories.remaining;
+      const remProt = nutritionSummary.protein.remaining;
+      const remCarb = nutritionSummary.carbs.remaining;
+      const remFat = nutritionSummary.fat.remaining;
 
       // Determine WIB hour
       let wibHour = 12;
@@ -3861,18 +3912,28 @@ async function startServer() {
 
       // ── Algorithmic fallback (no AI needed, always accurate) ─────────────
       const buildFallbackAdvice = (): string => {
-        const calPercent = Number(calories) / (Number(targetCalories) || 2000);
-
         let advice = "";
 
-        // Case 1: Very early in the day, protein very low
-        if (remProt > Number(targetProtein) * 0.8) {
+        // Priority 1: Sodium over limit
+        if (nutritionSummary.sodium.isOver) {
           advice = isMia
-            ? `Protein kamu hari ini masih sangat rendah. Untuk meal berikutnya, prioritaskan sumber protein berkualitas — dada ayam rebus/panggang, telur rebus, atau tahu kukus. Minumnya air putih dulu ya biar metabolisme tetap optimal! 💪`
-            : `Protein lo masih rendah banget! Next meal, gue rekomendasiin langsung serang protein dulu — dada ayam panggang, ikan bakar, atau telur rebus 3 biji. Jangan lupa minum air putih 500ml sekarang bro! 💧`;
+            ? `Asupan natrium hari ini sudah melebihi batas 2.000 mg (${currSodium.toLocaleString("id-ID")} mg). Untuk meal selanjutnya, utamakan air putih dingin dan menu tawar/rendah garam seperti dada ayam rebus atau sayur bening ya ✨`
+            : `Sodium lo udah tembus ${currSodium.toLocaleString("id-ID")} mg bro (melebihi batas anjuran)! Next meal, hindari makanan berkuah asin atau saus kecap, dan minum air putih minimal 500ml sekarang! 💧`;
         }
-        // Case 2: Protein deficit is the biggest gap
-        else if (remProt > remCarb && remProt > remFat && remProt > 30) {
+        // Priority 2: Calories already over target
+        else if (nutritionSummary.calories.isOver) {
+          if (nutritionSummary.protein.isUnder) {
+            advice = isMia
+              ? `Kalori harian kamu sudah melewati target (${currCal}/${targetCal} kcal), tetapi kebutuhan protein masih kurang ${remProt}g. Jika masih ingin makan di waktu ${timeLabel}, pilih yang murni protein tanpa minyak seperti 2 putih telur rebus atau 100g dada ayam kukus ya ✨`
+              : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Tapi protein masih kurang ${remProt}g. Kalau laper, pilih yang murni protein tanpa lemak/minyak — putih telur rebus atau dada ayam kukus! 💪🔥`;
+          } else {
+            advice = isMia
+              ? `Kalori harian kamu sudah terpenuhi dan sedikit melewati target (${currCal}/${targetCal} kcal). Untuk waktu ${timeLabel} ini, cukup minum air putih atau teh tawar hangat, lalu fokus istirahat optimal ya ✨`
+              : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Kunci porsi makan lo hari ini. Minum air putih yang banyak dan fokus recovery buat besok! 💯`;
+          }
+        }
+        // Priority 3: Protein deficit is the biggest gap
+        else if (remProt > 25) {
           const foodSugg = goal === "lose"
             ? (isMia ? "dada ayam panggang, ikan tuna, atau putih telur" : "dada ayam grill, ikan bakar, atau tuna kalengan")
             : (isMia ? "dada ayam + nasi merah, susu, atau protein shake" : "chicken rice bowl, tuna + nasi, atau mass gainer shake");
@@ -3880,28 +3941,13 @@ async function startServer() {
             ? `Sisa protein kamu hari ini masih *${remProt}g* — lumayan banyak ya. Untuk meal ${timeLabel} berikutnya, fokuskan ke ${foodSugg}. Ini penting banget buat recovery dan perkembangan ototmu! ✨`
             : `Bro, masih kurang *${remProt}g protein* nih. Next meal lo harus fokus ke ${foodSugg}. Otot lo butuh ini buat tumbuh! Gas jangan skip makan! 🔥`;
         }
-        // Case 3: Calories almost full, recommend light/beverage
-        else if (calPercent > 0.85) {
+        // Priority 4: Calories almost full
+        else if (nutritionSummary.calories.percentage >= 85) {
           advice = isMia
             ? `Kalori kamu udah hampir mencapai target hari ini! Kalau masih lapar di waktu ${timeLabel}, pilih camilan ringan aja ya — buah segar, salad, atau yogurt tanpa gula. Hindari yang berat supaya tetap di jalur ${goalStr}! 🥗`
             : `Kalori lo udah mepet target! Kalau laper ${timeLabel} ini, pilih yang ringan aja — buah, salad, atau yogurt. Jangan kalap makan berat lagi ya bro, kita lagi ngejer goal ${goalStr}! 💯`;
         }
-        // Case 4: Hydration reminder
-        else if (wibHour >= 13 && wibHour <= 15) {
-          const proteinSugg = goal === "gain"
-            ? (isMia ? "protein shake atau susu full cream" : "protein shake atau susu coklat")
-            : (isMia ? "teh hijau atau air lemon" : "air putih dingin atau teh tanpa gula");
-          advice = isMia
-            ? `Waktu ${timeLabel} ini biasanya energi mulai turun. Yuk minum dulu — ${proteinSugg} sangat bagus buat menjaga energi! Kalau belum makan siang, pilih yang tinggi protein dan serat ya supaya kenyang lebih lama. 🍵`
-            : `${timeLabel.charAt(0).toUpperCase() + timeLabel.slice(1)} ini waktu yang rawan mager bro! Minum dulu — ${proteinSugg}. Kalau belum makan siang, langsung cari yang protein-nya tinggi ya! 💪`;
-        }
-        // Case 5: Fat deficit
-        else if (remFat < 10 && remFat > 0) {
-          advice = isMia
-            ? `Lemak sehat kamu hari ini udah hampir terpenuhi. Untuk meal selanjutnya, pilih yang rendah lemak — dada ayam tanpa kulit, ikan rebus, atau sayuran kukus dengan sedikit olive oil. Tetap jaga keseimbangan nutrisinya ya! 🥦`
-            : `Lemak lo udah hampir habis jatahnya hari ini. Next meal, pilih yang low-fat aja — dada ayam tanpa kulit, ikan kukus, atau salad sayur. Jaga makro lo bro! ⚡`;
-        }
-        // Default: general next meal advice based on goal
+        // Default: balanced recommendations
         else {
           const goalAdvice = goal === "lose"
             ? (isMia ? "makanan tinggi serat dan protein rendah kalori — sayur, ayam rebus, atau ikan panggang" : "yang tinggi protein dan serat — ayam panggang, ikan, atau salad protein")
@@ -3920,7 +3966,7 @@ async function startServer() {
         return res.json({ success: true, advice: buildFallbackAdvice() });
       }
 
-      // ── Gemini AI generated advice ────────────────────────────────────────
+      // ── Gemini AI generated advice with pre-calculated backend nutrition summary ────────
       const prompt = `Kamu adalah ${coachName}, AI Coach dari GymBuddy.
 
 DATA USER:
@@ -3929,11 +3975,14 @@ DATA USER:
 - Makanan baru saja dikonsumsi: "${mealName || "Makanan"}"
 - Waktu sekarang: ${timeLabel} (pukul ${wibHour}:xx WIB)
 
-SISA KEBUTUHAN NUTRISI HARI INI (setelah makan ini):
-- Kalori tersisa: ${remCal} kcal
-- Protein tersisa: ${remProt}g
-- Karbohidrat tersisa: ${remCarb}g
-- Lemak tersisa: ${remFat}g
+STATUS NUTRISI RESMI (SINGLE SOURCE OF TRUTH DARI BACKEND):
+${JSON.stringify({
+  calories: { current: currCal, target: targetCal, percentage: nutritionSummary.calories.percentage, status: nutritionSummary.calories.status, remaining: remCal },
+  protein: { current: currProt, target: targetProt, percentage: nutritionSummary.protein.percentage, status: nutritionSummary.protein.status, remaining: remProt },
+  carbs: { current: currCarb, target: targetCarb, percentage: nutritionSummary.carbs.percentage, status: nutritionSummary.carbs.status, remaining: remCarb },
+  fat: { current: currFat, target: targetFat, percentage: nutritionSummary.fat.percentage, status: nutritionSummary.fat.status, remaining: remFat },
+  sodium: { current: currSodium, limit: 2000, percentage: nutritionSummary.sodium.percentage, status: nutritionSummary.sodium.status }
+}, null, 2)}
 
 PERSONA:
 ${isMia
@@ -3941,19 +3990,16 @@ ${isMia
   : "Coach Max: Pria, tegas, penuh energi, gaya Jakarta gaul (lo/gue). Motivasional tapi realistis."
 }
 
-TUGAS:
-Berikan saran singkat (MAX 3 kalimat) tentang apa yang SEBAIKNYA DIMAKAN atau DIMINUM pada meal/snack selanjutnya berdasarkan:
-1. Sisa kebutuhan nutrisi hari ini (fokus pada makro yang paling defisit)
-2. Waktu (${timeLabel} — apakah ini saatnya snack, makan besar, atau cukup minum dulu?)
-3. Goal user (${goalStr})
-4. Sesuatu yang SPESIFIK dan ACTIONABLE — sebut nama makanan konkret, bukan generik
+ATURAN REKOMENDASI (PRIORITAS MUTLAK):
+1. Jika Kalori/Karbo/Lemak berstatus "over_target" (nilai > target):
+   - JANGAN PERNAH mengatakan "kalori masih tersisa" atau "karbohidrat masih aman".
+   - Nyatakan dengan jelas bahwa kalori/makro telah melebihi target.
+   - Jika protein masih kurang ("under_target"), rekomendasikan HANYA opsi sangat ringan tinggi protein (misal putih telur, dada ayam rebus) tanpa tambahan karbohidrat, lemak, atau sodium tinggi.
+   - Jika protein sudah tercapai, rekomendasikan hidrasi (air putih/teh tawar) dan istirahat.
+2. Jika Sodium berstatus "over_limit", ingatkan untuk minum air putih dan hindari kuah asin/saus.
+3. Berikan saran singkat (MAX 3 kalimat) yang spesifik dan actionable.
 
-PENTING:
-- Jangan copy/paste referensi apapun. Kreasikan sendiri dengan gaya ${coachName}.
-- Boleh pakai emoji 1-2 buah saja.
-- Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯" atau emoji relevan.
-- Kalau remCal < 200, sarankan hanya minuman/camilan ringan saja.
-- Kalau protein adalah defisit terbesar, itu harus jadi fokus utama saran.`;
+Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
 
       try {
         const rawAdvice = await generateGeminiContent(prompt);
@@ -4024,58 +4070,61 @@ PENTING:
           });
         }
 
-        const itemsToUse = Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed.items : deterministicResult.items;
+        const rawCompNames = (Array.isArray(parsed.components) && parsed.components.length > 0)
+          ? parsed.components.map((c: any) => c.name ? `${c.quantity ? `${c.quantity} ` : ""}${c.name} ${c.cookingMethod || ""}` : String(c))
+          : (Array.isArray(parsed.items) && parsed.items.length > 0
+              ? parsed.items.map((i: any) => i.food_name || i.normalized_food_name || i.foodName || String(i))
+              : undefined);
 
-        // Strict Requirement: Total Calories & Macros MUST ALWAYS BE SUM(items)
-        let sumCal = 0, sumProt = 0, sumCarb = 0, sumFat = 0, sumFib = 0, sumSug = 0;
-        for (const it of itemsToUse) {
-          sumCal += Number(it.calories) || 0;
-          sumProt += Number(it.protein) || 0;
-          sumCarb += Number(it.carbs) || 0;
-          sumFat += Number(it.fat) || 0;
-          sumFib += Number(it.fiber) || 0;
-          sumSug += Number(it.sugar) || 0;
-        }
-
-        const protein = Math.round(sumProt * 10) / 10;
-        const carbs = Math.round(sumCarb * 10) / 10;
-        const fat = Math.round(sumFat * 10) / 10;
-        const fiber = Math.round(sumFib * 10) / 10;
-        const sugar = Math.round(sumSug * 10) / 10;
+        // Calculate strictly from USDA & TKPI single source of truth database
+        const calculatedNutrition = calculateFoodNutrition(cleanText, rawCompNames);
 
         const genericCheck = isGenericMealInput(cleanText);
-        const isLowConfidence = genericCheck.isGeneric || parsed.confidence === "low" || deterministicResult.needsClarification;
-
-        // Sodium handling: preserve null/undefined when unestimated (never convert unknown to 0)
-        const rawSodium = parsed.sodium !== undefined && parsed.sodium !== null ? Number(parsed.sodium) : undefined;
-        const sodium = (rawSodium !== undefined && !isNaN(rawSodium) && rawSodium > 0) ? rawSodium : undefined;
-
-        // Atwater Macro Calorie Rule: Calories = Protein * 4 + Carbs * 4 + Fat * 9 (Sodium/Electrolytes = 0 kcal)
-        const atwaterCal = Math.round((protein * 4) + (carbs * 4) + (fat * 9));
+        const isLowConfidence = genericCheck.isGeneric || calculatedNutrition.overallConfidence === "low" || calculatedNutrition.needsClarification;
 
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
-          calories: isLowConfidence ? undefined : atwaterCal,
-          protein: isLowConfidence ? undefined : protein,
-          carbs: isLowConfidence ? undefined : carbs,
-          fat: isLowConfidence ? undefined : fat,
-          fiber: isLowConfidence ? undefined : fiber,
-          sugar: isLowConfidence ? undefined : sugar,
-          sodium: isLowConfidence ? undefined : sodium,
-          isHydration: Boolean(parsed.isHydration || deterministicResult.isHydration),
-          volumeMl: Number(parsed.volumeMl) || deterministicResult.volumeMl || 0,
-          mealType: parsed.mealType,
-          portionNote: itemsToUse.length === 1 ? "1 meal detected" : `${itemsToUse.length} food items detected`,
-          items: itemsToUse,
-          confidence: isLowConfidence ? "low" : (parsed.confidence || deterministicResult.confidence || "medium"),
+          calories: isLowConfidence ? undefined : calculatedNutrition.calories,
+          protein: isLowConfidence ? undefined : calculatedNutrition.protein,
+          carbs: isLowConfidence ? undefined : calculatedNutrition.carbs,
+          fat: isLowConfidence ? undefined : calculatedNutrition.fat,
+          fiber: isLowConfidence ? undefined : calculatedNutrition.fiber,
+          sugar: isLowConfidence ? undefined : calculatedNutrition.sugar,
+          sodium: isLowConfidence ? undefined : calculatedNutrition.sodium,
+          isHydration: Boolean(calculatedNutrition.isHydration),
+          volumeMl: Number(calculatedNutrition.volumeMl) || 0,
+          mealType: parsed.mealType || calculatedNutrition.mealType,
+          portionNote: calculatedNutrition.portionNote,
+          items: calculatedNutrition.components.map((c: any) => ({
+            food_name: c.foodName,
+            normalized_food_name: c.normalizedName,
+            database_id: c.databaseId,
+            data_source: c.source,
+            estimated_quantity: 1,
+            estimated_weight_grams: c.actualAmount,
+            serving_unit: `${c.actualAmount}${c.actualUnit}`,
+            display_unit: `${c.actualAmount}${c.actualUnit}`,
+            cooking_method: c.cookingMethod,
+            calories: c.calories,
+            protein: c.protein,
+            carbs: c.carbs,
+            fat: c.fat,
+            fiber: c.fiber,
+            sugar: c.sugar,
+            sodium: c.sodium,
+            confidence: c.portionConfidence >= 85 ? "high" : "medium",
+            notes: c.notes
+          })),
+          confidence: isLowConfidence ? "low" : calculatedNutrition.overallConfidence,
           needsClarification: isLowConfidence,
           clarificationQuestion: genericCheck.isGeneric ? `What’s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
           suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
-          portionDisplayLabel: deterministicResult.portionDisplayLabel,
-          debugLog: deterministicResult.debugLog
+          portionDisplayLabel: calculatedNutrition.portionDisplayLabel,
+          debugLog: calculatedNutrition.traceabilityLog,
+          sanityValid: calculatedNutrition.sanityValid
         });
       } catch (aiErr) {
         console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
@@ -5166,19 +5215,35 @@ Keluarkan output JSON valid:
               }
 
               if (parsed.isFood) {
+                const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
+                const calcNutr = calculateFoodNutrition(finalFoodName);
+
                 addMealLog(from, {
                   id: `m-${Date.now()}`,
-                  foodName: parsed.foodName || "Makanan",
-                  calories: Number(parsed.calories) || 0,
-                  protein: Number(parsed.protein) || 0,
-                  carbs: Number(parsed.carbs) || 0,
-                  fat: Number(parsed.fat) || 0,
-                  fiber: Number(parsed.fiber) || 0,
+                  foodName: finalFoodName,
+                  calories: calcNutr.calories,
+                  protein: calcNutr.protein,
+                  carbs: calcNutr.carbs,
+                  fat: calcNutr.fat,
+                  fiber: calcNutr.fiber,
+                  sugar: calcNutr.sugar,
+                  sodium: calcNutr.sodium,
                   mealType: parsed.mealType || getMealTypeByHour(),
                   timestamp: new Date().toISOString()
                 });
                 const dailyTotals = getDailyTotals(from);
-                const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+                const card = formatNutritionCard({
+                  ...parsed,
+                  foodName: finalFoodName,
+                  calories: calcNutr.calories,
+                  protein: calcNutr.protein,
+                  carbs: calcNutr.carbs,
+                  fat: calcNutr.fat,
+                  fiber: calcNutr.fiber,
+                  sugar: calcNutr.sugar,
+                  sodium: calcNutr.sodium,
+                  portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
+                }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
                 responseMessages = [card];
               } else if (parsed.isEquipment) {
                 const eqCard = formatEquipmentCard(parsed, userData);
@@ -5871,21 +5936,35 @@ Keluarkan output JSON valid:
                 : `📸 Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? 💪`;
               responseMessages = [parsed.clarificationQuestion || defaultClarification];
             } else {
+              const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
+              const calcNutr = calculateFoodNutrition(finalFoodName);
+
               addMealLog(normFrom, {
                 id: `m-${Date.now()}`,
-                foodName: parsed.foodName || "Makanan",
-                calories: Number(parsed.calories) || 0,
-                protein: Number(parsed.protein) || 0,
-                carbs: Number(parsed.carbs) || 0,
-                fat: Number(parsed.fat) || 0,
-                fiber: Number(parsed.fiber) || 0,
-                sugar: Number(parsed.sugar) || 0,
-                sodium: Number(parsed.sodium) || 0,
+                foodName: finalFoodName,
+                calories: calcNutr.calories,
+                protein: calcNutr.protein,
+                carbs: calcNutr.carbs,
+                fat: calcNutr.fat,
+                fiber: calcNutr.fiber,
+                sugar: calcNutr.sugar,
+                sodium: calcNutr.sodium,
                 mealType: getMealTypeByHour(userText || parsed.mealType),
                 timestamp: new Date().toISOString()
               });
               const dailyTotals = getDailyTotals(normFrom);
-              const card = formatNutritionCard(parsed, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+              const card = formatNutritionCard({
+                ...parsed,
+                foodName: finalFoodName,
+                calories: calcNutr.calories,
+                protein: calcNutr.protein,
+                carbs: calcNutr.carbs,
+                fat: calcNutr.fat,
+                fiber: calcNutr.fiber,
+                sugar: calcNutr.sugar,
+                sodium: calcNutr.sodium,
+                portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
+              }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
               responseMessages = [card];
 
               // HANYA kirim gambar kartu infografis jika user MENGIRIM FOTO MAKANAN (imagePart / MediaUrl0)
@@ -5896,14 +5975,14 @@ Keluarkan output JSON valid:
                 const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
 
                 cardMediaCache.set(cardId, {
-                  foodName: parsed.foodName || "Makanan",
-                  calories: Number(parsed.calories) || 0,
-                  protein: Number(parsed.protein) || 0,
-                  carbs: Number(parsed.carbs) || 0,
-                  fat: Number(parsed.fat) || 0,
-                  sodium: Number(parsed.sodium) || 0,
-                  fiber: Number(parsed.fiber) || 0,
-                  sugar: Number(parsed.sugar) || 0,
+                  foodName: finalFoodName,
+                  calories: calcNutr.calories,
+                  protein: calcNutr.protein,
+                  carbs: calcNutr.carbs,
+                  fat: calcNutr.fat,
+                  sodium: calcNutr.sodium,
+                  fiber: calcNutr.fiber,
+                  sugar: calcNutr.sugar,
                   mealType: mealTypeStr,
                   dateStr,
                   dailyTargetCalories: userData.targetCalories || 1966,
