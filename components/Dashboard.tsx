@@ -4839,7 +4839,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
                 <button
                   type="button"
-                  onClick={() => setShowEditProfileModal(true)}
+                  onClick={() => setShowHealthProfileModal(true)}
                   className="px-4 py-2 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
                 >
                   <Edit3 size={14} />
@@ -4865,6 +4865,54 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "AI Coach" : "Pelatih AI"}</span>
                   <span className="text-sm font-black text-white">{coachName}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Health & Medical Profile Card */}
+            <div className="bg-[#222222] border border-white/[0.08] rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shrink-0">
+                    <HeartPulse size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-white">
+                      {isEN ? "Health Conditions & Age Group" : "Kondisi Kesehatan & Kelompok Usia"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                      {activeUser.healthProfile?.conditions && activeUser.healthProfile.conditions.length > 0
+                        ? `🩺 ${activeUser.healthProfile.conditions.join(", ")}${activeUser.healthProfile.otherCondition ? ` (${activeUser.healthProfile.otherCondition})` : ""}`
+                        : (isEN ? "✨ No specific medical conditions recorded" : "✨ Tanpa riwayat penyakit khusus (Bugar)")}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowHealthProfileModal(true)}
+                  className="px-4 py-2 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-[#D4FF00]/40 text-neutral-200 hover:text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                >
+                  <Edit3 size={14} className="text-[#D4FF00]" />
+                  <span>{isEN ? "Manage Health Profile" : "Atur Profil Kesehatan"}</span>
+                </button>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/[0.08]">
+                <span className="px-2.5 py-1 rounded-lg bg-[#181818] border border-white/[0.08] text-[11px] font-bold text-neutral-300">
+                  🎂 {activeUser.age || 25} th ({getDashboardAgeGroupLabel(Number(activeUser.age) || 25)})
+                </span>
+                {activeUser.healthProfile?.conditions && activeUser.healthProfile.conditions.length > 0 ? (
+                  activeUser.healthProfile.conditions.map((c: string) => (
+                    <span key={c} className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] font-bold text-amber-300">
+                      🩺 {c}
+                    </span>
+                  ))
+                ) : (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-300">
+                    🟢 Kondisi Bugar (Fit)
+                  </span>
+                )}
               </div>
             </div>
 
