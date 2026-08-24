@@ -1102,7 +1102,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                             type="number"
                             step="0.5"
                             min="1"
-                            value={userTargetWeight || recW}
+                            value={userTargetWeight}
                             onChange={(e) => setUserTargetWeight(e.target.value.replace(/-/g, ''))}
                             placeholder={String(recW)}
                             className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
@@ -1183,7 +1183,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                             type="number"
                             step="0.5"
                             min="1"
-                            value={userTargetWeight || recW}
+                            value={userTargetWeight}
                             onChange={(e) => setUserTargetWeight(e.target.value.replace(/-/g, ''))}
                             placeholder={String(recW)}
                             className="w-full bg-[#111620] border border-[#D4FF00]/40 rounded-xl pl-11 pr-4 py-3.5 text-lg font-bold text-white focus:outline-none focus:border-[#D4FF00]"
