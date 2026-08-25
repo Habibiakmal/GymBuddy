@@ -29,6 +29,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // server.ts
 var server_exports = {};
 __export(server_exports, {
+  buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
+  formatNutritionCard: () => formatNutritionCard,
   getMealTypeByHour: () => getMealTypeByHour,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
@@ -45745,6 +45747,89 @@ function resolveCleanFoodNameAndMealType(rawUserText, detectedFoodName, hasImage
   }
   return { foodName: finalFoodName, mealType };
 }
+function buildSingleSourceOfTruthMealRecord(rawUserText, parsed, hasImage) {
+  const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
+    rawUserText,
+    parsed?.foodName,
+    hasImage,
+    parsed?.mealType
+  );
+  let finalCal = Number(parsed?.calories) || 0;
+  let finalProt = Number(parsed?.protein) || 0;
+  let finalCarb = Number(parsed?.carbs) || 0;
+  let finalFat = Number(parsed?.fat) || 0;
+  let finalFiber = Number(parsed?.fiber) || 0;
+  let finalSugar = Number(parsed?.sugar) || 0;
+  let finalSodium = Number(parsed?.sodium) || 0;
+  if (hasImage && finalCal > 0) {
+    const macroCal = finalProt * 4 + finalCarb * 4 + finalFat * 9;
+    if (macroCal > 0 && Math.abs(macroCal - finalCal) > 80) {
+      finalCal = Math.round(macroCal);
+    }
+  } else {
+    const calcNutr = calculateFoodNutrition(finalFoodName);
+    finalCal = calcNutr.calories;
+    finalProt = calcNutr.protein;
+    finalCarb = calcNutr.carbs;
+    finalFat = calcNutr.fat;
+    finalFiber = calcNutr.fiber;
+    finalSugar = calcNutr.sugar;
+    finalSodium = calcNutr.sodium;
+  }
+  finalCal = Math.max(0, Math.round(finalCal));
+  finalProt = Math.max(0, Number(finalProt.toFixed(1)));
+  finalCarb = Math.max(0, Number(finalCarb.toFixed(1)));
+  finalFat = Math.max(0, Number(finalFat.toFixed(1)));
+  finalFiber = Math.max(0, Number(finalFiber.toFixed(1)));
+  finalSugar = Math.max(0, Number(finalSugar.toFixed(1)));
+  finalSodium = Math.max(0, Math.round(finalSodium));
+  let validPortionEstimates = Array.isArray(parsed?.portionEstimates) ? [...parsed.portionEstimates] : [];
+  if (validPortionEstimates.length > 0) {
+    let componentCalSum = 0;
+    let hasCalCount = 0;
+    validPortionEstimates.forEach((p) => {
+      const m = String(p).match(/~(\d+)\s*kcal/i);
+      if (m) {
+        componentCalSum += parseInt(m[1], 10);
+        hasCalCount++;
+      }
+    });
+    if (hasCalCount > 0 && componentCalSum > 0 && Math.abs(componentCalSum - finalCal) > 20) {
+      const ratio = finalCal / componentCalSum;
+      validPortionEstimates = validPortionEstimates.map((p) => {
+        return p.replace(/~(\d+)\s*kcal/i, (_, c) => `~${Math.round(parseInt(c, 10) * ratio)} kcal`);
+      });
+    }
+  }
+  const mealRecord = {
+    id: `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    foodName: finalFoodName,
+    calories: finalCal,
+    protein: finalProt,
+    carbs: finalCarb,
+    fat: finalFat,
+    fiber: finalFiber,
+    sugar: finalSugar,
+    sodium: finalSodium,
+    mealType: finalMealType.toLowerCase(),
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const validatedParsed = {
+    ...parsed,
+    foodName: finalFoodName,
+    calories: finalCal,
+    protein: finalProt,
+    carbs: finalCarb,
+    fat: finalFat,
+    fiber: finalFiber,
+    sugar: finalSugar,
+    sodium: finalSodium,
+    mealType: finalMealType,
+    portionEstimates: validPortionEstimates,
+    portionDetail: parsed?.portionDetail || `${finalCal} kcal`
+  };
+  return { mealRecord, validatedParsed };
+}
 function splitWhatsAppMessage(text, maxSafeLength = 1400) {
   if (!text || typeof text !== "string") return [];
   const trimmed = sanitizeWhatsAppResponse(text);
@@ -47262,101 +47347,67 @@ function isPlainWaterName(name) {
 function addMealLog(rawPhone, meal, targetDateStr) {
   const phone = normalizePhone(rawPhone);
   const targetDate = targetDateStr || getTodayDateStr();
-  const rawName = meal.foodName || "";
-  const parts = rawName.split(/\+|\s+&\s+|\s+dan\s+|\s+with\s+|,/i).map((p) => p.trim()).filter(Boolean);
-  const solidParts = [];
-  const liquidParts = [];
-  for (const part of parts) {
-    if (isLiquidName(part)) {
-      liquidParts.push(part);
-    } else {
-      solidParts.push(part);
-    }
+  const finalMealToInsert = {
+    ...meal,
+    id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    foodName: meal.foodName || "Makanan",
+    calories: Number(meal.calories) || 0,
+    protein: Number(meal.protein) || 0,
+    carbs: Number(meal.carbs) || 0,
+    fat: Number(meal.fat) || 0,
+    fiber: Number(meal.fiber) || 0,
+    sugar: Number(meal.sugar) || 0,
+    sodium: Number(meal.sodium) || 0,
+    mealType: meal.mealType,
+    isHydration: Boolean(meal.isHydration || isPlainWaterName(meal.foodName)),
+    volumeMl: meal.volumeMl || (isLiquidName(meal.foodName) ? extractVolumeMlFromName(meal.foodName) : void 0),
+    timestamp: meal.timestamp || (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const key = `${phone}_${targetDate}`;
+  if (!dbData.dailyLogs[key]) {
+    dbData.dailyLogs[key] = [];
   }
-  const mealsToInsert = [];
-  if (solidParts.length > 0) {
-    mealsToInsert.push({
-      ...meal,
-      id: `${meal.id || Date.now()}-food`,
-      foodName: solidParts.join(" + "),
-      calories: liquidParts.length > 0 ? Math.max(0, (Number(meal.calories) || 450) - liquidParts.length * 50) : Number(meal.calories) || 450,
-      isHydration: false,
-      volumeMl: void 0
-    });
+  if (!dbData.dailyLogs[key].some((m) => m.id === finalMealToInsert.id)) {
+    dbData.dailyLogs[key].push(finalMealToInsert);
   }
-  if (liquidParts.length > 0) {
-    liquidParts.forEach((lPart, idx) => {
-      const detectedVolumeMl = extractVolumeMlFromName(lPart);
-      const isMilky = /(susu|milk|latte|whey|protein|gainer|yogurt|shake)/i.test(lPart);
-      const isSweet = /(manis|sweet|gula|sugar|sirup|syrup|boba|jus|juice|soda|coca|cola|sprite|fanta)/i.test(lPart);
-      const cal = isMilky ? 120 : isSweet ? 65 : 2;
-      const prot = isMilky ? 6 : 0;
-      const carb = isMilky ? 10 : isSweet ? 16 : 0;
-      const fat = isMilky ? 4 : 0;
-      mealsToInsert.push({
-        ...meal,
-        id: `${meal.id || Date.now()}-drink-${idx}`,
-        foodName: lPart,
-        calories: cal,
-        protein: prot,
-        carbs: carb,
-        fat,
-        isHydration: true,
-        volumeMl: detectedVolumeMl
-      });
-    });
-  } else if (solidParts.length === 0) {
-    mealsToInsert.push({
-      ...meal,
-      isHydration: isLiquidName(rawName),
-      volumeMl: isLiquidName(rawName) ? extractVolumeMlFromName(rawName) : void 0
-    });
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const altKey = `${altPhone}_${targetDate}`;
+  if (!dbData.dailyLogs[altKey]) {
+    dbData.dailyLogs[altKey] = [];
   }
-  for (const itemMeal of mealsToInsert) {
-    const key = `${phone}_${targetDate}`;
-    if (!dbData.dailyLogs[key]) {
-      dbData.dailyLogs[key] = [];
-    }
-    if (!dbData.dailyLogs[key].some((m) => m.id === itemMeal.id)) {
-      dbData.dailyLogs[key].push(itemMeal);
-    }
-    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-    const altKey = `${altPhone}_${targetDate}`;
-    if (!dbData.dailyLogs[altKey]) {
-      dbData.dailyLogs[altKey] = [];
-    }
-    if (!dbData.dailyLogs[altKey].some((m) => m.id === itemMeal.id)) {
-      dbData.dailyLogs[altKey].push(itemMeal);
-    }
-    insertFoodLog({
-      id: String(itemMeal.id || `m-${Date.now()}`),
-      userId: `usr_${phone}`,
-      phone,
-      date: targetDate,
-      foodName: itemMeal.foodName,
-      calories: Number(itemMeal.calories) || 0,
-      protein: Number(itemMeal.protein) || 0,
-      carbs: Number(itemMeal.carbs) || 0,
-      fat: Number(itemMeal.fat) || 0,
-      fiber: Number(itemMeal.fiber) || 0,
-      sugar: Number(itemMeal.sugar) || 0,
-      time: itemMeal.time || (/* @__PURE__ */ new Date()).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
-      isHydration: Boolean(itemMeal.isHydration),
-      volumeMl: itemMeal.volumeMl,
-      displayUnit: itemMeal.displayUnit,
-      portionType: itemMeal.portionType || "estimated",
-      itemType: itemMeal.isHydration ? "water" : "food",
-      source: itemMeal.source || "WhatsApp",
-      items: itemMeal.items || [],
-      imageUrl: itemMeal.imageUrl,
-      createdAt: /* @__PURE__ */ new Date()
-    }).catch((e) => console.warn("[Firestore] insertFoodLog note:", e?.message || e));
-    if (isPlainWaterName(itemMeal.foodName) && !itemMeal.id?.startsWith("wa-water-")) {
-      const vol = itemMeal.volumeMl || 250;
-      const cupsToAdd = Math.max(1, Math.round(vol / 250));
-      const currentCups = getWaterCups(phone, targetDate);
-      setWaterCups(phone, currentCups + cupsToAdd, targetDate);
-    }
+  if (!dbData.dailyLogs[altKey].some((m) => m.id === finalMealToInsert.id)) {
+    dbData.dailyLogs[altKey].push(finalMealToInsert);
+  }
+  insertFoodLog({
+    id: String(finalMealToInsert.id),
+    userId: `usr_${phone}`,
+    phone,
+    date: targetDate,
+    foodName: finalMealToInsert.foodName,
+    mealType: finalMealToInsert.mealType,
+    calories: finalMealToInsert.calories,
+    protein: finalMealToInsert.protein,
+    carbs: finalMealToInsert.carbs,
+    fat: finalMealToInsert.fat,
+    fiber: finalMealToInsert.fiber,
+    sugar: Number(finalMealToInsert.sugar) || 0,
+    sodium: Number(finalMealToInsert.sodium) || 0,
+    time: finalMealToInsert.time || (/* @__PURE__ */ new Date()).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
+    isHydration: Boolean(finalMealToInsert.isHydration),
+    volumeMl: finalMealToInsert.volumeMl,
+    displayUnit: finalMealToInsert.displayUnit,
+    portionType: finalMealToInsert.portionType || "estimated",
+    itemType: finalMealToInsert.isHydration ? "water" : "food",
+    source: finalMealToInsert.source || "WhatsApp",
+    items: finalMealToInsert.items || [],
+    imageUrl: finalMealToInsert.imageUrl,
+    createdAt: /* @__PURE__ */ new Date()
+  }).catch((e) => console.warn("[Firestore] insertFoodLog note:", e?.message || e));
+  if (isPlainWaterName(finalMealToInsert.foodName) && !finalMealToInsert.id?.startsWith("wa-water-")) {
+    const vol = finalMealToInsert.volumeMl || 250;
+    const cupsToAdd = Math.max(1, Math.round(vol / 250));
+    const currentCups = getWaterCups(phone, targetDate);
+    setWaterCups(phone, currentCups + cupsToAdd, targetDate);
   }
   saveDb();
 }
@@ -49975,52 +50026,19 @@ Keluarkan output JSON valid:
                   parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
                 }
                 if (parsed.isFood) {
-                  const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
+                  const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                     userText,
-                    parsed.foodName,
-                    Boolean(imagePart),
-                    parsed.mealType
+                    parsed,
+                    Boolean(imagePart)
                   );
-                  let calcNutr = calculateFoodNutrition(finalFoodName);
-                  if (imagePart && Number(parsed.calories) > 0 && calcNutr.calories === 103 && finalFoodName !== "Estimasi Makanan") {
-                    calcNutr = {
-                      ...calcNutr,
-                      foodName: finalFoodName,
-                      calories: Number(parsed.calories) || 250,
-                      protein: Number(parsed.protein) || 4,
-                      carbs: Number(parsed.carbs) || 30,
-                      fat: Number(parsed.fat) || 12,
-                      fiber: Number(parsed.fiber) || 2,
-                      sugar: Number(parsed.sugar) || 10,
-                      sodium: Number(parsed.sodium) || 150
-                    };
-                  }
-                  addMealLog(from, {
-                    id: `m-${Date.now()}`,
-                    foodName: finalFoodName,
-                    calories: calcNutr.calories,
-                    protein: calcNutr.protein,
-                    carbs: calcNutr.carbs,
-                    fat: calcNutr.fat,
-                    fiber: calcNutr.fiber,
-                    sugar: calcNutr.sugar,
-                    sodium: calcNutr.sodium,
-                    mealType: finalMealType.toLowerCase(),
-                    timestamp: (/* @__PURE__ */ new Date()).toISOString()
-                  });
+                  addMealLog(from, mealRecord);
                   const dailyTotals = getDailyTotals(from);
-                  const card = formatNutritionCard({
-                    ...parsed,
-                    foodName: finalFoodName,
-                    calories: calcNutr.calories,
-                    protein: calcNutr.protein,
-                    carbs: calcNutr.carbs,
-                    fat: calcNutr.fat,
-                    fiber: calcNutr.fiber,
-                    sugar: calcNutr.sugar,
-                    sodium: calcNutr.sodium,
-                    portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
-                  }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+                  const card = formatNutritionCard(
+                    validatedParsed,
+                    imagePart ? "Foto" : "Teks",
+                    userData,
+                    dailyTotals
+                  );
                   responseMessages = [card];
                 } else if (parsed.isEquipment) {
                   const eqCard = formatEquipmentCard(parsed, userData);
@@ -50030,48 +50048,19 @@ Keluarkan output JSON valid:
                 }
               } catch (e) {
                 console.error("Gemini AI Error:", e);
-                let calEst = 350;
-                let protEst = 20;
-                let carbEst = 40;
-                let fatEst = 12;
-                let foodTitle = userText;
-                if (userText.toLowerCase().includes("batagor") || userText.toLowerCase().includes("padang") || userText.toLowerCase().includes("pizza")) {
-                  calEst = 3800;
-                  protEst = 140;
-                  carbEst = 420;
-                  fatEst = 160;
-                  foodTitle = "Batagor 3x, Nasi Padang 3x & Pizza 1 Loyang";
-                }
-                const fallbackFoodObj = {
-                  isFood: true,
-                  isEquipment: false,
-                  foodName: foodTitle,
-                  calories: calEst,
-                  protein: protEst,
-                  carbs: carbEst,
-                  fat: fatEst,
-                  fiber: 15,
-                  sugar: 30,
-                  satietyScore: 9,
-                  satietyExplanation: "Porsi makan sangat besar dengan kepadatan kalori tinggi.",
-                  healthScore: 5,
-                  portionEstimates: [userText],
-                  keyInsights: ["Asupan kalori & karbohidrat sangat tinggi", "Sangat bagus untuk pemulihan energi setelah latihan berat"],
-                  coachComment: userData.persona === "max" ? "Gila bro! Porsi segunung gini langsung melampaui target kalori! Tapi kalau buat bulking ekstrim, habiskan dan gas pembakaran di gym besok!" : "Wah porsi makanmu banyak banget hari ini! Imbangi dengan air putih yang cukup ya \u2728"
-                };
-                addMealLog(from, {
-                  id: `m-${Date.now()}`,
-                  foodName: fallbackFoodObj.foodName,
-                  calories: calEst,
-                  protein: protEst,
-                  carbs: carbEst,
-                  fat: fatEst,
-                  fiber: 15,
-                  mealType: getMealTypeByHour(),
-                  timestamp: (/* @__PURE__ */ new Date()).toISOString()
-                });
+                const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                  userText,
+                  null,
+                  Boolean(imagePart)
+                );
+                addMealLog(from, mealRecord);
                 const dailyTotals = getDailyTotals(from);
-                const card = formatNutritionCard(fallbackFoodObj, "Teks", userData, dailyTotals);
+                const card = formatNutritionCard(
+                  validatedParsed,
+                  imagePart ? "Foto" : "Teks",
+                  userData,
+                  dailyTotals
+                );
                 responseMessages = [card];
               }
             }
@@ -50595,67 +50584,34 @@ Keluarkan output JSON valid:
               const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
               responseMessages = [parsed.clarificationQuestion || defaultClarification];
             } else {
-              const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
+              const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                 userText,
-                parsed.foodName,
-                Boolean(imagePart),
-                parsed.mealType
+                parsed,
+                Boolean(imagePart)
               );
-              let calcNutr = calculateFoodNutrition(finalFoodName);
-              if (imagePart && Number(parsed.calories) > 0 && calcNutr.calories === 103 && finalFoodName !== "Estimasi Makanan") {
-                calcNutr = {
-                  ...calcNutr,
-                  foodName: finalFoodName,
-                  calories: Number(parsed.calories) || 250,
-                  protein: Number(parsed.protein) || 4,
-                  carbs: Number(parsed.carbs) || 30,
-                  fat: Number(parsed.fat) || 12,
-                  fiber: Number(parsed.fiber) || 2,
-                  sugar: Number(parsed.sugar) || 10,
-                  sodium: Number(parsed.sodium) || 150
-                };
-              }
-              addMealLog(normFrom, {
-                id: `m-${Date.now()}`,
-                foodName: finalFoodName,
-                calories: calcNutr.calories,
-                protein: calcNutr.protein,
-                carbs: calcNutr.carbs,
-                fat: calcNutr.fat,
-                fiber: calcNutr.fiber,
-                sugar: calcNutr.sugar,
-                sodium: calcNutr.sodium,
-                mealType: finalMealType.toLowerCase(),
-                timestamp: (/* @__PURE__ */ new Date()).toISOString()
-              });
+              addMealLog(normFrom, mealRecord);
               const dailyTotals = getDailyTotals(normFrom);
-              const card = formatNutritionCard({
-                ...parsed,
-                foodName: finalFoodName,
-                calories: calcNutr.calories,
-                protein: calcNutr.protein,
-                carbs: calcNutr.carbs,
-                fat: calcNutr.fat,
-                fiber: calcNutr.fiber,
-                sugar: calcNutr.sugar,
-                sodium: calcNutr.sodium,
-                portionDetail: calcNutr.portionDisplayLabel || parsed.portionDetail
-              }, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+              const card = formatNutritionCard(
+                validatedParsed,
+                imagePart ? "Foto" : "Teks",
+                userData,
+                dailyTotals
+              );
               responseMessages = [card];
               if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
                 const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-                const mealTypeStr = getMealTypeByHour(userText || parsed.mealType);
+                const mealTypeStr = validatedParsed.mealType;
                 const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
                 const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
                 cardMediaCache.set(cardId, {
-                  foodName: finalFoodName,
-                  calories: calcNutr.calories,
-                  protein: calcNutr.protein,
-                  carbs: calcNutr.carbs,
-                  fat: calcNutr.fat,
-                  sodium: calcNutr.sodium,
-                  fiber: calcNutr.fiber,
-                  sugar: calcNutr.sugar,
+                  foodName: mealRecord.foodName,
+                  calories: mealRecord.calories,
+                  protein: mealRecord.protein,
+                  carbs: mealRecord.carbs,
+                  fat: mealRecord.fat,
+                  sodium: mealRecord.sodium || 0,
+                  fiber: mealRecord.fiber || 0,
+                  sugar: mealRecord.sugar || 0,
                   mealType: mealTypeStr,
                   dateStr,
                   dailyTargetCalories: userData.targetCalories || 1966,
@@ -50690,45 +50646,19 @@ Keluarkan output JSON valid:
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);
-          const { foodName: fallbackFoodName, mealType: fallbackMealType } = resolveCleanFoodNameAndMealType(
+          const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
             userText,
-            "",
+            null,
             Boolean(imagePart)
           );
-          const detRes = estimateMealNutritionDeterministic(fallbackFoodName);
-          const fallbackFoodObj = {
-            isFood: true,
-            isEquipment: false,
-            foodName: detRes.foodName || fallbackFoodName,
-            calories: detRes.calories || 450,
-            protein: detRes.protein || 30,
-            carbs: detRes.carbs || 50,
-            fat: detRes.fat || 12,
-            fiber: detRes.fiber || 3,
-            sugar: detRes.sugar || 4,
-            sodium: detRes.sodium || 400,
-            satietyScore: 7,
-            satietyExplanation: "Keseimbangan nutrisi yang baik untuk mendukung kebutuhan harian kamu.",
-            healthScore: 8,
-            portionEstimates: detRes.items?.map((i) => `${i.name}: ~${i.calories} kcal`) || [fallbackFoodName],
-            keyInsights: ["Asupan makro seimbang", "Mendukung target pemulihan dan energi harian"],
-            coachComment: userData.persona === "max" ? "Mantap bro! Pilihan menu yang solid, jaga terus konsistensi nutrisi lo! \u{1F4AA}\u{1F525}" : "Pilihan menu yang lezat dan bergizi! Tetap jaga hidrasi tubuh kamu ya \u2728"
-          };
-          addMealLog(normFrom, {
-            id: `m-${Date.now()}`,
-            foodName: fallbackFoodObj.foodName,
-            calories: fallbackFoodObj.calories,
-            protein: fallbackFoodObj.protein,
-            carbs: fallbackFoodObj.carbs,
-            fat: fallbackFoodObj.fat,
-            fiber: fallbackFoodObj.fiber,
-            sugar: fallbackFoodObj.sugar,
-            sodium: fallbackFoodObj.sodium,
-            mealType: fallbackMealType.toLowerCase(),
-            timestamp: (/* @__PURE__ */ new Date()).toISOString()
-          });
+          addMealLog(normFrom, mealRecord);
           const dailyTotals = getDailyTotals(normFrom);
-          const card = formatNutritionCard(fallbackFoodObj, imagePart ? "Foto" : "Teks", userData, dailyTotals);
+          const card = formatNutritionCard(
+            validatedParsed,
+            imagePart ? "Foto" : "Teks",
+            userData,
+            dailyTotals
+          );
           responseMessages = [card];
         }
       }
@@ -51104,6 +51034,8 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  buildSingleSourceOfTruthMealRecord,
+  formatNutritionCard,
   getMealTypeByHour,
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,
