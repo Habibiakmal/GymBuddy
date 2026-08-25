@@ -41,7 +41,11 @@ import {
   makeSodiumProgressBar,
   validateNutrientSanity,
   buildGeminiNutritionPrompt,
-  isGenericMealInput
+  isGenericMealInput,
+  generateCanonicalMealTitle,
+  formatFoodItemsToTitle,
+  cleanSingleFoodItemName,
+  extractDetectedFoodItems
 } from "./services/nutritionEngine";
 import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
@@ -73,14 +77,16 @@ export function sanitizeWhatsAppResponse(text: string): string {
 }
 
 /**
- * Helper to determine clean food name and meal type from AI Vision detection and optional user caption.
- * Ensures user captions like "aku makan ini untuk sarapan" or "aku makan snack ini" are NEVER used as food names.
+ * Helper to determine clean canonical food name and meal type from AI Vision detection and optional user caption.
+ * Ensures user captions (e.g. "aku tadi siang makan nasi 2 piring, pake ayam goreng, dan pete goreng serta selada")
+ * are NEVER used as food names, and generates canonical format: [ITEM 1], [ITEM 2] & [ITEM 3].
  */
 export function resolveCleanFoodNameAndMealType(
   rawUserText: string,
   detectedFoodName: string,
   hasImage: boolean,
-  detectedMealType?: string
+  detectedMealType?: string,
+  detectedFoodsList?: string[]
 ): { foodName: string; mealType: string } {
   const cleanCaption = String(rawUserText || "").trim();
   const lowerCaption = cleanCaption.toLowerCase();
@@ -126,36 +132,32 @@ export function resolveCleanFoodNameAndMealType(
 
   let finalFoodName = "";
 
-  if (hasImage) {
+  if (Array.isArray(detectedFoodsList) && detectedFoodsList.length > 0) {
+    finalFoodName = generateCanonicalMealTitle(detectedFoodsList);
+  } else if (hasImage) {
     // When photo is present, detected food name from Vision AI is ALWAYS the primary source of truth
     if (cleanDetected && cleanDetected.toLowerCase() !== "makanan" && cleanDetected.toLowerCase() !== "analisis makanan" && cleanDetected.toLowerCase() !== "unknown food") {
-      finalFoodName = cleanDetected;
+      finalFoodName = generateCanonicalMealTitle(cleanDetected);
     } else if (!isGenericCaption) {
-      // User typed specific name with photo (e.g. "Nasi Padang Rendang")
-      finalFoodName = cleanCaption
-        .replace(/^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|catat|log|makanan\s+saya)\s+(?:adalah\s+|yaitu\s+)?/i, "")
-        .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
-        .trim();
+      finalFoodName = generateCanonicalMealTitle(cleanCaption);
     } else {
       finalFoodName = "Estimasi Makanan";
     }
   } else {
     // Text-only logging
-    if (!isGenericCaption) {
-      // Strip conversational phrases: "aku makan nasi uduk untuk sarapan" -> "Nasi Uduk"
-      finalFoodName = cleanCaption
-        .replace(/^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|catat|log|makanan\s+saya)\s+(?:adalah\s+|yaitu\s+)?/i, "")
-        .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
-        .trim();
+    if (cleanDetected && cleanDetected.toLowerCase() !== "makanan" && cleanDetected.toLowerCase() !== "analisis makanan" && cleanDetected.toLowerCase() !== "unknown food" && cleanDetected.toLowerCase() !== cleanCaption.toLowerCase()) {
+      finalFoodName = generateCanonicalMealTitle(cleanDetected);
+    } else if (!isGenericCaption) {
+      finalFoodName = generateCanonicalMealTitle(cleanCaption);
     } else if (cleanDetected && cleanDetected.toLowerCase() !== "makanan" && cleanDetected.toLowerCase() !== "analisis makanan") {
-      finalFoodName = cleanDetected;
+      finalFoodName = generateCanonicalMealTitle(cleanDetected);
     } else {
       finalFoodName = "Estimasi Makanan";
     }
   }
 
   if (!finalFoodName || finalFoodName.toLowerCase() === "makanan") {
-    finalFoodName = (cleanDetected && cleanDetected.toLowerCase() !== "makanan") ? cleanDetected : "Estimasi Makanan";
+    finalFoodName = (cleanDetected && cleanDetected.toLowerCase() !== "makanan") ? generateCanonicalMealTitle(cleanDetected) : "Estimasi Makanan";
   }
 
   return { foodName: finalFoodName, mealType };
@@ -179,9 +181,10 @@ export function buildSingleSourceOfTruthMealRecord(
 } {
   const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
     rawUserText,
-    parsed?.foodName,
+    parsed?.canonicalMealTitle || parsed?.foodName,
     hasImage,
-    parsed?.mealType
+    parsed?.mealType,
+    parsed?.detectedFoods
   );
 
   let finalCal = Number(parsed?.calories) || 0;
@@ -243,9 +246,15 @@ export function buildSingleSourceOfTruthMealRecord(
     }
   }
 
+  const detectedFoodsList = Array.isArray(parsed?.detectedFoods) && parsed.detectedFoods.length > 0
+    ? parsed.detectedFoods
+    : extractDetectedFoodItems(rawUserText || finalFoodName);
+
   const mealRecord: MealLog = {
     id: `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     foodName: finalFoodName,
+    mealTitle: finalFoodName,
+    rawUserMessage: rawUserText || "",
     calories: finalCal,
     protein: finalProt,
     carbs: finalCarb,
@@ -254,12 +263,17 @@ export function buildSingleSourceOfTruthMealRecord(
     sugar: finalSugar,
     sodium: finalSodium,
     mealType: finalMealType.toLowerCase() as any,
+    detectedFoods: detectedFoodsList,
+    components: parsed?.components || [],
+    aiConfidence: parsed?.aiConfidence || (hasImage ? 92 : 88),
     timestamp: new Date().toISOString()
   };
 
   const validatedParsed = {
     ...parsed,
     foodName: finalFoodName,
+    mealTitle: finalFoodName,
+    detectedFoods: detectedFoodsList,
     calories: finalCal,
     protein: finalProt,
     carbs: finalCarb,
@@ -836,6 +850,11 @@ function validateAndNormalizeNutrition(parsed: any, isPhoto: boolean = false): a
 interface MealLog {
   id?: string;
   foodName: string;
+  mealTitle?: string;
+  rawUserMessage?: string;
+  mealType?: string;
+  detectedFoods?: string[];
+  components?: any[];
   calories: number;
   protein: number;
   carbs: number;
@@ -845,8 +864,9 @@ interface MealLog {
   sodium?: number;
   isHydration?: boolean;
   volumeMl?: number;
+  aiConfidence?: number;
   timestamp: string;
-  mealType?: string;
+  date?: string;
 }
 
 interface WeeklyEntry {
@@ -5944,17 +5964,27 @@ PRINSIP UTAMA:
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN
 PASTIKAN "isFood": true dan berikan angka estimasi realistis.
+ATURAN TITLE MAKANAN (SANGAT KETAT):
+- DILARANG KERAS menggunakan pesan asli user (misal: "aku tadi siang makan nasi 2 piring...") sebagai foodName / canonicalMealTitle!
+- canonicalMealTitle & foodName HARUS berupa nama makanan bersih dengan format: "[Item 1], [Item 2] & [Item 3]" (contoh: "Nasi Putih, Ayam Goreng, Pete Goreng & Selada" atau "Sandwich Daging Sapi & Keju").
+- detectedFoods HARUS berupa array nama item makanan yang terdeteksi: ["Nasi Putih", "Ayam Goreng", "Pete Goreng", "Selada"].
+- mealType HARUS berisi konteks waktu: "Breakfast" | "Lunch" | "Dinner" | "Snack".
+
 Keluarkan output JSON valid:
 {
   "isFood": true,
   "isEquipment": false,
-  "foodName": "Nama Makanan/Minuman",
+  "canonicalMealTitle": "Nama Makanan Bersih [Item 1], [Item 2] & [Item 3]",
+  "foodName": "Nama Makanan Bersih [Item 1], [Item 2] & [Item 3]",
+  "detectedFoods": ["Item 1", "Item 2", "Item 3"],
+  "mealType": "Breakfast / Lunch / Dinner / Snack",
   "calories": 210,
   "protein": 20,
   "carbs": 30,
   "fat": 5,
   "fiber": 2,
   "sugar": 4,
+  "sodium": 350,
   "satietyScore": 7,
   "satietyExplanation": "Penjelasan singkat efek kenyang makanan ini",
   "healthScore": 8,
@@ -6594,13 +6624,22 @@ PRINSIP WAJIB ANALISIS MAKANAN (MULTI-MODAL IMAGE + TEXT):
      Set "needsClarification": true dan sediakan "clarificationQuestion" ramah dari coach (${isMia ? "Coach Mia" : "Coach Max"}).
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN (teks atau gambar makanan/minuman)
+ATURAN TITLE MAKANAN (SANGAT KETAT):
+- DILARANG KERAS menggunakan pesan asli user (misal: "aku tadi siang makan nasi 2 piring...") sebagai foodName / canonicalMealTitle!
+- canonicalMealTitle & foodName HARUS berupa nama makanan bersih dengan format: "[Item 1], [Item 2] & [Item 3]" (contoh: "Nasi Putih, Ayam Goreng, Pete Goreng & Selada" atau "Sandwich Daging Sapi & Keju").
+- detectedFoods HARUS berupa array nama item makanan yang terdeteksi: ["Nasi Putih", "Ayam Goreng", "Pete Goreng", "Selada"].
+- mealType HARUS berisi konteks waktu: "Breakfast" | "Lunch" | "Dinner" | "Snack".
+
 Keluarkan output JSON valid:
 {
   "isFood": true,
   "isEquipment": false,
   "needsClarification": false,
   "clarificationQuestion": "",
-  "foodName": "Nama Lengkap Makanan / Kombo",
+  "canonicalMealTitle": "Nama Makanan Bersih [Item 1], [Item 2] & [Item 3]",
+  "foodName": "Nama Makanan Bersih [Item 1], [Item 2] & [Item 3]",
+  "detectedFoods": ["Item 1", "Item 2", "Item 3"],
+  "mealType": "Breakfast / Lunch / Dinner / Snack",
   "calories": 420,
   "protein": 24,
   "carbs": 48,
@@ -7203,6 +7242,6 @@ Keluarkan output JSON valid:
   });
 }
 
-if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.argv.some(a => a.includes("test"))) {
+if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.argv.some(a => a.toLowerCase().includes("test") || a.includes("test_"))) {
   startServer();
 }

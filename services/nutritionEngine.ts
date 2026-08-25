@@ -1847,6 +1847,195 @@ export function makeSodiumProgressBar(current: number, limit: number = 2000, len
 }
 
 /**
+ * Cleans conversational noise from an individual food item name.
+ */
+export function cleanSingleFoodItemName(raw: string): string {
+  if (!raw || typeof raw !== "string") return "";
+  let clean = raw
+    .replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "")
+    .replace(/(?:^|\s+)~?\d+\s*k?cal(?:\s+|$)/gi, " ")
+    .replace(/(?:^|\s+)(?:diperbarui|koreksi|updated|baru)(?:\s+|$)/gi, " ")
+    .trim();
+
+  // Strip conversational pronouns & verbs & leading connectors
+  clean = clean
+    .replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "")
+    .replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "")
+    .replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin)\s+/i, "")
+    .replace(/^(?:makan|santap|ngemil|minum|catat|log)\s+/i, "")
+    .replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "")
+    .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
+    .replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "")
+    .trim();
+
+  // Strip portion indicators if present at start or end
+  clean = clean
+    .replace(/^\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)\s+(?:dari\s+|nya\s+)?/i, "")
+    .replace(/\s+\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)(?:\s+(?:saja|aja|doang))?$/i, "")
+    .replace(/\s*:\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices).*$/i, "")
+    .replace(/\s*\(\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices|kcal).*?\)/gi, "")
+    .trim();
+
+  if (!clean) return "";
+
+  // Strip any remaining leading connectors
+  clean = clean.replace(/^(?:dan|serta|pake|pakai|sama|dengan)\s+/i, "").trim();
+
+  // Normalize common Indonesian food component names
+  const lower = clean.toLowerCase();
+  if (lower === "nasi" || lower === "nasi putih") return "Nasi Putih";
+  if (lower === "ayam" || lower === "daging ayam") return "Ayam";
+  if (lower === "telur" || lower === "telor") return "Telur";
+  if (lower === "kopi" || lower === "coffee") return "Kopi";
+  if (lower.includes("iced coffee") && (lower.includes("cream foam") || lower.includes("float"))) {
+    return "Iced Coffee dengan Cream Foam / Cream Float";
+  }
+
+  // Capitalize words cleanly
+  return clean
+    .split(/\s+/)
+    .map(word => {
+      if (word.includes("/")) {
+        return word.split("/").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" / ");
+      }
+      if (["dan", "atau", "di", "ke", "dari", "yang", "dengan", "and", "or", "of", "with", "in"].includes(word.toLowerCase())) {
+        return word.toLowerCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
+/**
+ * Formats a list of detected food item names into the canonical meal title format:
+ * [ITEM 1], [ITEM 2], [ITEM 3] & [ITEM 4]
+ * Example:
+ * ["Nasi Putih", "Ayam Goreng", "Pete Goreng", "Selada"] -> "Nasi Putih, Ayam Goreng, Pete Goreng & Selada"
+ * ["Nasi Putih", "Ayam Goreng"] -> "Nasi Putih & Ayam Goreng"
+ * ["Apel"] -> "Apel"
+ */
+export function formatFoodItemsToTitle(items: string[]): string {
+  const cleanItems = items
+    .map(i => cleanSingleFoodItemName(i))
+    .filter(i => i.length > 0);
+
+  if (cleanItems.length === 0) return "Estimasi Makanan";
+  if (cleanItems.length === 1) return cleanItems[0];
+  if (cleanItems.length === 2) return `${cleanItems[0]} & ${cleanItems[1]}`;
+
+  const lastItem = cleanItems[cleanItems.length - 1];
+  const prefixItems = cleanItems.slice(0, cleanItems.length - 1).join(", ");
+  return `${prefixItems} & ${lastItem}`;
+}
+
+/**
+ * Extracts distinct food items from a natural language text.
+ * Example:
+ * "aku tadi siang makan nasi 2 piring, pake ayam goreng, dan pete goreng serta selada"
+ * -> ["Nasi Putih", "Ayam Goreng", "Pete Goreng", "Selada"]
+ */
+export function extractDetectedFoodItems(text: string): string[] {
+  if (!text || typeof text !== "string") return [];
+  let clean = text.trim();
+
+  // Strip conversational prefixes
+  clean = clean
+    .replace(/^(?:halo\s+|hai\s+|coach\s+(?:mia|max),?\s*|tolong\s+catat,?\s*|catat\s+makan,?\s*)/i, "")
+    .replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "")
+    .replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin|hari\s+ini)\s+/i, "")
+    .replace(/^(?:makan|santap|ngemil|minum|sarapan|lunch|dinner|snack)\s+/i, "")
+    .replace(/^(?:pake|pakai|dengan|sama)\s+/i, "")
+    .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
+    .replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "")
+    .trim();
+
+  if (!clean) return [];
+
+  const lower = clean.toLowerCase();
+
+  // Single compound dish patterns (should NOT be split unless explicit comma / & / + adds multiple items)
+  if (
+    lower.startsWith("sandwich") ||
+    lower.startsWith("sub sandwich") ||
+    lower.startsWith("burger") ||
+    lower.startsWith("pizza") ||
+    lower.startsWith("nasi padang") ||
+    lower.startsWith("nasi uduk") ||
+    lower.startsWith("nasi kuning") ||
+    lower.startsWith("nasi liwet") ||
+    lower.startsWith("nasi kebuli") ||
+    lower.startsWith("nasi briyani") ||
+    lower.startsWith("nasi hainan") ||
+    lower.startsWith("nasi goreng") ||
+    lower.startsWith("mie goreng") ||
+    lower.startsWith("mie ayam") ||
+    lower.startsWith("kwetiau") ||
+    lower.startsWith("bihun") ||
+    lower.startsWith("soto") ||
+    lower.startsWith("bakso") ||
+    lower.startsWith("ayam geprek") ||
+    lower.startsWith("ayam penyet") ||
+    lower.startsWith("ayam bakar") ||
+    lower.startsWith("ayam goreng") ||
+    lower.startsWith("sate") ||
+    lower.startsWith("pisang goreng") ||
+    lower.startsWith("iced coffee") ||
+    lower.startsWith("es kopi")
+  ) {
+    if (clean.includes(",") || clean.includes("&") || /\s+serta\s+|\s+plus\s+|\s*\+\s*/i.test(clean)) {
+      const parts = clean.split(/(?:,|\s*&\s*|\s+serta\s+|\s+plus\s+|\s*\+\s*)/i);
+      return parts.map(p => cleanSingleFoodItemName(p)).filter(Boolean);
+    }
+    return [cleanSingleFoodItemName(clean)];
+  }
+
+  // Split by connectors: comma, &, " dan ", " serta ", " pake ", " pakai ", " plus ", " + ", " sama ", " dengan "
+  const rawParts = clean.split(/(?:,|\s*&\s*|\s+dan\s+|\s+serta\s+|\s+pake\s+|\s+pakai\s+|\s+plus\s+|\s*\+\s*|\s+sama\s+|\s+dengan\s+)/i);
+  const items: string[] = [];
+
+  for (const part of rawParts) {
+    const cleanedItem = cleanSingleFoodItemName(part);
+    if (cleanedItem && !["dan", "serta", "pake", "sama", "dengan", "ini", "itu", "makanan", "makan"].includes(cleanedItem.toLowerCase())) {
+      items.push(cleanedItem);
+    }
+  }
+
+  return items.length > 0 ? items : [cleanSingleFoodItemName(clean) || "Estimasi Makanan"];
+}
+
+/**
+ * Universal Canonical Food Title Generator.
+ * Guarantees that raw user text is NEVER used directly as the display title.
+ */
+export function generateCanonicalMealTitle(input: string[] | string, fallbackText?: string): string {
+  if (Array.isArray(input)) {
+    if (input.length > 0) {
+      return formatFoodItemsToTitle(input);
+    }
+    if (fallbackText) {
+      const extracted = extractDetectedFoodItems(fallbackText);
+      return formatFoodItemsToTitle(extracted);
+    }
+    return "Estimasi Makanan";
+  }
+
+  if (typeof input === "string" && input.trim()) {
+    const extracted = extractDetectedFoodItems(input.trim());
+    if (extracted.length > 0) {
+      return formatFoodItemsToTitle(extracted);
+    }
+    return cleanSingleFoodItemName(input.trim()) || "Estimasi Makanan";
+  }
+
+  if (fallbackText) {
+    const extracted = extractDetectedFoodItems(fallbackText);
+    return formatFoodItemsToTitle(extracted);
+  }
+
+  return "Estimasi Makanan";
+}
+
+/**
  * AI Structured Prompt Generator for Gemini
  * Directs Gemini to perform food decomposition and item recognition.
  */
@@ -1858,16 +2047,21 @@ TUGAS: Lakukan dekonstruksi makanan/minuman dan identifikasi komponen individual
 IKUTI ATURAN:
 1. IDENTIFIKASI KOMPONEN INDIVIDUAL (DEKOMPOSISI):
    - Pisahkan setiap item makanan/minuman, isian, topping, dan saus secara spesifik.
-   - Contoh "Roti isi sosis topping keju" -> (1) Roti, (2) Sosis, (3) Keju.
-   - Contoh "Nasi ayam bumbu, perkedel, dan daun singkong" -> (1) Nasi putih, (2) Ayam, (3) Perkedel, (4) Daun singkong.
-2. JANGAN MENGHILANGKAN INFORMASI YANG DISEBUTKAN USER:
-   - Jika user menyebutkan bahan secara eksplisit (misal "isi sosis topping keju"), seluruh komponen tersebut WAJIB dimasukkan ke dalam daftar item.
-3. JANGAN MENGARANG INGREDIEN TERSEMBUNYI YANG TIDAK TERLIHAT / TIDAK DISEBUTKAN.
+   - Contoh "aku tadi siang makan nasi 2 piring, pake ayam goreng, dan pete goreng serta selada" -> (1) Nasi Putih, (2) Ayam Goreng, (3) Pete Goreng, (4) Selada.
+   - Canonical Meal Title HARUS: "Nasi Putih, Ayam Goreng, Pete Goreng & Selada".
+2. DILARANG KERAS MENGGUNAKAN PESAN ASLI USER SEBAGAI FOOD NAME / TITLE:
+   - DILARANG memasukkan kata percakapan ("aku", "tadi", "siang", "makan", "pake", "serta", "dan", "minum", "sarapan") ke dalam canonicalMealTitle / foodName.
+   - canonicalMealTitle HARUS HANYA berisi nama item makanan/minuman yang terdeteksi dengan format "[Item 1], [Item 2] & [Item 3]".
+3. JANGAN MENGHILANGKAN INFORMASI YANG DISEBUTKAN USER:
+   - Jika user menyebutkan bahan secara eksplisit, seluruh komponen tersebut WAJIB dimasukkan ke dalam daftar item.
 4. ESTIMASI KUANTITAS DAN UNIT YANG REALISTIS.
 
 Keluarkan JSON valid:
 {
-  "foodName": "Nama Lengkap Makanan / Kombo",
+  "canonicalMealTitle": "Format [Item 1], [Item 2] & [Item 3]",
+  "foodName": "Format [Item 1], [Item 2] & [Item 3]",
+  "detectedFoods": ["Item 1", "Item 2", "Item 3"],
+  "mealType": "Breakfast / Lunch / Dinner / Snack",
   "isFood": true,
   "portionNote": "Porsi teridentifikasi",
   "components": [
