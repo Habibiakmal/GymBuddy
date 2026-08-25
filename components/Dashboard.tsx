@@ -70,6 +70,7 @@ import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
 import { notificationService } from "../services/notificationService";
 import { estimateMealNutritionDeterministic, FoodItemNutrition, MealNutritionResult } from "../services/nutritionEngine";
+import { getApiBaseUrl } from "../utils/api";
 
 function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
   const hour = new Date().getHours();
@@ -127,6 +128,7 @@ interface DashboardProps {
   onBackToHome: () => void;
   onResetData?: () => void;
   onOpenWatchMode?: () => void;
+  onUpdateUser?: (updatedUser: UserProfileData) => void;
 }
 
 interface WorkoutExercise {
@@ -740,7 +742,8 @@ export default function Dashboard({
   onLogout,
   onBackToHome,
   onResetData,
-  onOpenWatchMode
+  onOpenWatchMode,
+  onUpdateUser
 }: DashboardProps) {
   const safeUser: UserProfileData = initialUser || {
     name: "Pengguna",
@@ -799,23 +802,27 @@ export default function Dashboard({
   useEffect(() => {
     const fetchLiveUser = async () => {
       const phoneToUse = initialUser?.phone || safeUser?.phone || safeUser?.normalizedPhone || "";
-      if (!phoneToUse) return; // No phone = no fetch, prevent fetching other user's data
+      if (!phoneToUse) return;
       const norm = normalizePhone(phoneToUse);
-      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+      const API_BASE_URL = getApiBaseUrl();
       try {
-        const res = await fetch(`${API_BASE_URL}/api/user/${norm}`);
+        const res = await fetch(`${API_BASE_URL}/api/user/${norm}`, {
+          headers: { Accept: "application/json" }
+        });
         if (res.ok) {
           const data = await res.json();
           if (data && (data.user || data.profile || data.name)) {
             const profile = data.user || data.profile || data;
             setLiveUser(profile);
+            onUpdateUser?.(profile);
             localStorage.setItem("gymbuddy_active_session", JSON.stringify(profile));
+            localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(profile));
           }
         }
       } catch (e) {}
     };
     fetchLiveUser();
-  }, [initialUser?.phone]);
+  }, [initialUser?.phone, safeUser?.phone]);
 
   // Robust Local Storage Meal Retrieval — ONLY reads user-specific keys (Bug #3/#4 fix)
   const getLocalMeals = (phone: string, dateStr: string): MealItem[] => {
@@ -1195,33 +1202,50 @@ export default function Dashboard({
       completedAt: new Date().toISOString()
     };
 
-    const updatedUser: UserProfileData = {
+    const norm = normalizePhone(activeUser.phone || "");
+    const API_BASE_URL = getApiBaseUrl();
+    let savedUser: UserProfileData = {
       ...activeUser,
       dob: healthDob || activeUser.dob,
       age: derivedAge,
       healthProfile: updatedHealthProfile
     };
 
-    setLiveUser(updatedUser);
-
-    const norm = normalizePhone(activeUser.phone || "");
     if (norm) {
       try {
-        localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(updatedUser));
-        localStorage.setItem("gymbuddy_last_user", JSON.stringify(updatedUser));
-        localStorage.setItem("gymbuddy_active_session", JSON.stringify(updatedUser));
-      } catch (e) {}
-
-      try {
-        const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-        await fetch(`${API_BASE_URL}/api/user/${norm}/health-profile`, {
+        const res = await fetch(`${API_BASE_URL}/api/user/${norm}/health-profile`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updatedHealthProfile)
         });
-      } catch (e) {
-        console.warn("Failed to sync health profile to backend:", e);
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.error || "Gagal menyimpan profil kesehatan");
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && (data.user || data.profile)) {
+          savedUser = data.user || data.profile;
+        }
+      } catch (err: any) {
+        console.error("Health profile save error:", err);
+        setIsSavingHealthProfile(false);
+        setReminderNotificationMsg(lang === "EN" ? "Failed to save health profile. Please try again." : "Perubahan profil kesehatan belum berhasil disimpan. Silakan coba lagi.");
+        setTimeout(() => setReminderNotificationMsg(null), 4500);
+        return;
       }
+    }
+
+    setLiveUser(savedUser);
+    onUpdateUser?.(savedUser);
+
+    if (norm) {
+      try {
+        localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(savedUser));
+        localStorage.setItem("gymbuddy_last_user", JSON.stringify(savedUser));
+        localStorage.setItem("gymbuddy_active_session", JSON.stringify(savedUser));
+      } catch (e) {}
     }
 
     if (activeUser?.phone) {
@@ -1706,7 +1730,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setCustWater(String(targetHydrationGoal));
   }, [targetCalories, targetProtein, targetCarbs, targetFat, targetSugar, targetHydrationGoal, showCustomTargetsModal]);
 
-  const handleSaveCustomTargets = () => {
+  const handleSaveCustomTargets = async () => {
     const newTargets = {
       calories: Math.max(500, Number(custCal) || autoTargetCalories),
       protein: Math.max(10, Number(custProt) || autoTargetProtein),
@@ -1715,35 +1739,78 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       sugar: Math.max(5, Number(custSugar) || 45),
       water: Math.max(500, Number(custWater) || 2500),
     };
+
+    const API_BASE_URL = getApiBaseUrl();
+    if (normPhone) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customTargets: newTargets, targetCalories: newTargets.calories })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.error || "Gagal menyimpan target kustom");
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && (data.user || data.profile)) {
+          const updatedProf = data.user || data.profile;
+          setLiveUser(updatedProf);
+          onUpdateUser?.(updatedProf);
+        }
+      } catch (err: any) {
+        console.error("Custom targets save error:", err);
+        setReminderNotificationMsg(isEN ? "Failed to save custom targets. Please try again." : "Gagal menyimpan target kustom. Silakan coba lagi.");
+        setTimeout(() => setReminderNotificationMsg(null), 4500);
+        return;
+      }
+    }
+
     setCustomTargets(newTargets);
     try {
       localStorage.setItem(`gymbuddy_custom_targets_${normPhone}`, JSON.stringify(newTargets));
     } catch (e) {}
-
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customTargets: newTargets, targetCalories: newTargets.calories })
-    }).catch(() => {});
 
     setShowCustomTargetsModal(false);
     setReminderNotificationMsg(isEN ? "Custom nutrition targets saved! 🎯" : "Target nutrisi kustom berhasil disimpan! 🎯");
     setTimeout(() => setReminderNotificationMsg(null), 3500);
   };
 
-  const handleResetCustomTargets = () => {
+  const handleResetCustomTargets = async () => {
+    const API_BASE_URL = getApiBaseUrl();
+    if (normPhone) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customTargets: null })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.error || "Gagal reset target");
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && (data.user || data.profile)) {
+          const updatedProf = data.user || data.profile;
+          setLiveUser(updatedProf);
+          onUpdateUser?.(updatedProf);
+        }
+      } catch (err: any) {
+        console.error("Custom targets reset error:", err);
+        setReminderNotificationMsg(isEN ? "Failed to reset targets. Please try again." : "Gagal mereset target. Silakan coba lagi.");
+        setTimeout(() => setReminderNotificationMsg(null), 4500);
+        return;
+      }
+    }
+
     setCustomTargets({});
     try {
       localStorage.removeItem(`gymbuddy_custom_targets_${normPhone}`);
     } catch (e) {}
-
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    fetch(`${API_BASE_URL}/api/user/${normPhone}/goals`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customTargets: null })
-    }).catch(() => {});
 
     setShowCustomTargetsModal(false);
     setReminderNotificationMsg(isEN ? "Reset to AI recommended targets! ✨" : "Target dikembalikan ke hitungan otomatis AI! ✨");
@@ -1850,7 +1917,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     }
   }, [activeUser, showEditProfileModal]);
 
-  const handleSaveProfileChanges = () => {
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleSaveProfileChanges = async () => {
+    setIsSavingProfile(true);
     const derivedAge = Number(profAge) || 25;
     const cleanConditions = healthStatus === "has_condition" ? selectedConditions : [];
     const cleanOther = healthStatus === "has_condition" ? healthOtherCondition.trim() : "";
@@ -1878,27 +1948,46 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       persona: profPersona,
       healthProfile: updatedHealthProfile
     };
-    setLiveUser(updated);
-    try {
-      localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(updated));
-      localStorage.setItem("gymbuddy_active_session", JSON.stringify(updated));
-      localStorage.setItem("gymbuddy_last_user", JSON.stringify(updated));
-    } catch (e) {}
+
+    const API_BASE_URL = getApiBaseUrl();
+    let savedProfile = updated;
 
     if (normPhone) {
-      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/health-profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedHealthProfile)
-      }).catch(() => {});
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updated)
-      }).catch(() => {});
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/${normPhone}/profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updated)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.error || "Gagal menyimpan profil ke database");
+        }
+
+        const data = await res.json().catch(() => null);
+        if (data && (data.user || data.profile)) {
+          savedProfile = data.user || data.profile;
+        }
+      } catch (err: any) {
+        console.error("Profile save error:", err);
+        setIsSavingProfile(false);
+        setReminderNotificationMsg(isEN ? "Failed to save profile changes. Please try again." : "Perubahan belum berhasil disimpan. Silakan coba lagi.");
+        setTimeout(() => setReminderNotificationMsg(null), 4500);
+        return;
+      }
     }
 
+    setLiveUser(savedProfile);
+    onUpdateUser?.(savedProfile);
+
+    try {
+      localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(savedProfile));
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(savedProfile));
+      localStorage.setItem("gymbuddy_last_user", JSON.stringify(savedProfile));
+    } catch (e) {}
+
+    setIsSavingProfile(false);
     setShowEditProfileModal(false);
     setReminderNotificationMsg(isEN ? "Profile & health details saved! ✨" : "Profil & riwayat kesehatan berhasil disimpan! ✨");
     setTimeout(() => setReminderNotificationMsg(null), 3500);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { getApiBaseUrl } from "../utils/api";
 import {
   ArrowLeft,
   Dumbbell,
@@ -271,13 +272,11 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
         };
 
         try {
-          // Always post to local relative endpoint first to ensure local server db.json is updated
+          // Always post to local relative endpoint first
           await postOnboarding("/api/onboarding");
-          const envUrl = (import.meta as any).env?.VITE_API_URL;
-          if (envUrl && envUrl !== "") {
-            await postOnboarding(`${envUrl}/api/onboarding`);
-          } else {
-            await postOnboarding("https://gymbuddy-backend-253242815083.asia-southeast2.run.app/api/onboarding");
+          const apiBase = getApiBaseUrl();
+          if (apiBase && apiBase !== "") {
+            await postOnboarding(`${apiBase}/api/onboarding`);
           }
         } catch (e) {
           console.error("Failed to save profile", e);
@@ -2521,18 +2520,20 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                         } catch (e) {}
 
                         // Sync to backend database immediately
-                        const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+                        const API_BASE_URL = getApiBaseUrl();
                         try {
                           fetch("/api/onboarding", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ phone: norm, profile: finalUserObj })
                           }).catch(() => {});
-                          fetch(`${API_BASE_URL}/api/onboarding`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ phone: norm, profile: finalUserObj })
-                          }).catch(() => {});
+                          if (API_BASE_URL) {
+                            fetch(`${API_BASE_URL}/api/onboarding`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ phone: norm, profile: finalUserObj })
+                            }).catch(() => {});
+                          }
                         } catch (e) {}
 
                         try {

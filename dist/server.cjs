@@ -31,13 +31,18 @@ var server_exports = {};
 __export(server_exports, {
   applyDeterministicCorrection: () => applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
+  calculateUserData: () => calculateUserData,
+  dbData: () => dbData,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
   formatNutritionCard: () => formatNutritionCard,
   getLastFoodMeal: () => getLastFoodMeal,
   getMealTypeByHour: () => getMealTypeByHour,
+  getUserProfile: () => getUserProfile,
   processMealCorrection: () => processMealCorrection,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
+  saveDb: () => saveDb,
+  saveUserProfile: () => saveUserProfile,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
   updateExistingMealLog: () => updateExistingMealLog
 });
@@ -44746,22 +44751,23 @@ function getFirestore() {
       firestoreInstance = new import_firestore.Firestore({
         projectId: projectId || parsedCredentials.project_id,
         databaseId,
-        credentials: parsedCredentials
+        credentials: parsedCredentials,
+        ignoreUndefinedProperties: true
       });
       console.log(`[Firestore] Initialized & authenticated via Service Account for DB: "${databaseId}" \u2705`);
       return firestoreInstance;
     }
     if (projectId) {
-      firestoreInstance = new import_firestore.Firestore({ projectId, databaseId });
+      firestoreInstance = new import_firestore.Firestore({ projectId, databaseId, ignoreUndefinedProperties: true });
       console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") \u2705`);
       return firestoreInstance;
     }
-    firestoreInstance = new import_firestore.Firestore();
+    firestoreInstance = new import_firestore.Firestore({ ignoreUndefinedProperties: true });
     return firestoreInstance;
   } catch (err) {
     console.warn("[Firestore] Initialization warning:", err?.message || err);
     try {
-      firestoreInstance = new import_firestore.Firestore();
+      firestoreInstance = new import_firestore.Firestore({ ignoreUndefinedProperties: true });
       return firestoreInstance;
     } catch (e) {
       return null;
@@ -44833,15 +44839,21 @@ async function saveUserToFirestore(doc) {
     const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
     const userId = doc.userId || `usr_${normPhone}`;
     const now = /* @__PURE__ */ new Date();
-    const payload = {
+    const rawPayload = {
       ...doc,
       phone: normPhone,
       userId,
       updatedAt: now,
       createdAt: doc.createdAt || now
     };
-    await db.collection("users").doc(userId).set(payload, { merge: true });
-    await db.collection("users").doc(normPhone).set(payload, { merge: true });
+    const cleanPayload = {};
+    for (const [k, v] of Object.entries(rawPayload)) {
+      if (v !== void 0) {
+        cleanPayload[k] = v;
+      }
+    }
+    await db.collection("users").doc(userId).set(cleanPayload, { merge: true });
+    await db.collection("users").doc(normPhone).set(cleanPayload, { merge: true });
   } catch (e) {
     console.warn("[Firestore] saveUser warning:", e?.message || e);
   }
@@ -48963,6 +48975,183 @@ async function startServer() {
       waterCups
     });
   });
+  const handleUpdateProfile = async (req, res) => {
+    try {
+      const rawPhone = req.params.phone || req.body.phone;
+      const phone = normalizePhone(rawPhone);
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor telepon wajib diisi." });
+      }
+      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+      const existing = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone) || {};
+      const payload = req.body || {};
+      const {
+        name,
+        gender,
+        age: rawAge,
+        dob: rawDob,
+        height: rawHeight,
+        weight: rawWeight,
+        startWeight: rawStartWeight,
+        targetWeight: rawTargetWeight,
+        activityLevel,
+        goal,
+        goalTitle,
+        persona,
+        plan,
+        activeService,
+        selectedFeature,
+        equipment,
+        injuries,
+        customInjury,
+        allergies,
+        healthProfile,
+        healthStatus,
+        conditions,
+        otherCondition,
+        customTargets,
+        customGoals,
+        workoutSchedule,
+        reminderTime,
+        reminderEnabled,
+        targetCalories,
+        dailyTargetCalories,
+        proteinGrams,
+        dailyTargetProtein,
+        carbGrams,
+        dailyTargetCarbs,
+        fatGrams,
+        dailyTargetFat,
+        fiberGrams
+      } = payload;
+      const updatedUser = {
+        ...existing,
+        phone,
+        normalizedPhone: phone,
+        userId: existing.userId || `usr_${phone}`
+      };
+      if (name !== void 0) updatedUser.name = String(name).trim();
+      if (gender !== void 0) {
+        const cleanGender = String(gender).toLowerCase();
+        updatedUser.gender = cleanGender === "wanita" || cleanGender === "female" ? "wanita" : "pria";
+      }
+      if (rawDob !== void 0) updatedUser.dob = String(rawDob).trim();
+      if (rawAge !== void 0) updatedUser.age = Number(rawAge) || existing.age || 25;
+      if (rawHeight !== void 0) updatedUser.height = Number(rawHeight) || existing.height || 170;
+      if (rawWeight !== void 0) updatedUser.weight = Number(rawWeight) || existing.weight || 70;
+      if (rawStartWeight !== void 0) updatedUser.startWeight = Number(rawStartWeight) || existing.startWeight || updatedUser.weight;
+      if (rawTargetWeight !== void 0) updatedUser.targetWeight = Number(rawTargetWeight) || existing.targetWeight || 65;
+      if (activityLevel !== void 0) updatedUser.activityLevel = activityLevel;
+      if (goal !== void 0) updatedUser.goal = goal;
+      if (goalTitle !== void 0) updatedUser.goalTitle = goalTitle;
+      if (persona !== void 0) {
+        const cleanPersona = String(persona).toLowerCase();
+        updatedUser.persona = cleanPersona === "mia" || cleanPersona === "nikita" ? "mia" : "max";
+      }
+      if (plan !== void 0) updatedUser.plan = plan;
+      if (activeService !== void 0) updatedUser.activeService = activeService;
+      if (selectedFeature !== void 0) updatedUser.selectedFeature = selectedFeature;
+      if (equipment !== void 0) updatedUser.equipment = equipment;
+      if (injuries !== void 0) updatedUser.injuries = Array.isArray(injuries) ? injuries : [injuries];
+      if (customInjury !== void 0) updatedUser.customInjury = customInjury;
+      if (allergies !== void 0) updatedUser.allergies = Array.isArray(allergies) ? allergies : [allergies];
+      if (customTargets !== void 0) updatedUser.customTargets = customTargets;
+      if (customGoals !== void 0) updatedUser.customGoals = customGoals;
+      if (workoutSchedule !== void 0) updatedUser.workoutSchedule = workoutSchedule;
+      if (reminderTime !== void 0) updatedUser.reminderTime = reminderTime;
+      if (reminderEnabled !== void 0) updatedUser.reminderEnabled = Boolean(reminderEnabled);
+      if (targetCalories !== void 0 || dailyTargetCalories !== void 0) {
+        const cal = Number(targetCalories || dailyTargetCalories);
+        if (!isNaN(cal) && cal > 0) {
+          updatedUser.targetCalories = cal;
+          updatedUser.dailyTargetCalories = cal;
+        }
+      }
+      if (proteinGrams !== void 0 || dailyTargetProtein !== void 0) {
+        const prot = Number(proteinGrams || dailyTargetProtein);
+        if (!isNaN(prot) && prot > 0) {
+          updatedUser.proteinGrams = prot;
+          updatedUser.dailyTargetProtein = prot;
+        }
+      }
+      if (carbGrams !== void 0 || dailyTargetCarbs !== void 0) {
+        const carb = Number(carbGrams || dailyTargetCarbs);
+        if (!isNaN(carb) && carb > 0) {
+          updatedUser.carbGrams = carb;
+          updatedUser.dailyTargetCarbs = carb;
+        }
+      }
+      if (fatGrams !== void 0 || dailyTargetFat !== void 0) {
+        const fat = Number(fatGrams || dailyTargetFat);
+        if (!isNaN(fat) && fat > 0) {
+          updatedUser.fatGrams = fat;
+          updatedUser.dailyTargetFat = fat;
+        }
+      }
+      if (fiberGrams !== void 0) {
+        const fib = Number(fiberGrams);
+        if (!isNaN(fib) && fib > 0) {
+          updatedUser.fiberGrams = fib;
+        }
+      }
+      if (healthProfile || healthStatus || conditions || otherCondition) {
+        const existingHp = existing.healthProfile || {};
+        const hpDob = updatedUser.dob || existingHp.dob || "";
+        const hpAge = updatedUser.age || existingHp.age || 25;
+        updatedUser.healthProfile = {
+          dob: hpDob,
+          age: hpAge,
+          hasCondition: healthStatus || healthProfile?.hasCondition || existingHp.hasCondition || "no_condition",
+          conditions: Array.isArray(conditions) ? conditions : Array.isArray(healthProfile?.conditions) ? healthProfile.conditions : existingHp.conditions || [],
+          otherCondition: otherCondition !== void 0 ? otherCondition : healthProfile?.otherCondition !== void 0 ? healthProfile.otherCondition : existingHp.otherCondition || "",
+          isCompleted: true,
+          completedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+      }
+      if (updatedUser.dob) {
+        const { age: derivedAge } = calculateAgeFromDob(updatedUser.dob, updatedUser.age);
+        updatedUser.age = derivedAge;
+        if (updatedUser.healthProfile) {
+          updatedUser.healthProfile.age = derivedAge;
+        }
+      }
+      updatedUser.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const calculated = calculateUserData(updatedUser);
+      saveUserProfile(phone, updatedUser);
+      if (altPhone !== phone) {
+        saveUserProfile(altPhone, updatedUser);
+      }
+      saveDb();
+      try {
+        await saveUserDocument({
+          userId: `usr_${phone}`,
+          phone,
+          ...updatedUser,
+          ...calculated,
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+        await saveAppDataToFirestore(dbData);
+      } catch (fErr) {
+        console.warn("[Firestore] saveUserDocument sync note:", fErr?.message || fErr);
+      }
+      console.log(`[User Profile] Successfully updated & persisted for ${phone} (${updatedUser.name}, Gender: ${calculated.gender}, Persona: ${calculated.persona}, Calories: ${calculated.targetCalories})`);
+      return res.json({
+        success: true,
+        message: "Profile updated and persisted successfully",
+        user: { ...updatedUser, ...calculated },
+        profile: { ...updatedUser, ...calculated },
+        userData: calculated,
+        calculated
+      });
+    } catch (e) {
+      console.error("[User Profile Update Error]:", e);
+      return res.status(500).json({ success: false, error: e.message || "Failed to update profile" });
+    }
+  };
+  app.post("/api/user/:phone/profile", import_express.default.json(), handleUpdateProfile);
+  app.put("/api/user/:phone/profile", import_express.default.json(), handleUpdateProfile);
+  app.post("/api/user/:phone", import_express.default.json(), handleUpdateProfile);
+  app.put("/api/user/:phone", import_express.default.json(), handleUpdateProfile);
   app.post("/api/user/:phone/health-profile", async (req, res) => {
     try {
       const phone = normalizePhone(req.params.phone);
@@ -49757,30 +49946,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const updatedCups = setWaterCups(phone, Number(cups) || 0, targetDate);
     res.json({ success: true, phone, date: targetDate, cups: updatedCups, liters: Number((updatedCups * 0.25).toFixed(1)) });
   });
-  app.delete("/api/user/:phone", (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
-    if (phone) {
-      delete dbData.users[phone];
-      delete dbData.users[altPhone];
-      delete dbData.weeklyProgress[phone];
-      delete dbData.weeklyProgress[altPhone];
-      Object.keys(dbData.dailyLogs).forEach((key) => {
-        if (key.startsWith(phone) || key.startsWith(altPhone)) {
-          delete dbData.dailyLogs[key];
-        }
-      });
-      Object.keys(dbData.waterLogs).forEach((key) => {
-        if (key.startsWith(phone) || key.startsWith(altPhone)) {
-          delete dbData.waterLogs[key];
-        }
-      });
-      saveDb();
-      console.log(`Deleted user profile and all logs for ${phone}`);
-      return res.json({ success: true, message: `Data user ${phone} dan semua riwayat log berhasil dihapus 100%.` });
-    }
-    return res.status(404).json({ success: false, error: "User profile not found" });
-  });
   app.all(["/api/user/reset", "/api/admin/reset-db"], async (req, res) => {
     dbData = {
       users: {},
@@ -49916,39 +50081,92 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     }
     res.json({ success: true, phone, date: targetDate, activities: dbData.dailyLogs[actKey] || [] });
   });
-  app.post("/api/user/:phone/reminder", import_express.default.json(), (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const user = getUserProfile(phone);
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found" });
+  app.post("/api/user/:phone/reminder", import_express.default.json(), async (req, res) => {
+    try {
+      const phone = normalizePhone(req.params.phone);
+      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+      const user = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User profile not found" });
+      }
+      const { reminderTime, reminderEnabled } = req.body;
+      if (reminderTime !== void 0) user.reminderTime = String(reminderTime).trim();
+      if (reminderEnabled !== void 0) user.reminderEnabled = Boolean(reminderEnabled);
+      user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      saveUserProfile(phone, user);
+      if (altPhone !== phone) saveUserProfile(altPhone, user);
+      saveDb();
+      const calculated = calculateUserData(user);
+      try {
+        await saveUserDocument({
+          userId: `usr_${phone}`,
+          phone,
+          ...user,
+          ...calculated,
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+      } catch (fErr) {
+        console.warn("[Firestore] save reminder sync note:", fErr?.message || fErr);
+      }
+      res.json({
+        success: true,
+        user: { ...user, ...calculated },
+        profile: { ...user, ...calculated },
+        userData: calculated,
+        calculated,
+        reminderTime: user.reminderTime,
+        reminderEnabled: user.reminderEnabled
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || "Failed to update reminder" });
     }
-    const { reminderTime, reminderEnabled } = req.body;
-    if (reminderTime) user.reminderTime = String(reminderTime).trim();
-    if (reminderEnabled !== void 0) user.reminderEnabled = Boolean(reminderEnabled);
-    saveUserProfile(phone, user);
-    res.json({
-      success: true,
-      user,
-      reminderTime: user.reminderTime,
-      reminderEnabled: user.reminderEnabled
-    });
   });
-  app.post("/api/user/:phone/goals", import_express.default.json(), (req, res) => {
-    const phone = normalizePhone(req.params.phone);
-    const user = getUserProfile(phone);
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found" });
+  app.post("/api/user/:phone/goals", import_express.default.json(), async (req, res) => {
+    try {
+      const phone = normalizePhone(req.params.phone);
+      const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+      const user = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User profile not found" });
+      }
+      const { targetWeight, targetCalories, goal, goalTitle, customTargets, customGoals } = req.body;
+      if (targetWeight !== void 0) user.targetWeight = Number(targetWeight);
+      if (targetCalories !== void 0) {
+        user.targetCalories = Number(targetCalories);
+        user.dailyTargetCalories = Number(targetCalories);
+      }
+      if (goal !== void 0) user.goal = goal;
+      if (goalTitle !== void 0) user.goalTitle = goalTitle;
+      if (customTargets !== void 0) user.customTargets = customTargets;
+      if (customGoals !== void 0) user.customGoals = customGoals;
+      user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      saveUserProfile(phone, user);
+      if (altPhone !== phone) saveUserProfile(altPhone, user);
+      saveDb();
+      const calculated = calculateUserData(user);
+      try {
+        await saveUserDocument({
+          userId: `usr_${phone}`,
+          phone,
+          ...user,
+          ...calculated,
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+      } catch (fErr) {
+        console.warn("[Firestore] save goals sync note:", fErr?.message || fErr);
+      }
+      res.json({
+        success: true,
+        user: { ...user, ...calculated },
+        profile: { ...user, ...calculated },
+        userData: calculated,
+        calculated,
+        customTargets: user.customTargets,
+        customGoals: user.customGoals
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || "Failed to update goals" });
     }
-    const { targetWeight, targetCalories, goal, goalTitle, customTargets, customGoals } = req.body;
-    if (targetWeight) user.targetWeight = Number(targetWeight);
-    if (targetCalories) user.targetCalories = Number(targetCalories);
-    if (goal) user.goal = goal;
-    if (goalTitle) user.goalTitle = goalTitle;
-    if (customTargets) user.customTargets = customTargets;
-    if (customGoals) user.customGoals = customGoals;
-    saveUserProfile(phone, user);
-    const calculated = calculateUserData(user);
-    res.json({ success: true, user, profile: user, userData: calculated, calculated, customTargets: user.customTargets });
   });
   app.get("/api/exercises", (req, res) => {
     res.json({ success: true, count: EXERCISE_DATABASE.length, exercises: EXERCISE_DATABASE });
@@ -51408,13 +51626,18 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
 0 && (module.exports = {
   applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord,
+  calculateUserData,
+  dbData,
   detectMealCorrectionIntent,
   formatNutritionCard,
   getLastFoodMeal,
   getMealTypeByHour,
+  getUserProfile,
   processMealCorrection,
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,
+  saveDb,
+  saveUserProfile,
   splitWhatsAppMessage,
   updateExistingMealLog
 });

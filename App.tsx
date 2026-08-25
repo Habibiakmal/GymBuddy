@@ -8,6 +8,7 @@ import GymBuddyLogo from "./components/Logo";
 import Dashboard from "./components/Dashboard";
 import WatchMode from "./components/WatchMode";
 import SplashScreen from "./components/SplashScreen";
+import { getApiBaseUrl } from "./utils/api";
 import {
   motion,
   useMotionValue,
@@ -201,7 +202,7 @@ export default function App() {
           // Background sync with server database
           const norm = String(parsed.phone).replace(/\D/g, "").replace(/^62/, "0");
           const cleanPhone = norm.startsWith("8") ? "0" + norm : norm;
-          const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+          const API_BASE_URL = getApiBaseUrl();
 
           try {
             const res = await fetch(`${API_BASE_URL}/api/user/${cleanPhone}`, {
@@ -562,6 +563,12 @@ export default function App() {
         onBackToHome={() => setViewMode("landing")}
         onResetData={handleResetAllData}
         onOpenWatchMode={() => setViewMode("watch")}
+        onUpdateUser={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          try {
+            localStorage.setItem("gymbuddy_active_session", JSON.stringify(updatedUser));
+          } catch (e) {}
+        }}
       />
     );
   }

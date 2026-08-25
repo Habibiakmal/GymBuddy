@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import GymBuddyLogo from "./Logo";
+import { getApiBaseUrl } from "../utils/api";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -82,7 +83,7 @@ export default function LoginModal({
     const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
     const phoneVariations = Array.from(new Set([normPhone, altPhone, cleanedPhone, `+${cleanedPhone}`, `usr_${normPhone}`])).filter(Boolean);
 
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    const API_BASE_URL = getApiBaseUrl();
 
     let foundProfile: any = null;
     let foundProgress: any = null;
@@ -172,10 +173,9 @@ export default function LoginModal({
       foundProfile = await tryFetchProfile("");
     }
 
-    // 2. Try configured environment API or external fallback URL
-    if (!foundProfile) {
-      const envUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-      foundProfile = await tryFetchProfile(envUrl);
+    // 2. Try configured API base URL if different
+    if (!foundProfile && API_BASE_URL) {
+      foundProfile = await tryFetchProfile(API_BASE_URL);
     }
 
     // 3. Try LocalStorage fallback

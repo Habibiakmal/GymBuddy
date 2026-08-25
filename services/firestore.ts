@@ -59,24 +59,25 @@ export function getFirestore(): Firestore | null {
       firestoreInstance = new Firestore({
         projectId: projectId || parsedCredentials.project_id,
         databaseId: databaseId,
-        credentials: parsedCredentials
+        credentials: parsedCredentials,
+        ignoreUndefinedProperties: true
       });
       console.log(`[Firestore] Initialized & authenticated via Service Account for DB: "${databaseId}" ✅`);
       return firestoreInstance;
     }
 
     if (projectId) {
-      firestoreInstance = new Firestore({ projectId, databaseId });
+      firestoreInstance = new Firestore({ projectId, databaseId, ignoreUndefinedProperties: true });
       console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") ✅`);
       return firestoreInstance;
     }
 
-    firestoreInstance = new Firestore();
+    firestoreInstance = new Firestore({ ignoreUndefinedProperties: true });
     return firestoreInstance;
   } catch (err: any) {
     console.warn("[Firestore] Initialization warning:", err?.message || err);
     try {
-      firestoreInstance = new Firestore();
+      firestoreInstance = new Firestore({ ignoreUndefinedProperties: true });
       return firestoreInstance;
     } catch (e) {
       return null;
@@ -165,7 +166,7 @@ export async function saveUserToFirestore(doc: Partial<UserDocument> & { phone: 
     const userId = doc.userId || `usr_${normPhone}`;
     const now = new Date();
 
-    const payload = {
+    const rawPayload: any = {
       ...doc,
       phone: normPhone,
       userId,
@@ -173,8 +174,16 @@ export async function saveUserToFirestore(doc: Partial<UserDocument> & { phone: 
       createdAt: doc.createdAt || now
     };
 
-    await db.collection("users").doc(userId).set(payload, { merge: true });
-    await db.collection("users").doc(normPhone).set(payload, { merge: true });
+    // Remove undefined values to avoid Firestore serialization errors
+    const cleanPayload: any = {};
+    for (const [k, v] of Object.entries(rawPayload)) {
+      if (v !== undefined) {
+        cleanPayload[k] = v;
+      }
+    }
+
+    await db.collection("users").doc(userId).set(cleanPayload, { merge: true });
+    await db.collection("users").doc(normPhone).set(cleanPayload, { merge: true });
   } catch (e: any) {
     console.warn("[Firestore] saveUser warning:", e?.message || e);
   }

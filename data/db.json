@@ -1,6 +1,18 @@
 {
   "users": {},
   "dailyLogs": {},
-  "weeklyProgress": {},
+  "weeklyProgress": {
+    "08999998888": [
+      {
+        "week": 0,
+        "weight": 78,
+        "changeFromStart": 0,
+        "changeFromLastWeek": 0,
+        "progressPercent": 0,
+        "date": "2026-08-25T06:42:44.837Z",
+        "notes": "Baseline Kuesioner Awal"
+      }
+    ]
+  },
   "waterLogs": {}
 }
