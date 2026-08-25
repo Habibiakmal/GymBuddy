@@ -390,11 +390,37 @@ export async function insertFoodLogToFirestore(doc: FoodLogDocument): Promise<vo
   }
 }
 
-export async function deleteFoodLogFromFirestore(id: string): Promise<void> {
+export async function deleteFoodLogFromFirestore(id: string, phone?: string, date?: string): Promise<void> {
   try {
     const db = getFirestore();
-    if (!db) return;
-    await db.collection("foodLogs").doc(id).delete();
+    if (!db || !id) return;
+
+    // 1. Delete document directly by ID
+    await db.collection("foodLogs").doc(id).delete().catch(() => {});
+
+    // 2. Also search by field 'id' == id in case document key differs
+    const snap = await db.collection("foodLogs").where("id", "==", id).get().catch(() => null);
+    if (snap && !snap.empty) {
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 3. If phone and date are provided and nothing matched, search by foodName / date for this phone
+    if (phone && date) {
+      const cleanPhone = phone.replace(/\D/g, "");
+      const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+      const snap2 = await db.collection("foodLogs")
+        .where("phone", "==", normPhone)
+        .where("date", "==", date)
+        .where("foodName", "==", id)
+        .get().catch(() => null);
+      if (snap2 && !snap2.empty) {
+        const batch2 = db.batch();
+        snap2.docs.forEach(d => batch2.delete(d.ref));
+        await batch2.commit();
+      }
+    }
   } catch (e: any) {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
   }

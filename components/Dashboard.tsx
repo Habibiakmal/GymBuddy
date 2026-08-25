@@ -2692,20 +2692,27 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   const handleDeleteLogItem = async (id: string) => {
-    const normPhone = normalizePhone(activeUser.phone || "");
-    const updated = allLogs.filter((item) => item.id !== id);
+    const rawPhone = activeUser.phone || activeUser.normalizedPhone || "";
+    const normPhone = normalizePhone(rawPhone);
+    if (!normPhone) return;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+
+    const updated = allLogs.filter((item) => String(item.id) !== String(id) && String(item.foodName) !== String(id));
     setAllLogs(updated);
 
-    // Immediately persist deletion to localStorage
-    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+    // Immediately persist deletion across all user localStorage keys
     try {
-      localStorage.setItem(localKey, JSON.stringify(updated));
+      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      localStorage.setItem(`gymbuddy_meals_${altPhone}_${selectedDate}`, JSON.stringify(updated));
+      if (rawPhone) {
+        localStorage.setItem(`gymbuddy_meals_${rawPhone}_${selectedDate}`, JSON.stringify(updated));
+      }
     } catch (e) {}
 
-    // Sync deletion to local and Render backend immediately
-    const API_BASE_URL = "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    // Sync deletion to local and backend API
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
     try {
-      // 1. Delete the specific meal by ID
+      // 1. Delete specific meal by ID
       fetch(`/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
       fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
 
@@ -2727,6 +2734,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
       }
     } catch (e) {}
+
+    setReminderNotificationMsg(lang === "EN" ? "Meal deleted successfully! 🗑️" : "Catatan makanan berhasil dihapus! 🗑️");
+    setTimeout(() => setReminderNotificationMsg(null), 3000);
   };
 
   const handleDeleteAccount = async () => {

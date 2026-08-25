@@ -4412,38 +4412,27 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
 
-    const mergedMap = new Map<string, MealLog>();
+    // 1. In-memory cache is authoritative when loaded
+    const hasMemKey = Array.isArray(dbData.dailyLogs[key]);
+    const hasMemAltKey = Array.isArray(dbData.dailyLogs[altKey]);
 
-    // 1. In-memory cache
-    const memLogs = [
-      ...(Array.isArray(dbData.dailyLogs[key]) ? dbData.dailyLogs[key] : []),
-      ...(Array.isArray(dbData.dailyLogs[altKey]) ? dbData.dailyLogs[altKey] : [])
-    ];
-    for (const m of memLogs) {
-      if (m && !isLegacyMockMeal(m)) {
-        const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
-        mergedMap.set(dedupeKey, m);
-      }
-    }
+    let logs: MealLog[] = [];
 
-    // 2. Query persistent database layer (Firestore collection)
-    try {
-      const dbLogs = await getFoodLogsForDate(phone, targetDate);
-      if (dbLogs && dbLogs.length > 0) {
-        for (const m of dbLogs) {
-          if (m && !isLegacyMockMeal(m)) {
-            const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
-            if (!mergedMap.has(dedupeKey)) {
-              mergedMap.set(dedupeKey, m as unknown as MealLog);
-            }
-          }
+    if (hasMemKey || hasMemAltKey) {
+      logs = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || []).filter(m => m && !isLegacyMockMeal(m));
+    } else {
+      // 2. Query persistent database layer on cold start
+      try {
+        const dbLogs = await getFoodLogsForDate(phone, targetDate);
+        if (dbLogs && dbLogs.length > 0) {
+          logs = dbLogs.filter(m => m && !isLegacyMockMeal(m)) as unknown as MealLog[];
         }
+      } catch (e: any) {
+        console.warn("[Meals API] Database fetch note:", e?.message || e);
       }
-    } catch (e: any) {
-      console.warn("[Meals API] Database fetch note:", e?.message || e);
     }
 
-    const logs = deduplicateMealLogs(Array.from(mergedMap.values()));
+    logs = deduplicateMealLogs(logs);
 
     // Persist cleaned deduplicated list back to server memory
     dbData.dailyLogs[key] = logs;
@@ -4461,7 +4450,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
     const mealObj: MealLog = {
-      id: meal.id || `m-${Date.now()}`,
+      id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       foodName: meal.foodName,
       calories: Number(meal.calories) || 0,
       protein: Number(meal.protein) || 0,
@@ -4513,7 +4502,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
   });
 
-  // REST API: Delete single meal log for user (cleans BOTH key and altKey)
+  // REST API: Delete single meal log for user (cleans BOTH key and altKey and Firestore)
   app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
@@ -4523,15 +4512,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const altKey = `${altPhone}_${targetDate}`;
 
     if (dbData.dailyLogs[key]) {
-      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m: any) => m.id !== mealId);
+      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m: any) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     if (dbData.dailyLogs[altKey]) {
-      dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m: any) => m.id !== mealId);
+      dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m: any) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     saveDb();
 
     try {
-      await deleteFoodLog(mealId);
+      await deleteFoodLog(mealId, phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteFoodLog(mealId, altPhone, targetDate);
+      }
     } catch (e: any) {
       console.warn("[Meals API] deleteFoodLog note:", e?.message || e);
     }
@@ -4553,6 +4545,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
     try {
       await deleteAllFoodLogsForDate(phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
     } catch (e: any) {
       console.warn("[Meals API] deleteAllFoodLogsForDate note:", e?.message || e);
     }
@@ -4573,21 +4568,33 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[altKey] = rawMeals;
     saveDb();
 
-    // Persist each meal to database layer
+    // 1. Wipe previous Firestore logs for this date to prevent deleted items from resurrecting
+    try {
+      await deleteAllFoodLogsForDate(phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
+    } catch (e: any) {
+      console.warn("[Meals API PUT] deleteAllFoodLogsForDate note:", e?.message || e);
+    }
+
+    // 2. Persist active meals into Firestore
     for (const m of rawMeals) {
       if (m && m.foodName) {
-        insertFoodLog({
-          id: m.id || `m-${Date.now()}`,
+        await insertFoodLog({
+          id: m.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           userId: `usr_${phone}`,
           phone,
           date: targetDate,
           foodName: m.foodName,
+          mealType: m.mealType,
           calories: Number(m.calories) || 0,
           protein: Number(m.protein) || 0,
           carbs: Number(m.carbs) || 0,
           fat: Number(m.fat) || 0,
           fiber: Number(m.fiber) || 0,
           sugar: Number(m.sugar) || 0,
+          sodium: Number(m.sodium) || 0,
           isHydration: Boolean(m.isHydration),
           volumeMl: Number(m.volumeMl) || undefined,
           itemType: m.isHydration ? "water" : "food",

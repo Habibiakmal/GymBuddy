@@ -45020,11 +45020,28 @@ async function insertFoodLogToFirestore(doc) {
     console.warn("[Firestore] insertFoodLog warning:", e?.message || e);
   }
 }
-async function deleteFoodLogFromFirestore(id) {
+async function deleteFoodLogFromFirestore(id, phone, date) {
   try {
     const db = getFirestore();
-    if (!db) return;
-    await db.collection("foodLogs").doc(id).delete();
+    if (!db || !id) return;
+    await db.collection("foodLogs").doc(id).delete().catch(() => {
+    });
+    const snap2 = await db.collection("foodLogs").where("id", "==", id).get().catch(() => null);
+    if (snap2 && !snap2.empty) {
+      const batch = db.batch();
+      snap2.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    if (phone && date) {
+      const cleanPhone = phone.replace(/\D/g, "");
+      const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+      const snap22 = await db.collection("foodLogs").where("phone", "==", normPhone).where("date", "==", date).where("foodName", "==", id).get().catch(() => null);
+      if (snap22 && !snap22.empty) {
+        const batch2 = db.batch();
+        snap22.docs.forEach((d) => batch2.delete(d.ref));
+        await batch2.commit();
+      }
+    }
   } catch (e) {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
   }
@@ -45510,10 +45527,10 @@ async function insertFoodLog(doc) {
     }
   }
 }
-async function deleteFoodLog(id) {
+async function deleteFoodLog(id, phone, date) {
   try {
     if (getFirestore()) {
-      await deleteFoodLogFromFirestore(id);
+      await deleteFoodLogFromFirestore(id, phone, date);
     }
   } catch (e) {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
@@ -49232,33 +49249,22 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
-    const mergedMap = /* @__PURE__ */ new Map();
-    const memLogs = [
-      ...Array.isArray(dbData.dailyLogs[key]) ? dbData.dailyLogs[key] : [],
-      ...Array.isArray(dbData.dailyLogs[altKey]) ? dbData.dailyLogs[altKey] : []
-    ];
-    for (const m of memLogs) {
-      if (m && !isLegacyMockMeal(m)) {
-        const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
-        mergedMap.set(dedupeKey, m);
-      }
-    }
-    try {
-      const dbLogs = await getFoodLogsForDate(phone, targetDate);
-      if (dbLogs && dbLogs.length > 0) {
-        for (const m of dbLogs) {
-          if (m && !isLegacyMockMeal(m)) {
-            const dedupeKey = m.id || `${m.foodName}_${m.timestamp || m.calories}`;
-            if (!mergedMap.has(dedupeKey)) {
-              mergedMap.set(dedupeKey, m);
-            }
-          }
+    const hasMemKey = Array.isArray(dbData.dailyLogs[key]);
+    const hasMemAltKey = Array.isArray(dbData.dailyLogs[altKey]);
+    let logs = [];
+    if (hasMemKey || hasMemAltKey) {
+      logs = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || []).filter((m) => m && !isLegacyMockMeal(m));
+    } else {
+      try {
+        const dbLogs = await getFoodLogsForDate(phone, targetDate);
+        if (dbLogs && dbLogs.length > 0) {
+          logs = dbLogs.filter((m) => m && !isLegacyMockMeal(m));
         }
+      } catch (e) {
+        console.warn("[Meals API] Database fetch note:", e?.message || e);
       }
-    } catch (e) {
-      console.warn("[Meals API] Database fetch note:", e?.message || e);
     }
-    const logs = deduplicateMealLogs(Array.from(mergedMap.values()));
+    logs = deduplicateMealLogs(logs);
     dbData.dailyLogs[key] = logs;
     dbData.dailyLogs[altKey] = logs;
     res.json({ success: true, phone, date: targetDate, logs });
@@ -49271,7 +49277,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
     const mealObj = {
-      id: meal.id || `m-${Date.now()}`,
+      id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       foodName: meal.foodName,
       calories: Number(meal.calories) || 0,
       protein: Number(meal.protein) || 0,
@@ -49325,14 +49331,17 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
     if (dbData.dailyLogs[key]) {
-      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m) => m.id !== mealId);
+      dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     if (dbData.dailyLogs[altKey]) {
-      dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== mealId);
+      dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     saveDb();
     try {
-      await deleteFoodLog(mealId);
+      await deleteFoodLog(mealId, phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteFoodLog(mealId, altPhone, targetDate);
+      }
     } catch (e) {
       console.warn("[Meals API] deleteFoodLog note:", e?.message || e);
     }
@@ -49349,6 +49358,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     saveDb();
     try {
       await deleteAllFoodLogsForDate(phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
     } catch (e) {
       console.warn("[Meals API] deleteAllFoodLogsForDate note:", e?.message || e);
     }
@@ -49364,20 +49376,30 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     dbData.dailyLogs[key] = rawMeals;
     dbData.dailyLogs[altKey] = rawMeals;
     saveDb();
+    try {
+      await deleteAllFoodLogsForDate(phone, targetDate);
+      if (altPhone !== phone) {
+        await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
+    } catch (e) {
+      console.warn("[Meals API PUT] deleteAllFoodLogsForDate note:", e?.message || e);
+    }
     for (const m of rawMeals) {
       if (m && m.foodName) {
-        insertFoodLog({
-          id: m.id || `m-${Date.now()}`,
+        await insertFoodLog({
+          id: m.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           userId: `usr_${phone}`,
           phone,
           date: targetDate,
           foodName: m.foodName,
+          mealType: m.mealType,
           calories: Number(m.calories) || 0,
           protein: Number(m.protein) || 0,
           carbs: Number(m.carbs) || 0,
           fat: Number(m.fat) || 0,
           fiber: Number(m.fiber) || 0,
           sugar: Number(m.sugar) || 0,
+          sodium: Number(m.sodium) || 0,
           isHydration: Boolean(m.isHydration),
           volumeMl: Number(m.volumeMl) || void 0,
           itemType: m.isHydration ? "water" : "food",

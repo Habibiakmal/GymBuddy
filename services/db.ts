@@ -608,10 +608,10 @@ export async function insertFoodLog(doc: FoodLogDocument): Promise<void> {
   }
 }
 
-export async function deleteFoodLog(id: string): Promise<void> {
+export async function deleteFoodLog(id: string, phone?: string, date?: string): Promise<void> {
   try {
     if (getFirestore()) {
-      await deleteFoodLogFromFirestore(id);
+      await deleteFoodLogFromFirestore(id, phone, date);
     }
   } catch (e: any) {
     console.warn("[Firestore] deleteFoodLog warning:", e?.message || e);
