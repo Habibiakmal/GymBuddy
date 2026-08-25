@@ -29,12 +29,17 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // server.ts
 var server_exports = {};
 __export(server_exports, {
+  applyDeterministicCorrection: () => applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
+  detectMealCorrectionIntent: () => detectMealCorrectionIntent,
   formatNutritionCard: () => formatNutritionCard,
+  getLastFoodMeal: () => getLastFoodMeal,
   getMealTypeByHour: () => getMealTypeByHour,
+  processMealCorrection: () => processMealCorrection,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
-  splitWhatsAppMessage: () => splitWhatsAppMessage
+  splitWhatsAppMessage: () => splitWhatsAppMessage,
+  updateExistingMealLog: () => updateExistingMealLog
 });
 module.exports = __toCommonJS(server_exports);
 var import_express = __toESM(require("express"), 1);
@@ -47428,6 +47433,335 @@ function addMealLog(rawPhone, meal, targetDateStr) {
   }
   saveDb();
 }
+function getLastFoodMeal(rawPhone, targetDateStr) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = targetDateStr || getTodayDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const altKey = `${altPhone}_${targetDate}`;
+  const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
+  const foodLogs = logs.filter((l) => l && !l.isHydration && !isPlainWaterName(l.foodName));
+  if (foodLogs.length === 0) return null;
+  return foodLogs[foodLogs.length - 1];
+}
+function updateExistingMealLog(rawPhone, updatedMeal, targetDateStr) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = targetDateStr || getTodayDateStr();
+  const key = `${phone}_${targetDate}`;
+  const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+  const altKey = `${altPhone}_${targetDate}`;
+  if (dbData.dailyLogs[key]) {
+    dbData.dailyLogs[key] = dbData.dailyLogs[key].map((m) => m.id === updatedMeal.id ? updatedMeal : m);
+  }
+  if (dbData.dailyLogs[altKey]) {
+    dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].map((m) => m.id === updatedMeal.id ? updatedMeal : m);
+  }
+  insertFoodLog({
+    id: String(updatedMeal.id),
+    userId: `usr_${phone}`,
+    phone,
+    date: targetDate,
+    foodName: updatedMeal.foodName,
+    mealType: updatedMeal.mealType,
+    calories: updatedMeal.calories,
+    protein: updatedMeal.protein,
+    carbs: updatedMeal.carbs,
+    fat: updatedMeal.fat,
+    fiber: updatedMeal.fiber,
+    sugar: Number(updatedMeal.sugar) || 0,
+    sodium: Number(updatedMeal.sodium) || 0,
+    time: updatedMeal.time || (/* @__PURE__ */ new Date()).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
+    isHydration: Boolean(updatedMeal.isHydration),
+    volumeMl: updatedMeal.volumeMl,
+    displayUnit: updatedMeal.displayUnit,
+    portionType: updatedMeal.portionType || "estimated",
+    itemType: updatedMeal.isHydration ? "water" : "food",
+    source: updatedMeal.source || "WhatsApp",
+    items: updatedMeal.items || [],
+    imageUrl: updatedMeal.imageUrl,
+    createdAt: updatedMeal.createdAt ? new Date(updatedMeal.createdAt) : /* @__PURE__ */ new Date()
+  }).catch((e) => console.warn("[Firestore] updateFoodLog note:", e?.message || e));
+  saveDb();
+}
+function detectMealCorrectionIntent(userText, hasRecentMeal) {
+  if (!userText || typeof userText !== "string") return false;
+  const clean2 = userText.trim();
+  const lower = clean2.toLowerCase();
+  if (lower.startsWith("koreksi:") || lower.startsWith("koreksi ") || lower.startsWith("koreksi,") || lower.startsWith("koreksi.") || lower === "koreksi" || lower.startsWith("ralat:") || lower.startsWith("ralat ") || lower.startsWith("ralat,") || lower.startsWith("edit makanan") || lower.startsWith("ganti makanan") || lower.startsWith("ganti porsi") || lower.startsWith("revisi porsi") || lower.startsWith("ubah porsi")) {
+    return true;
+  }
+  if (/(?:^|\s)(?:koreksi|ralat|revisi)(?:[,:\s]|$)/i.test(clean2)) {
+    return true;
+  }
+  if (hasRecentMeal) {
+    const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe";
+    const portionUnits = "\\d+(?:[\\.,]\\d+)?\\s*(?:g|gr|gram|ml|potong|slice|sdm|sendok|buah|porsi)?|setengah|separuh|seperempat|sedikit|tanpa|1\\/2|1\\/4";
+    if (new RegExp(`^(?:yang\\s+)?(?:${foodKeywords})(?:\\s*sapi|\\s*ayam|\\s*goreng)?(?:nya)?\\s*(?:tadi)?\\s*(?:cuma|hanya|cuman|jadi|sebanyak)?\\s*(?:${portionUnits})\\s*(?:aja|saja|doang)?$`, "i").test(lower) || new RegExp(`^(?:yang\\s+)?([a-z\\s]+?)\\s*(?:nya\\s*)?(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^porsi\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:jadi|cuma|hanya|sebanyak)?\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^(?:ternyata|sebenarnya|sebetulnya)\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:cuma|hanya|cuman|jadi|sebanyak)`, "i").test(lower) || new RegExp(`^(?:ubah|ganti)\\s+([a-z\\s]+?)\\s*(?:jadi|ke|menjadi)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:nya)?\\s*(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak|diubah|ganti)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:\\s*sapi|\\s*ayam)?\\s*(${portionUnits})\\s*(?:aja|saja|cuma|doang)`, "i").test(lower)) {
+      return true;
+    }
+  }
+  return false;
+}
+function applyDeterministicCorrection(lastMeal, userText, isMia, userName) {
+  const lower = userText.toLowerCase();
+  const rawEstimates = Array.isArray(lastMeal.portionEstimates) && lastMeal.portionEstimates.length > 0 ? [...lastMeal.portionEstimates] : [`\u2022 ${lastMeal.foodName}: 1 porsi (~${lastMeal.calories} kcal)`];
+  let requestedGrams = null;
+  let requestedFraction = null;
+  const numMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i) || lower.match(/(?:cuma|hanya|jadi|sebanyak|porsi)\s*(\d+(?:[.,]\d+)?)/i);
+  if (numMatch) {
+    requestedGrams = parseFloat(numMatch[1].replace(",", "."));
+  }
+  if (lower.includes("setengah") || lower.includes("separuh") || lower.includes("1/2") || lower.includes("setengahnya")) {
+    requestedFraction = 0.5;
+  } else if (lower.includes("seperempat") || lower.includes("1/4")) {
+    requestedFraction = 0.25;
+  } else if (lower.includes("dua kali") || lower.includes("2 porsi") || lower.includes("dobel") || lower.includes("double")) {
+    requestedFraction = 2;
+  }
+  const componentKeywords = [
+    "daging",
+    "beef",
+    "sapi",
+    "ayam",
+    "chicken",
+    "roti",
+    "bread",
+    "sub",
+    "keju",
+    "cheese",
+    "sayur",
+    "sayuran",
+    "salad",
+    "saus",
+    "sauce",
+    "sambal",
+    "nasi",
+    "rice",
+    "telur",
+    "egg",
+    "minyak",
+    "oil",
+    "kuah",
+    "kentang",
+    "potato",
+    "ikan",
+    "fish",
+    "tahu",
+    "tempe",
+    "susu",
+    "milk",
+    "kopi",
+    "coffee",
+    "teh",
+    "tea",
+    "gula",
+    "sugar"
+  ];
+  let matchedIdx = -1;
+  let targetKeyword = "";
+  for (const kw of componentKeywords) {
+    if (lower.includes(kw)) {
+      const idx = rawEstimates.findIndex((line) => line.toLowerCase().includes(kw));
+      if (idx !== -1) {
+        matchedIdx = idx;
+        targetKeyword = kw;
+        break;
+      }
+    }
+  }
+  if (matchedIdx === -1) {
+    matchedIdx = 0;
+    targetKeyword = "porsi";
+  }
+  const targetLine = rawEstimates[matchedIdx];
+  const oldGramMatch = targetLine.match(/(\d+(?:[.,]\d+)?)\s*g/i);
+  const oldCalMatch = targetLine.match(/~(\d+)\s*kcal/i);
+  const oldGrams = oldGramMatch ? parseFloat(oldGramMatch[1].replace(",", ".")) : 100;
+  const oldCal = oldCalMatch ? parseInt(oldCalMatch[1], 10) : Math.round(lastMeal.calories / Math.max(1, rawEstimates.length));
+  let newGrams = oldGrams;
+  let ratio = 1;
+  if (requestedGrams !== null && requestedGrams > 0) {
+    newGrams = requestedGrams;
+    ratio = oldGrams > 0 ? newGrams / oldGrams : 1;
+  } else if (requestedFraction !== null) {
+    ratio = requestedFraction;
+    newGrams = Math.round(oldGrams * ratio);
+  } else {
+    ratio = 0.7;
+    newGrams = Math.round(oldGrams * ratio);
+  }
+  const newCal = Math.max(0, Math.round(oldCal * ratio));
+  const cleanEstimates = rawEstimates.map((line) => line.replace(/\s*←\s*diperbarui/gi, "").replace(/\s*\(diperbarui\)/gi, "").trim());
+  let updatedTargetLine = cleanEstimates[matchedIdx];
+  if (oldGramMatch) {
+    updatedTargetLine = updatedTargetLine.replace(/(\d+(?:[.,]\d+)?)\s*g/i, `${newGrams}g`);
+  }
+  if (oldCalMatch) {
+    updatedTargetLine = updatedTargetLine.replace(/~(\d+)\s*kcal/i, `~${newCal} kcal`);
+  } else {
+    updatedTargetLine += ` (~${newCal} kcal)`;
+  }
+  updatedTargetLine = `${updatedTargetLine} \u2190 diperbarui`;
+  cleanEstimates[matchedIdx] = updatedTargetLine;
+  let newTotalCal = 0;
+  let hasCalCount = 0;
+  cleanEstimates.forEach((line) => {
+    const m = line.match(/~(\d+)\s*kcal/i);
+    if (m) {
+      newTotalCal += parseInt(m[1], 10);
+      hasCalCount++;
+    }
+  });
+  if (hasCalCount === 0 || newTotalCal <= 0) {
+    const diffCal = newCal - oldCal;
+    newTotalCal = Math.max(50, lastMeal.calories + diffCal);
+  }
+  const calRatio = lastMeal.calories > 0 ? newTotalCal / lastMeal.calories : 1;
+  const newProtein = Number((lastMeal.protein * calRatio).toFixed(1));
+  const newCarbs = Number((lastMeal.carbs * calRatio).toFixed(1));
+  const newFat = Number((lastMeal.fat * calRatio).toFixed(1));
+  const coachComment = isMia ? `Siap, ${userName}. Aku sudah memperbarui porsi ${targetKeyword} dari ${oldGrams}g menjadi ${newGrams}g dan menghitung ulang total nutrisi ${lastMeal.foodName} kamu! \u2728` : `Beres, ${userName}! Porsi ${targetKeyword} udah gue update dari ${oldGrams}g jadi ${newGrams}g dan total nutrisi ${lastMeal.foodName} lo udah dihitung ulang! \u{1F4AA}`;
+  return {
+    isFood: true,
+    isCorrection: true,
+    foodName: lastMeal.foodName,
+    correctedComponent: targetKeyword,
+    oldPortion: `${oldGrams}g`,
+    newPortion: `${newGrams}g`,
+    calories: newTotalCal,
+    protein: newProtein,
+    carbs: newCarbs,
+    fat: newFat,
+    fiber: lastMeal.fiber || 0,
+    sugar: lastMeal.sugar || 0,
+    sodium: lastMeal.sodium || 0,
+    portionEstimates: cleanEstimates,
+    coachComment
+  };
+}
+async function processMealCorrection(rawPhone, userText, userData, targetDateStr) {
+  const phone = normalizePhone(rawPhone);
+  const targetDate = targetDateStr || getTodayDateStr();
+  const lastMeal = getLastFoodMeal(phone, targetDate);
+  if (!lastMeal) return null;
+  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
+  const userName = userData?.name ? userData.name.split(" ")[0] : "kamu";
+  const existingEstimates = Array.isArray(lastMeal.portionEstimates) && lastMeal.portionEstimates.length > 0 ? lastMeal.portionEstimates.join("\n") : lastMeal.foodName + ` (~${lastMeal.calories} kcal)`;
+  const prompt = `KAMU ADALAH NUTRITION CORRECTION ENGINE UNTUK GYMBUDDY.
+User sedang mengoreksi satu atau beberapa komponen porsi dari makanan terakhir yang SUDAH dicatat.
+
+DATA MAKANAN SEBELUMNYA:
+- Nama Makanan Utama: "${lastMeal.foodName}"
+- Komponen & Porsi Sebelumnya:
+${existingEstimates}
+- Total Nutrisi Sebelumnya:
+  \u2022 Kalori: ${lastMeal.calories} kcal
+  \u2022 Protein: ${lastMeal.protein}g
+  \u2022 Karbo: ${lastMeal.carbs}g
+  \u2022 Lemak: ${lastMeal.fat}g
+  \u2022 Serat: ${lastMeal.fiber || 0}g
+  \u2022 Gula: ${lastMeal.sugar || 0}g
+  \u2022 Natrium: ${lastMeal.sodium || 0}mg
+
+PESAN KOREKSI DARI USER:
+"${userText}"
+
+INSTRUKSI PENTING & ATURAN MUTLAK:
+1. USER TIDAK SEDANG MEMBUAT MAKANAN BARU. User sedang MENGUBAH satu atribut/komponen dari makanan "${lastMeal.foodName}".
+2. Identifikasi komponen apa yang dikoreksi user (misalnya "daging", "roti", "keju", "sayur", dll.) dan porsi barunya (misalnya 50g, setengah, 1 porsi, dll.).
+3. PERTAHANKAN seluruh komponen lain yang TIDAK dikoreksi dengan nilai/porsi sebelumnya.
+4. Hitung ulang nutrisi untuk komponen yang diubah, lalu JUMLAHKAN SELURUH KOMPONEN untuk mendapatkan TOTAL NUTRISI BARU MAKANAN LENGKAP.
+5. Format nama makanan HARUS TETAP "${lastMeal.foodName}". JANGAN PERNAH mengubah nama makanan menjadi teks koreksi user.
+6. Pada array "portionEstimates", sebutkan SEMUA komponen makanan dan berikan penanda " \u2190 diperbarui" pada komponen yang baru saja dikoreksi.
+7. Buat kalimat "coachComment" yang ramah dan empatik sesuai persona Coach ${isMia ? "Mia" : "Max"}:
+   - Menyebut nama user ("${userName}")
+   - Menjelaskan komponen apa yang diubah (misalnya "porsi daging sapi dari 70g menjadi 50g")
+   - Mengonfirmasi bahwa seluruh total nutrisi makanan "${lastMeal.foodName}" sudah dihitung ulang secara lengkap.
+
+Keluarkan HANYA JSON valid:
+{
+  "isFood": true,
+  "isCorrection": true,
+  "foodName": "${lastMeal.foodName}",
+  "correctedComponent": "Nama Komponen Yang Diubah",
+  "oldPortion": "Porsi Lama",
+  "newPortion": "Porsi Baru",
+  "calories": 366,
+  "protein": 24.5,
+  "carbs": 42.0,
+  "fat": 11.2,
+  "fiber": 3.0,
+  "sugar": 4.0,
+  "sodium": 580,
+  "portionEstimates": [
+    "\u2022 Roti Sub Herb/Gandum 6 inch: 80g (~190 kcal)",
+    "\u2022 Irisan daging sapi: 50g (~86 kcal) \u2190 diperbarui",
+    "\u2022 Keju leleh: 20g (~70 kcal)",
+    "\u2022 Sayuran & acar: 80g (~21 kcal)"
+  ],
+  "coachComment": "Pesan konfirmasi koreksi sesuai persona coach"
+}`;
+  let parsedCorrection = null;
+  try {
+    const rawText = await generateGeminiContent(prompt);
+    parsedCorrection = extractAndParseJson(rawText);
+  } catch (err) {
+    console.error("[MealCorrection] AI call error, applying deterministic fallback:", err);
+  }
+  if (!parsedCorrection || !parsedCorrection.calories || isNaN(Number(parsedCorrection.calories))) {
+    parsedCorrection = applyDeterministicCorrection(lastMeal, userText, isMia, userName);
+  }
+  const updatedCalories = Math.max(0, Math.round(Number(parsedCorrection.calories) || lastMeal.calories));
+  const updatedProtein = Math.max(0, Number((Number(parsedCorrection.protein) || lastMeal.protein).toFixed(1)));
+  const updatedCarbs = Math.max(0, Number((Number(parsedCorrection.carbs) || lastMeal.carbs).toFixed(1)));
+  const updatedFat = Math.max(0, Number((Number(parsedCorrection.fat) || lastMeal.fat).toFixed(1)));
+  const updatedFiber = Math.max(0, Number((Number(parsedCorrection.fiber) || lastMeal.fiber || 0).toFixed(1)));
+  const updatedSugar = Math.max(0, Number((Number(parsedCorrection.sugar) || lastMeal.sugar || 0).toFixed(1)));
+  const updatedSodium = Math.max(0, Math.round(Number(parsedCorrection.sodium) || lastMeal.sodium || 0));
+  const updatedMealRecord = {
+    ...lastMeal,
+    foodName: lastMeal.foodName,
+    calories: updatedCalories,
+    protein: updatedProtein,
+    carbs: updatedCarbs,
+    fat: updatedFat,
+    fiber: updatedFiber,
+    sugar: updatedSugar,
+    sodium: updatedSodium,
+    portionEstimates: parsedCorrection.portionEstimates || lastMeal.portionEstimates,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  updateExistingMealLog(phone, updatedMealRecord, targetDate);
+  const validatedParsed = {
+    ...parsedCorrection,
+    isFood: true,
+    isCorrection: true,
+    foodName: lastMeal.foodName,
+    calories: updatedCalories,
+    protein: updatedProtein,
+    carbs: updatedCarbs,
+    fat: updatedFat,
+    fiber: updatedFiber,
+    sugar: updatedSugar,
+    sodium: updatedSodium,
+    portionEstimates: parsedCorrection.portionEstimates,
+    coachComment: parsedCorrection.coachComment || (isMia ? `Siap, ${userName}. Aku sudah memperbarui porsi ${parsedCorrection.correctedComponent || "makanan"} kamu dan menghitung ulang total nutrisinya! \u2728` : `Beres, ${userName}! Porsi ${parsedCorrection.correctedComponent || "makanan"} lo udah gue update dan total nutrisinya udah dihitung ulang! \u{1F4AA}`),
+    confidenceLevel: 95
+  };
+  const dailyTotals = getDailyTotals(phone, targetDate);
+  const card = formatNutritionCard(
+    validatedParsed,
+    "Koreksi",
+    userData,
+    dailyTotals
+  );
+  return {
+    mealRecord: updatedMealRecord,
+    validatedParsed,
+    oldMeal: lastMeal,
+    card
+  };
+}
 function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan") {
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
@@ -47691,7 +48025,7 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const sodBar = makeSodiumProgressBar(totalTodaySodium, 2e3);
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
-  if (!coachComment || nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver) {
+  if (!coachComment || !parsedAi?.isCorrection && (nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver)) {
     if (nutritionSummary.calories.isOver && nutritionSummary.protein.isUnder) {
       coachComment = isMia ? "Kalori, karbohidrat, dan lemak kamu sudah melewati target hari ini. Kalau masih perlu makan nanti, pilih opsi yang lebih ringan dan prioritaskan kebutuhan protein ya \u2728" : "Kalori, karbo, dan lemak lo udah tembus target hari ini bro! Kalau masih butuh asupan, pilih yang ringan dan prioritaskan sumber protein bersih! \u{1F4AA}\u{1F525}";
     } else if (nutritionSummary.calories.isOver) {
@@ -49911,6 +50245,25 @@ https://gymbuddygroup.com`
             } else {
               responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
             }
+          } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
+            const recentMeal = getLastFoodMeal(from);
+            const isMia = userData.persona === "mia" || userData.persona === "nikita";
+            if (recentMeal) {
+              const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
+              await sendMetaWhatsappMessage(from, processingMsg);
+              const correctionResult = await processMealCorrection(from, userText, userData);
+              if (correctionResult) {
+                responseMessages = [correctionResult.card];
+              } else {
+                responseMessages = [
+                  isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry bro, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+                ];
+              }
+            } else {
+              responseMessages = [
+                isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi bro! Kirim foto atau sebutkan makanan lo dulu! \u{1F4AA}`
+              ];
+            }
           } else if (getAi()) {
             const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
             if (isGenericImageCaption && !imagePart) {
@@ -50202,9 +50555,8 @@ Keluarkan output JSON valid:
       const isDeleteMealMessage = Boolean(
         lowerText.match(/^(?:hapus|delete|batal(?:kan)?)\s+(?:log\s+)?(?:makan(?:an)?|food|nutrisi)(?:\s+terakhir)?$/i) || lowerText === "hapus log terakhir" || lowerText === "hapus makan terakhir" || lowerText === "hapus makanan terakhir" || lowerText === "batal catat makanan"
       );
-      const isMealCorrection = Boolean(
-        lowerText.startsWith("koreksi:") || lowerText.startsWith("koreksi ") || lowerText.startsWith("edit makanan:") || lowerText.startsWith("ganti makanan:")
-      );
+      const recentFoodMeal = getLastFoodMeal(normFrom);
+      const isMealCorrection = !imagePart && detectMealCorrectionIntent(userText, Boolean(recentFoodMeal));
       let responseMessages = [];
       let mediaUrlToSend = void 0;
       const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
@@ -50419,27 +50771,25 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
       } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
         responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
-      } else {
-        if (isMealCorrection) {
-          const correctionDetail = userText.replace(/^(?:koreksi\s*:?|edit\s+makanan\s*:?|ganti\s+makanan\s*:?)\s*/i, "").trim();
-          const todayStr = getTodayDateStr();
-          const key = `${normFrom}_${todayStr}`;
-          const altPhone = normFrom.startsWith("0") ? "62" + normFrom.substring(1) : normFrom.startsWith("62") ? "0" + normFrom.substring(2) : normFrom;
-          const altKey = `${altPhone}_${todayStr}`;
-          const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-          const foodLogs = logs.filter((l) => !l.isHydration && !isPlainWaterName(l.foodName));
-          const lastMeal = foodLogs[foodLogs.length - 1];
-          if (lastMeal && lastMeal.id) {
-            dbData.dailyLogs[key] = (dbData.dailyLogs[key] || []).filter((m) => m.id !== lastMeal.id);
-            if (dbData.dailyLogs[altKey]) {
-              dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m) => m.id !== lastMeal.id);
-            }
-            deleteFoodLog(normFrom, lastMeal.id).catch(() => {
-            });
+      } else if (isMealCorrection) {
+        if (recentFoodMeal) {
+          console.log(`[Twilio WA] Executing meal correction on "${recentFoodMeal.foodName}" for ${normFrom}: "${userText}"`);
+          const correctionResult = await processMealCorrection(normFrom, userText, userData);
+          if (correctionResult) {
+            responseMessages = [correctionResult.card];
+          } else {
+            const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+            responseMessages = [
+              isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry bro, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+            ];
           }
-          userText = lastMeal ? `${lastMeal.foodName}, koreksi porsi/komposisi: ${correctionDetail}` : correctionDetail;
-          console.log(`[Twilio WA] Applied meal correction. Combined query: "${userText}"`);
+        } else {
+          const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+          responseMessages = [
+            isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi bro! Kirim foto atau sebutkan makanan lo dulu! \u{1F4AA}`
+          ];
         }
+      } else {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
         const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
@@ -51056,11 +51406,16 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord,
+  detectMealCorrectionIntent,
   formatNutritionCard,
+  getLastFoodMeal,
   getMealTypeByHour,
+  processMealCorrection,
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,
-  splitWhatsAppMessage
+  splitWhatsAppMessage,
+  updateExistingMealLog
 });
 //# sourceMappingURL=server.cjs.map
