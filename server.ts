@@ -50,13 +50,36 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 
 /**
+ * Sanitizes outgoing WhatsApp messages to guarantee:
+ * 1. No broken or repeated separator bars (e.g. ━━━━━━━━━━━━━━).
+ * 2. No empty sections, stray bullets, or triple empty newlines.
+ * 3. Clean mobile readability and zero JSON/code leaks.
+ */
+export function sanitizeWhatsAppResponse(text: string): string {
+  if (!text || typeof text !== "string") return "";
+
+  let cleaned = text
+    // Replace 2 or more consecutive separator lines with a single clean separator
+    .replace(/(?:^[━─\-=]{5,}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
+    // Remove isolated empty bullets
+    .replace(/^[•\-\*]\s*$/gm, "")
+    // Normalize 3+ newlines to max 2 newlines
+    .replace(/\n{3,}/g, "\n\n")
+    // Strip trailing empty separators at end of message
+    .replace(/[\r\n]+[━─\-=]{5,}\s*$/g, "")
+    .trim();
+
+  return cleaned;
+}
+
+/**
  * Safely splits a WhatsApp message into ordered chunks <= maxSafeLength
  * without breaking sentences, words, section headers, or Unicode characters.
  * Twilio concatenated message limit is 1600 characters. Default maxSafeLength = 1400.
  */
 export function splitWhatsAppMessage(text: string, maxSafeLength = 1400): string[] {
   if (!text || typeof text !== "string") return [];
-  const trimmed = text.trim();
+  const trimmed = sanitizeWhatsAppResponse(text);
   if (trimmed.length <= maxSafeLength) {
     return [trimmed];
   }
@@ -2061,39 +2084,44 @@ function addWeeklyProgress(rawPhone: string, currentWeight: number, notes: strin
 
 function formatWeeklyProgressCard(progressResult: NonNullable<ReturnType<typeof addWeeklyProgress>>): string {
   const { entry, userData } = progressResult;
-  const { name, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams } = userData;
+  const { name, targetWeight, goalTitle, persona } = userData;
 
-  const filledBars = Math.floor(entry.progressPercent / 10);
+  const prevWeight = userData.startWeight || entry.weight;
+  const currWeight = entry.weight;
+  const targetW = targetWeight || 65;
+  const diffRemaining = Math.round(Math.abs(currWeight - targetW) * 10) / 10;
+
+  const filledBars = Math.min(10, Math.max(0, Math.floor(entry.progressPercent / 10)));
   const progressVisual = "🟩".repeat(filledBars) + "⬜".repeat(10 - filledBars);
 
-  const changeStr = entry.changeFromStart <= 0 ? `${entry.changeFromStart} kg` : `+${entry.changeFromStart} kg`;
-  const weekChangeStr = entry.changeFromLastWeek <= 0 ? `${entry.changeFromLastWeek} kg` : `+${entry.changeFromLastWeek} kg`;
+  const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+  const isMia = (persona || "mia").toLowerCase().includes("mia");
+  const coachName = isMia ? "Coach Mia" : "Coach Max";
 
-  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
-  const comment = persona === "max"
-    ? (entry.changeFromStart <= 0 
-        ? `Mantap bro! Berat badan lo udah berkurang ${Math.abs(entry.changeFromStart)} kg dari awal. Jangan kasih kendor, bantai terus!`
-        : `Ada kenaikan sedikit, tapi gak masalah! Penyesuaian makro hari ini bakal bikin lo balik ke jalur yang bener. Gas!`)
-    : (entry.changeFromStart <= 0
-        ? `Wah selamat ya ${name}! Kamu sudah berhasil mengikis ${Math.abs(entry.changeFromStart)} kg. Mia bangga banget sama konsistensimu! ✨`
-        : `Tetap tenang ya ${name}, fluktuasi berat badan itu wajar. Kita tetap fokus ke pola makan seimbang minggu ini ya 🌱`);
+  let comment = "";
+  if (isMia) {
+    comment = diffRemaining <= 1
+      ? `Luar biasa ${name}! Kamu sudah sangat dekat dengan target impianmu. Tetap konsisten dan jaga pola hidup sehatmu ya! ✨`
+      : `Catatan berat badan terbarumu sudah tersimpan rapi ${name}. Setiap langkah kecil membawa hasil besar, tetap semangat! ✨`;
+  } else {
+    comment = isFemale
+      ? (diffRemaining <= 1
+          ? `Target udah di depan mata! Pertahankan fokus dan konsistensi kamu sampai garis finish! 🔥`
+          : `Progres tercatat. Tetap disiplin di gym dan jaga asupan nutrisi harian kamu! 💪`)
+      : (diffRemaining <= 1
+          ? `Target udah di depan mata bro! Pertahankan disiplin lo sampai garis finish! 🔥`
+          : `Progres tercatat. Tetap disiplin latihan dan jaga asupan makro lo! 💪`);
+  }
 
-  return `📈 *LAPORAN PROGRESS MINGGUAN FOR ${name.toUpperCase()}*
------------------------------
-🎯 *Goal*: ${goalTitle}
-🗓️ *Status*: Minggu ke-${entry.week}
-⚖️ *BB Awal*: ${userData.startWeight} kg
-⚖️ *BB Sekarang*: ${entry.weight} kg (${changeStr} total)
-📉 *Perubahan Minggu Ini*: ${weekChangeStr}
-🎯 *Target Akhir*: ${targetWeight} kg
+  return `⚖️ *BERAT DIPERBARUI*
+━━━━━━━━━━━━━━
+• *Sebelumnya*: ${prevWeight} kg
+• *Sekarang*: ${currWeight} kg
+• *Target*: ${targetW} kg
 
-📊 *PROGRES CAPAIAN GOAL*: ${entry.progressPercent}%
+📊 *Progress Menuju Target*:
+${diffRemaining} kg tersisa (${entry.progressPercent}% tercapai)
 ${progressVisual}
-
-⚡ *TARGET NUTRISI BARU DISESUAIKAN*:
-🔥 Kalori Harian: ${targetCalories} kcal
-🍖 Protein: ${proteinGrams}g | 🍚 Karbo: ${carbGrams}g | 🥓 Lemak: ${fatGrams}g
------------------------------
 
 💬 *${coachName}*:
 "${comment}"`;
@@ -2143,12 +2171,13 @@ ${rowsStr}
 async function sendMetaWhatsappMessage(to: string, bodyText: string) {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
   try {
+    const cleanText = sanitizeWhatsAppResponse(bodyText);
     await axios.post(
       `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to: to,
-        text: { body: bodyText },
+        text: { body: cleanText },
       },
       { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
     );

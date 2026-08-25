@@ -29,6 +29,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // server.ts
 var server_exports = {};
 __export(server_exports, {
+  sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
   splitWhatsAppMessage: () => splitWhatsAppMessage
 });
 module.exports = __toCommonJS(server_exports);
@@ -45692,9 +45693,14 @@ process.on("uncaughtException", (err) => {
 });
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+function sanitizeWhatsAppResponse(text) {
+  if (!text || typeof text !== "string") return "";
+  let cleaned = text.replace(/(?:^[━─\-=]{5,}\s*[\r\n]+){2,}/gm, "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n").replace(/^[•\-\*]\s*$/gm, "").replace(/\n{3,}/g, "\n\n").replace(/[\r\n]+[━─\-=]{5,}\s*$/g, "").trim();
+  return cleaned;
+}
 function splitWhatsAppMessage(text, maxSafeLength = 1400) {
   if (!text || typeof text !== "string") return [];
-  const trimmed = text.trim();
+  const trimmed = sanitizeWhatsAppResponse(text);
   if (trimmed.length <= maxSafeLength) {
     return [trimmed];
   }
@@ -47356,29 +47362,31 @@ function addWeeklyProgress(rawPhone, currentWeight, notes = "Progress Mingguan")
 }
 function formatWeeklyProgressCard(progressResult) {
   const { entry, userData } = progressResult;
-  const { name, targetWeight, goalTitle, persona, targetCalories, proteinGrams, carbGrams, fatGrams } = userData;
-  const filledBars = Math.floor(entry.progressPercent / 10);
+  const { name, targetWeight, goalTitle, persona } = userData;
+  const prevWeight = userData.startWeight || entry.weight;
+  const currWeight = entry.weight;
+  const targetW = targetWeight || 65;
+  const diffRemaining = Math.round(Math.abs(currWeight - targetW) * 10) / 10;
+  const filledBars = Math.min(10, Math.max(0, Math.floor(entry.progressPercent / 10)));
   const progressVisual = "\u{1F7E9}".repeat(filledBars) + "\u2B1C".repeat(10 - filledBars);
-  const changeStr = entry.changeFromStart <= 0 ? `${entry.changeFromStart} kg` : `+${entry.changeFromStart} kg`;
-  const weekChangeStr = entry.changeFromLastWeek <= 0 ? `${entry.changeFromLastWeek} kg` : `+${entry.changeFromLastWeek} kg`;
-  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
-  const comment = persona === "max" ? entry.changeFromStart <= 0 ? `Mantap bro! Berat badan lo udah berkurang ${Math.abs(entry.changeFromStart)} kg dari awal. Jangan kasih kendor, bantai terus!` : `Ada kenaikan sedikit, tapi gak masalah! Penyesuaian makro hari ini bakal bikin lo balik ke jalur yang bener. Gas!` : entry.changeFromStart <= 0 ? `Wah selamat ya ${name}! Kamu sudah berhasil mengikis ${Math.abs(entry.changeFromStart)} kg. Mia bangga banget sama konsistensimu! \u2728` : `Tetap tenang ya ${name}, fluktuasi berat badan itu wajar. Kita tetap fokus ke pola makan seimbang minggu ini ya \u{1F331}`;
-  return `\u{1F4C8} *LAPORAN PROGRESS MINGGUAN FOR ${name.toUpperCase()}*
------------------------------
-\u{1F3AF} *Goal*: ${goalTitle}
-\u{1F5D3}\uFE0F *Status*: Minggu ke-${entry.week}
-\u2696\uFE0F *BB Awal*: ${userData.startWeight} kg
-\u2696\uFE0F *BB Sekarang*: ${entry.weight} kg (${changeStr} total)
-\u{1F4C9} *Perubahan Minggu Ini*: ${weekChangeStr}
-\u{1F3AF} *Target Akhir*: ${targetWeight} kg
+  const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+  const isMia = (persona || "mia").toLowerCase().includes("mia");
+  const coachName = isMia ? "Coach Mia" : "Coach Max";
+  let comment = "";
+  if (isMia) {
+    comment = diffRemaining <= 1 ? `Luar biasa ${name}! Kamu sudah sangat dekat dengan target impianmu. Tetap konsisten dan jaga pola hidup sehatmu ya! \u2728` : `Catatan berat badan terbarumu sudah tersimpan rapi ${name}. Setiap langkah kecil membawa hasil besar, tetap semangat! \u2728`;
+  } else {
+    comment = isFemale ? diffRemaining <= 1 ? `Target udah di depan mata! Pertahankan fokus dan konsistensi kamu sampai garis finish! \u{1F525}` : `Progres tercatat. Tetap disiplin di gym dan jaga asupan nutrisi harian kamu! \u{1F4AA}` : diffRemaining <= 1 ? `Target udah di depan mata bro! Pertahankan disiplin lo sampai garis finish! \u{1F525}` : `Progres tercatat. Tetap disiplin latihan dan jaga asupan makro lo! \u{1F4AA}`;
+  }
+  return `\u2696\uFE0F *BERAT DIPERBARUI*
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2022 *Sebelumnya*: ${prevWeight} kg
+\u2022 *Sekarang*: ${currWeight} kg
+\u2022 *Target*: ${targetW} kg
 
-\u{1F4CA} *PROGRES CAPAIAN GOAL*: ${entry.progressPercent}%
+\u{1F4CA} *Progress Menuju Target*:
+${diffRemaining} kg tersisa (${entry.progressPercent}% tercapai)
 ${progressVisual}
-
-\u26A1 *TARGET NUTRISI BARU DISESUAIKAN*:
-\u{1F525} Kalori Harian: ${targetCalories} kcal
-\u{1F356} Protein: ${proteinGrams}g | \u{1F35A} Karbo: ${carbGrams}g | \u{1F953} Lemak: ${fatGrams}g
------------------------------
 
 \u{1F4AC} *${coachName}*:
 "${comment}"`;
@@ -47420,12 +47428,13 @@ ${rowsStr}
 async function sendMetaWhatsappMessage(to, bodyText) {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
   try {
+    const cleanText = sanitizeWhatsAppResponse(bodyText);
     await import_axios.default.post(
       `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to,
-        text: { body: bodyText }
+        text: { body: cleanText }
       },
       { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
     );
@@ -51005,6 +51014,7 @@ ${mistakes}
 startServer();
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  sanitizeWhatsAppResponse,
   splitWhatsAppMessage
 });
 //# sourceMappingURL=server.cjs.map
