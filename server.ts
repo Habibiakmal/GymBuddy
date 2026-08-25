@@ -73,6 +73,95 @@ export function sanitizeWhatsAppResponse(text: string): string {
 }
 
 /**
+ * Helper to determine clean food name and meal type from AI Vision detection and optional user caption.
+ * Ensures user captions like "aku makan ini untuk sarapan" or "aku makan snack ini" are NEVER used as food names.
+ */
+export function resolveCleanFoodNameAndMealType(
+  rawUserText: string,
+  detectedFoodName: string,
+  hasImage: boolean,
+  detectedMealType?: string
+): { foodName: string; mealType: string } {
+  const cleanCaption = String(rawUserText || "").trim();
+  const lowerCaption = cleanCaption.toLowerCase();
+
+  // 1. Extract Meal Type from caption or fallback
+  let mealType = detectedMealType || "";
+  if (/(?:sarapan|breakfast|pagi)/i.test(lowerCaption)) {
+    mealType = "Breakfast";
+  } else if (/(?:snack|camilan|ngemil|cemilan|sore)/i.test(lowerCaption)) {
+    mealType = "Snack";
+  } else if (/(?:siang|lunch)/i.test(lowerCaption)) {
+    mealType = "Lunch";
+  } else if (/(?:malam|dinner)/i.test(lowerCaption)) {
+    mealType = "Dinner";
+  }
+
+  if (!mealType) {
+    const rawType = getMealTypeByHour(cleanCaption);
+    mealType = rawType.charAt(0).toUpperCase() + rawType.slice(1);
+  } else {
+    mealType = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+  }
+
+  // 2. Identify if userText is purely conversational / generic intent phrase
+  const isGenericCaption = !cleanCaption || /(?:^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|makanan|foto|ini|nih|buat|untuk|tadi|lagi|sarapan|lunch|dinner|snack|camilan|makan\s+siang|makan\s+malam|makan\s+pagi)(?:\s+(?:ini|nih|ya|dong|gan|bro|coach|mia|max|tadi|tadi\s+siang|tadi\s+malam|pagi|siang|malam|untuk\s+sarapan|untuk\s+lunch|untuk\s+dinner|untuk\s+snack|buat\s+sarapan|buat\s+lunch|buat\s+snack|buat\s+dinner))*[\.!\?]*$)/i.test(lowerCaption) ||
+    lowerCaption === "aku makan ini" ||
+    lowerCaption === "aku makan ini untuk sarapan" ||
+    lowerCaption === "aku makan snack ini" ||
+    lowerCaption === "ini makanan saya" ||
+    lowerCaption === "makanan saya" ||
+    lowerCaption === "sarapan saya" ||
+    lowerCaption === "makan siang saya" ||
+    lowerCaption === "ini foto makanan" ||
+    lowerCaption === "ini makananku" ||
+    lowerCaption === "makan" ||
+    lowerCaption === "makan ini" ||
+    lowerCaption === "snack ini" ||
+    lowerCaption === "sarapan ini";
+
+  let cleanDetected = String(detectedFoodName || "").trim();
+  // Strip any leading emojis or generic labels
+  cleanDetected = cleanDetected.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲\s]+/, "").trim();
+
+  let finalFoodName = "";
+
+  if (hasImage) {
+    // When photo is present, detected food name from Vision AI is ALWAYS the primary source of truth
+    if (cleanDetected && cleanDetected.toLowerCase() !== "makanan" && cleanDetected.toLowerCase() !== "analisis makanan" && cleanDetected.toLowerCase() !== "unknown food") {
+      finalFoodName = cleanDetected;
+    } else if (!isGenericCaption) {
+      // User typed specific name with photo (e.g. "Nasi Padang Rendang")
+      finalFoodName = cleanCaption
+        .replace(/^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|catat|log|makanan\s+saya)\s+(?:adalah\s+|yaitu\s+)?/i, "")
+        .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
+        .trim();
+    } else {
+      finalFoodName = "Estimasi Makanan";
+    }
+  } else {
+    // Text-only logging
+    if (!isGenericCaption) {
+      // Strip conversational phrases: "aku makan nasi uduk untuk sarapan" -> "Nasi Uduk"
+      finalFoodName = cleanCaption
+        .replace(/^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|catat|log|makanan\s+saya)\s+(?:adalah\s+|yaitu\s+)?/i, "")
+        .replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "")
+        .trim();
+    } else if (cleanDetected && cleanDetected.toLowerCase() !== "makanan" && cleanDetected.toLowerCase() !== "analisis makanan") {
+      finalFoodName = cleanDetected;
+    } else {
+      finalFoodName = "Estimasi Makanan";
+    }
+  }
+
+  if (!finalFoodName || finalFoodName.toLowerCase() === "makanan") {
+    finalFoodName = (cleanDetected && cleanDetected.toLowerCase() !== "makanan") ? cleanDetected : "Estimasi Makanan";
+  }
+
+  return { foodName: finalFoodName, mealType };
+}
+
+/**
  * Safely splits a WhatsApp message into ordered chunks <= maxSafeLength
  * without breaking sentences, words, section headers, or Unicode characters.
  * Twilio concatenated message limit is 1600 characters. Default maxSafeLength = 1400.
@@ -766,7 +855,7 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
 }
 
 // Helper to determine meal type by keyword or hour — always computed in WIB (UTC+7)
-function getMealTypeByHour(userText?: string): "breakfast" | "lunch" | "snack" | "dinner" {
+export function getMealTypeByHour(userText?: string): "breakfast" | "lunch" | "snack" | "dinner" {
   if (userText) {
     const lower = String(userText).toLowerCase();
     if (/(?:sarapan|pagi|breakfast|sahur)/i.test(lower)) return "breakfast";
@@ -5199,8 +5288,27 @@ Keluarkan output JSON valid:
               }
 
               if (parsed.isFood) {
-                const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
-                const calcNutr = calculateFoodNutrition(finalFoodName);
+                const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
+                  userText,
+                  parsed.foodName,
+                  Boolean(imagePart),
+                  parsed.mealType
+                );
+
+                let calcNutr = calculateFoodNutrition(finalFoodName);
+                if (imagePart && Number(parsed.calories) > 0 && calcNutr.calories === 103 && finalFoodName !== "Estimasi Makanan") {
+                  calcNutr = {
+                    ...calcNutr,
+                    foodName: finalFoodName,
+                    calories: Number(parsed.calories) || 250,
+                    protein: Number(parsed.protein) || 4,
+                    carbs: Number(parsed.carbs) || 30,
+                    fat: Number(parsed.fat) || 12,
+                    fiber: Number(parsed.fiber) || 2,
+                    sugar: Number(parsed.sugar) || 10,
+                    sodium: Number(parsed.sodium) || 150
+                  };
+                }
 
                 addMealLog(from, {
                   id: `m-${Date.now()}`,
@@ -5212,7 +5320,7 @@ Keluarkan output JSON valid:
                   fiber: calcNutr.fiber,
                   sugar: calcNutr.sugar,
                   sodium: calcNutr.sodium,
-                  mealType: parsed.mealType || getMealTypeByHour(),
+                  mealType: finalMealType.toLowerCase() as any,
                   timestamp: new Date().toISOString()
                 });
                 const dailyTotals = getDailyTotals(from);
@@ -5920,8 +6028,27 @@ Keluarkan output JSON valid:
                 : `📸 Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? 💪`;
               responseMessages = [parsed.clarificationQuestion || defaultClarification];
             } else {
-              const finalFoodName = String(userText || parsed.foodName || "Makanan").trim();
-              const calcNutr = calculateFoodNutrition(finalFoodName);
+              const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
+                userText,
+                parsed.foodName,
+                Boolean(imagePart),
+                parsed.mealType
+              );
+
+              let calcNutr = calculateFoodNutrition(finalFoodName);
+              if (imagePart && Number(parsed.calories) > 0 && calcNutr.calories === 103 && finalFoodName !== "Estimasi Makanan") {
+                calcNutr = {
+                  ...calcNutr,
+                  foodName: finalFoodName,
+                  calories: Number(parsed.calories) || 250,
+                  protein: Number(parsed.protein) || 4,
+                  carbs: Number(parsed.carbs) || 30,
+                  fat: Number(parsed.fat) || 12,
+                  fiber: Number(parsed.fiber) || 2,
+                  sugar: Number(parsed.sugar) || 10,
+                  sodium: Number(parsed.sodium) || 150
+                };
+              }
 
               addMealLog(normFrom, {
                 id: `m-${Date.now()}`,
@@ -5933,7 +6060,7 @@ Keluarkan output JSON valid:
                 fiber: calcNutr.fiber,
                 sugar: calcNutr.sugar,
                 sodium: calcNutr.sodium,
-                mealType: getMealTypeByHour(userText || parsed.mealType),
+                mealType: finalMealType.toLowerCase() as any,
                 timestamp: new Date().toISOString()
               });
               const dailyTotals = getDailyTotals(normFrom);
@@ -6003,11 +6130,16 @@ Keluarkan output JSON valid:
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);
-          const detRes = estimateMealNutritionDeterministic(userText);
+          const { foodName: fallbackFoodName, mealType: fallbackMealType } = resolveCleanFoodNameAndMealType(
+            userText,
+            "",
+            Boolean(imagePart)
+          );
+          const detRes = estimateMealNutritionDeterministic(fallbackFoodName);
           const fallbackFoodObj = {
             isFood: true,
             isEquipment: false,
-            foodName: detRes.foodName || userText,
+            foodName: detRes.foodName || fallbackFoodName,
             calories: detRes.calories || 450,
             protein: detRes.protein || 30,
             carbs: detRes.carbs || 50,
@@ -6018,7 +6150,7 @@ Keluarkan output JSON valid:
             satietyScore: 7,
             satietyExplanation: "Keseimbangan nutrisi yang baik untuk mendukung kebutuhan harian kamu.",
             healthScore: 8,
-            portionEstimates: detRes.items?.map(i => `${i.name}: ~${i.calories} kcal`) || [userText],
+            portionEstimates: detRes.items?.map(i => `${i.name}: ~${i.calories} kcal`) || [fallbackFoodName],
             keyInsights: ["Asupan makro seimbang", "Mendukung target pemulihan dan energi harian"],
             coachComment: userData.persona === "max"
               ? "Mantap bro! Pilihan menu yang solid, jaga terus konsistensi nutrisi lo! 💪🔥"
@@ -6035,7 +6167,7 @@ Keluarkan output JSON valid:
             fiber: fallbackFoodObj.fiber,
             sugar: fallbackFoodObj.sugar,
             sodium: fallbackFoodObj.sodium,
-            mealType: getMealTypeByHour(userText),
+            mealType: fallbackMealType.toLowerCase() as any,
             timestamp: new Date().toISOString()
           });
           const dailyTotals = getDailyTotals(normFrom);
@@ -6485,4 +6617,6 @@ Keluarkan output JSON valid:
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.argv.some(a => a.includes("test"))) {
+  startServer();
+}

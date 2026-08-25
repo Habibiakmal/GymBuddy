@@ -238,6 +238,26 @@ const isPlainWaterName = (name: string): boolean => {
   return waterKeywords.some((kw) => lower.includes(kw));
 };
 
+// Smart Food & Drink Emoji Selector
+const getFoodEmoji = (name: string): string => {
+  if (!name) return "🍽️";
+  const n = name.toLowerCase();
+  if (isLiquidName(n) || n.includes("kopi") || n.includes("jus") || n.includes("susu") || n.includes("tea") || n.includes("teh") || n.includes("drink")) return "🥤";
+  if (n.includes("cookie") || n.includes("biskuit") || n.includes("wafer") || n.includes("oreo") || n.includes("kue kering")) return "🍪";
+  if (n.includes("sandwich") || n.includes("sub ") || n.includes("toast") || n.includes("roti") || n.includes("bread") || n.includes("pastrami")) return "🥪";
+  if (n.includes("burger")) return "🍔";
+  if (n.includes("pizza")) return "🍕";
+  if (n.includes("nasi") || n.includes("rice") || n.includes("padang") || n.includes("uduk") || n.includes("goreng")) return "🍚";
+  if (n.includes("ayam") || n.includes("chicken") || n.includes("bebek") || n.includes("unggas")) return "🍗";
+  if (n.includes("daging") || n.includes("beef") || n.includes("steak") || n.includes("rendang") || n.includes("sapi")) return "🥩";
+  if (n.includes("telur") || n.includes("egg") || n.includes("omelet") || n.includes("ceplok") || n.includes("dadar")) return "🍳";
+  if (n.includes("salad") || n.includes("sayur") || n.includes("lalapan") || n.includes("capcay") || n.includes("tumis")) return "🥗";
+  if (n.includes("buah") || n.includes("apel") || n.includes("pisang") || n.includes("fruit") || n.includes("jeruk") || n.includes("semangka")) return "🍎";
+  if (n.includes("mie") || n.includes("noodle") || n.includes("ramen") || n.includes("pasta") || n.includes("spaghetti") || n.includes("bihun") || n.includes("kwetiau")) return "🍜";
+  if (n.includes("snack") || n.includes("camilan") || n.includes("keripik") || n.includes("chips")) return "🍿";
+  return "🍽️";
+};
+
 // Smart Combo Item Splitting Logic (e.g. "Nasi Ayam McD + Kopi" or "rice bowl + americano")
 const splitAndCategorizeComboText = (
   rawName: string,
@@ -3791,7 +3811,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-base leading-none">
-                                    {isLiquidName(item.foodName) ? "🥤" : "🍽️"}
+                                    {getFoodEmoji(item.foodName)}
                                   </span>
                                   <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors truncate">
                                     {item.foodName}
