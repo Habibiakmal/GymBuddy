@@ -1654,11 +1654,11 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
   }
 
   const percentageExact = (c / t) * 100;
-  const percentage = Math.round(percentageExact);
   const remaining = t - c;
 
   if (isUpperLimit) {
     if (c > t) {
+      const percentage = Math.max(101, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -1687,6 +1687,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
         isUnder: false
       };
     } else if (percentageExact >= 80) {
+      const percentage = Math.min(99, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -1701,6 +1702,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
         isUnder: true
       };
     } else {
+      const percentage = Math.min(99, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -1720,6 +1722,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
   // Target-based Nutrients:
   // Strict mutually exclusive comparison on raw numerical values
   if (c < t) {
+    const percentage = Math.min(99, Math.round(percentageExact));
     return {
       current: c,
       target: t,
@@ -1749,6 +1752,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
     };
   } else {
     // c > t
+    const percentage = Math.max(101, Math.round(percentageExact));
     return {
       current: c,
       target: t,
@@ -1824,8 +1828,12 @@ export function calculateDailyNutritionSummary(
 export function makeProgressBar(current: number, target: number, length: number = 10): string {
   if (!target || target <= 0) return `[░░░░░░░░░░] 0% · 🟡 Belum Cukup`;
   const statusInfo = calculateNutrientStatus(current, target, false);
-  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
-  const filledCount = Math.min(length, Math.max(0, Math.floor((cappedPercent / 100) * length)));
+  let filledCount = 0;
+  if (current < target) {
+    filledCount = Math.min(length - 1, Math.floor((current / target) * length));
+  } else {
+    filledCount = length;
+  }
   const emptyCount = Math.max(0, length - filledCount);
   const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
 
@@ -1838,8 +1846,12 @@ export function makeProgressBar(current: number, target: number, length: number 
 export function makeSodiumProgressBar(current: number, limit: number = 2000, length: number = 10): string {
   if (!limit || limit <= 0) limit = 2000;
   const statusInfo = calculateNutrientStatus(current, limit, true);
-  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
-  const filledCount = Math.min(length, Math.max(0, Math.floor((cappedPercent / 100) * length)));
+  let filledCount = 0;
+  if (current <= limit) {
+    filledCount = Math.min(length, Math.floor((current / limit) * length));
+  } else {
+    filledCount = length;
+  }
   const emptyCount = Math.max(0, length - filledCount);
   const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
 

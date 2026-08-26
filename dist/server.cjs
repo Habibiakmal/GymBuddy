@@ -44197,10 +44197,10 @@ function calculateNutrientStatus(current, target, isUpperLimit = false) {
     };
   }
   const percentageExact = c / t * 100;
-  const percentage = Math.round(percentageExact);
   const remaining = t - c;
   if (isUpperLimit) {
     if (c > t) {
+      const percentage = Math.max(101, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -44229,6 +44229,7 @@ function calculateNutrientStatus(current, target, isUpperLimit = false) {
         isUnder: false
       };
     } else if (percentageExact >= 80) {
+      const percentage = Math.min(99, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -44243,6 +44244,7 @@ function calculateNutrientStatus(current, target, isUpperLimit = false) {
         isUnder: true
       };
     } else {
+      const percentage = Math.min(99, Math.round(percentageExact));
       return {
         current: c,
         target: t,
@@ -44259,6 +44261,7 @@ function calculateNutrientStatus(current, target, isUpperLimit = false) {
     }
   }
   if (c < t) {
+    const percentage = Math.min(99, Math.round(percentageExact));
     return {
       current: c,
       target: t,
@@ -44287,6 +44290,7 @@ function calculateNutrientStatus(current, target, isUpperLimit = false) {
       isUnder: false
     };
   } else {
+    const percentage = Math.max(101, Math.round(percentageExact));
     return {
       current: c,
       target: t,
@@ -44348,8 +44352,12 @@ function calculateDailyNutritionSummary(dailyTotals, userTargets) {
 function makeProgressBar(current, target, length = 10) {
   if (!target || target <= 0) return `[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 0% \xB7 \u{1F7E1} Belum Cukup`;
   const statusInfo = calculateNutrientStatus(current, target, false);
-  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
-  const filledCount = Math.min(length, Math.max(0, Math.floor(cappedPercent / 100 * length)));
+  let filledCount = 0;
+  if (current < target) {
+    filledCount = Math.min(length - 1, Math.floor(current / target * length));
+  } else {
+    filledCount = length;
+  }
   const emptyCount = Math.max(0, length - filledCount);
   const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
   return `[${bar}] ${statusInfo.percentage}% \xB7 ${statusInfo.statusBadge}`;
@@ -44357,8 +44365,12 @@ function makeProgressBar(current, target, length = 10) {
 function makeSodiumProgressBar(current, limit = 2e3, length = 10) {
   if (!limit || limit <= 0) limit = 2e3;
   const statusInfo = calculateNutrientStatus(current, limit, true);
-  const cappedPercent = Math.min(100, Math.max(0, statusInfo.percentage));
-  const filledCount = Math.min(length, Math.max(0, Math.floor(cappedPercent / 100 * length)));
+  let filledCount = 0;
+  if (current <= limit) {
+    filledCount = Math.min(length, Math.floor(current / limit * length));
+  } else {
+    filledCount = length;
+  }
   const emptyCount = Math.max(0, length - filledCount);
   const bar = "\u2588".repeat(filledCount) + "\u2591".repeat(emptyCount);
   return `[${bar}] ${statusInfo.percentage}% \xB7 ${statusInfo.statusBadge}`;
@@ -48080,14 +48092,15 @@ function parseDateFromQuery(userText) {
   return { dateStr: getWibDate(wibNow), label: todayLabel, isYesterday: false, isToday: true, isSpecificDate: false };
 }
 function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
-  const rawFoodName = String(parsedAi?.foodName || "Analisis Makanan").trim();
-  const calories = Number(parsedAi?.calories) || 0;
-  const protein = Number(parsedAi?.protein) || 0;
-  const carbs = Number(parsedAi?.carbs) || 0;
-  const fat = Number(parsedAi?.fat) || 0;
-  const fiber = Number(parsedAi?.fiber) || 0;
-  const sugar = Number(parsedAi?.sugar) || 0;
-  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
+  const rawFoodName = String(parsedAi?.canonicalMealTitle || parsedAi?.foodName || "Estimasi Makanan").trim();
+  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Estimasi Makanan";
+  const calories = Math.max(0, Math.round(Number(parsedAi?.calories) || 0));
+  const protein = Math.max(0, Number((Number(parsedAi?.protein) || 0).toFixed(1)));
+  const carbs = Math.max(0, Number((Number(parsedAi?.carbs) || 0).toFixed(1)));
+  const fat = Math.max(0, Number((Number(parsedAi?.fat) || 0).toFixed(1)));
+  const fiber = Math.max(0, Number((Number(parsedAi?.fiber) || 0).toFixed(1)));
+  const sugar = Math.max(0, Number((Number(parsedAi?.sugar) || 0).toFixed(1)));
+  const sodium = Math.max(0, Math.round(Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0)));
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
   const fatKcal = fat * 9;
@@ -48096,18 +48109,6 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const carbPercent = Math.round(carbKcal / totalMacroKcal * 100);
   const fatPercent = Math.round(fatKcal / totalMacroKcal * 100);
   const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi?.confidenceLevel) || (String(inputSource).toLowerCase().includes("foto") ? 88 : 92)));
-  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
-  let portionDetailText = "";
-  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates.map((p) => {
-      const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
-      return line.startsWith("\u2022") ? line : `\u2022 ${line}`;
-    }).join("\n");
-  } else if (parsedAi?.portionDetail) {
-    portionDetailText = `\u2022 ${String(parsedAi.portionDetail).trim()}`;
-  } else {
-    portionDetailText = `\u2022 1 Porsi Standar (~${calories} kcal)`;
-  }
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1e3);
   const wibIso = wibNow.toISOString();
   const [wibDatePart, wibTimePart] = wibIso.split("T");
@@ -48115,71 +48116,85 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
   const dateStr = `${parseInt(wibDay)} ${monthNames[parseInt(wibMonth) - 1]} ${wibYear}`;
   const timeStr = wibTimePart.substring(0, 5).replace(":", ".");
-  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
-  const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
-  const totalTodayCal = dailyTotals.calories;
-  const targetCal = userData.targetCalories || 2e3;
-  const totalTodayProt = dailyTotals.protein;
-  const targetProt = userData.proteinGrams || 120;
-  const totalTodayCarb = dailyTotals.carbs;
-  const targetCarb = userData.carbGrams || 240;
-  const totalTodayFat = dailyTotals.fat;
-  const targetFat = userData.fatGrams || 65;
-  const totalTodaySodium = dailyTotals.sodium || 0;
+  let portionDetailText = "";
+  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates.map((p) => {
+      const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
+      return line.startsWith("\u2022") ? line : `\u2022 ${line}`;
+    }).filter(Boolean).join("\n");
+  } else if (parsedAi?.portionDetail) {
+    portionDetailText = `\u2022 ${String(parsedAi.portionDetail).trim()}`;
+  } else {
+    portionDetailText = `\u2022 1 Porsi Standar (~${calories} kcal)`;
+  }
+  const persona = (userData?.persona || "mia").toLowerCase();
+  const isMax = persona === "max";
+  const coachHeader = isMax ? "COACH MAX" : "COACH MIA";
+  const totalTodayCal = Math.max(0, Math.round(Number(dailyTotals?.calories) || 0));
+  const targetCal = Math.max(1, Math.round(Number(userData?.targetCalories) || 2e3));
+  const totalTodayProt = Math.max(0, Number((Number(dailyTotals?.protein) || 0).toFixed(1)));
+  const targetProt = Math.max(1, Math.round(Number(userData?.proteinGrams) || 120));
+  const totalTodayCarb = Math.max(0, Number((Number(dailyTotals?.carbs) || 0).toFixed(1)));
+  const targetCarb = Math.max(1, Math.round(Number(userData?.carbGrams) || 240));
+  const totalTodayFat = Math.max(0, Number((Number(dailyTotals?.fat) || 0).toFixed(1)));
+  const targetFat = Math.max(1, Math.round(Number(userData?.fatGrams) || 65));
+  const totalTodaySodium = Math.max(0, Math.round(Number(dailyTotals?.sodium) || 0));
+  const sodiumLimit = 2e3;
   const nutritionSummary = calculateDailyNutritionSummary(
     { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium },
-    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2e3 }
+    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit }
   );
   const calBar = makeProgressBar(totalTodayCal, targetCal);
   const protBar = makeProgressBar(totalTodayProt, targetProt);
   const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
-  const sodBar = makeSodiumProgressBar(totalTodaySodium, 2e3);
+  const sodBar = makeSodiumProgressBar(totalTodaySodium, sodiumLimit);
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
-  if (!coachComment || !parsedAi?.isCorrection && (nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver)) {
-    if (nutritionSummary.calories.isOver && nutritionSummary.protein.isUnder) {
-      coachComment = isMia ? "Kalori, karbohidrat, dan lemak kamu sudah melewati target hari ini. Kalau masih perlu makan nanti, pilih opsi yang lebih ringan dan prioritaskan kebutuhan protein ya \u2728" : "Kalori, karbo, dan lemak lo udah tembus target hari ini bro! Kalau masih butuh asupan, pilih yang ringan dan prioritaskan sumber protein bersih! \u{1F4AA}\u{1F525}";
+  if (!coachComment || !parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver)) {
+    if (nutritionSummary.sodium.isOver) {
+      coachComment = isMax ? `Sodium lo udah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini bro! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
+    } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
+      coachComment = isMax ? `Asupan lemak lo udah lewat target hari ini (${totalTodayFat}/${targetFat}g), sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! \u{1F525}` : `Lemak harian kamu sudah sedikit melebihi target ya. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728`;
     } else if (nutritionSummary.calories.isOver) {
-      coachComment = isMia ? "Kalori harian kamu sudah terpenuhi dan sedikit melewati target. Cukupi asupan air putih dan istirahat optimal ya \u2728" : "Kalori harian lo udah melampaui target bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan gas recovery! \u26A1";
-    } else if (nutritionSummary.sodium.isOver) {
-      coachComment = isMia ? "Asupan natrium hari ini sudah melebihi batas anjuran. Yuk imbangi dengan minum air putih yang cukup dan pilih menu rendah garam ya \u2728" : "Sodium lo udah nembus batas harian bro! Imbangi langsung dengan minum air putih 500ml-1L sekarang dan kurangi kuah asin! \u{1F4A7}";
+      coachComment = isMax ? `Kalori harian lo udah melampaui target (${totalTodayCal}/${targetCal} kcal) bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan maksimalkan istirahat! \u26A1` : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal). Cukupi hidrasi air putih dan istirahat optimal ya \u2728`;
+    } else if (nutritionSummary.protein.isReached) {
+      coachComment = isMax ? `Target protein harian lo udah tembus (${totalTodayProt}/${targetProt}g)! Mantap banget disiplin makro lo bro! \u{1F4AA}\u{1F525}` : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g)! Pertahankan pola makan sehat ini ya \u2728`;
+    } else if (protein >= 25) {
+      coachComment = isMax ? `Pilihan mantap bro! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot lo! \u{1F4AA}` : `Pilihan makanan yang bagus! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu \u2728`;
     } else {
-      coachComment = isMia ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! \u2728" : "Mantap bro! Jaga terus disiplin makro lo! \u{1F4AA}";
+      coachComment = isMax ? `Mantap bro! Makanan lo udah tercatat, jaga terus konsistensi nutrisi lo hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya. Semangat terus jaga pola makan seimbangmu! \u2728`;
     }
   }
-  const sodiumTip = totalTodaySodium > 2e3 ? `
+  const sections = [];
+  sections.push(`\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
-\u{1F4A1} *Catatan Natrium*: Asupan natrium kamu hari ini (${totalTodaySodium.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg. Untuk makanan berikutnya, prioritaskan opsi lebih rendah sodium dan cukupi minum air putih ya.` : "";
-  return `\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
-
-\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} AI: ${confidenceScore}%
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4CA} *REKAP NUTRISI*
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F525} *${calories} kcal*
+\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} AI: ${confidenceScore}%`);
+  let nutrContent = `\u{1F525} *${calories} kcal*
 
 \u{1F356} *Protein*: ${protein}g (${protPercent}%)
 \u{1F35A} *Karbo*: ${carbs}g (${carbPercent}%)
 \u{1F953} *Lemak*: ${fat}g (${fatPercent}%)
 \u{1F96C} *Serat*: ${fiber}g
-\u{1F9C2} *Natrium*: ${sodium} mg${sugar > 0 ? `
-\u{1F36F} *Gula*: ${sugar}g` : ""}
-
+\u{1F9C2} *Natrium*: ${sodium} mg`;
+  if (sugar > 0) {
+    nutrContent += `
+\u{1F36F} *Gula*: ${sugar}g`;
+  }
+  sections.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4CA} *REKAP NUTRISI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+${nutrContent}`);
+  if (portionDetailText.trim()) {
+    sections.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F37D}\uFE0F *ESTIMASI PORSI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-${portionDetailText}
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+${portionDetailText.trim()}`);
+  }
+  sections.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 \u{1F916} *${coachHeader}*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-"${coachComment}"
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4C8} *STATUS HARI INI*
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F525} *Kalori*: ${totalTodayCal}/${targetCal} kcal
+"${coachComment}"`);
+  const statusContent = `\u{1F525} *Kalori*: ${totalTodayCal}/${targetCal} kcal
 ${calBar}
 
 \u{1F356} *Protein*: ${totalTodayProt}/${targetProt}g
@@ -48192,10 +48207,14 @@ ${carbBar}
 ${fatBar}
 
 \u{1F9C2} *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg
-${sodBar}${sodiumTip}
-
+${sodBar}`;
+  sections.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4C8} *STATUS HARI INI*
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u2699\uFE0F _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
+${statusContent}`);
+  sections.push(`\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u2699\uFE0F _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`);
+  return sections.join("\n\n");
 }
 function generateWelcomeMessages(userData) {
   const {
@@ -48410,17 +48429,20 @@ function generateDailySummaryCard(userData, dailyTotals, dateLabel = "Hari Ini")
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
   const sodiumVal = dailyTotals.sodium || 0;
   const sodBar = makeSodiumProgressBar(sodiumVal, 2e3);
-  const sodiumTip = sodiumVal > 2e3 ? `
-
-\u{1F4A1} *Catatan Natrium*: Asupan natrium kamu pada rekap ini (${sodiumVal.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg.` : "";
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
     mealListStr = "_Belum ada makanan yang dicatat pada tanggal ini._";
   } else {
     mealListStr = dailyTotals.logs.map((m, idx) => `\u2022 ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${m.sodium ? ` Na:${m.sodium}mg` : ""})`).join("\n");
   }
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-  const quote = userData.persona === "max" ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil." : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya \u2728";
+  const isMax = (userData?.persona || "mia").toLowerCase() === "max";
+  const coachName = isMax ? "Coach Max" : "Coach Mia";
+  let quote = "";
+  if (sodiumVal > 2e3) {
+    quote = isMax ? `Jaga terus ritme lo bro! Natrium lo (${sodiumVal.toLocaleString("id-ID")} mg) udah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! \u{1F4AA}` : `Kamu hebat sudah konsisten mencatat hari ini! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728`;
+  } else {
+    quote = isMax ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil. \u{1F4AA}" : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya \u2728";
+  }
   return `\u{1F4C6} *Rekap ${dateLabel}*
 
 \u2696\uFE0F *Berat*: ${userData.weight} kg
@@ -48442,7 +48464,7 @@ ${fatBar}
 ${fiberBar}
 
 \u{1F9C2} *Natrium*: ${sodiumVal.toLocaleString("id-ID")}/2,000 mg
-${sodBar}${sodiumTip}
+${sodBar}
 
 \u{1F37D}\uFE0F *Makanan Terdaftar*:
 ${mealListStr}

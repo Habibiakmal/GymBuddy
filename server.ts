@@ -2846,15 +2846,16 @@ export function formatNutritionCard(
   userData: ReturnType<typeof calculateUserData>,
   dailyTotals: ReturnType<typeof getDailyTotals>
 ): string {
-  const rawFoodName = String(parsedAi?.foodName || "Analisis Makanan").trim();
+  const rawFoodName = String(parsedAi?.canonicalMealTitle || parsedAi?.foodName || "Estimasi Makanan").trim();
+  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Estimasi Makanan";
 
-  const calories = Number(parsedAi?.calories) || 0;
-  const protein = Number(parsedAi?.protein) || 0;
-  const carbs = Number(parsedAi?.carbs) || 0;
-  const fat = Number(parsedAi?.fat) || 0;
-  const fiber = Number(parsedAi?.fiber) || 0;
-  const sugar = Number(parsedAi?.sugar) || 0;
-  const sodium = Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0);
+  const calories = Math.max(0, Math.round(Number(parsedAi?.calories) || 0));
+  const protein = Math.max(0, Number((Number(parsedAi?.protein) || 0).toFixed(1)));
+  const carbs = Math.max(0, Number((Number(parsedAi?.carbs) || 0).toFixed(1)));
+  const fat = Math.max(0, Number((Number(parsedAi?.fat) || 0).toFixed(1)));
+  const fiber = Math.max(0, Number((Number(parsedAi?.fiber) || 0).toFixed(1)));
+  const sugar = Math.max(0, Number((Number(parsedAi?.sugar) || 0).toFixed(1)));
+  const sodium = Math.max(0, Math.round(Number(parsedAi?.sodium) || (parsedAi?.sodiumMg ? Number(parsedAi.sodiumMg) : 0)));
 
   const protKcal = protein * 4;
   const carbKcal = carbs * 4;
@@ -2867,22 +2868,6 @@ export function formatNutritionCard(
 
   const confidenceScore = Math.min(98, Math.max(75, Number(parsedAi?.confidenceLevel) || (String(inputSource).toLowerCase().includes("foto") ? 88 : 92)));
 
-  const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Analisis Makanan";
-  
-  let portionDetailText = "";
-  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
-    portionDetailText = parsedAi.portionEstimates
-      .map((p: any) => {
-        const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
-        return line.startsWith("•") ? line : `• ${line}`;
-      })
-      .join("\n");
-  } else if (parsedAi?.portionDetail) {
-    portionDetailText = `• ${String(parsedAi.portionDetail).trim()}`;
-  } else {
-    portionDetailText = `• 1 Porsi Standar (~${calories} kcal)`;
-  }
-
   // Always display time in WIB (UTC+7)
   const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
   const wibIso = wibNow.toISOString();
@@ -2892,102 +2877,121 @@ export function formatNutritionCard(
   const dateStr = `${parseInt(wibDay)} ${monthNames[parseInt(wibMonth) - 1]} ${wibYear}`;
   const timeStr = wibTimePart.substring(0, 5).replace(":", ".");
 
-  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
-  const coachHeader = isMia ? "COACH MIA" : "COACH MAX";
+  // Portion details
+  let portionDetailText = "";
+  if (Array.isArray(parsedAi?.portionEstimates) && parsedAi.portionEstimates.length > 0) {
+    portionDetailText = parsedAi.portionEstimates
+      .map((p: any) => {
+        const line = typeof p === "string" ? p.trim() : JSON.stringify(p);
+        return line.startsWith("•") ? line : `• ${line}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+  } else if (parsedAi?.portionDetail) {
+    portionDetailText = `• ${String(parsedAi.portionDetail).trim()}`;
+  } else {
+    portionDetailText = `• 1 Porsi Standar (~${calories} kcal)`;
+  }
 
-  const totalTodayCal = dailyTotals.calories;
-  const targetCal = userData.targetCalories || 2000;
-  const totalTodayProt = dailyTotals.protein;
-  const targetProt = userData.proteinGrams || 120;
-  const totalTodayCarb = dailyTotals.carbs;
-  const targetCarb = userData.carbGrams || 240;
-  const totalTodayFat = dailyTotals.fat;
-  const targetFat = userData.fatGrams || 65;
-  const totalTodaySodium = (dailyTotals as any).sodium || 0;
+  // Active Coach Dynamic Determination
+  const persona = (userData?.persona || "mia").toLowerCase();
+  const isMax = persona === "max";
+  const coachHeader = isMax ? "COACH MAX" : "COACH MIA";
 
-  // Single Source of Truth Nutrition Summary
+  // Dashboard synchronized daily totals and targets
+  const totalTodayCal = Math.max(0, Math.round(Number(dailyTotals?.calories) || 0));
+  const targetCal = Math.max(1, Math.round(Number(userData?.targetCalories) || 2000));
+  const totalTodayProt = Math.max(0, Number((Number(dailyTotals?.protein) || 0).toFixed(1)));
+  const targetProt = Math.max(1, Math.round(Number(userData?.proteinGrams) || 120));
+  const totalTodayCarb = Math.max(0, Number((Number(dailyTotals?.carbs) || 0).toFixed(1)));
+  const targetCarb = Math.max(1, Math.round(Number(userData?.carbGrams) || 240));
+  const totalTodayFat = Math.max(0, Number((Number(dailyTotals?.fat) || 0).toFixed(1)));
+  const targetFat = Math.max(1, Math.round(Number(userData?.fatGrams) || 65));
+  const totalTodaySodium = Math.max(0, Math.round(Number((dailyTotals as any)?.sodium) || 0));
+  const sodiumLimit = 2000;
+
+  // Single Source of Truth Nutrition Summary & Progress Bars
   const nutritionSummary = calculateDailyNutritionSummary(
     { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium },
-    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2000 }
+    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit }
   );
 
   const calBar = makeProgressBar(totalTodayCal, targetCal);
   const protBar = makeProgressBar(totalTodayProt, targetProt);
   const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
-  const sodBar = makeSodiumProgressBar(totalTodaySodium, 2000);
+  const sodBar = makeSodiumProgressBar(totalTodaySodium, sodiumLimit);
 
-  // Status-aware coach comment
+  // Status-aware and persona-aligned Coach Message (Natural Integration of Warnings)
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
-  if (!coachComment || (!parsedAi?.isCorrection && (nutritionSummary.calories.isOver || nutritionSummary.sodium.isOver))) {
-    if (nutritionSummary.calories.isOver && nutritionSummary.protein.isUnder) {
-      coachComment = isMia
-        ? "Kalori, karbohidrat, dan lemak kamu sudah melewati target hari ini. Kalau masih perlu makan nanti, pilih opsi yang lebih ringan dan prioritaskan kebutuhan protein ya ✨"
-        : "Kalori, karbo, dan lemak lo udah tembus target hari ini bro! Kalau masih butuh asupan, pilih yang ringan dan prioritaskan sumber protein bersih! 💪🔥";
+
+  // If coach comment is generic or missing, or if key limits/targets are hit, formulate natural persona coaching message:
+  if (!coachComment || (!parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver))) {
+    if (nutritionSummary.sodium.isOver) {
+      coachComment = isMax
+        ? `Sodium lo udah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini bro! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. 💪`
+        : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
+    } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
+      coachComment = isMax
+        ? `Asupan lemak lo udah lewat target hari ini (${totalTodayFat}/${targetFat}g), sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! 🔥`
+        : `Lemak harian kamu sudah sedikit melebihi target ya. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya ✨`;
     } else if (nutritionSummary.calories.isOver) {
-      coachComment = isMia
-        ? "Kalori harian kamu sudah terpenuhi dan sedikit melewati target. Cukupi asupan air putih dan istirahat optimal ya ✨"
-        : "Kalori harian lo udah melampaui target bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan gas recovery! ⚡";
-    } else if (nutritionSummary.sodium.isOver) {
-      coachComment = isMia
-        ? "Asupan natrium hari ini sudah melebihi batas anjuran. Yuk imbangi dengan minum air putih yang cukup dan pilih menu rendah garam ya ✨"
-        : "Sodium lo udah nembus batas harian bro! Imbangi langsung dengan minum air putih 500ml-1L sekarang dan kurangi kuah asin! 💧";
+      coachComment = isMax
+        ? `Kalori harian lo udah melampaui target (${totalTodayCal}/${targetCal} kcal) bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan maksimalkan istirahat! ⚡`
+        : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal). Cukupi hidrasi air putih dan istirahat optimal ya ✨`;
+    } else if (nutritionSummary.protein.isReached) {
+      coachComment = isMax
+        ? `Target protein harian lo udah tembus (${totalTodayProt}/${targetProt}g)! Mantap banget disiplin makro lo bro! 💪🔥`
+        : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g)! Pertahankan pola makan sehat ini ya ✨`;
+    } else if (protein >= 25) {
+      coachComment = isMax
+        ? `Pilihan mantap bro! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot lo! 💪`
+        : `Pilihan makanan yang bagus! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu ✨`;
     } else {
-      coachComment = isMia
-        ? "Hebat banget! Tetap jaga pola makan seimbang kamu ya! ✨"
-        : "Mantap bro! Jaga terus disiplin makro lo! 💪";
+      coachComment = isMax
+        ? `Mantap bro! Makanan lo udah tercatat, jaga terus konsistensi nutrisi lo hari ini! 💪`
+        : `Catatan makananmu sudah tersimpan rapi ya. Semangat terus jaga pola makan seimbangmu! ✨`;
     }
   }
 
-  const sodiumTip = totalTodaySodium > 2000
-    ? `\n\n💡 *Catatan Natrium*: Asupan natrium kamu hari ini (${totalTodaySodium.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg. Untuk makanan berikutnya, prioritaskan opsi lebih rendah sodium dan cukupi minum air putih ya.`
-    : "";
+  // Construct sections cleanly without empty/consecutive separators
+  const sections: string[] = [];
 
-  return `🍽️ *${cleanFoodName.toUpperCase()}*
+  // Header: Meal Title & Meta
+  sections.push(`🍽️ *${cleanFoodName.toUpperCase()}*\n\n🕒 ${dateStr}, ${timeStr} WIB · 🤖 AI: ${confidenceScore}%`);
 
-🕒 ${dateStr}, ${timeStr} WIB · 🤖 AI: ${confidenceScore}%
+  // Section 1: Rekap Nutrisi
+  let nutrContent = `🔥 *${calories} kcal*\n\n` +
+    `🍖 *Protein*: ${protein}g (${protPercent}%)\n` +
+    `🍚 *Karbo*: ${carbs}g (${carbPercent}%)\n` +
+    `🥓 *Lemak*: ${fat}g (${fatPercent}%)\n` +
+    `🥬 *Serat*: ${fiber}g\n` +
+    `🧂 *Natrium*: ${sodium} mg`;
+  if (sugar > 0) {
+    nutrContent += `\n🍯 *Gula*: ${sugar}g`;
+  }
+  sections.push(`━━━━━━━━━━━━━━\n📊 *REKAP NUTRISI*\n━━━━━━━━━━━━━━\n${nutrContent}`);
 
-━━━━━━━━━━━━━━
-📊 *REKAP NUTRISI*
-━━━━━━━━━━━━━━
-🔥 *${calories} kcal*
+  // Section 2: Estimasi Porsi (only if portion detail text exists)
+  if (portionDetailText.trim()) {
+    sections.push(`━━━━━━━━━━━━━━\n🍽️ *ESTIMASI PORSI*\n━━━━━━━━━━━━━━\n${portionDetailText.trim()}`);
+  }
 
-🍖 *Protein*: ${protein}g (${protPercent}%)
-🍚 *Karbo*: ${carbs}g (${carbPercent}%)
-🥓 *Lemak*: ${fat}g (${fatPercent}%)
-🥬 *Serat*: ${fiber}g
-🧂 *Natrium*: ${sodium} mg${sugar > 0 ? `\n🍯 *Gula*: ${sugar}g` : ""}
+  // Section 3: Active Coach
+  sections.push(`━━━━━━━━━━━━━━\n🤖 *${coachHeader}*\n━━━━━━━━━━━━━━\n"${coachComment}"`);
 
-━━━━━━━━━━━━━━
-🍽️ *ESTIMASI PORSI*
-━━━━━━━━━━━━━━
-${portionDetailText}
+  // Section 4: Status Hari Ini
+  const statusContent = `🔥 *Kalori*: ${totalTodayCal}/${targetCal} kcal\n${calBar}\n\n` +
+    `🍖 *Protein*: ${totalTodayProt}/${targetProt}g\n${protBar}\n\n` +
+    `🍚 *Karbo*: ${totalTodayCarb}/${targetCarb}g\n${carbBar}\n\n` +
+    `🥓 *Lemak*: ${totalTodayFat}/${targetFat}g\n${fatBar}\n\n` +
+    `🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg\n${sodBar}`;
+  sections.push(`━━━━━━━━━━━━━━\n📈 *STATUS HARI INI*\n━━━━━━━━━━━━━━\n${statusContent}`);
 
-━━━━━━━━━━━━━━
-🤖 *${coachHeader}*
-━━━━━━━━━━━━━━
-"${coachComment}"
+  // Footer
+  sections.push(`━━━━━━━━━━━━━━\n⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`);
 
-━━━━━━━━━━━━━━
-📈 *STATUS HARI INI*
-━━━━━━━━━━━━━━
-🔥 *Kalori*: ${totalTodayCal}/${targetCal} kcal
-${calBar}
-
-🍖 *Protein*: ${totalTodayProt}/${targetProt}g
-${protBar}
-
-🍚 *Karbo*: ${totalTodayCarb}/${targetCarb}g
-${carbBar}
-
-🥓 *Lemak*: ${totalTodayFat}/${targetFat}g
-${fatBar}
-
-🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg
-${sodBar}${sodiumTip}
-
-━━━━━━━━━━━━━━
-⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`;
+  return sections.join("\n\n");
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
@@ -3212,9 +3216,6 @@ function generateDailySummaryCard(
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
   const sodiumVal = (dailyTotals as any).sodium || 0;
   const sodBar = makeSodiumProgressBar(sodiumVal, 2000);
-  const sodiumTip = sodiumVal > 2000
-    ? `\n\n💡 *Catatan Natrium*: Asupan natrium kamu pada rekap ini (${sodiumVal.toLocaleString("id-ID")} mg) telah melebihi batas anjuran 2,000 mg.`
-    : "";
 
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
@@ -3223,10 +3224,18 @@ function generateDailySummaryCard(
     mealListStr = dailyTotals.logs.map((m, idx) => `• ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${(m as any).sodium ? ` Na:${(m as any).sodium}mg` : ""})`).join("\n");
   }
 
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-  const quote = userData.persona === "max" 
-    ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil."
-    : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya ✨";
+  const isMax = (userData?.persona || "mia").toLowerCase() === "max";
+  const coachName = isMax ? "Coach Max" : "Coach Mia";
+  let quote = "";
+  if (sodiumVal > 2000) {
+    quote = isMax
+      ? `Jaga terus ritme lo bro! Natrium lo (${sodiumVal.toLocaleString("id-ID")} mg) udah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! 💪`
+      : `Kamu hebat sudah konsisten mencatat hari ini! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih ✨`;
+  } else {
+    quote = isMax 
+      ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil. 💪"
+      : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya ✨";
+  }
 
   return `📆 *Rekap ${dateLabel}*
 
@@ -3249,7 +3258,7 @@ ${fatBar}
 ${fiberBar}
 
 🧂 *Natrium*: ${sodiumVal.toLocaleString("id-ID")}/2,000 mg
-${sodBar}${sodiumTip}
+${sodBar}
 
 🍽️ *Makanan Terdaftar*:
 ${mealListStr}
