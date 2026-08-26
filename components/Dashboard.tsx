@@ -396,6 +396,8 @@ const translations = {
     proteinLabel: "Protein",
     carbsLabel: "Karbohidrat",
     fatLabel: "Lemak",
+    sodiumLabel: "Natrium",
+    waterLabel: "Air",
     overallGoalProgress: "Progress Goal Keseluruhan",
     howDoYouFeel: "Bagaimana perasaanmu hari ini?",
     feelSubtext: "Ini bukan diagnosis medis. Hanya digunakan sebagai daily wellbeing dan readiness check.",
@@ -483,6 +485,8 @@ const translations = {
     proteinLabel: "Protein",
     carbsLabel: "Carbohydrates",
     fatLabel: "Fat",
+    sodiumLabel: "Sodium",
+    waterLabel: "Water",
     overallGoalProgress: "Overall Goal Progress",
     howDoYouFeel: "How do you feel today?",
     feelSubtext: "This is not a medical diagnosis. Used only for daily wellbeing and readiness check.",
@@ -1690,6 +1694,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     protein?: number;
     carbs?: number;
     fat?: number;
+    sodium?: number;
     sugar?: number;
     water?: number;
   }>(() => {
@@ -1709,6 +1714,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const targetProtein = customTargets.protein ?? (activeUser.proteinGrams || autoTargetProtein);
   const targetFat = customTargets.fat ?? (activeUser.fatGrams || autoTargetFat);
   const targetCarbs = customTargets.carbs ?? (activeUser.carbGrams || autoTargetCarbs);
+  const targetSodium = customTargets.sodium ?? 2000;
   const targetSugar = customTargets.sugar ?? 45;
   const targetHydrationGoal = customTargets.water ?? 2500;
 
@@ -1718,6 +1724,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [custProt, setCustProt] = useState(String(targetProtein));
   const [custCarb, setCustCarb] = useState(String(targetCarbs));
   const [custFat, setCustFat] = useState(String(targetFat));
+  const [custSodium, setCustSodium] = useState(String(targetSodium));
   const [custSugar, setCustSugar] = useState(String(targetSugar));
   const [custWater, setCustWater] = useState(String(targetHydrationGoal));
 
@@ -1726,9 +1733,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setCustProt(String(targetProtein));
     setCustCarb(String(targetCarbs));
     setCustFat(String(targetFat));
+    setCustSodium(String(targetSodium));
     setCustSugar(String(targetSugar));
     setCustWater(String(targetHydrationGoal));
-  }, [targetCalories, targetProtein, targetCarbs, targetFat, targetSugar, targetHydrationGoal, showCustomTargetsModal]);
+  }, [targetCalories, targetProtein, targetCarbs, targetFat, targetSodium, targetSugar, targetHydrationGoal, showCustomTargetsModal]);
 
   const handleSaveCustomTargets = async () => {
     const newTargets = {
@@ -1736,6 +1744,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       protein: Math.max(10, Number(custProt) || autoTargetProtein),
       carbs: Math.max(10, Number(custCarb) || autoTargetCarbs),
       fat: Math.max(5, Number(custFat) || autoTargetFat),
+      sodium: Math.max(500, Number(custSodium) || 2000),
       sugar: Math.max(5, Number(custSugar) || 45),
       water: Math.max(500, Number(custWater) || 2500),
     };
@@ -2046,6 +2055,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const totalProteinConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.protein) || 0), 0);
   const totalCarbsConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
   const totalFatConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
+  const totalSodiumConsumed = allLogs.reduce((sum, item) => sum + (Number((item as any).sodium) || ((item as any).sodiumMg ? Number((item as any).sodiumMg) : 0)), 0);
 
   const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
@@ -3182,14 +3192,60 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               
               {/* ── CARD A: AI NUTRITIONIST FIRST-CLASS BENTO MODULE ── */}
               {(() => {
-                const calDiff = targetCalories - totalCaloriesConsumed;
-                const isOverCal = totalCaloriesConsumed > targetCalories;
-                const isExactCal = totalCaloriesConsumed === targetCalories && totalCaloriesConsumed > 0;
-                
-                const protDiff = targetProtein - totalProteinConsumed;
-                const carbDiff = targetCarbs - totalCarbsConsumed;
-                const fatDiff = targetFat - totalFatConsumed;
-                const waterDiff = targetHydrationGoal - totalHydrationMl;
+                const targetCal = Math.max(1, targetCalories || 2000);
+                const calDiff = targetCal - totalCaloriesConsumed;
+                const isOverCal = totalCaloriesConsumed > targetCal;
+                const isExactCal = totalCaloriesConsumed === targetCal && totalCaloriesConsumed > 0;
+                const calPercent = isOverCal
+                  ? Math.max(101, Math.round((totalCaloriesConsumed / targetCal) * 100))
+                  : isExactCal
+                  ? 100
+                  : Math.min(99, Math.floor((totalCaloriesConsumed / targetCal) * 100));
+
+                const targetProt = Math.max(1, targetProtein || 140);
+                const protDiff = targetProt - totalProteinConsumed;
+                const isOverProt = totalProteinConsumed > targetProt;
+                const isExactProt = totalProteinConsumed === targetProt && totalProteinConsumed > 0;
+                const protPercent = isOverProt
+                  ? Math.max(101, Math.round((totalProteinConsumed / targetProt) * 100))
+                  : isExactProt
+                  ? 100
+                  : Math.min(99, Math.floor((totalProteinConsumed / targetProt) * 100));
+
+                const targetCarb = Math.max(1, targetCarbs || 220);
+                const carbDiff = targetCarb - totalCarbsConsumed;
+                const isOverCarb = totalCarbsConsumed > targetCarb;
+                const isExactCarb = totalCarbsConsumed === targetCarb && totalCarbsConsumed > 0;
+                const carbPercent = isOverCarb
+                  ? Math.max(101, Math.round((totalCarbsConsumed / targetCarb) * 100))
+                  : isExactCarb
+                  ? 100
+                  : Math.min(99, Math.floor((totalCarbsConsumed / targetCarb) * 100));
+
+                const targetF = Math.max(1, targetFat || 55);
+                const fatDiff = targetF - totalFatConsumed;
+                const isOverFat = totalFatConsumed > targetF;
+                const isExactFat = totalFatConsumed === targetF && totalFatConsumed > 0;
+                const fatPercent = isOverFat
+                  ? Math.max(101, Math.round((totalFatConsumed / targetF) * 100))
+                  : isExactFat
+                  ? 100
+                  : Math.min(99, Math.floor((totalFatConsumed / targetF) * 100));
+
+                const targetSod = Math.max(1, Number((customTargets as any)?.sodiumLimit || (customTargets as any)?.sodium) || 2000);
+                const sodDiff = targetSod - totalSodiumConsumed;
+                const isOverSod = totalSodiumConsumed > targetSod;
+                const isExactSod = totalSodiumConsumed === targetSod && totalSodiumConsumed > 0;
+                const sodPercent = isOverSod
+                  ? Math.max(101, Math.round((totalSodiumConsumed / targetSod) * 100))
+                  : isExactSod
+                  ? 100
+                  : Math.min(99, Math.floor((totalSodiumConsumed / targetSod) * 100));
+
+                const targetWater = Math.max(1, targetHydrationGoal || 2500);
+                const waterDiff = targetWater - totalHydrationMl;
+                const isOverWater = totalHydrationMl >= targetWater && totalHydrationMl > 0;
+                const waterPercent = Math.min(100, Math.round((totalHydrationMl / targetWater) * 100));
 
                 const caloriesByMealType = {
                   breakfast: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "breakfast").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
@@ -3197,6 +3253,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   dinner: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "dinner").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
                   snack: foodMeals.filter(m => (m.mealType || "").toLowerCase() === "snack").reduce((sum, item) => sum + (Number(item.calories) || 0), 0),
                 };
+
+                const loggedMealSlotsCount = [
+                  caloriesByMealType.breakfast > 0,
+                  caloriesByMealType.lunch > 0,
+                  caloriesByMealType.dinner > 0,
+                  caloriesByMealType.snack > 0
+                ].filter(Boolean).length;
 
                 const nutritionBentoContent = (
                   <div className="bg-[#222222] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-xl space-y-5 flex flex-col justify-between h-full relative overflow-hidden">
@@ -3227,7 +3290,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         </button>
                       </div>
 
-                      {/* Calorie Relationship Gauge + Status */}
+                      {/* 1. Calorie Relationship Gauge + Status */}
                       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-4 bg-[#181818] border border-white/[0.08] rounded-2xl">
                         {/* Gauge */}
                         <div className="relative w-28 h-28 shrink-0 flex items-center justify-center">
@@ -3240,7 +3303,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               stroke={isOverCal ? "url(#calorieOverGradBento)" : "url(#calorieGlowGradBento)"}
                               strokeWidth="10"
                               strokeDasharray={2 * Math.PI * 48}
-                              strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, totalCaloriesConsumed / (targetCalories || 2000)))}
+                              strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(isOverCal ? 1 : 0.99, totalCaloriesConsumed / targetCal))}
                               strokeLinecap="round"
                               fill="transparent"
                               className="transition-all duration-700 ease-out"
@@ -3261,8 +3324,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             <Flame size={16} className={isOverCal ? "text-amber-400 animate-pulse" : "text-[#D4FF00] animate-pulse"} />
                             <span className={`text-lg sm:text-xl font-black leading-none mt-0.5 ${isOverCal ? "text-amber-400" : "text-white"}`}>
                               {isOverCal 
-                                ? `+${(totalCaloriesConsumed - targetCalories).toLocaleString()}` 
-                                : Math.max(0, targetCalories - totalCaloriesConsumed).toLocaleString()}
+                                ? `+${(totalCaloriesConsumed - targetCal).toLocaleString()}` 
+                                : Math.max(0, calDiff).toLocaleString()}
                             </span>
                             <span className="text-[8px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
                               {isOverCal ? (isEN ? "kcal over" : "kcal lebih") : (isEN ? "kcal left" : "kcal sisa")}
@@ -3277,27 +3340,27 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </span>
                           <h3 className="text-xl font-black text-white">
                             {totalCaloriesConsumed.toLocaleString()}{" "}
-                            <span className="text-neutral-400 text-xs font-semibold">/ {targetCalories.toLocaleString()} kcal</span>
+                            <span className="text-neutral-400 text-xs font-semibold">/ {targetCal.toLocaleString()} kcal</span>
                           </h3>
                           <div className="pt-0.5">
                             {isOverCal ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-lg border border-amber-400/20">
-                                ⚠️ {Math.abs(calDiff).toLocaleString()} kcal melebihi target
+                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-lg border border-rose-400/20">
+                                🔴 +{Math.abs(calDiff).toLocaleString()} kcal ({calPercent}%) · Melebihi Target
                               </span>
                             ) : isExactCal ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-black text-[#D4FF00] bg-[#D4FF00]/10 px-2 py-0.5 rounded-lg border border-[#D4FF00]/20">
-                                🎯 Target kalori tercapai!
+                                🟢 🎯 Target kalori tercapai (100%)
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-lg border border-emerald-400/20">
-                                ✨ {Math.max(0, calDiff).toLocaleString()} kcal tersisa
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-lg border border-amber-400/20">
+                                🟡 {Math.max(0, calDiff).toLocaleString()} kcal sisa ({calPercent}%) · Belum Cukup
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Macronutrients & Target Bars */}
+                      {/* 2. Daily Nutrition Metrics in Exact Order: Calories -> Protein -> Karbo -> Lemak -> Natrium -> Air */}
                       <div className="space-y-2.5">
                         {/* 1. Protein */}
                         <div className="space-y-1">
@@ -3307,16 +3370,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.proteinLabel}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProtein}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${protDiff < 0 ? "bg-amber-400/20 text-amber-400" : protDiff === 0 ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-400"}`}>
-                                {protDiff < 0 ? `+${Math.abs(protDiff)}g` : protDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${protDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className="text-white font-mono text-[11px]">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProt}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverProt ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactProt ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-300"}`}>
+                                {isOverProt ? `+${Math.abs(protDiff)}g (${protPercent}%) 🔴 Melebihi Target` : isExactProt ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${protDiff}g sisa (${protPercent}%) 🟡`}
                               </span>
                             </div>
                           </div>
                           <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
-                              className="h-full bg-gradient-to-r from-emerald-400 to-[#D4FF00] rounded-full transition-all duration-500 shadow-[0_0_8px_#D4FF00]"
-                              style={{ width: `${Math.min(100, Math.round((totalProteinConsumed / (targetProtein || 1)) * 100))}%` }}
+                              className={`h-full rounded-full transition-all duration-500 ${isOverProt ? "bg-gradient-to-r from-emerald-500 via-[#D4FF00] to-rose-400 shadow-[0_0_8px_#D4FF00]" : "bg-gradient-to-r from-emerald-400 to-[#D4FF00]"}`}
+                              style={{ width: `${Math.min(isOverProt ? 100 : 99, protPercent)}%` }}
                             />
                           </div>
                         </div>
@@ -3329,16 +3392,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.carbsLabel || "Karbohidrat"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalCarbsConsumed} <span className="text-neutral-500 font-normal">/ {targetCarbs}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${carbDiff < 0 ? "bg-amber-400/20 text-amber-400" : carbDiff === 0 ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-400"}`}>
-                                {carbDiff < 0 ? `+${Math.abs(carbDiff)}g` : carbDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${carbDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className="text-white font-mono text-[11px]">{totalCarbsConsumed} <span className="text-neutral-500 font-normal">/ {targetCarb}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverCarb ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactCarb ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-300"}`}>
+                                {isOverCarb ? `+${Math.abs(carbDiff)}g (${carbPercent}%) 🔴 Melebihi Target` : isExactCarb ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${carbDiff}g sisa (${carbPercent}%) 🟡`}
                               </span>
                             </div>
                           </div>
                           <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
-                              className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(100, Math.round((totalCarbsConsumed / (targetCarbs || 1)) * 100))}%` }}
+                              className={`h-full rounded-full transition-all duration-500 ${isOverCarb ? "bg-gradient-to-r from-teal-500 via-emerald-400 to-rose-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" : "bg-gradient-to-r from-teal-500 to-emerald-400"}`}
+                              style={{ width: `${Math.min(isOverCarb ? 100 : 99, carbPercent)}%` }}
                             />
                           </div>
                         </div>
@@ -3351,78 +3414,104 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.fatLabel || "Lemak"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalFatConsumed} <span className="text-neutral-500 font-normal">/ {targetFat}g</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${fatDiff < 0 ? "bg-rose-400/20 text-rose-400" : fatDiff === 0 ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-400"}`}>
-                                {fatDiff < 0 ? `+${Math.abs(fatDiff)}g` : fatDiff === 0 ? (isEN ? "✓ Target" : "✓ Tercapai") : `${fatDiff}g ${isEN ? "rem." : "sisa"}`}
+                              <span className="text-white font-mono text-[11px]">{totalFatConsumed} <span className="text-neutral-500 font-normal">/ {targetF}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverFat ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactFat ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-300"}`}>
+                                {isOverFat ? `+${Math.abs(fatDiff)}g (${fatPercent}%) 🔴 Melebihi Target` : isExactFat ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${fatDiff}g sisa (${fatPercent}%) 🟡`}
                               </span>
                             </div>
                           </div>
                           <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
-                              className="h-full bg-gradient-to-r from-pink-500 to-rose-400 rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(100, Math.round((totalFatConsumed / (targetFat || 1)) * 100))}%` }}
+                              className={`h-full rounded-full transition-all duration-500 ${isOverFat ? "bg-gradient-to-r from-pink-500 via-rose-500 to-red-500 shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse" : "bg-gradient-to-r from-pink-500 to-rose-400"}`}
+                              style={{ width: `${Math.min(isOverFat ? 100 : 99, fatPercent)}%` }}
                             />
                           </div>
                         </div>
 
-                        {/* 4. Water Intake */}
+                        {/* 4. Sodium (Directly below Fat and above Water) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-purple-400" />
+                              <span>🧂 {t.sodiumLabel || "Natrium"}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono text-[11px]">{totalSodiumConsumed.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetSod.toLocaleString()} mg</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverSod ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactSod ? "bg-amber-400/20 text-amber-400" : "bg-emerald-400/20 text-emerald-400"}`}>
+                                {isOverSod ? `+${Math.abs(sodDiff).toLocaleString()} mg (${sodPercent}%) 🔴 Melebihi Batas` : isExactSod ? "🟡 100% Batas Maksimal" : `${sodDiff.toLocaleString()} mg sisa (${sodPercent}%) 🟢 Dalam Batas`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${isOverSod ? "bg-gradient-to-r from-amber-500 via-rose-500 to-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-gradient-to-r from-emerald-500 to-teal-400"}`}
+                              style={{ width: `${Math.min(isOverSod ? 100 : 99, sodPercent)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 5. Water Intake (Last item in Daily Nutrition) */}
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#00D2FF]" />
-                              <span>{t.waterLabel}</span>
+                              <span>💧 {t.waterLabel || "Air"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalHydrationMl.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetHydrationGoal.toLocaleString()}ml</span></span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${waterDiff <= 0 ? "bg-[#00D2FF]/20 text-[#00D2FF]" : "bg-white/5 text-neutral-400"}`}>
-                                {waterDiff <= 0 ? "✓ Target" : `${waterDiff.toLocaleString()}ml sisa`}
+                              <span className="text-white font-mono text-[11px]">{totalHydrationMl.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetWater.toLocaleString()} ml</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${waterDiff <= 0 ? "bg-[#00D2FF]/20 text-[#00D2FF]" : "bg-white/5 text-neutral-300"}`}>
+                                {waterDiff <= 0 ? "✓ Target Tercapai" : `${waterDiff.toLocaleString()} ml sisa`}
                               </span>
                             </div>
                           </div>
                           <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(100, Math.round((totalHydrationMl / (targetHydrationGoal || 1)) * 100))}%` }}
+                              className="h-full bg-gradient-to-r from-blue-500 to-[#00D2FF] rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(0,210,255,0.4)]"
+                              style={{ width: `${waterPercent}%` }}
                             />
                           </div>
                         </div>
+                      </div>
 
-                        {/* 5. Target Weight */}
+                      {/* 3. Separate Long Term Goal Section: Target Berat Badan */}
+                      <div className="pt-2.5 border-t border-white/[0.08] space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                            <Scale size={12} />
+                            <span>Target Berat Badan (Goal Jangka Panjang)</span>
+                          </span>
+                        </div>
                         <div
                           onClick={() => setShowGoalEditModal(true)}
-                          className="space-y-1 cursor-pointer group/goal hover:opacity-90 transition-opacity pt-0.5"
+                          className="p-3 bg-[#181818] hover:bg-[#222222] border border-white/[0.08] hover:border-amber-400/40 rounded-2xl cursor-pointer transition-all space-y-1.5 group/goal"
                           title="Klik untuk ubah goal & target berat badan"
                         >
                           <div className="flex items-center justify-between text-xs font-bold">
-                            <span className="text-neutral-300 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-400" />
-                              <span className="group-hover/goal:text-[#D4FF00] transition-colors">{t.targetWeightLabel}</span>
-                              <Edit3 size={10} className="text-neutral-500 group-hover/goal:text-[#D4FF00]" />
-                            </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[#D4FF00] font-mono text-[11px]">{weight} kg ➔ {targetWeight}kg</span>
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${weight === targetWeight ? "bg-emerald-400/20 text-emerald-400" : "bg-amber-400/20 text-amber-300"}`}>
-                                {weight === targetWeight ? "Goal ✓" : `${Math.abs(Number((weight - targetWeight).toFixed(1)))} kg ke target`}
-                              </span>
+                              <span className="text-white font-mono text-xs">{weight} kg ➔ <span className="text-[#D4FF00] font-black">{targetWeight} kg</span></span>
+                              <Edit3 size={11} className="text-neutral-500 group-hover/goal:text-[#D4FF00] transition-colors" />
                             </div>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${weight === targetWeight ? "bg-emerald-400/20 text-emerald-400 border border-emerald-400/30" : "bg-amber-400/15 text-amber-300 border border-amber-400/25"}`}>
+                              {weight === targetWeight ? "🎯 Goal Tercapai" : `${Math.abs(Number((weight - targetWeight).toFixed(1)))} kg ke target`}
+                            </span>
                           </div>
-                          <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
+                          <div className="w-full h-1.5 bg-[#222222] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
+                              className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500 shadow-[0_0_6px_rgba(245,158,11,0.4)]"
                               style={{ width: `${progressPercent}%` }}
                             />
                           </div>
                         </div>
                       </div>
 
-                      {/* Today's Meals 4-Box Bento Preview */}
+                      {/* 4. Today's Meals 4-Box Bento Preview */}
                       <div className="pt-2 border-t border-white/[0.08] space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-extrabold text-neutral-300 uppercase tracking-wider">
                             Jurnal Makanan Hari Ini
                           </span>
                           <span className="text-[11px] font-bold text-neutral-400 font-mono">
-                            {foodMeals.length} tercatat
+                            {loggedMealSlotsCount} tercatat
                           </span>
                         </div>
 
@@ -3436,14 +3525,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             <div
                               key={m.key}
                               onClick={openAddFoodModal}
-                              className="p-2.5 bg-[#181818] hover:bg-[#2a2a2a] border border-white/[0.08] rounded-xl flex flex-col justify-between transition-all cursor-pointer group"
+                              className="p-2.5 bg-[#181818] hover:bg-[#2a2a2a] border border-white/[0.08] rounded-xl flex flex-col justify-between transition-all cursor-pointer group min-h-[58px]"
                             >
                               <span className="text-[10px] text-neutral-400 font-bold flex items-center gap-1 group-hover:text-white transition-colors">
                                 {m.icon} {m.label}
                               </span>
-                              <span className={`text-xs sm:text-sm font-black mt-1 ${m.cal > 0 ? "text-white" : "text-neutral-500 text-[11px]"}`}>
-                                {m.cal > 0 ? `${m.cal} kcal` : "+ Catat"}
-                              </span>
+                              {m.cal > 0 ? (
+                                <span className="text-xs sm:text-sm font-black text-white mt-1">
+                                  {m.cal} kcal
+                                </span>
+                              ) : (
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[10px] text-neutral-500 font-medium">Belum dicatat</span>
+                                  <span className="text-[10px] font-bold text-[#D4FF00] bg-[#D4FF00]/10 px-1.5 py-0.5 rounded border border-[#D4FF00]/20">+ Catat</span>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -5035,7 +5131,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               </div>
 
               {/* Current Target Stats Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
                 <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-3 space-y-0.5">
                   <span className="text-[10px] text-neutral-400 font-bold uppercase block">{isEN ? "Calories" : "Kalori"}</span>
                   <p className="text-base font-black text-white">{targetCalories} <span className="text-[10px] text-neutral-400 font-normal">kcal</span></p>
@@ -5051,6 +5147,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-3 space-y-0.5">
                   <span className="text-[10px] text-rose-400 font-bold uppercase block">{isEN ? "Fat" : "Lemak"}</span>
                   <p className="text-base font-black text-white">{targetFat} <span className="text-[10px] text-neutral-400 font-normal">g</span></p>
+                </div>
+                <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-3 space-y-0.5">
+                  <span className="text-[10px] text-purple-400 font-bold uppercase block">{isEN ? "Max Sodium" : "Batas Natrium"}</span>
+                  <p className="text-base font-black text-white">{targetSodium} <span className="text-[10px] text-neutral-400 font-normal">mg</span></p>
                 </div>
                 <div className="bg-[#181818] border border-white/[0.08] rounded-xl p-3 space-y-0.5">
                   <span className="text-[10px] text-amber-400 font-bold uppercase block">{isEN ? "Max Sugar" : "Batas Gula"}</span>
@@ -7958,8 +8058,18 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   </div>
                 </div>
 
-                {/* Sugar & Water Grid */}
-                <div className="grid grid-cols-2 gap-2.5">
+                {/* Sodium, Sugar & Water Grid */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-purple-400">{isEN ? "Max Sodium (mg)" : "Batas Natrium (mg)"}</label>
+                    <input
+                      type="number"
+                      value={custSodium}
+                      onChange={(e) => setCustSodium(e.target.value)}
+                      placeholder="2000"
+                      className="w-full px-3 py-2 bg-[#181818] border border-white/[0.08] rounded-xl text-white text-sm font-black focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-amber-400">{isEN ? "Max Sugar (g)" : "Batas Gula (g)"}</label>
                     <input
@@ -7971,7 +8081,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-blue-400">{isEN ? "Water Target (ml)" : "Target Air (ml)"}</label>
+                    <label className="text-[11px] font-bold text-blue-400">{isEN ? "Water (ml)" : "Air (ml)"}</label>
                     <input
                       type="number"
                       value={custWater}
