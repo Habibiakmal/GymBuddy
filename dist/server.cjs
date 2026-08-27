@@ -42772,6 +42772,49 @@ var CURATED_EXERCISES = [
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
     ]
+  },
+  {
+    id: "elliptical-trainer",
+    name: "Elliptical Cross Trainer",
+    indonesianName: "Mesin Elliptical / Cross Trainer (Kardio Low Impact)",
+    aliases: ["elliptical", "elip", "eliptical", "crosstrainer", "cross trainer", "alat eliptikal", "mesin elliptical", "cara elliptical"],
+    equipmentCategory: "cardio",
+    equipmentName: "Commercial Elliptical Cross Trainer",
+    bodyPart: "cardio",
+    targetMuscles: ["Cardiovascular System (Jantung & Paru)", "Quadriceps", "Glutes"],
+    secondaryMuscles: ["Calves", "Hamstrings", "Arms", "Core"],
+    equipmentSetup: [
+      "Posisikan kedua kaki menapak penuh pada pedal elliptical.",
+      "Pegang handle stang bergerak (moving handlebars) untuk aktivasi tubuh atas atau handle statis untuk fokus kaki.",
+      "Pilih level resistensi (resistance) yang nyaman (mulai dari level 3-6)."
+    ],
+    instructions: [
+      "Mulai kayuh pedal dengan gerakan melingkar yang halus dan terkontrol seperti meluncur di udara.",
+      "Dorong dan tarik stang bergerak seirama dengan ayunan kaki untuk mengoptimalkan pembakaran kalori tubuh total.",
+      "Pertahankan tubuh tetap tegak, dada tegap, dan hindari bertumpu terlalu berat pada pergelangan tangan.",
+      "Lakukan selama 20 - 45 menit dengan tempo kayuhan stabil (60-80 RPM)."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga seluruh telapak kaki tetap menempel pada pedal untuk melindungi sendi lutut.",
+        "Aktifkan otot perut (core) dan jaga bahu tetap rileks.",
+        "Variasikan kayuhan maju dan mundur untuk melatih otot paha depan dan belakang."
+      ],
+      donts: [
+        "Jangan berjinjit pada ujung jari kaki (dapat menyebabkan mati rasa pada jari kaki).",
+        "Jangan membungkuk atau mencondongkan badan ke depan secara berlebihan."
+      ]
+    },
+    coachCues: {
+      max: "Elliptical mesin kardio tanpa benturan terbaik bro! Dorong dari tumit, ayunkan stang kuat-kuat. 30-40 menit kardio solid! \u{1F525}",
+      mia: "Kayuh dengan ritme yang stabil dan teratur ya Kak. Sangat ramah untuk sendi lutut dan membakar kalori dengan nyaman! \u2728"
+    },
+    recommendedSetsReps: "25 - 45 Menit Steady State Cardio (Zona 2)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
+    ]
   }
 ];
 var curatedNames = new Set(CURATED_EXERCISES.map((e) => e.name.toLowerCase()));
@@ -49713,8 +49756,14 @@ function extractWorkoutParameters(userText) {
   const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
   if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
   let durationMinutes = void 0;
-  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)\b/i);
+  let durationSeconds = void 0;
+  const secMatch = lower.match(/(\d+)\s*(?:detik|secs|sec|second|seconds|det)\b/i);
+  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min|minute|minutes)\b/i);
   const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)\b/i);
+  if (secMatch) {
+    durationSeconds = parseInt(secMatch[1], 10);
+    durationMinutes = durationSeconds >= 60 ? Math.round(durationSeconds / 60) : 1;
+  }
   if (minMatch) {
     durationMinutes = parseInt(minMatch[1], 10);
   } else if (hourMatch) {
@@ -49730,7 +49779,7 @@ function extractWorkoutParameters(userText) {
     distanceKm = parseFloat(kmMatch[1].replace(",", "."));
   }
   let intensity = void 0;
-  if (lower.includes("kecepatan sedang") || lower.includes("speed sedang") || lower.includes("pace sedang") || lower.includes("moderate")) {
+  if (lower.includes("kecepatan sedang") || lower.includes("speed sedang") || lower.includes("pace sedang") || lower.includes("intensitas sedang") || lower.includes("moderate")) {
     intensity = "Kecepatan Sedang";
   } else if (lower.includes("intensitas tinggi") || lower.includes("kecepatan tinggi") || lower.includes("sprint") || lower.includes("high intensity")) {
     intensity = "Intensitas Tinggi";
@@ -49741,24 +49790,32 @@ function extractWorkoutParameters(userText) {
   } else if (lower.includes("zona 2") || lower.includes("zone 2")) {
     intensity = "Zona 2";
   }
-  return { sets, reps, weightKg, durationMinutes, distanceKm, intensity };
+  return { sets, reps, weightKg, durationMinutes, durationSeconds, distanceKm, intensity };
 }
 var ADDITIONAL_ACTIVITY_MAP = [
   { keywords: ["berenang", "swimming", "renang"], name: "Berenang (Swimming)", icon: "\u{1F3CA}\u200D\u2642\uFE0F", category: "cardio", met: 8 },
-  { keywords: ["lari", "running", "jogging", "joging"], name: "Lari (Running)", icon: "\u{1F3C3}\u200D\u2642\uFE0F", category: "cardio", met: 9.5 },
-  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking"], name: "Jalan Kaki (Walking)", icon: "\u{1F6B6}\u200D\u2642\uFE0F", category: "cardio", met: 3.8 },
-  { keywords: ["sepeda", "bersepeda", "cycling", "gowes"], name: "Bersepeda (Cycling)", icon: "\u{1F6B4}\u200D\u2642\uFE0F", category: "cardio", met: 7.5 },
+  { keywords: ["lari", "running", "jogging", "joging", "sprint"], name: "Lari (Running)", icon: "\u{1F3C3}\u200D\u2642\uFE0F", category: "cardio", met: 9.5 },
+  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking", "brisk walk"], name: "Jalan Kaki (Walking)", icon: "\u{1F6B6}\u200D\u2642\uFE0F", category: "cardio", met: 3.8 },
+  { keywords: ["sepeda", "bersepeda", "cycling", "gowes", "spinning", "spin bike", "stationary bike"], name: "Bersepeda (Cycling)", icon: "\u{1F6B4}\u200D\u2642\uFE0F", category: "cardio", met: 7.5 },
+  { keywords: ["elliptical", "elip", "eliptical", "crosstrainer", "cross trainer"], name: "Elliptical Trainer", icon: "\u{1F3C3}\u200D\u2640\uFE0F", category: "cardio", met: 7.5 },
+  { keywords: ["treadmill"], name: "Treadmill", icon: "\u{1F3C3}", category: "cardio", met: 8.5 },
+  { keywords: ["plank", "plank hold", "forearm plank", "tahan plank"], name: "Plank", icon: "\u{1F9D8}\u200D\u2642\uFE0F", category: "core", met: 4.5 },
+  { keywords: ["push up", "push-up", "pushup"], name: "Push-Up", icon: "\u{1F4AA}", category: "calisthenics", met: 5.5 },
+  { keywords: ["sit up", "sit-up", "situp", "crunch", "crunches"], name: "Sit-Up / Crunches", icon: "\u{1F938}\u200D\u2642\uFE0F", category: "core", met: 5 },
+  { keywords: ["squat", "air squat", "bodyweight squat"], name: "Squat", icon: "\u{1F9B5}", category: "calisthenics", met: 5.5 },
   { keywords: ["badminton", "bulutangkis"], name: "Badminton", icon: "\u{1F3F8}", category: "sports", met: 7 },
   { keywords: ["futsal", "sepak bola", "football", "soccer"], name: "Futsal / Sepak Bola", icon: "\u26BD", category: "sports", met: 8.5 },
   { keywords: ["basket", "basketball"], name: "Basket", icon: "\u{1F3C0}", category: "sports", met: 8 },
   { keywords: ["tenis", "tennis", "padel"], name: "Tenis / Padel", icon: "\u{1F3BE}", category: "sports", met: 7.5 },
   { keywords: ["yoga"], name: "Yoga", icon: "\u{1F9D8}\u200D\u2640\uFE0F", category: "flexibility", met: 3.5 },
   { keywords: ["pilates"], name: "Pilates", icon: "\u{1F9D8}", category: "flexibility", met: 4 },
+  { keywords: ["stretching", "peregangan", "stretch", "pemanasan", "cooling down", "pendinginan"], name: "Stretching / Peregangan", icon: "\u{1F938}\u200D\u2640\uFE0F", category: "flexibility", met: 3 },
   { keywords: ["zumba", "dance", "aerobik", "aerobic"], name: "Zumba / Aerobik", icon: "\u{1F483}", category: "cardio", met: 6.5 },
-  { keywords: ["treadmill"], name: "Treadmill", icon: "\u{1F3C3}", category: "cardio", met: 8.5 },
   { keywords: ["skipping", "lompat tali", "jumping rope"], name: "Lompat Tali", icon: "\u{1FAA2}", category: "cardio", met: 10 },
   { keywords: ["boxing", "tinju", "muay thai"], name: "Boxing / Muay Thai", icon: "\u{1F94A}", category: "martial_arts", met: 9 },
   { keywords: ["hiking", "naik gunung"], name: "Hiking", icon: "\u{1F9D7}", category: "outdoor", met: 6.5 },
+  { keywords: ["cardio", "kardio"], name: "Kardio", icon: "\u2764\uFE0F\u200D\u{1F525}", category: "cardio", met: 7 },
+  { keywords: ["strength training", "angkat beban", "latihan beban", "weight training"], name: "Latihan Beban", icon: "\u{1F3CB}\uFE0F\u200D\u2642\uFE0F", category: "strength", met: 6 },
   { keywords: ["workout", "olahraga", "latihan tambahan", "home workout", "gym"], name: "Olahraga Tambahan", icon: "\u{1F3CB}\uFE0F", category: "general", met: 6 }
 ];
 function handleAdditionalActivityLogging(rawPhone, userText, userData) {
@@ -49769,6 +49826,10 @@ function handleAdditionalActivityLogging(rawPhone, userText, userData) {
     return null;
   }
   if (lower.includes("jadwal latihanku apa") || lower.includes("jadwal latihan hari ini") || lower.includes("workout apa hari ini") || lower.includes("latihan apa hari ini") || lower.includes("jadwal gym hari ini") || lower.includes("jadwal workout hari ini") || lower.includes("olahraga hari ini apa") || lower.includes("hari ini jadwal latihanku apa")) {
+    return null;
+  }
+  const isFuture = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) && !Boolean(lower.match(/\b(?:tadi|sudah|udah|habis|selesai|beres|done|barusan|telah)\b/i));
+  if (isFuture) {
     return null;
   }
   const dateInfo = parseDateFromQuery(userText);
@@ -49814,10 +49875,11 @@ Dashboard web sudah otomatis diperbarui. \u2728`
   const duration = params.durationMinutes || (matchedAct.name.includes("Gym") || matchedAct.name.includes("Olahraga Tambahan") ? 45 : void 0);
   const distance = params.distanceKm;
   const intensity = params.intensity;
+  const durText = params.durationSeconds && params.durationSeconds < 60 ? `${params.durationSeconds} detik` : `${duration || 1} menit`;
   const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
   const weight = userData.weight || 70;
   const durHours = duration ? duration / 60 : distance ? distance / 10 : 0.5;
-  const calBurn = Math.round(matchedAct.met * weight * durHours);
+  const calBurn = Math.max(5, Math.round(matchedAct.met * weight * durHours));
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
@@ -49850,7 +49912,7 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
     distanceKm: distance,
     intensity,
     details: [
-      duration ? `${duration} menit` : null,
+      duration || params.durationSeconds ? durText : null,
       intensity ? intensity : null,
       distance ? `${distance} km` : null
     ].filter(Boolean).join(" \u2022 "),
@@ -49871,17 +49933,24 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   const isRest = !todayRoutine || todayRoutine.focus.toLowerCase().includes("rest") || todayRoutine.focus.toLowerCase().includes("istirahat") || (todayRoutine.exercises || []).length === 0;
   const scheduleNote = isRest ? `Hari ini memang jadwal *Rest Day* kamu. Aktivitas tambahan ini sangat bagus untuk pemulihan aktif tanpa membebani otot! \u{1F33F}` : `Jadwal latihan utama kamu (*${todayRoutine.focus}*) tetap tersimpan di Dashboard.`;
   const details = [];
-  if (duration) details.push(`\u23F1\uFE0F Durasi: *${duration} menit*`);
+  if (duration || params.durationSeconds) details.push(`\u23F1\uFE0F Durasi: *${durText}*`);
   if (intensity) details.push(`\u26A1 Intensitas: *${intensity}*`);
   if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
   details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
   const isVagueGym = matchedAct.keywords.includes("gym") && !params.durationMinutes && !distance;
-  const comment = validateAndFormatCoachNote(
-    userData.persona === "max" ? isVagueGym ? `Mantap, ${validatedAddr}! Sesi gym kamu sudah dicatat di Dashboard. Kalau mau catat gerakan spesifik (misal: 3 set bench press atau 30 menit treadmill), kasih tahu aku ya! \u{1F4AA}` : `Bagus, ${validatedAddr}! Aktivitas ${matchedAct.name} sudah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : isVagueGym ? `Hebat banget, ${validatedAddr}! Sesi olahraga kamu sudah tersimpan \u2728 Kalau ada gerakan spesifik atau durasi yang mau dicatat lengkap, tinggal kasih tahu aku ya!` : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728`,
-    userData
-  );
+  let coachCommentText = "";
+  if (matchedAct.keywords.includes("plank")) {
+    coachCommentText = userData.persona === "max" ? `Bagus, ${validatedAddr}! Plank ${durText} sudah tercatat di riwayat latihan kamu. Tetap jaga core tetap kencang! \u{1F525}` : `Plank ${durText} sudah tercatat di riwayat latihan kamu. Bagus banget, tetap konsisten ya! \u2728`;
+  } else if (matchedAct.keywords.includes("elliptical")) {
+    coachCommentText = userData.persona === "max" ? `Sesi Elliptical Trainer ${durText}${intensity ? ` dengan ${intensity.toLowerCase()}` : ""} sudah tercatat rapi di riwayat latihan lo, ${validatedAddr}. Solid bro! \u{1F525}` : `Sesi Elliptical Trainer ${durText}${intensity ? ` dengan ${intensity.toLowerCase()}` : ""} sudah tercatat di riwayat latihan kamu, ${validatedAddr}. Bagus banget, tetap konsisten ya! \u2728`;
+  } else if (isVagueGym) {
+    coachCommentText = userData.persona === "max" ? `Mantap, ${validatedAddr}! Sesi gym kamu sudah dicatat di Dashboard. Kalau mau catat gerakan spesifik (misal: 3 set bench press atau 30 menit treadmill), kasih tahu aku ya! \u{1F4AA}` : `Hebat banget, ${validatedAddr}! Sesi olahraga kamu sudah tersimpan \u2728 Kalau ada gerakan spesifik atau durasi yang mau dicatat lengkap, tinggal kasih tahu aku ya!`;
+  } else {
+    coachCommentText = userData.persona === "max" ? `Bagus, ${validatedAddr}! Aktivitas ${matchedAct.name} sudah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728`;
+  }
+  const comment = validateAndFormatCoachNote(coachCommentText, userData);
   return [
-    `\u{1F3C5} *AKTIVITAS TAMBAHAN DICATAT*
+    `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
 -----------------------------
 \u2705 *${matchedAct.name}* ${matchedAct.icon}
 ${details.join(" \u2022 ")}
@@ -49902,12 +49971,16 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   if (lower.includes("jadwal latihanku apa") || lower.includes("jadwal latihan hari ini") || lower.includes("workout apa hari ini") || lower.includes("latihan apa hari ini") || lower.includes("jadwal gym hari ini") || lower.includes("jadwal workout hari ini") || lower.includes("olahraga hari ini apa") || lower.includes("hari ini jadwal latihanku apa") || lower.includes("jadwal hari ini apa") || lower.includes("jadwal latihan besok") || lower.includes("workout besok apa")) {
     return null;
   }
+  const isFuture = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) && !Boolean(lower.match(/\b(?:tadi|sudah|udah|habis|selesai|beres|done|barusan|telah)\b/i));
+  if (isFuture) {
+    return null;
+  }
   const params = extractWorkoutParameters(userText);
   const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
   if (additionalActResp) {
     return additionalActResp;
   }
-  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku)/i);
+  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|aku melakukan|aku olahraga|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku|tadi)/i);
   const hasStructure = Boolean(params.sets || params.reps || params.weightKg);
   if (!hasWorkoutSignal && !hasStructure) {
     return null;
@@ -49947,25 +50020,21 @@ Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u2728`
     ];
   }
   let matchedScheduledEx = null;
-  for (const ex of existingExercises) {
-    const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-    const exWords = exNameLower.split(/\s+/).filter((w) => w.length > 2);
-    if (lower.includes(exNameLower)) {
-      matchedScheduledEx = ex;
-      break;
-    }
-    for (const w of exWords) {
-      if (w !== "day" && w !== "grip" && w !== "medium" && w !== "sets" && w !== "wide" && lower.includes(w)) {
+  const dbEx = findExerciseOrEquipment(userText);
+  if (dbEx) {
+    for (const ex of existingExercises) {
+      const exName = String(ex.name || "").toLowerCase();
+      const dbExName = dbEx.name.toLowerCase();
+      if (exName.includes(dbExName) || dbExName.includes(exName) || dbEx.aliases && dbEx.aliases.some((a) => exName.includes(a.toLowerCase()) || a.toLowerCase().includes(exName))) {
         matchedScheduledEx = ex;
         break;
       }
     }
-    if (matchedScheduledEx) break;
   }
-  const dbEx = findExerciseOrEquipment(userText);
-  if (!matchedScheduledEx && dbEx) {
+  if (!matchedScheduledEx) {
     for (const ex of existingExercises) {
-      if (ex.name.toLowerCase().includes(dbEx.name.toLowerCase()) || dbEx.name.toLowerCase().includes(ex.name.toLowerCase()) || dbEx.aliases && dbEx.aliases.some((a) => ex.name.toLowerCase().includes(a.toLowerCase()))) {
+      const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+      if (exNameLower.length >= 4 && lower.includes(exNameLower)) {
         matchedScheduledEx = ex;
         break;
       }

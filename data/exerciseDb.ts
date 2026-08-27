@@ -881,6 +881,49 @@ const CURATED_EXERCISES: ExerciseItem[] = [
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
     ]
+  },
+  {
+    id: "elliptical-trainer",
+    name: "Elliptical Cross Trainer",
+    indonesianName: "Mesin Elliptical / Cross Trainer (Kardio Low Impact)",
+    aliases: ["elliptical", "elip", "eliptical", "crosstrainer", "cross trainer", "alat eliptikal", "mesin elliptical", "cara elliptical"],
+    equipmentCategory: "cardio",
+    equipmentName: "Commercial Elliptical Cross Trainer",
+    bodyPart: "cardio",
+    targetMuscles: ["Cardiovascular System (Jantung & Paru)", "Quadriceps", "Glutes"],
+    secondaryMuscles: ["Calves", "Hamstrings", "Arms", "Core"],
+    equipmentSetup: [
+      "Posisikan kedua kaki menapak penuh pada pedal elliptical.",
+      "Pegang handle stang bergerak (moving handlebars) untuk aktivasi tubuh atas atau handle statis untuk fokus kaki.",
+      "Pilih level resistensi (resistance) yang nyaman (mulai dari level 3-6)."
+    ],
+    instructions: [
+      "Mulai kayuh pedal dengan gerakan melingkar yang halus dan terkontrol seperti meluncur di udara.",
+      "Dorong dan tarik stang bergerak seirama dengan ayunan kaki untuk mengoptimalkan pembakaran kalori tubuh total.",
+      "Pertahankan tubuh tetap tegak, dada tegap, dan hindari bertumpu terlalu berat pada pergelangan tangan.",
+      "Lakukan selama 20 - 45 menit dengan tempo kayuhan stabil (60-80 RPM)."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga seluruh telapak kaki tetap menempel pada pedal untuk melindungi sendi lutut.",
+        "Aktifkan otot perut (core) dan jaga bahu tetap rileks.",
+        "Variasikan kayuhan maju dan mundur untuk melatih otot paha depan dan belakang."
+      ],
+      donts: [
+        "Jangan berjinjit pada ujung jari kaki (dapat menyebabkan mati rasa pada jari kaki).",
+        "Jangan membungkuk atau mencondongkan badan ke depan secara berlebihan."
+      ]
+    },
+    coachCues: {
+      max: "Elliptical mesin kardio tanpa benturan terbaik bro! Dorong dari tumit, ayunkan stang kuat-kuat. 30-40 menit kardio solid! 🔥",
+      mia: "Kayuh dengan ritme yang stabil dan teratur ya Kak. Sangat ramah untuk sendi lutut dan membakar kalori dengan nyaman! ✨"
+    },
+    recommendedSetsReps: "25 - 45 Menit Steady State Cardio (Zona 2)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
+    ]
   }
 ];
 

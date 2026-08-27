@@ -219,6 +219,101 @@ const recalculatedCalories = userActivities.reduce((sum, a) => sum + (a.estimate
 assert(recalculatedCalories === 290, `Recalculated calories accurately equals 290 kcal (440 - 150 = ${recalculatedCalories})`);
 assert(!recalculatedCalories.toString().includes("440"), "Deleted activity's 150 kcal is completely purged from calculation");
 
+// ── GROUP 7: COMPREHENSIVE COMPLETED EXERCISE COVERAGE ──────────────────────
+console.log("\n▶ GROUP 7: Comprehensive Completed Exercise Coverage");
+
+// 1. Plank 1 menit
+const plankInput = "Tadi aku plank 1 menit";
+const plankParams = extractWorkoutParameters(plankInput);
+assert(plankParams.durationMinutes === 1, "Plank duration extracted as 1 minute");
+const plankResp = handleWorkoutProgressLogging("081299990002", plankInput, mockUserMia);
+assert(Boolean(plankResp && plankResp.length > 0), "Plank 1 menit returns confirmation response");
+const plankText = plankResp ? plankResp.join("\n") : "";
+assert(plankText.includes("Plank"), "Plank confirmation includes 'Plank'");
+assert(plankText.includes("1 menit"), "Plank confirmation includes '1 menit'");
+assert(plankText.includes("LATIHAN BERHASIL DICATAT"), "Uses explicit confirmation header 'LATIHAN BERHASIL DICATAT'");
+assert(plankText.includes("Plank 1 menit sudah tercatat"), "Coach Mia explicitly confirms 'Plank 1 menit sudah tercatat'");
+
+// 2. Elliptical 35 menit dengan intensitas sedang
+const ellipticalInput = "Tadi aku elliptical 35 menit dengan intensitas sedang";
+const ellipticalParams = extractWorkoutParameters(ellipticalInput);
+assert(ellipticalParams.durationMinutes === 35, "Elliptical duration extracted as 35 minutes");
+assert(ellipticalParams.intensity === "Kecepatan Sedang", "Elliptical intensity extracted as 'Kecepatan Sedang'");
+const ellipticalResp = handleWorkoutProgressLogging("081299990001", ellipticalInput, mockUserMax);
+assert(Boolean(ellipticalResp && ellipticalResp.length > 0), "Elliptical 35 menit returns confirmation response");
+const ellipticalText = ellipticalResp ? ellipticalResp.join("\n") : "";
+assert(ellipticalText.includes("Elliptical"), "Elliptical confirmation includes 'Elliptical'");
+assert(ellipticalText.includes("35 menit"), "Elliptical confirmation includes '35 menit'");
+assert(ellipticalText.includes("Kecepatan Sedang"), "Elliptical confirmation includes 'Kecepatan Sedang'");
+
+// 3. Push-Up
+const pushUpInput = "Sudah push up 20 kali";
+const pushUpParams = extractWorkoutParameters(pushUpInput);
+assert(pushUpParams.reps === 20, "Push-up reps extracted as 20");
+const pushUpResp = handleWorkoutProgressLogging("081299990001", pushUpInput, mockUserMax);
+assert(Boolean(pushUpResp && pushUpResp.length > 0), "Push-up returns confirmation response");
+assert(pushUpResp!.join("\n").includes("Push-Up"), "Push-up confirmation includes 'Push-Up'");
+
+// 4. Sit-Up
+const sitUpInput = "Barusan sit up 30 kali";
+const sitUpParams = extractWorkoutParameters(sitUpInput);
+assert(sitUpParams.reps === 30, "Sit-up reps extracted as 30");
+const sitUpResp = handleWorkoutProgressLogging("081299990001", sitUpInput, mockUserMax);
+assert(Boolean(sitUpResp && sitUpResp.length > 0), "Sit-up returns confirmation response");
+assert(sitUpResp!.join("\n").includes("Sit-Up"), "Sit-up confirmation includes 'Sit-Up'");
+
+// 5. Stretching
+const stretchInput = "Selesai stretching 15 menit";
+const stretchParams = extractWorkoutParameters(stretchInput);
+assert(stretchParams.durationMinutes === 15, "Stretching duration extracted as 15 minutes");
+const stretchResp = handleWorkoutProgressLogging("081299990001", stretchInput, mockUserMax);
+assert(Boolean(stretchResp && stretchResp.length > 0), "Stretching returns confirmation response");
+assert(stretchResp!.join("\n").includes("Stretching"), "Stretching confirmation includes 'Stretching'");
+
+// 6. Seated Row
+const seatedRowInput = "Aku latihan seated row 3 set, 12 repetisi, 30 kg";
+const seatedRowParams = extractWorkoutParameters(seatedRowInput);
+assert(seatedRowParams.sets === 3, "Seated row sets extracted as 3");
+assert(seatedRowParams.reps === 12, "Seated row reps extracted as 12");
+assert(seatedRowParams.weightKg === 30, "Seated row weight extracted as 30 kg");
+const seatedRowResp = handleWorkoutProgressLogging("081299990001", seatedRowInput, mockUserMax);
+assert(Boolean(seatedRowResp && seatedRowResp.length > 0), "Seated row returns confirmation response");
+const seatedRowText = seatedRowResp ? seatedRowResp.join("\n") : "";
+assert(seatedRowText.includes("Row") || seatedRowText.includes("seated"), "Seated row confirmation includes exercise name");
+assert(seatedRowText.includes("3 Set"), "Seated row confirmation includes 3 Set");
+assert(seatedRowText.includes("12 Repetisi"), "Seated row confirmation includes 12 Repetisi");
+assert(seatedRowText.includes("30 kg"), "Seated row confirmation includes 30 kg");
+
+// ── GROUP 8: DISTINGUISHING GUIDE VS COMPLETED VS FUTURE PLAN ─────────────────
+console.log("\n▶ GROUP 8: Distinguishing Guide vs Completed vs Future Plan");
+
+// 1. "Bagaimana cara melakukan plank?" -> Guide / Tutorial (NOT a completed log)
+const plankGuideQuery = "Bagaimana cara melakukan plank?";
+const plankGuideLog = handleWorkoutProgressLogging("081299990001", plankGuideQuery, mockUserMax);
+assert(plankGuideLog === null, "'Bagaimana cara melakukan plank?' does NOT trigger workout logging");
+const matchedPlankEx = findExerciseOrEquipment(plankGuideQuery);
+assert(matchedPlankEx !== null && (matchedPlankEx.id === "plank-hold" || matchedPlankEx.aliases.includes("plank")), "'Bagaimana cara melakukan plank?' resolves to Exercise Guide tutorial in exerciseDb");
+
+// 2. "Aku mau plank nanti" -> Future intent (NOT a completed log)
+const futurePlankQuery = "Aku mau plank nanti";
+const futurePlankLog = handleWorkoutProgressLogging("081299990001", futurePlankQuery, mockUserMax);
+assert(futurePlankLog === null, "'Aku mau plank nanti' does NOT trigger workout logging");
+
+// 3. "Tadi aku plank 1 menit" -> Completed activity (MUST log)
+const completedPlankQuery = "Tadi aku plank 1 menit";
+const completedPlankLog = handleWorkoutProgressLogging("081299990001", completedPlankQuery, mockUserMax);
+assert(completedPlankLog !== null, "'Tadi aku plank 1 menit' MUST trigger workout logging");
+
+// 4. "Nanti mau latihan lat pulldown" -> Future intent (NOT a completed log)
+const futureLatQuery = "Nanti mau latihan lat pulldown";
+const futureLatLog = handleWorkoutProgressLogging("081299990001", futureLatQuery, mockUserMax);
+assert(futureLatLog === null, "'Nanti mau latihan lat pulldown' does NOT trigger workout logging");
+
+// 5. "Aku latihan lat pulldown 3 set, 12 repetisi, 25 kg" -> Completed activity (MUST log)
+const completedLatQuery = "Aku latihan lat pulldown 3 set, 12 repetisi, 25 kg";
+const completedLatLog = handleWorkoutProgressLogging("081299990001", completedLatQuery, mockUserMax);
+assert(completedLatLog !== null, "'Aku latihan lat pulldown 3 set, 12 repetisi, 25 kg' MUST trigger workout logging");
+
 // ================================================================================
 console.log("\n================================================================================");
 console.log(`SUMMARY: ${totalPassed} PASSED | ${totalFailed} FAILED`);

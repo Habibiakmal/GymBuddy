@@ -3613,10 +3613,17 @@ export function extractWorkoutParameters(userText: string) {
   const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
   if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
 
-  // 4. Extract Duration (e.g. "30 menit", "45 mins", "1 jam", "setengah jam")
+  // 4. Extract Duration (e.g. "30 menit", "45 mins", "1 jam", "setengah jam", "45 detik", "60 detik")
   let durationMinutes: number | undefined = undefined;
-  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)\b/i);
+  let durationSeconds: number | undefined = undefined;
+  const secMatch = lower.match(/(\d+)\s*(?:detik|secs|sec|second|seconds|det)\b/i);
+  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min|minute|minutes)\b/i);
   const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)\b/i);
+
+  if (secMatch) {
+    durationSeconds = parseInt(secMatch[1], 10);
+    durationMinutes = durationSeconds >= 60 ? Math.round(durationSeconds / 60) : 1;
+  }
   if (minMatch) {
     durationMinutes = parseInt(minMatch[1], 10);
   } else if (hourMatch) {
@@ -3636,7 +3643,7 @@ export function extractWorkoutParameters(userText: string) {
 
   // 6. Extract Intensity
   let intensity: string | undefined = undefined;
-  if (lower.includes("kecepatan sedang") || lower.includes("speed sedang") || lower.includes("pace sedang") || lower.includes("moderate")) {
+  if (lower.includes("kecepatan sedang") || lower.includes("speed sedang") || lower.includes("pace sedang") || lower.includes("intensitas sedang") || lower.includes("moderate")) {
     intensity = "Kecepatan Sedang";
   } else if (lower.includes("intensitas tinggi") || lower.includes("kecepatan tinggi") || lower.includes("sprint") || lower.includes("high intensity")) {
     intensity = "Intensitas Tinggi";
@@ -3648,25 +3655,33 @@ export function extractWorkoutParameters(userText: string) {
     intensity = "Zona 2";
   }
 
-  return { sets, reps, weightKg, durationMinutes, distanceKm, intensity };
+  return { sets, reps, weightKg, durationMinutes, durationSeconds, distanceKm, intensity };
 }
 
 const ADDITIONAL_ACTIVITY_MAP = [
   { keywords: ["berenang", "swimming", "renang"], name: "Berenang (Swimming)", icon: "🏊‍♂️", category: "cardio", met: 8 },
-  { keywords: ["lari", "running", "jogging", "joging"], name: "Lari (Running)", icon: "🏃‍♂️", category: "cardio", met: 9.5 },
-  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking"], name: "Jalan Kaki (Walking)", icon: "🚶‍♂️", category: "cardio", met: 3.8 },
-  { keywords: ["sepeda", "bersepeda", "cycling", "gowes"], name: "Bersepeda (Cycling)", icon: "🚴‍♂️", category: "cardio", met: 7.5 },
+  { keywords: ["lari", "running", "jogging", "joging", "sprint"], name: "Lari (Running)", icon: "🏃‍♂️", category: "cardio", met: 9.5 },
+  { keywords: ["jalan santai", "jalan kaki", "jalan", "walking", "brisk walk"], name: "Jalan Kaki (Walking)", icon: "🚶‍♂️", category: "cardio", met: 3.8 },
+  { keywords: ["sepeda", "bersepeda", "cycling", "gowes", "spinning", "spin bike", "stationary bike"], name: "Bersepeda (Cycling)", icon: "🚴‍♂️", category: "cardio", met: 7.5 },
+  { keywords: ["elliptical", "elip", "eliptical", "crosstrainer", "cross trainer"], name: "Elliptical Trainer", icon: "🏃‍♀️", category: "cardio", met: 7.5 },
+  { keywords: ["treadmill"], name: "Treadmill", icon: "🏃", category: "cardio", met: 8.5 },
+  { keywords: ["plank", "plank hold", "forearm plank", "tahan plank"], name: "Plank", icon: "🧘‍♂️", category: "core", met: 4.5 },
+  { keywords: ["push up", "push-up", "pushup"], name: "Push-Up", icon: "💪", category: "calisthenics", met: 5.5 },
+  { keywords: ["sit up", "sit-up", "situp", "crunch", "crunches"], name: "Sit-Up / Crunches", icon: "🤸‍♂️", category: "core", met: 5 },
+  { keywords: ["squat", "air squat", "bodyweight squat"], name: "Squat", icon: "🦵", category: "calisthenics", met: 5.5 },
   { keywords: ["badminton", "bulutangkis"], name: "Badminton", icon: "🏸", category: "sports", met: 7 },
   { keywords: ["futsal", "sepak bola", "football", "soccer"], name: "Futsal / Sepak Bola", icon: "⚽", category: "sports", met: 8.5 },
   { keywords: ["basket", "basketball"], name: "Basket", icon: "🏀", category: "sports", met: 8 },
   { keywords: ["tenis", "tennis", "padel"], name: "Tenis / Padel", icon: "🎾", category: "sports", met: 7.5 },
   { keywords: ["yoga"], name: "Yoga", icon: "🧘‍♀️", category: "flexibility", met: 3.5 },
   { keywords: ["pilates"], name: "Pilates", icon: "🧘", category: "flexibility", met: 4 },
+  { keywords: ["stretching", "peregangan", "stretch", "pemanasan", "cooling down", "pendinginan"], name: "Stretching / Peregangan", icon: "🤸‍♀️", category: "flexibility", met: 3 },
   { keywords: ["zumba", "dance", "aerobik", "aerobic"], name: "Zumba / Aerobik", icon: "💃", category: "cardio", met: 6.5 },
-  { keywords: ["treadmill"], name: "Treadmill", icon: "🏃", category: "cardio", met: 8.5 },
   { keywords: ["skipping", "lompat tali", "jumping rope"], name: "Lompat Tali", icon: "🪢", category: "cardio", met: 10 },
   { keywords: ["boxing", "tinju", "muay thai"], name: "Boxing / Muay Thai", icon: "🥊", category: "martial_arts", met: 9 },
   { keywords: ["hiking", "naik gunung"], name: "Hiking", icon: "🧗", category: "outdoor", met: 6.5 },
+  { keywords: ["cardio", "kardio"], name: "Kardio", icon: "❤️‍🔥", category: "cardio", met: 7 },
+  { keywords: ["strength training", "angkat beban", "latihan beban", "weight training"], name: "Latihan Beban", icon: "🏋️‍♂️", category: "strength", met: 6 },
   { keywords: ["workout", "olahraga", "latihan tambahan", "home workout", "gym"], name: "Olahraga Tambahan", icon: "🏋️", category: "general", met: 6 }
 ];
 
@@ -3695,6 +3710,13 @@ export function handleAdditionalActivityLogging(
     lower.includes("olahraga hari ini apa") ||
     lower.includes("hari ini jadwal latihanku apa")
   ) {
+    return null;
+  }
+
+  // Guard 3: Future intent (e.g. "aku mau plank nanti", "nanti mau jogging", "besok mau lari")
+  const isFuture = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) &&
+    !Boolean(lower.match(/\b(?:tadi|sudah|udah|habis|selesai|beres|done|barusan|telah)\b/i));
+  if (isFuture) {
     return null;
   }
 
@@ -3751,6 +3773,7 @@ export function handleAdditionalActivityLogging(
   const duration = params.durationMinutes || (matchedAct.name.includes("Gym") || matchedAct.name.includes("Olahraga Tambahan") ? 45 : undefined);
   const distance = params.distanceKm;
   const intensity = params.intensity;
+  const durText = params.durationSeconds && params.durationSeconds < 60 ? `${params.durationSeconds} detik` : `${duration || 1} menit`;
 
   // Check if message is an edit/correction (e.g. "berenang tadi sebenarnya 60 menit")
   const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
@@ -3758,7 +3781,7 @@ export function handleAdditionalActivityLogging(
   // Calorie Burn Estimation (MET * Weight * Hours)
   const weight = userData.weight || 70;
   const durHours = duration ? duration / 60 : (distance ? (distance / 10) : 0.5);
-  const calBurn = Math.round(matchedAct.met * weight * durHours);
+  const calBurn = Math.max(5, Math.round(matchedAct.met * weight * durHours));
 
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
   const addressing = getValidatedUserAddressing(userData);
@@ -3795,7 +3818,7 @@ export function handleAdditionalActivityLogging(
     distanceKm: distance,
     intensity: intensity,
     details: [
-      duration ? `${duration} menit` : null,
+      (duration || params.durationSeconds) ? durText : null,
       intensity ? intensity : null,
       distance ? `${distance} km` : null
     ].filter(Boolean).join(" • "),
@@ -3822,26 +3845,36 @@ export function handleAdditionalActivityLogging(
     : `Jadwal latihan utama kamu (*${todayRoutine.focus}*) tetap tersimpan di Dashboard.`;
 
   const details: string[] = [];
-  if (duration) details.push(`⏱️ Durasi: *${duration} menit*`);
+  if (duration || params.durationSeconds) details.push(`⏱️ Durasi: *${durText}*`);
   if (intensity) details.push(`⚡ Intensitas: *${intensity}*`);
   if (distance) details.push(`📍 Jarak: *${distance} km*`);
   details.push(`🔥 Estimasi Bakar: *~${calBurn} kcal*`);
 
   const isVagueGym = matchedAct.keywords.includes("gym") && !params.durationMinutes && !distance;
 
-  const comment = validateAndFormatCoachNote(
-    userData.persona === "max"
-      ? (isVagueGym
-          ? `Mantap, ${validatedAddr}! Sesi gym kamu sudah dicatat di Dashboard. Kalau mau catat gerakan spesifik (misal: 3 set bench press atau 30 menit treadmill), kasih tahu aku ya! 💪`
-          : `Bagus, ${validatedAddr}! Aktivitas ${matchedAct.name} sudah tercatat. Tetap jaga hidrasi & makan bergizi! 🔥`)
-      : (isVagueGym
-          ? `Hebat banget, ${validatedAddr}! Sesi olahraga kamu sudah tersimpan ✨ Kalau ada gerakan spesifik atau durasi yang mau dicatat lengkap, tinggal kasih tahu aku ya!`
-          : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya ✨`),
-    userData
-  );
+  let coachCommentText = "";
+  if (matchedAct.keywords.includes("plank")) {
+    coachCommentText = userData.persona === "max"
+      ? `Bagus, ${validatedAddr}! Plank ${durText} sudah tercatat di riwayat latihan kamu. Tetap jaga core tetap kencang! 🔥`
+      : `Plank ${durText} sudah tercatat di riwayat latihan kamu. Bagus banget, tetap konsisten ya! ✨`;
+  } else if (matchedAct.keywords.includes("elliptical")) {
+    coachCommentText = userData.persona === "max"
+      ? `Sesi Elliptical Trainer ${durText}${intensity ? ` dengan ${intensity.toLowerCase()}` : ""} sudah tercatat rapi di riwayat latihan lo, ${validatedAddr}. Solid bro! 🔥`
+      : `Sesi Elliptical Trainer ${durText}${intensity ? ` dengan ${intensity.toLowerCase()}` : ""} sudah tercatat di riwayat latihan kamu, ${validatedAddr}. Bagus banget, tetap konsisten ya! ✨`;
+  } else if (isVagueGym) {
+    coachCommentText = userData.persona === "max"
+      ? `Mantap, ${validatedAddr}! Sesi gym kamu sudah dicatat di Dashboard. Kalau mau catat gerakan spesifik (misal: 3 set bench press atau 30 menit treadmill), kasih tahu aku ya! 💪`
+      : `Hebat banget, ${validatedAddr}! Sesi olahraga kamu sudah tersimpan ✨ Kalau ada gerakan spesifik atau durasi yang mau dicatat lengkap, tinggal kasih tahu aku ya!`;
+  } else {
+    coachCommentText = userData.persona === "max"
+      ? `Bagus, ${validatedAddr}! Aktivitas ${matchedAct.name} sudah tercatat. Tetap jaga hidrasi & makan bergizi! 🔥`
+      : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya ✨`;
+  }
+
+  const comment = validateAndFormatCoachNote(coachCommentText, userData);
 
   return [
-    `🏅 *AKTIVITAS TAMBAHAN DICATAT*\n-----------------------------\n` +
+    `🏋️‍♂️ *LATIHAN BERHASIL DICATAT*\n-----------------------------\n` +
     `✅ *${matchedAct.name}* ${matchedAct.icon}\n` +
     `${details.join(" • ")}\n\n` +
     `💡 *Status Program*: ${scheduleNote}\n\n` +
@@ -3880,17 +3913,24 @@ export function handleWorkoutProgressLogging(
     return null; // Delegate to isWorkoutScheduleQuery
   }
 
+  // Guard 3: Future intent (e.g. "aku mau latihan lat pulldown nanti", "besok mau workout")
+  const isFuture = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) &&
+    !Boolean(lower.match(/\b(?:tadi|sudah|udah|habis|selesai|beres|done|barusan|telah)\b/i));
+  if (isFuture) {
+    return null;
+  }
+
   // Parse workout parameters
   const params = extractWorkoutParameters(userText);
 
-  // Check additional activity first (e.g. "aku tadi berenang 45 menit", "lari 5 km", "hapus swimming")
+  // Check additional activity first (e.g. "aku tadi berenang 45 menit", "lari 5 km", "tadi aku plank 1 menit", "tadi aku elliptical 35 menit")
   const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
   if (additionalActResp) {
     return additionalActResp;
   }
 
   // Check if message indicates progress, reporting, or structured details
-  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku)/i);
+  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|aku melakukan|aku olahraga|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku|tadi)/i);
   const hasStructure = Boolean(params.sets || params.reps || params.weightKg);
 
   if (!hasWorkoutSignal && !hasStructure) {
@@ -3941,28 +3981,29 @@ export function handleWorkoutProgressLogging(
 
   // Try matching individual exercise from existingExercises or EXERCISE_DATABASE
   let matchedScheduledEx: any = null;
-  for (const ex of existingExercises) {
-    const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-    const exWords = exNameLower.split(/\s+/).filter((w: string) => w.length > 2);
-    if (lower.includes(exNameLower)) {
-      matchedScheduledEx = ex;
-      break;
-    }
-    for (const w of exWords) {
-      if (w !== "day" && w !== "grip" && w !== "medium" && w !== "sets" && w !== "wide" && lower.includes(w)) {
+  const dbEx = findExerciseOrEquipment(userText);
+
+  // 1. Try matching dbEx against scheduled exercises
+  if (dbEx) {
+    for (const ex of existingExercises) {
+      const exName = String(ex.name || "").toLowerCase();
+      const dbExName = dbEx.name.toLowerCase();
+      if (
+        exName.includes(dbExName) ||
+        dbExName.includes(exName) ||
+        (dbEx.aliases && dbEx.aliases.some((a: string) => exName.includes(a.toLowerCase()) || a.toLowerCase().includes(exName)))
+      ) {
         matchedScheduledEx = ex;
         break;
       }
     }
-    if (matchedScheduledEx) break;
   }
 
-  const dbEx = findExerciseOrEquipment(userText);
-  if (!matchedScheduledEx && dbEx) {
+  // 2. If no dbEx match, check if full scheduled exercise name is in userText
+  if (!matchedScheduledEx) {
     for (const ex of existingExercises) {
-      if (ex.name.toLowerCase().includes(dbEx.name.toLowerCase()) ||
-          dbEx.name.toLowerCase().includes(ex.name.toLowerCase()) ||
-          (dbEx.aliases && dbEx.aliases.some((a: string) => ex.name.toLowerCase().includes(a.toLowerCase())))) {
+      const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+      if (exNameLower.length >= 4 && lower.includes(exNameLower)) {
         matchedScheduledEx = ex;
         break;
       }
