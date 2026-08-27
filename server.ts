@@ -6001,8 +6001,18 @@ BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
 - Jika pesan bersifat campuran (mixed): Prioritaskan dan proses HANYA bagian yang didukung oleh paket GymBuddy, abaikan pertanyaan di luar topik.
 
 TUGASMU:
-User mengirim pesan/foto di WhatsApp: "${userText}"
-${imagePart ? "CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto dan SELALU set \"isFood\": true." : ""}
+${imagePart ? `USER MENGIRIM GAMBAR/FOTO BESERTA PESAN: "${userText}".
+VALIDASI KONTEKS GAMBAR (SANGAT KETAT):
+1. Tentukan apakah gambar ini benar-benar terkait ruang lingkup GymBuddy:
+   - MAKANAN / MINUMAN (Kategori 1): Foto hidangan, makanan, minuman, barcode makanan, label nutrisi/kemasan makanan.
+   - ALAT GYM / GERAKAN WORKOUT (Kategori 2): Foto alat gym, mesin latihan, dumbbell, barbell, treadmill, form gerakan latihan.
+2. JIKA GAMBAR TIDAK TERKAIT / DI LUAR KONTEKS (Kategori 3 - isUnrelatedImage: true):
+   Jika gambar BUKAN makanan/minuman dan BUKAN alat gym/latihan (CONTOH: tangkapan layar Excel / spreadsheet karyawan / data bisnis, dokumen kantor, invoice, teks non-makanan, meme, hewan, pemandangan, kendaraan, gadget/laptop, foto diri/selfie santai tanpa konteks makanan/gym, atau gambar ambigu tanpa bukti cukup):
+   - DILARANG KERAS MENEBAK atau memaksakan gambar ke kategori makanan atau gym!
+   - DILARANG membuat panduan latihan dari spreadsheet!
+   - DILARANG membuat estimasi nutrisi dari dokumen kantor!
+   - Set "isFood": false, "isEquipment": false, "isUnrelatedImage": true.
+   - Isi "coachComment": "Maaf ya 😊 Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."` : `User mengirim pesan teks di WhatsApp: "${userText}"`}
 
 PRINSIP UTAMA & VALIDASI NUTRISI (WAJIB DIPATUHI):
 1. Akurasi ilmiah dan konsistensi internal selalu diutamakan.
@@ -6074,11 +6084,13 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar khas persona coach"
 }
 
-Kategori 3: PERTANYAAN UMUM / WORKOUT REKLAMASI LAINNYA
+Kategori 3: PERTANYAAN UMUM / GAMBAR TIDAK TERKAIT
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": false,
+  "isUnrelatedImage": ${imagePart ? "true" : "false"},
+  "coachComment": "Pesan ramah jika di luar konteks atau pesan balasan coach alami",
   "generalReply": "Pesan balasan coach yang alami dan sesuai persona"
 }
 `;
@@ -6090,7 +6102,7 @@ Keluarkan output JSON valid:
                 parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
               }
 
-              if (parsed.isFood) {
+              if (parsed.isFood && !parsed.isUnrelatedImage) {
                 if (!planCapabilities.canNutrition) {
                   const redirectRes = validatePlanContext("makanan", true, userData);
                   responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -6111,7 +6123,7 @@ Keluarkan output JSON valid:
                   );
                   responseMessages = [card];
                 }
-              } else if (parsed.isEquipment) {
+              } else if (parsed.isEquipment && !parsed.isUnrelatedImage) {
                 if (!planCapabilities.canWorkout) {
                   const redirectRes = validatePlanContext("alat gym", true, userData);
                   responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
@@ -6119,26 +6131,44 @@ Keluarkan output JSON valid:
                   const eqCard = formatEquipmentCard(parsed, userData);
                   responseMessages = [eqCard];
                 }
+              } else if (imagePart || parsed.isUnrelatedImage) {
+                // Image is unrelated or ambiguous - polite redirection without guessing
+                const defaultUnrelatedMsg = isMia
+                  ? "Maaf ya 😊 Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."
+                  : (isLansia
+                      ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. 🌿`
+                      : `Sorry ya, ${addressing.validatedAddress}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim foto yang sesuai ya! 💪`);
+
+                responseMessages = [validateAndFormatCoachNote(parsed.coachComment || parsed.generalReply || defaultUnrelatedMsg, userData)];
               } else {
                 responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
               }
             } catch (e) {
               console.error("Gemini AI Error:", e);
-              const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-                userText,
-                null,
-                Boolean(imagePart)
-              );
+              if (imagePart) {
+                const defaultErrorMsg = isMia
+                  ? "Maaf ya 😊 Aku belum berhasil menganalisis gambar ini. Boleh coba kirim ulang fotonya atau ceritakan makanan/latihan kamu lewat teks? ✨"
+                  : (isLansia
+                      ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses gambar ini. Silakan kirimkan kembali fotonya atau sampaikan melalui pesan teks ya. 🌿`
+                      : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? 💪`);
+                responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
+              } else {
+                const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                  userText,
+                  null,
+                  false
+                );
 
-              addMealLog(from, mealRecord);
-              const dailyTotals = getDailyTotals(from);
-              const card = formatNutritionCard(
-                validatedParsed,
-                imagePart ? "Foto" : "Teks",
-                userData,
-                dailyTotals
-              );
-              responseMessages = [card];
+                addMealLog(from, mealRecord);
+                const dailyTotals = getDailyTotals(from);
+                const card = formatNutritionCard(
+                  validatedParsed,
+                  "Teks",
+                  userData,
+                  dailyTotals
+                );
+                responseMessages = [card];
+              }
             }
           }
         }
@@ -6707,7 +6737,18 @@ ATURAN PENANGANAN REFERENSI TIDAK DIKENAL & OUT-OF-CONTEXT INPUT:
 
 ${personaInstruction}
 TUGASMU:
-User mengirim ${imagePart ? "FOTO MAKANAN/MINUMAN BESERTA PESAN" : "PESAN TEKS"} di WhatsApp: "${userText}"
+${imagePart ? `USER MENGIRIM GAMBAR/FOTO BESERTA PESAN: "${userText}".
+VALIDASI KONTEKS GAMBAR (SANGAT KETAT):
+1. Tentukan apakah gambar ini benar-benar terkait ruang lingkup GymBuddy:
+   - MAKANAN / MINUMAN (Kategori 1): Foto hidangan, makanan, minuman, barcode makanan, label nutrisi/kemasan makanan.
+   - ALAT GYM / GERAKAN WORKOUT (Kategori 2): Foto alat gym, mesin latihan, dumbbell, barbell, treadmill, form gerakan latihan.
+2. JIKA GAMBAR TIDAK TERKAIT / DI LUAR KONTEKS (Kategori 3 - isUnrelatedImage: true):
+   Jika gambar BUKAN makanan/minuman dan BUKAN alat gym/latihan (CONTOH: tangkapan layar Excel / spreadsheet karyawan / data bisnis, dokumen kantor, invoice, teks non-makanan, meme, hewan, pemandangan, kendaraan, gadget/laptop, foto diri/selfie santai tanpa konteks makanan/gym, atau gambar ambigu tanpa bukti cukup):
+   - DILARANG KERAS MENEBAK atau memaksakan gambar ke kategori makanan atau gym!
+   - DILARANG membuat panduan latihan dari spreadsheet!
+   - DILARANG membuat estimasi nutrisi dari dokumen kantor!
+   - Set "isFood": false, "isEquipment": false, "isUnrelatedImage": true.
+   - Isi "coachComment": "Maaf ya 😊 Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."` : `User mengirim pesan teks di WhatsApp: "${userText}"`}
 
 PRINSIP WAJIB ANALISIS MAKANAN (MULTI-MODAL IMAGE + TEXT):
 1. GABUNGKAN FOTO + DESKRIPSI TEXT SEBAGAI SINGLE COMBINED INPUT:
@@ -6798,13 +6839,16 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar khas persona coach"
 }
 
-Kategori 3: PERTANYAAN UMUM / OBROLAN / REFERENSI TIDAK DIKENAL / OUT-OF-CONTEXT
+Kategori 3: PERTANYAAN UMUM / OBROLAN / REFERENSI TIDAK DIKENAL / GAMBAR TIDAK TERKAIT
+- Jika gambar bukan makanan/minuman dan bukan alat gym/latihan (spreadsheet, dokumen, foto acak): set "isUnrelatedImage": true.
 - Jika ada nama orang/entitas yang tidak dikenal (misal "si A", "Budi"), tanyakan klarifikasi secara natural tanpa mengarang identitas mereka.
 - Jika pengguna bertanya hal umum atau berdiskusi, jawab secara ramah, jujur terhadap konteks, dan sesuai persona coach tanpa memaksakan menu/program jika tidak diminta.
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": false,
+  "isUnrelatedImage": ${imagePart ? "true" : "false"},
+  "coachComment": "Pesan ramah jika di luar konteks atau pesan balasan coach alami",
   "generalReply": "Pesan balasan coach yang alami, jujur terhadap konteks, dan sesuai persona"
 }
 `;
@@ -6816,11 +6860,12 @@ Keluarkan output JSON valid:
             parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
           }
 
-          // Force equipment detection if an image is sent and it is NOT food
-          const isEquipmentMatch = parsed.isEquipment || (imagePart && !parsed.isFood) || 
-            lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
+          const isEquipmentMatch = !parsed.isUnrelatedImage && (
+            parsed.isEquipment ||
+            ((lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym")) && !parsed.isFood)
+          );
 
-          if (parsed.isFood) {
+          if (parsed.isFood && !parsed.isUnrelatedImage) {
             // Interactive Clarification: If photo is ambiguous and user provided NO description
             if (parsed.needsClarification && !userText.trim()) {
               const defaultClarification = isMia
@@ -6901,26 +6946,44 @@ Keluarkan output JSON valid:
                 mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
               }
             }
+          } else if (imagePart || parsed.isUnrelatedImage) {
+            // Unrelated or ambiguous image uploaded - polite redirection without guessing
+            const defaultUnrelatedMsg = isMia
+              ? "Maaf ya 😊 Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."
+              : (isLansia
+                  ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. 🌿`
+                  : `Sorry ya, ${addressing.validatedAddress}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim foto yang sesuai ya! 💪`);
+
+            responseMessages = [validateAndFormatCoachNote(parsed.coachComment || parsed.generalReply || defaultUnrelatedMsg, userData)];
           } else {
             responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);
-          const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-            userText,
-            null,
-            Boolean(imagePart)
-          );
+          if (imagePart) {
+            const defaultErrorMsg = isMia
+              ? "Maaf ya 😊 Aku belum berhasil menganalisis gambar ini. Boleh coba kirim ulang fotonya atau ceritakan makanan/latihan kamu lewat teks? ✨"
+              : (isLansia
+                  ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses gambar ini. Silakan kirimkan kembali fotonya atau sampaikan melalui pesan teks ya. 🌿`
+                  : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? 💪`);
+            responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
+          } else {
+            const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+              userText,
+              null,
+              false
+            );
 
-          addMealLog(normFrom, mealRecord);
-          const dailyTotals = getDailyTotals(normFrom);
-          const card = formatNutritionCard(
-            validatedParsed,
-            imagePart ? "Foto" : "Teks",
-            userData,
-            dailyTotals
-          );
-          responseMessages = [card];
+            addMealLog(normFrom, mealRecord);
+            const dailyTotals = getDailyTotals(normFrom);
+            const card = formatNutritionCard(
+              validatedParsed,
+              "Teks",
+              userData,
+              dailyTotals
+            );
+            responseMessages = [card];
+          }
         }
       }
     }

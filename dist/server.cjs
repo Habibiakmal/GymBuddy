@@ -44713,7 +44713,7 @@ function getValidatedUserAddressing(userData) {
 function validateAndFormatCoachNote(rawNote, userData) {
   if (!rawNote || typeof rawNote !== "string") return "";
   const addressing = getValidatedUserAddressing(userData);
-  const isLansia = addressing.ageGroup === "Lansia";
+  const isLansia2 = addressing.ageGroup === "Lansia";
   const isAnak = addressing.ageGroup === "Anak";
   const addr = addressing.validatedAddress;
   let cleaned = rawNote.trim();
@@ -44729,7 +44729,7 @@ function validateAndFormatCoachNote(rawNote, userData) {
   cleaned = cleaned.replace(/,\s*,/g, ",");
   cleaned = cleaned.replace(/\s+,/g, ",");
   cleaned = cleaned.replace(/\s+/g, " ");
-  if (isLansia) {
+  if (isLansia2) {
     cleaned = cleaned.replace(/\blo\b|\blu\b/gi, "Anda");
     cleaned = cleaned.replace(/\bgue\b/gi, "Saya");
     cleaned = cleaned.replace(/\bkamu\b/gi, "Anda");
@@ -44895,7 +44895,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
   const addressing = getValidatedUserAddressing(userDataObj);
   const validatedAddr = addressing.validatedAddress;
   const isMia = (userDataObj?.persona || "mia").toLowerCase().includes("mia");
-  const isLansia = addressing.ageGroup === "Lansia";
+  const isLansia2 = addressing.ageGroup === "Lansia";
   const lower = (userText || "").toLowerCase();
   const components = extractMealComponents(lastMeal);
   if (components.length === 0) {
@@ -44913,7 +44913,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
   }
   const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
   if (!cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan") {
-    const generalClarify = isMia ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya \u2728" : isLansia ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! \u{1F4AA}";
+    const generalClarify = isMia ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya \u2728" : isLansia2 ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! \u{1F4AA}";
     return {
       isFood: true,
       isCorrection: false,
@@ -45095,13 +45095,13 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       let clarifyMsg = "";
       const compLower = targetComp.name.toLowerCase();
       if (compLower.includes("ayam")) {
-        clarifyMsg = isMia ? "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau jenis ayamnya?" : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ayamnya, ${validatedAddr}? Misalnya porsi atau jumlah potongnya ya. \u{1F33F}` : "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau cara masaknya? Kasih tahu gue ya! \u{1F4AA}";
+        clarifyMsg = isMia ? "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau jenis ayamnya?" : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ayamnya, ${validatedAddr}? Misalnya porsi atau jumlah potongnya ya. \u{1F33F}` : "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau cara masaknya? Kasih tahu gue ya! \u{1F4AA}";
       } else if (compLower.includes("daging") || compLower.includes("sapi") || compLower.includes("ikan") || compLower.includes("tahu") || compLower.includes("tempe") || compLower.includes("telur")) {
-        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, jumlah potongnya, atau jenisnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsi gramnya atau jumlah potongnya? Kasih tahu gue ya! \u{1F4AA}`;
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, jumlah potongnya, atau jenisnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsi gramnya atau jumlah potongnya? Kasih tahu gue ya! \u{1F4AA}`;
       } else if (compLower.includes("teh") || compLower.includes("kopi") || compLower.includes("minum") || compLower.includes("jus")) {
-        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya manisnya/tanpa gula, porsi gelasnya, atau jenisnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya tanpa gula atau ukuran porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya tanpa gula atau ukuran gelasnya? Kasih tahu gue ya! \u{1F4AA}`;
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya manisnya/tanpa gula, porsi gelasnya, atau jenisnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya tanpa gula atau ukuran porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya tanpa gula atau ukuran gelasnya? Kasih tahu gue ya! \u{1F4AA}`;
       } else {
-        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, takaran gramnya, atau jumlahnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsi makanannya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya atau gramnya? Kasih tahu gue ya! \u{1F4AA}`;
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, takaran gramnya, atau jumlahnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsi makanannya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya atau gramnya? Kasih tahu gue ya! \u{1F4AA}`;
       }
       return {
         isFood: true,
@@ -45169,7 +45169,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
   });
   const changeSummary = changeDescriptions.length > 0 ? changeDescriptions.join(", ") : `porsi ${mainCorrectedComponent || "makanan"}`;
   let coachComment = "";
-  if (isLansia) {
+  if (isLansia2) {
     coachComment = `Catatan ${changeSummary} sudah diperbarui, ${validatedAddr}. Menu lainnya tetap seperti catatan sebelumnya dan total nutrisi Anda sudah disesuaikan dengan rapi ya. \u{1F33F}`;
   } else if (isMia) {
     coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya \u2728`;
@@ -45338,8 +45338,14 @@ var UNRELATED_OFFTOPIC_REGEX = /\b(?:cuaca|hujan|panas\s+hari\s+ini|presiden|pol
 function classifyUserInput(userText, hasImage) {
   const trimmed = userText.trim();
   const lower = trimmed.toLowerCase();
+  const hasNutrition = NUTRITION_KEYWORDS.some((k) => lower.includes(k));
+  const hasWorkout = WORKOUT_KEYWORDS.some((k) => lower.includes(k));
+  const hasUnrelated = UNRELATED_OFFTOPIC_REGEX.test(lower) || /^(?:apa\s+itu|apaan\s+itu|apa\s+artinya|siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara|jelaskan\s+tentang)\b/i.test(lower) || /\b(?:laptop|komputer|gadget|handphone|hp|smartphone|mobil|motor|pesawat|coding|koding|javascript|typescript|python|html|css|bug|syntax|crypto|bitcoin|saham|politik|pemilu|presiden|menteri|sinopsis|lirik|chord|excel|spreadsheet|pegawai|karyawan|slip\s+gaji|dokumen|tugas\s+kantor|invoice)\b/i.test(lower);
   if (hasImage) {
-    if (lower.includes("alat") || lower.includes("mesin") || lower.includes("gym")) {
+    if (hasUnrelated && !hasNutrition && !hasWorkout) {
+      return "OUT_OF_CONTEXT";
+    }
+    if (hasWorkout || lower.includes("alat") || lower.includes("mesin") || lower.includes("gym")) {
       return "WORKOUT";
     }
     return "NUTRITION";
@@ -45350,13 +45356,10 @@ function classifyUserInput(userText, hasImage) {
   if (CASUAL_GREETING_REGEX.test(trimmed)) {
     return "GREETING_OR_CASUAL";
   }
-  const isAmbiguousOnly = AMBIGUOUS_KEYWORDS.some((k) => lower.includes(k)) && !NUTRITION_KEYWORDS.some((k) => lower.includes(k)) && !WORKOUT_KEYWORDS.some((k) => lower.includes(k));
+  const isAmbiguousOnly = AMBIGUOUS_KEYWORDS.some((k) => lower.includes(k)) && !hasNutrition && !hasWorkout;
   if (isAmbiguousOnly && trimmed.split(/\s+/).length <= 6) {
     return "AMBIGUOUS";
   }
-  const hasNutrition = NUTRITION_KEYWORDS.some((k) => lower.includes(k));
-  const hasWorkout = WORKOUT_KEYWORDS.some((k) => lower.includes(k));
-  const hasUnrelated = UNRELATED_OFFTOPIC_REGEX.test(lower);
   if (hasUnrelated && (hasNutrition || hasWorkout)) {
     return "MIXED";
   }
@@ -45383,7 +45386,7 @@ function validatePlanContext(userText, hasImage, userData) {
   const capabilities = getUserPlanCapabilities(userData);
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
-  const isLansia = addressing.ageGroup === "Lansia";
+  const isLansia2 = addressing.ageGroup === "Lansia";
   const isMax = (userData?.persona || "mia").toLowerCase() === "max";
   const category = classifyUserInput(userText, hasImage);
   if (category === "GREETING_OR_CASUAL") {
@@ -45412,16 +45415,16 @@ function validatePlanContext(userText, hasImage, userData) {
       };
     }
     if (!capabilities.canNutrition && hasNutrition) {
-      return buildUnsupportedRedirect("workout", isMax, isLansia, validatedAddr, userData);
+      return buildUnsupportedRedirect("workout", isMax, isLansia2, validatedAddr, userData);
     }
     if (!capabilities.canWorkout && hasWorkout) {
-      return buildUnsupportedRedirect("nutrition", isMax, isLansia, validatedAddr, userData);
+      return buildUnsupportedRedirect("nutrition", isMax, isLansia2, validatedAddr, userData);
     }
   }
   if (category === "AMBIGUOUS") {
     let clarifyMsg = "";
     if (capabilities.canWorkout && capabilities.canNutrition) {
-      clarifyMsg = isMax ? isLansia ? `Apakah rasa lelah ini setelah berolahraga atau karena aktivitas fisik harian, ${validatedAddr}? Ceritakan sedikit agar Saya dapat membantu meninjau pemulihan Anda. \u{1F4AA}` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit, nanti gue bantu cek recovery atau asupan energi lo! \u{1F4AA}` : isLansia ? `Apakah Anda merasa lelah setelah beraktivitas atau berolahraga, ${validatedAddr}? Boleh ceritakan sedikit agar aku dapat membantu memeriksa asupan dan pemulihan Anda \u2728` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit ya, nanti aku bantu cek recovery dan istirahat kamu \u2728`;
+      clarifyMsg = isMax ? isLansia2 ? `Apakah rasa lelah ini setelah berolahraga atau karena aktivitas fisik harian, ${validatedAddr}? Ceritakan sedikit agar Saya dapat membantu meninjau pemulihan Anda. \u{1F4AA}` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit, nanti gue bantu cek recovery atau asupan energi lo! \u{1F4AA}` : isLansia2 ? `Apakah Anda merasa lelah setelah beraktivitas atau berolahraga, ${validatedAddr}? Boleh ceritakan sedikit agar aku dapat membantu memeriksa asupan dan pemulihan Anda \u2728` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit ya, nanti aku bantu cek recovery dan istirahat kamu \u2728`;
     } else if (capabilities.canWorkout) {
       clarifyMsg = isMax ? `Capeknya setelah sesi workout apa nih, ${validatedAddr}? Ceritain latihan lo hari ini biar gue bantu evaluasi pemulihan otot lo! \u{1F4AA}` : `Capeknya setelah workout atau latihan tertentu, ${validatedAddr}? Ceritakan sedikit ya, nanti aku bantu cek panduan recovery kamu \u2728`;
     } else {
@@ -45436,8 +45439,10 @@ function validatePlanContext(userText, hasImage, userData) {
   }
   if (category === "OUT_OF_CONTEXT") {
     let redirectMsg = "";
-    if (capabilities.canNutrition && capabilities.canWorkout) {
-      redirectMsg = isMax ? isLansia ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. \u{1F33F}` : `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan, nutrisi, atau workout, gue siap bantu! \u{1F4AA}` : isLansia ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} \u2728 Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. \u{1F33F}` : `Maaf ya \u{1F60A} Aku fokus membantu kamu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan, nutrisi, atau workout, aku siap bantu.`;
+    if (hasImage) {
+      redirectMsg = isMax ? `Sorry ya, ${validatedAddr}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim gambar yang sesuai ya! \u{1F4AA}` : isLansia2 ? `Mohon maaf, ${validatedAddr}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. \u{1F33F}` : `Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya.`;
+    } else if (capabilities.canNutrition && capabilities.canWorkout) {
+      redirectMsg = isMax ? isLansia2 ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. \u{1F33F}` : `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan, nutrisi, atau workout, gue siap bantu! \u{1F4AA}` : isLansia2 ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} \u2728 Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. \u{1F33F}` : `Maaf ya \u{1F60A} Aku fokus membantu kamu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan, nutrisi, atau workout, aku siap bantu.`;
     } else if (capabilities.canNutrition) {
       redirectMsg = isMax ? `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan atau nutrisi, gue siap bantu! \u{1F4AA}` : `Maaf ya \u{1F60A} Aku fokus membantu kamu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan atau nutrisi, aku siap bantu \u2728`;
     } else {
@@ -45451,10 +45456,10 @@ function validatePlanContext(userText, hasImage, userData) {
     };
   }
   if (category === "NUTRITION" && !capabilities.canNutrition) {
-    return buildUnsupportedRedirect("workout", isMax, isLansia, validatedAddr, userData);
+    return buildUnsupportedRedirect("workout", isMax, isLansia2, validatedAddr, userData);
   }
   if (category === "WORKOUT" && !capabilities.canWorkout) {
-    return buildUnsupportedRedirect("nutrition", isMax, isLansia, validatedAddr, userData);
+    return buildUnsupportedRedirect("nutrition", isMax, isLansia2, validatedAddr, userData);
   }
   if (category === "NUTRITION") {
     return {
@@ -45469,10 +45474,10 @@ function validatePlanContext(userText, hasImage, userData) {
     canProceed: true
   };
 }
-function buildUnsupportedRedirect(currentFocus, isMax, isLansia, validatedAddr, userData) {
+function buildUnsupportedRedirect(currentFocus, isMax, isLansia2, validatedAddr, userData) {
   let msg = "";
   if (currentFocus === "nutrition") {
-    msg = isMax ? isLansia ? `Untuk plan Anda saat ini, Saya berfokus mendampingi asupan nutrisi dan pola makan sehat, ${validatedAddr}. Anda dapat mengirimkan menu makanan, asupan air minum, atau konsultasi kebutuhan nutrisi harian Anda. Apabila Anda membutuhkan panduan latihan fisik, Anda dapat melakukan upgrade ke Paket Workout atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi nutrisi dan manajemen kalori lo, ${validatedAddr}. Lo bisa kirim laporan makan, minuman, cek makro, atau target nutrisi lo ya. Kalau lo mau program latihan & panduan alat gym, lo bisa upgrade ke Paket Workout atau Premium! \u{1F4AA}` : isLansia ? `Untuk plan Anda saat ini, aku berfokus mendampingi pola makan dan nutrisi sehat ya, ${validatedAddr} \u2728 Anda bisa berkonsultasi seputar makanan, hidrasi, atau target gizi harian. Jika membutuhkan panduan olahraga, Anda dapat beralih ke Paket Workout atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya, ${validatedAddr} \u2728 Kamu bisa cerita tentang makanan, minuman, kalori, atau target nutrisi kamu. Kalau butuh panduan latihan dan jadwal workout, kamu bisa upgrade ke Paket Workout atau Premium ya! \u{1F966}`;
+    msg = isMax ? isLansia2 ? `Untuk plan Anda saat ini, Saya berfokus mendampingi asupan nutrisi dan pola makan sehat, ${validatedAddr}. Anda dapat mengirimkan menu makanan, asupan air minum, atau konsultasi kebutuhan nutrisi harian Anda. Apabila Anda membutuhkan panduan latihan fisik, Anda dapat melakukan upgrade ke Paket Workout atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi nutrisi dan manajemen kalori lo, ${validatedAddr}. Lo bisa kirim laporan makan, minuman, cek makro, atau target nutrisi lo ya. Kalau lo mau program latihan & panduan alat gym, lo bisa upgrade ke Paket Workout atau Premium! \u{1F4AA}` : isLansia2 ? `Untuk plan Anda saat ini, aku berfokus mendampingi pola makan dan nutrisi sehat ya, ${validatedAddr} \u2728 Anda bisa berkonsultasi seputar makanan, hidrasi, atau target gizi harian. Jika membutuhkan panduan olahraga, Anda dapat beralih ke Paket Workout atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya, ${validatedAddr} \u2728 Kamu bisa cerita tentang makanan, minuman, kalori, atau target nutrisi kamu. Kalau butuh panduan latihan dan jadwal workout, kamu bisa upgrade ke Paket Workout atau Premium ya! \u{1F966}`;
     return {
       decision: "REDIRECT_UNSUPPORTED_WORKOUT",
       inputCategory: "WORKOUT",
@@ -45480,7 +45485,7 @@ function buildUnsupportedRedirect(currentFocus, isMax, isLansia, validatedAddr, 
       redirectMessage: validateAndFormatCoachNote(msg, userData)
     };
   } else {
-    msg = isMax ? isLansia ? `Untuk plan Anda saat ini, Saya berfokus mendampingi program latihan fisik dan kebugaran, ${validatedAddr}. Anda dapat menanyakan panduan gerakan, mencatat aktivitas fisik harian, atau konsultasi pemulihan aktif Anda. Untuk pencatatan nutrisi lengkap, Anda dapat beralih ke Paket Nutritionist atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi jadwal workout, form latihan, dan progres fisik lo, ${validatedAddr}! Lo bisa lapor set latihan, tanya panduan alat gym, atau jadwal harian lo. Buat tracking kalori & nutrisi lengkap, lo bisa upgrade ke Paket Nutritionist atau Premium! \u{1F525}` : isLansia ? `Untuk plan Anda saat ini, aku berfokus mendampingi latihan fisik dan kebugaran ya, ${validatedAddr} \u2728 Anda dapat menanyakan gerakan, jadwal olahraga, atau teknik alat gym. Untuk pencatatan menu makanan dan kalori, Anda dapat mengaktifkan Paket Nutritionist atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus mendampingi program latihan dan teknik workout kamu ya, ${validatedAddr} \u2728 Kamu bisa lapor hasil latihan, tanya gerakan, panduan alat gym, atau jadwal latihan harian. Untuk pencatatan kalori & nutrisi lengkap, kamu bisa upgrade ke Paket Nutritionist atau Premium ya! \u{1F3CB}\uFE0F\u200D\u2640\uFE0F`;
+    msg = isMax ? isLansia2 ? `Untuk plan Anda saat ini, Saya berfokus mendampingi program latihan fisik dan kebugaran, ${validatedAddr}. Anda dapat menanyakan panduan gerakan, mencatat aktivitas fisik harian, atau konsultasi pemulihan aktif Anda. Untuk pencatatan nutrisi lengkap, Anda dapat beralih ke Paket Nutritionist atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi jadwal workout, form latihan, dan progres fisik lo, ${validatedAddr}! Lo bisa lapor set latihan, tanya panduan alat gym, atau jadwal harian lo. Buat tracking kalori & nutrisi lengkap, lo bisa upgrade ke Paket Nutritionist atau Premium! \u{1F525}` : isLansia2 ? `Untuk plan Anda saat ini, aku berfokus mendampingi latihan fisik dan kebugaran ya, ${validatedAddr} \u2728 Anda dapat menanyakan gerakan, jadwal olahraga, atau teknik alat gym. Untuk pencatatan menu makanan dan kalori, Anda dapat mengaktifkan Paket Nutritionist atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus mendampingi program latihan dan teknik workout kamu ya, ${validatedAddr} \u2728 Kamu bisa lapor hasil latihan, tanya gerakan, panduan alat gym, atau jadwal latihan harian. Untuk pencatatan kalori & nutrisi lengkap, kamu bisa upgrade ke Paket Nutritionist atau Premium ya! \u{1F3CB}\uFE0F\u200D\u2640\uFE0F`;
     return {
       decision: "REDIRECT_UNSUPPORTED_NUTRITION",
       inputCategory: "NUTRITION",
@@ -48998,23 +49003,23 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const sugBar = makeSugarProgressBar(totalTodaySugar, sugarLimit);
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
-  const isLansia = addressing.ageGroup === "Lansia";
+  const isLansia2 = addressing.ageGroup === "Lansia";
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
   if (!coachComment || !parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.sugar.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver)) {
     if (nutritionSummary.sodium.isOver) {
-      coachComment = isMax ? isLansia ? `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : isLansia ? `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.` : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
+      coachComment = isMax ? isLansia2 ? `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : isLansia2 ? `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.` : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
     } else if (nutritionSummary.sugar.isOver) {
-      coachComment = isMax ? isLansia ? `Asupan gula Anda sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g), ${validatedAddr}. Mohon imbangi dengan banyak minum air putih dan batasi asupan manis untuk sisa hari ini ya. \u{1F4AA}` : `Gula harian kamu sudah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g), ${validatedAddr}! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! \u26A1` : isLansia ? `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih minuman tanpa gula nanti.` : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`;
+      coachComment = isMax ? isLansia2 ? `Asupan gula Anda sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g), ${validatedAddr}. Mohon imbangi dengan banyak minum air putih dan batasi asupan manis untuk sisa hari ini ya. \u{1F4AA}` : `Gula harian kamu sudah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g), ${validatedAddr}! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! \u26A1` : isLansia2 ? `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih minuman tanpa gula nanti.` : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`;
     } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
-      coachComment = isMax ? isLansia ? `Asupan lemak Anda sudah melampaui target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}. Untuk makan selanjutnya prioritaskan protein sehat tanpa banyak minyak ya. \u{1F4AA}` : `Asupan lemak kamu sudah lewat target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}, sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! \u{1F525}` : isLansia ? `Lemak harian Anda sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728` : `Lemak harian kamu sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728`;
+      coachComment = isMax ? isLansia2 ? `Asupan lemak Anda sudah melampaui target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}. Untuk makan selanjutnya prioritaskan protein sehat tanpa banyak minyak ya. \u{1F4AA}` : `Asupan lemak kamu sudah lewat target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}, sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! \u{1F525}` : isLansia2 ? `Lemak harian Anda sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728` : `Lemak harian kamu sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728`;
     } else if (nutritionSummary.calories.isOver) {
-      coachComment = isMax ? isLansia ? `Target kalori harian Anda sudah terpenuhi (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan optimalkan istirahat ya. \u{1F4AA}` : `Kalori harian kamu sudah melampaui target (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}! Kunci disiplin kamu hari ini, perbanyak minum air putih dan maksimalkan istirahat! \u26A1` : isLansia ? `Kalori harian Anda sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728` : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728`;
+      coachComment = isMax ? isLansia2 ? `Target kalori harian Anda sudah terpenuhi (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan optimalkan istirahat ya. \u{1F4AA}` : `Kalori harian kamu sudah melampaui target (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}! Kunci disiplin kamu hari ini, perbanyak minum air putih dan maksimalkan istirahat! \u26A1` : isLansia2 ? `Kalori harian Anda sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728` : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728`;
     } else if (nutritionSummary.protein.isReached) {
-      coachComment = isMax ? isLansia ? `Target protein harian Anda sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan konsistensi nutrisi sehat ini. \u{1F4AA}` : `Target protein harian kamu sudah tembus (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Mantap banget disiplin kamu! \u{1F4AA}\u{1F525}` : isLansia ? `Luar biasa, target protein Anda hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728` : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728`;
+      coachComment = isMax ? isLansia2 ? `Target protein harian Anda sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan konsistensi nutrisi sehat ini. \u{1F4AA}` : `Target protein harian kamu sudah tembus (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Mantap banget disiplin kamu! \u{1F4AA}\u{1F525}` : isLansia2 ? `Luar biasa, target protein Anda hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728` : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728`;
     } else if (protein >= 25) {
-      coachComment = isMax ? isLansia ? `Pilihan yang sangat baik, ${validatedAddr}. Menu ini memberikan suplai protein padat (${protein}g) yang sangat bagus untuk kebugaran tubuh Anda. \u{1F4AA}` : `Pilihan mantap, ${validatedAddr}! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot kamu! \u{1F4AA}` : `Pilihan makanan yang bagus, ${validatedAddr}! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu \u2728`;
+      coachComment = isMax ? isLansia2 ? `Pilihan yang sangat baik, ${validatedAddr}. Menu ini memberikan suplai protein padat (${protein}g) yang sangat bagus untuk kebugaran tubuh Anda. \u{1F4AA}` : `Pilihan mantap, ${validatedAddr}! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot kamu! \u{1F4AA}` : `Pilihan makanan yang bagus, ${validatedAddr}! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu \u2728`;
     } else {
-      coachComment = isMax ? isLansia ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! \u2728`;
+      coachComment = isMax ? isLansia2 ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! \u2728`;
     }
   }
   coachComment = validateAndFormatCoachNote(coachComment, userData);
@@ -49096,13 +49101,13 @@ function generateWelcomeMessages(userData) {
   const isMax = persona === "max";
   const isFemale = (gender || "").toLowerCase() === "wanita" || (gender || "").toLowerCase() === "female";
   const ageNum = Number(age) || 25;
-  const isLansia = ageNum >= 60;
+  const isLansia2 = ageNum >= 60;
   const isAnak = ageNum < 13;
   const cleanName = (name || "Member").trim();
   const cleanGoal = goalTitle || "Kebugaran & Hidup Sehat";
   let opening = "";
   if (isMax) {
-    if (isLansia) {
+    if (isLansia2) {
       const honorific = isFemale ? "Bu" : "Pak";
       opening = `\u{1F4AA} *Halo ${honorific} ${cleanName}!* Saya Coach Max, siap mendampingi target kebugaran Anda di GymBuddy dengan aman & terukur.
 
@@ -49121,7 +49126,7 @@ Program latihan & nutrisi kamu udah gue sesuaikan penuh dengan goal *${cleanGoal
 Program latihan & nutrisi lo udah gue sesuaikan penuh dengan goal *${cleanGoal}* dan profil tubuh lo.`;
     }
   } else {
-    if (isLansia) {
+    if (isLansia2) {
       const honorific = isFemale ? "Bu" : "Pak";
       opening = `\u{1F33F} *Halo ${honorific} ${cleanName}!* Saya Coach Mia, senang sekali bisa mendampingi perjalanan sehat Anda di GymBuddy dengan nyaman & aman. \u2728
 
@@ -49136,8 +49141,8 @@ Rencana makan sehat dan aktivitas kamu sudah aku sesuaikan dengan goal *${cleanG
 Aku sudah menyesuaikan seluruh pendampinganmu dengan goal *${cleanGoal}* dan profil tubuhmu.`;
     }
   }
-  const pronoun = isLansia ? "Anda" : isMax && !isFemale ? "lo" : "kamu";
-  const pronounSuffix = isLansia ? " Anda" : isMax && !isFemale ? "mu" : "mu";
+  const pronoun = isLansia2 ? "Anda" : isMax && !isFemale ? "lo" : "kamu";
+  const pronounSuffix = isLansia2 ? " Anda" : isMax && !isFemale ? "mu" : "mu";
   const featureOverview = `Yang bisa ${pronoun} lakukan lewat WhatsApp & App:
 
 \u{1F957} *Nutrition*
@@ -49159,10 +49164,10 @@ Aku sudah menyesuaikan seluruh pendampinganmu dengan goal *${cleanGoal}* dan pro
 
 \u{1F464} *Profile & Target*
 \u2022 Atur data personal, target kustom, kondisi kesehatan & Coach di web app`;
-  const personalizationNote = isLansia ? `Semua saran akan disesuaikan secara personal dengan profil, usia, dan kondisi kesehatan Anda.` : `Semua saran akan disesuaikan dengan profil, usia, dan kondisi tubuh${pronounSuffix}.`;
+  const personalizationNote = isLansia2 ? `Semua saran akan disesuaikan secara personal dengan profil, usia, dan kondisi kesehatan Anda.` : `Semua saran akan disesuaikan dengan profil, usia, dan kondisi tubuh${pronounSuffix}.`;
   let closing = "";
   if (isMax) {
-    if (isLansia) {
+    if (isLansia2) {
       closing = `Jika sudah siap, silakan kirimkan menu makanan pertama atau pertanyaan latihan Anda. \u{1F4AA}`;
     } else if (isFemale) {
       closing = `Gas mulai! Kirim foto makanan pertama kamu, log latihan, atau tanya apa pun sekarang! \u{1F525}`;
@@ -49170,7 +49175,7 @@ Aku sudah menyesuaikan seluruh pendampinganmu dengan goal *${cleanGoal}* dan pro
       closing = `Gas mulai! Kirim foto makanan pertama lo, log latihan, atau tanya apa pun sekarang! \u{1F525}`;
     }
   } else {
-    if (isLansia) {
+    if (isLansia2) {
       closing = `Jika sudah siap, silakan kirimkan foto/menu makanan pertama atau pertanyaan Anda. \u{1F33F}`;
     } else {
       closing = `Yuk mulai! Coba kirim foto makanan, log latihan, atau ajukan pertanyaan pertamamu sekarang! \u2728`;
@@ -49297,14 +49302,14 @@ function generateDailySummaryCard(userData, dailyTotals, dateLabel = "Hari Ini")
   const coachName = isMax ? "Coach Max" : "Coach Mia";
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
-  const isLansia = addressing.ageGroup === "Lansia";
+  const isLansia2 = addressing.ageGroup === "Lansia";
   let quote = "";
   if (sodiumVal > 2e3) {
-    quote = isMax ? isLansia ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, mohon banyakin minum air putih hangat dan kurangi makanan asin ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Natrium kamu (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! \u{1F4AA}` : isLansia ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728`;
+    quote = isMax ? isLansia2 ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, mohon banyakin minum air putih hangat dan kurangi makanan asin ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Natrium kamu (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! \u{1F4AA}` : isLansia2 ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728`;
   } else if (sugarVal > 50) {
-    quote = isMax ? isLansia ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, mohon perbanyak minum air putih dan kurangi makanan/minuman manis ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Gula kamu (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, jadi perbanyak minum air putih dan kurangi makanan/minuman manis ya! \u{1F4AA}` : isLansia ? `Pencatatan yang sangat baik hari ini, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan gula harianmu (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728`;
+    quote = isMax ? isLansia2 ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, mohon perbanyak minum air putih dan kurangi makanan/minuman manis ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Gula kamu (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, jadi perbanyak minum air putih dan kurangi makanan/minuman manis ya! \u{1F4AA}` : isLansia2 ? `Pencatatan yang sangat baik hari ini, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan gula harianmu (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728`;
   } else {
-    quote = isMax ? isLansia ? `Konsistensi yang sangat baik, ${validatedAddr}. Tetap jaga pola makan sehat dan istirahat optimal Anda. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Konsistensi kamu mantap hari ini, jangan kendor di jam-jam rawan ngemil. \u{1F4AA}` : isLansia ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Tetap semangat menjaga kebugaran ya \u2728` : `Kamu hebat sudah konsisten ngetrack hari ini, ${validatedAddr}! Tetap semangat ya \u2728`;
+    quote = isMax ? isLansia2 ? `Konsistensi yang sangat baik, ${validatedAddr}. Tetap jaga pola makan sehat dan istirahat optimal Anda. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Konsistensi kamu mantap hari ini, jangan kendor di jam-jam rawan ngemil. \u{1F4AA}` : isLansia2 ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Tetap semangat menjaga kebugaran ya \u2728` : `Kamu hebat sudah konsisten ngetrack hari ini, ${validatedAddr}! Tetap semangat ya \u2728`;
   }
   quote = validateAndFormatCoachNote(quote, userData);
   return `\u{1F4C6} *Rekap ${dateLabel}*
@@ -51602,8 +51607,18 @@ BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
 - Jika pesan bersifat campuran (mixed): Prioritaskan dan proses HANYA bagian yang didukung oleh paket GymBuddy, abaikan pertanyaan di luar topik.
 
 TUGASMU:
-User mengirim pesan/foto di WhatsApp: "${userText}"
-${imagePart ? 'CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto dan SELALU set "isFood": true.' : ""}
+${imagePart ? `USER MENGIRIM GAMBAR/FOTO BESERTA PESAN: "${userText}".
+VALIDASI KONTEKS GAMBAR (SANGAT KETAT):
+1. Tentukan apakah gambar ini benar-benar terkait ruang lingkup GymBuddy:
+   - MAKANAN / MINUMAN (Kategori 1): Foto hidangan, makanan, minuman, barcode makanan, label nutrisi/kemasan makanan.
+   - ALAT GYM / GERAKAN WORKOUT (Kategori 2): Foto alat gym, mesin latihan, dumbbell, barbell, treadmill, form gerakan latihan.
+2. JIKA GAMBAR TIDAK TERKAIT / DI LUAR KONTEKS (Kategori 3 - isUnrelatedImage: true):
+   Jika gambar BUKAN makanan/minuman dan BUKAN alat gym/latihan (CONTOH: tangkapan layar Excel / spreadsheet karyawan / data bisnis, dokumen kantor, invoice, teks non-makanan, meme, hewan, pemandangan, kendaraan, gadget/laptop, foto diri/selfie santai tanpa konteks makanan/gym, atau gambar ambigu tanpa bukti cukup):
+   - DILARANG KERAS MENEBAK atau memaksakan gambar ke kategori makanan atau gym!
+   - DILARANG membuat panduan latihan dari spreadsheet!
+   - DILARANG membuat estimasi nutrisi dari dokumen kantor!
+   - Set "isFood": false, "isEquipment": false, "isUnrelatedImage": true.
+   - Isi "coachComment": "Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."` : `User mengirim pesan teks di WhatsApp: "${userText}"`}
 
 PRINSIP UTAMA & VALIDASI NUTRISI (WAJIB DIPATUHI):
 1. Akurasi ilmiah dan konsistensi internal selalu diutamakan.
@@ -51675,11 +51690,13 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar khas persona coach"
 }
 
-Kategori 3: PERTANYAAN UMUM / WORKOUT REKLAMASI LAINNYA
+Kategori 3: PERTANYAAN UMUM / GAMBAR TIDAK TERKAIT
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": false,
+  "isUnrelatedImage": ${imagePart ? "true" : "false"},
+  "coachComment": "Pesan ramah jika di luar konteks atau pesan balasan coach alami",
   "generalReply": "Pesan balasan coach yang alami dan sesuai persona"
 }
 `;
@@ -51690,7 +51707,7 @@ Keluarkan output JSON valid:
                     const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
                     parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
                   }
-                  if (parsed.isFood) {
+                  if (parsed.isFood && !parsed.isUnrelatedImage) {
                     if (!planCapabilities.canNutrition) {
                       const redirectRes = validatePlanContext("makanan", true, userData);
                       responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
@@ -51710,7 +51727,7 @@ Keluarkan output JSON valid:
                       );
                       responseMessages = [card];
                     }
-                  } else if (parsed.isEquipment) {
+                  } else if (parsed.isEquipment && !parsed.isUnrelatedImage) {
                     if (!planCapabilities.canWorkout) {
                       const redirectRes = validatePlanContext("alat gym", true, userData);
                       responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
@@ -51718,25 +51735,33 @@ Keluarkan output JSON valid:
                       const eqCard = formatEquipmentCard(parsed, userData);
                       responseMessages = [eqCard];
                     }
+                  } else if (imagePart || parsed.isUnrelatedImage) {
+                    const defaultUnrelatedMsg = isMia ? "Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya." : isLansia ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. \u{1F33F}` : `Sorry ya, ${addressing.validatedAddress}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim foto yang sesuai ya! \u{1F4AA}`;
+                    responseMessages = [validateAndFormatCoachNote(parsed.coachComment || parsed.generalReply || defaultUnrelatedMsg, userData)];
                   } else {
                     responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
                   }
                 } catch (e) {
                   console.error("Gemini AI Error:", e);
-                  const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-                    userText,
-                    null,
-                    Boolean(imagePart)
-                  );
-                  addMealLog(from, mealRecord);
-                  const dailyTotals = getDailyTotals(from);
-                  const card = formatNutritionCard(
-                    validatedParsed,
-                    imagePart ? "Foto" : "Teks",
-                    userData,
-                    dailyTotals
-                  );
-                  responseMessages = [card];
+                  if (imagePart) {
+                    const defaultErrorMsg = isMia ? "Maaf ya \u{1F60A} Aku belum berhasil menganalisis gambar ini. Boleh coba kirim ulang fotonya atau ceritakan makanan/latihan kamu lewat teks? \u2728" : isLansia ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses gambar ini. Silakan kirimkan kembali fotonya atau sampaikan melalui pesan teks ya. \u{1F33F}` : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? \u{1F4AA}`;
+                    responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
+                  } else {
+                    const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                      userText,
+                      null,
+                      false
+                    );
+                    addMealLog(from, mealRecord);
+                    const dailyTotals = getDailyTotals(from);
+                    const card = formatNutritionCard(
+                      validatedParsed,
+                      "Teks",
+                      userData,
+                      dailyTotals
+                    );
+                    responseMessages = [card];
+                  }
                 }
               }
             }
@@ -51968,12 +51993,12 @@ Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari l
         if (userProfile.hasReceivedWelcome) {
           const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
           const ageNum = Number(userProfile.age) || 25;
-          const isLansia = ageNum >= 60;
+          const isLansia2 = ageNum >= 60;
           const cleanName = (userData.name || "Member").trim();
           const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
           let shortWelcome = "";
           if (userData.persona === "max") {
-            if (isLansia) {
+            if (isLansia2) {
               const honorific = isFemale ? "Bu" : "Pak";
               shortWelcome = `\u{1F525} *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi Anda.
 
@@ -51988,7 +52013,7 @@ Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau mi
 Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! \u{1F4AA}`;
             }
           } else {
-            if (isLansia) {
+            if (isLansia2) {
               const honorific = isFemale ? "Bu" : "Pak";
               shortWelcome = `\u2728 *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} di sini. \u{1F970}
 
@@ -52204,7 +52229,18 @@ ATURAN PENANGANAN REFERENSI TIDAK DIKENAL & OUT-OF-CONTEXT INPUT:
 
 ${personaInstruction}
 TUGASMU:
-User mengirim ${imagePart ? "FOTO MAKANAN/MINUMAN BESERTA PESAN" : "PESAN TEKS"} di WhatsApp: "${userText}"
+${imagePart ? `USER MENGIRIM GAMBAR/FOTO BESERTA PESAN: "${userText}".
+VALIDASI KONTEKS GAMBAR (SANGAT KETAT):
+1. Tentukan apakah gambar ini benar-benar terkait ruang lingkup GymBuddy:
+   - MAKANAN / MINUMAN (Kategori 1): Foto hidangan, makanan, minuman, barcode makanan, label nutrisi/kemasan makanan.
+   - ALAT GYM / GERAKAN WORKOUT (Kategori 2): Foto alat gym, mesin latihan, dumbbell, barbell, treadmill, form gerakan latihan.
+2. JIKA GAMBAR TIDAK TERKAIT / DI LUAR KONTEKS (Kategori 3 - isUnrelatedImage: true):
+   Jika gambar BUKAN makanan/minuman dan BUKAN alat gym/latihan (CONTOH: tangkapan layar Excel / spreadsheet karyawan / data bisnis, dokumen kantor, invoice, teks non-makanan, meme, hewan, pemandangan, kendaraan, gadget/laptop, foto diri/selfie santai tanpa konteks makanan/gym, atau gambar ambigu tanpa bukti cukup):
+   - DILARANG KERAS MENEBAK atau memaksakan gambar ke kategori makanan atau gym!
+   - DILARANG membuat panduan latihan dari spreadsheet!
+   - DILARANG membuat estimasi nutrisi dari dokumen kantor!
+   - Set "isFood": false, "isEquipment": false, "isUnrelatedImage": true.
+   - Isi "coachComment": "Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya."` : `User mengirim pesan teks di WhatsApp: "${userText}"`}
 
 PRINSIP WAJIB ANALISIS MAKANAN (MULTI-MODAL IMAGE + TEXT):
 1. GABUNGKAN FOTO + DESKRIPSI TEXT SEBAGAI SINGLE COMBINED INPUT:
@@ -52295,13 +52331,16 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar khas persona coach"
 }
 
-Kategori 3: PERTANYAAN UMUM / OBROLAN / REFERENSI TIDAK DIKENAL / OUT-OF-CONTEXT
+Kategori 3: PERTANYAAN UMUM / OBROLAN / REFERENSI TIDAK DIKENAL / GAMBAR TIDAK TERKAIT
+- Jika gambar bukan makanan/minuman dan bukan alat gym/latihan (spreadsheet, dokumen, foto acak): set "isUnrelatedImage": true.
 - Jika ada nama orang/entitas yang tidak dikenal (misal "si A", "Budi"), tanyakan klarifikasi secara natural tanpa mengarang identitas mereka.
 - Jika pengguna bertanya hal umum atau berdiskusi, jawab secara ramah, jujur terhadap konteks, dan sesuai persona coach tanpa memaksakan menu/program jika tidak diminta.
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": false,
+  "isUnrelatedImage": ${imagePart ? "true" : "false"},
+  "coachComment": "Pesan ramah jika di luar konteks atau pesan balasan coach alami",
   "generalReply": "Pesan balasan coach yang alami, jujur terhadap konteks, dan sesuai persona"
 }
 `;
@@ -52312,8 +52351,8 @@ Keluarkan output JSON valid:
               const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
               parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
             }
-            const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
-            if (parsed.isFood) {
+            const isEquipmentMatch = !parsed.isUnrelatedImage && (parsed.isEquipment || (lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym")) && !parsed.isFood);
+            if (parsed.isFood && !parsed.isUnrelatedImage) {
               if (parsed.needsClarification && !userText.trim()) {
                 const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
                 responseMessages = [validateAndFormatCoachNote(parsed.clarificationQuestion || defaultClarification, userData)];
@@ -52385,25 +52424,33 @@ Keluarkan output JSON valid:
                   mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
                 }
               }
+            } else if (imagePart || parsed.isUnrelatedImage) {
+              const defaultUnrelatedMsg = isMia ? "Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya." : isLansia ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. \u{1F33F}` : `Sorry ya, ${addressing.validatedAddress}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim foto yang sesuai ya! \u{1F4AA}`;
+              responseMessages = [validateAndFormatCoachNote(parsed.coachComment || parsed.generalReply || defaultUnrelatedMsg, userData)];
             } else {
               responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
             }
           } catch (e) {
             console.error("Gemini AI Error:", e);
-            const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-              userText,
-              null,
-              Boolean(imagePart)
-            );
-            addMealLog(normFrom, mealRecord);
-            const dailyTotals = getDailyTotals(normFrom);
-            const card = formatNutritionCard(
-              validatedParsed,
-              imagePart ? "Foto" : "Teks",
-              userData,
-              dailyTotals
-            );
-            responseMessages = [card];
+            if (imagePart) {
+              const defaultErrorMsg = isMia ? "Maaf ya \u{1F60A} Aku belum berhasil menganalisis gambar ini. Boleh coba kirim ulang fotonya atau ceritakan makanan/latihan kamu lewat teks? \u2728" : isLansia ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses gambar ini. Silakan kirimkan kembali fotonya atau sampaikan melalui pesan teks ya. \u{1F33F}` : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? \u{1F4AA}`;
+              responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
+            } else {
+              const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                userText,
+                null,
+                false
+              );
+              addMealLog(normFrom, mealRecord);
+              const dailyTotals = getDailyTotals(normFrom);
+              const card = formatNutritionCard(
+                validatedParsed,
+                "Teks",
+                userData,
+                dailyTotals
+              );
+              responseMessages = [card];
+            }
           }
         }
       }

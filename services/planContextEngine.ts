@@ -110,12 +110,23 @@ export function classifyUserInput(userText: string, hasImage: boolean): InputCat
   const trimmed = userText.trim();
   const lower = trimmed.toLowerCase();
 
-  // If user sent a photo without text or with a simple photo caption, it is almost always Food or Equipment/Workout
+  const hasNutrition = NUTRITION_KEYWORDS.some(k => lower.includes(k));
+  const hasWorkout = WORKOUT_KEYWORDS.some(k => lower.includes(k));
+  const hasUnrelated = UNRELATED_OFFTOPIC_REGEX.test(lower) ||
+    /^(?:apa\s+itu|apaan\s+itu|apa\s+artinya|siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara|jelaskan\s+tentang)\b/i.test(lower) ||
+    /\b(?:laptop|komputer|gadget|handphone|hp|smartphone|mobil|motor|pesawat|coding|koding|javascript|typescript|python|html|css|bug|syntax|crypto|bitcoin|saham|politik|pemilu|presiden|menteri|sinopsis|lirik|chord|excel|spreadsheet|pegawai|karyawan|slip\s+gaji|dokumen|tugas\s+kantor|invoice)\b/i.test(lower);
+
+  // If user sent a photo
   if (hasImage) {
-    // If the text explicitly mentions workout equipment
-    if (lower.includes("alat") || lower.includes("mesin") || lower.includes("gym")) {
+    // 1. If accompanying text explicitly indicates an unrelated off-topic subject
+    if (hasUnrelated && !hasNutrition && !hasWorkout) {
+      return "OUT_OF_CONTEXT";
+    }
+    // 2. If the text explicitly mentions workout or gym equipment
+    if (hasWorkout || lower.includes("alat") || lower.includes("mesin") || lower.includes("gym")) {
       return "WORKOUT";
     }
+    // 3. Otherwise, for visual evaluation of food/drink/equipment, defaults to NUTRITION context for routing
     return "NUTRITION";
   }
 
@@ -129,16 +140,12 @@ export function classifyUserInput(userText: string, hasImage: boolean): InputCat
 
   // Check for Ambiguous complaint of fatigue/energy
   const isAmbiguousOnly = AMBIGUOUS_KEYWORDS.some(k => lower.includes(k)) &&
-    !NUTRITION_KEYWORDS.some(k => lower.includes(k)) &&
-    !WORKOUT_KEYWORDS.some(k => lower.includes(k));
+    !hasNutrition &&
+    !hasWorkout;
 
   if (isAmbiguousOnly && trimmed.split(/\s+/).length <= 6) {
     return "AMBIGUOUS";
   }
-
-  const hasNutrition = NUTRITION_KEYWORDS.some(k => lower.includes(k));
-  const hasWorkout = WORKOUT_KEYWORDS.some(k => lower.includes(k));
-  const hasUnrelated = UNRELATED_OFFTOPIC_REGEX.test(lower);
 
   // Mixed message: Contains unrelated content BUT also contains clear nutrition or workout logging
   if (hasUnrelated && (hasNutrition || hasWorkout)) {
@@ -265,7 +272,13 @@ export function validatePlanContext(
   // 4. OUT OF CONTEXT INPUT (Completely unrelated to fitness/nutrition)
   if (category === "OUT_OF_CONTEXT") {
     let redirectMsg = "";
-    if (capabilities.canNutrition && capabilities.canWorkout) {
+    if (hasImage) {
+      redirectMsg = isMax
+        ? `Sorry ya, ${validatedAddr}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim gambar yang sesuai ya! 💪`
+        : (isLansia
+            ? `Mohon maaf, ${validatedAddr}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. 🌿`
+            : `Maaf ya 😊 Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya.`);
+    } else if (capabilities.canNutrition && capabilities.canWorkout) {
       redirectMsg = isMax
         ? (isLansia
             ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. 🌿`
