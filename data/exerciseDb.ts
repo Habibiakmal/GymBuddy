@@ -294,6 +294,51 @@ const CURATED_EXERCISES: ExerciseItem[] = [
     ]
   },
   {
+    id: "bodyweight-squat",
+    name: "Bodyweight Squat",
+    indonesianName: "Squat Bebas / Bodyweight (Paha & Bokong)",
+    aliases: ["squat", "bodyweight squat", "squat polos", "squat tanpa beban", "air squat", "cara squat", "gerakan squat", "latihan squat", "teknik squat", "squat biasa", "free squat"],
+    equipmentCategory: "bodyweight",
+    equipmentName: "Bodyweight (Tanpa Alat)",
+    bodyPart: "legs",
+    targetMuscles: ["Quadriceps (Paha Depan)", "Gluteus Maximus (Bokong)"],
+    secondaryMuscles: ["Core (Otot Inti)", "Hamstrings", "Calves"],
+    equipmentSetup: [
+      "Tidak membutuhkan alat khusus. Cukup siapkan ruang lantai yang rata dan tidak licin.",
+      "Gunakan sepatu olahraga yang stabil dengan sol datar/empuk."
+    ],
+    instructions: [
+      "Berdiri tegak dengan kaki dibuka selebar bahu atau sedikit lebih lebar, jari-jari kaki sedikit mengarah ke luar (15-30 derajat).",
+      "Luruskan kedua lengan ke depan sejajar bahu atau silangkan di depan dada untuk menjaga keseimbangan.",
+      "Tarik napas, kencangkan otot perut (core), lalu dorong pinggul ke belakang seolah-olah hendak duduk di kursi.",
+      "Tekuk lutut dan turunkan tubuh secara terkontrol hingga paha minimal sejajar dengan lantai.",
+      "Pastikan punggung tetap lurus alami, dada terbuka membusung, dan tumit menempel kuat di lantai.",
+      "Buang napas dan dorong lantai dengan tumpuan seluruh telapak kaki & tumit untuk kembali ke posisi berdiri tegak."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga dada tetap tegak dan pandangan lurus ke depan sepanjang gerakan.",
+        "Pastikan arah lutut selalu sejajar dengan jari-jari kaki (buka lutut sedikit ke luar).",
+        "Tumpukan beban tubuh pada seluruh telapak kaki dan tumit, bukan hanya jari kaki."
+      ],
+      donts: [
+        "Jangan biarkan lutut terlipat/menekuk ke dalam (knee valgus) saat turun atau naik.",
+        "Jangan mengangkat tumit dari lantai (jika tumit terangkat, tingkatkan fleksibilitas pergelangan kaki).",
+        "Jangan membungkukkan punggung ke depan saat mencapai titik terendah."
+      ]
+    },
+    coachCues: {
+      max: "Buka kaki selebar bahu, kunci core lo, dorong pantat ke belakang kayak mau duduk di kursi! Dorong kuat dari tumit pas naik. 3-4 set x 15-20 reps! 🔥",
+      mia: "Berdiri tegak, rentangkan tangan ke depan untuk keseimbangan ya Kak. Turun perlahan dengan dada tegap, lalu dorong dari tumit sampai berdiri tegak. Semangat! ✨"
+    },
+    recommendedSetsReps: "3-4 Set x 12-20 Repetisi (Rest 45-60s)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/1.jpg"
+    ]
+  },
+  {
     id: "goblet-squat",
     name: "Goblet Squat (Dumbbell / Kettlebell)",
     indonesianName: "Goblet Squat (Squat Dumbbell Depan Dada)",
@@ -868,11 +913,37 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
   );
   if (aliasMatch) return aliasMatch;
 
-  // 3. Substring match on name / aliases
-  const substrMatch = EXERCISE_DATABASE.find((item) =>
-    item.name.toLowerCase().includes(q) || (item.aliases || []).some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
-  );
-  if (substrMatch) return substrMatch;
+  // 3. Match longest specific alias contained in query, or where query is contained in alias
+  let bestSubstrItem: ExerciseItem | null = null;
+  let maxAliasLength = 0;
+
+  for (const item of EXERCISE_DATABASE) {
+    if (item.name.toLowerCase().includes(q)) {
+      return item;
+    }
+
+    for (const alias of (item.aliases || [])) {
+      const a = alias.toLowerCase();
+      if (q === a) {
+        return item;
+      }
+      if (q.includes(a)) {
+        if (a.length > maxAliasLength) {
+          maxAliasLength = a.length;
+          bestSubstrItem = item;
+        }
+      } else if (a.includes(q)) {
+        if (q.length > maxAliasLength) {
+          maxAliasLength = q.length;
+          bestSubstrItem = item;
+        }
+      }
+    }
+  }
+
+  if (bestSubstrItem && maxAliasLength >= 3) {
+    return bestSubstrItem;
+  }
 
   // 4. Keyword token matching
   const tokens = q.split(/[\s,+/_-]+/).filter((t) => t.length > 2);

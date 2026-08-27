@@ -37,6 +37,7 @@ __export(server_exports, {
   dbData: () => dbData,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
   extractMealComponents: () => extractMealComponents,
+  extractWorkoutParameters: () => extractWorkoutParameters,
   formatDashboardInteger: () => formatDashboardInteger,
   formatDashboardMacro: () => formatDashboardMacro,
   formatDashboardPercent: () => formatDashboardPercent,
@@ -46,6 +47,8 @@ __export(server_exports, {
   getMealTypeByHour: () => getMealTypeByHour,
   getUserPlanCapabilities: () => getUserPlanCapabilities,
   getUserProfile: () => getUserProfile,
+  handleAdditionalActivityLogging: () => handleAdditionalActivityLogging,
+  handleWorkoutProgressLogging: () => handleWorkoutProgressLogging,
   processMealCorrection: () => processMealCorrection,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
@@ -42182,6 +42185,51 @@ var CURATED_EXERCISES = [
     ]
   },
   {
+    id: "bodyweight-squat",
+    name: "Bodyweight Squat",
+    indonesianName: "Squat Bebas / Bodyweight (Paha & Bokong)",
+    aliases: ["squat", "bodyweight squat", "squat polos", "squat tanpa beban", "air squat", "cara squat", "gerakan squat", "latihan squat", "teknik squat", "squat biasa", "free squat"],
+    equipmentCategory: "bodyweight",
+    equipmentName: "Bodyweight (Tanpa Alat)",
+    bodyPart: "legs",
+    targetMuscles: ["Quadriceps (Paha Depan)", "Gluteus Maximus (Bokong)"],
+    secondaryMuscles: ["Core (Otot Inti)", "Hamstrings", "Calves"],
+    equipmentSetup: [
+      "Tidak membutuhkan alat khusus. Cukup siapkan ruang lantai yang rata dan tidak licin.",
+      "Gunakan sepatu olahraga yang stabil dengan sol datar/empuk."
+    ],
+    instructions: [
+      "Berdiri tegak dengan kaki dibuka selebar bahu atau sedikit lebih lebar, jari-jari kaki sedikit mengarah ke luar (15-30 derajat).",
+      "Luruskan kedua lengan ke depan sejajar bahu atau silangkan di depan dada untuk menjaga keseimbangan.",
+      "Tarik napas, kencangkan otot perut (core), lalu dorong pinggul ke belakang seolah-olah hendak duduk di kursi.",
+      "Tekuk lutut dan turunkan tubuh secara terkontrol hingga paha minimal sejajar dengan lantai.",
+      "Pastikan punggung tetap lurus alami, dada terbuka membusung, dan tumit menempel kuat di lantai.",
+      "Buang napas dan dorong lantai dengan tumpuan seluruh telapak kaki & tumit untuk kembali ke posisi berdiri tegak."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga dada tetap tegak dan pandangan lurus ke depan sepanjang gerakan.",
+        "Pastikan arah lutut selalu sejajar dengan jari-jari kaki (buka lutut sedikit ke luar).",
+        "Tumpukan beban tubuh pada seluruh telapak kaki dan tumit, bukan hanya jari kaki."
+      ],
+      donts: [
+        "Jangan biarkan lutut terlipat/menekuk ke dalam (knee valgus) saat turun atau naik.",
+        "Jangan mengangkat tumit dari lantai (jika tumit terangkat, tingkatkan fleksibilitas pergelangan kaki).",
+        "Jangan membungkukkan punggung ke depan saat mencapai titik terendah."
+      ]
+    },
+    coachCues: {
+      max: "Buka kaki selebar bahu, kunci core lo, dorong pantat ke belakang kayak mau duduk di kursi! Dorong kuat dari tumit pas naik. 3-4 set x 15-20 reps! \u{1F525}",
+      mia: "Berdiri tegak, rentangkan tangan ke depan untuk keseimbangan ya Kak. Turun perlahan dengan dada tegap, lalu dorong dari tumit sampai berdiri tegak. Semangat! \u2728"
+    },
+    recommendedSetsReps: "3-4 Set x 12-20 Repetisi (Rest 45-60s)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/1.jpg"
+    ]
+  },
+  {
     id: "goblet-squat",
     name: "Goblet Squat (Dumbbell / Kettlebell)",
     indonesianName: "Goblet Squat (Squat Dumbbell Depan Dada)",
@@ -42745,10 +42793,33 @@ function findExerciseOrEquipment(query) {
     (item) => (item.aliases || []).some((alias) => q === alias.toLowerCase())
   );
   if (aliasMatch) return aliasMatch;
-  const substrMatch = EXERCISE_DATABASE.find(
-    (item) => item.name.toLowerCase().includes(q) || (item.aliases || []).some((alias) => alias.toLowerCase().includes(q) || q.includes(alias.toLowerCase()))
-  );
-  if (substrMatch) return substrMatch;
+  let bestSubstrItem = null;
+  let maxAliasLength = 0;
+  for (const item of EXERCISE_DATABASE) {
+    if (item.name.toLowerCase().includes(q)) {
+      return item;
+    }
+    for (const alias of item.aliases || []) {
+      const a = alias.toLowerCase();
+      if (q === a) {
+        return item;
+      }
+      if (q.includes(a)) {
+        if (a.length > maxAliasLength) {
+          maxAliasLength = a.length;
+          bestSubstrItem = item;
+        }
+      } else if (a.includes(q)) {
+        if (q.length > maxAliasLength) {
+          maxAliasLength = q.length;
+          bestSubstrItem = item;
+        }
+      }
+    }
+  }
+  if (bestSubstrItem && maxAliasLength >= 3) {
+    return bestSubstrItem;
+  }
   const tokens = q.split(/[\s,+/_-]+/).filter((t) => t.length > 2);
   let bestItem = null;
   let maxScore = 0;
@@ -49630,6 +49701,48 @@ Berikut daftar gerakan yang terjadwal untukmu:
 
 Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
 }
+function extractWorkoutParameters(userText) {
+  const lower = userText.toLowerCase().trim();
+  let sets = void 0;
+  const setMatch = lower.match(/(\d+)\s*(?:set|sets)\b/i);
+  if (setMatch) sets = parseInt(setMatch[1], 10);
+  let reps = void 0;
+  const repMatch = lower.match(/(?:masing[-\s]*masing\s*)?(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/x\s*(\d+)\b/i);
+  if (repMatch) reps = parseInt(repMatch[1], 10);
+  let weightKg = void 0;
+  const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
+  if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
+  let durationMinutes = void 0;
+  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)\b/i);
+  const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)\b/i);
+  if (minMatch) {
+    durationMinutes = parseInt(minMatch[1], 10);
+  } else if (hourMatch) {
+    durationMinutes = Math.round(parseFloat(hourMatch[1].replace(",", ".")) * 60);
+  } else if (lower.includes("setengah jam")) {
+    durationMinutes = 30;
+  } else if (lower.includes("satu jam")) {
+    durationMinutes = 60;
+  }
+  let distanceKm = void 0;
+  const kmMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilo|kilometer)\b/i);
+  if (kmMatch && !lower.includes("beban " + kmMatch[1])) {
+    distanceKm = parseFloat(kmMatch[1].replace(",", "."));
+  }
+  let intensity = void 0;
+  if (lower.includes("kecepatan sedang") || lower.includes("speed sedang") || lower.includes("pace sedang") || lower.includes("moderate")) {
+    intensity = "Kecepatan Sedang";
+  } else if (lower.includes("intensitas tinggi") || lower.includes("kecepatan tinggi") || lower.includes("sprint") || lower.includes("high intensity")) {
+    intensity = "Intensitas Tinggi";
+  } else if (lower.includes("santai") || lower.includes("ringan") || lower.includes("jalan santai") || lower.includes("low intensity")) {
+    intensity = "Santai";
+  } else if (lower.includes("incline") || lower.includes("menanjak")) {
+    intensity = "Incline";
+  } else if (lower.includes("zona 2") || lower.includes("zone 2")) {
+    intensity = "Zona 2";
+  }
+  return { sets, reps, weightKg, durationMinutes, distanceKm, intensity };
+}
 var ADDITIONAL_ACTIVITY_MAP = [
   { keywords: ["berenang", "swimming", "renang"], name: "Berenang (Swimming)", icon: "\u{1F3CA}\u200D\u2642\uFE0F", category: "cardio", met: 8 },
   { keywords: ["lari", "running", "jogging", "joging"], name: "Lari (Running)", icon: "\u{1F3C3}\u200D\u2642\uFE0F", category: "cardio", met: 9.5 },
@@ -49653,6 +49766,9 @@ function handleAdditionalActivityLogging(rawPhone, userText, userData) {
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const lower = userText.toLowerCase().trim();
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
+    return null;
+  }
+  if (lower.includes("jadwal latihanku apa") || lower.includes("jadwal latihan hari ini") || lower.includes("workout apa hari ini") || lower.includes("latihan apa hari ini") || lower.includes("jadwal gym hari ini") || lower.includes("jadwal workout hari ini") || lower.includes("olahraga hari ini apa") || lower.includes("hari ini jadwal latihanku apa")) {
     return null;
   }
   const dateInfo = parseDateFromQuery(userText);
@@ -49682,39 +49798,35 @@ Dashboard web sudah otomatis diperbarui. \u2728`
       }
     }
   }
+  const params = extractWorkoutParameters(userText);
+  const isStrengthStructured = Boolean(params.sets || params.reps || params.weightKg);
   let matchedAct = null;
   for (const act of ADDITIONAL_ACTIVITY_MAP) {
     if (act.keywords.some((k) => lower.includes(k))) {
+      if (act.category === "general" && isStrengthStructured) {
+        continue;
+      }
       matchedAct = act;
       break;
     }
   }
   if (!matchedAct) return null;
-  let duration = void 0;
-  const hourMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:jam|hours|hr|hrs)/i);
-  const minMatch = lower.match(/(\d+)\s*(?:menit|mins|min)/i);
-  if (minMatch) {
-    duration = parseInt(minMatch[1], 10);
-  } else if (hourMatch) {
-    duration = Math.round(parseFloat(hourMatch[1].replace(",", ".")) * 60);
-  } else if (lower.includes("setengah jam")) {
-    duration = 30;
-  }
-  let distance = void 0;
-  const kmMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilo|kilometer)/i);
-  if (kmMatch) {
-    distance = parseFloat(kmMatch[1].replace(",", "."));
-  }
+  const duration = params.durationMinutes || (matchedAct.name.includes("Gym") || matchedAct.name.includes("Olahraga Tambahan") ? 45 : void 0);
+  const distance = params.distanceKm;
+  const intensity = params.intensity;
   const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
   const weight = userData.weight || 70;
   const durHours = duration ? duration / 60 : distance ? distance / 10 : 0.5;
   const calBurn = Math.round(matchedAct.met * weight * durHours);
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
   if (isEdit && existingActivities.length > 0) {
     const existingIndex = existingActivities.findIndex((a) => a.activityName.toLowerCase().includes(matchedAct.keywords[0]));
     if (existingIndex !== -1) {
       if (duration) existingActivities[existingIndex].durationMinutes = duration;
       if (distance) existingActivities[existingIndex].distanceKm = distance;
+      if (intensity) existingActivities[existingIndex].intensity = intensity;
       existingActivities[existingIndex].estimatedCaloriesBurned = calBurn;
       dbData.dailyLogs[actKey] = existingActivities;
       dbData.dailyLogs[altActKey] = existingActivities;
@@ -49722,19 +49834,26 @@ Dashboard web sudah otomatis diperbarui. \u2728`
       return [
         `\u270F\uFE0F *AKTIVITAS TAMBAHAN DIPERBARUI*
 -----------------------------
-\u2705 Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${distance ? ` (${distance} km)` : ""} (~${calBurn} kcal estimasi).
+\u2705 Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${intensity ? ` (${intensity})` : ""}${distance ? ` (${distance} km)` : ""} (~${calBurn} kcal estimasi).
 
 Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
       ];
     }
   }
+  const activityUniqueId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const newActivity = {
-    id: `act-${Date.now()}`,
+    id: activityUniqueId,
     activityName: matchedAct.name,
     category: matchedAct.category,
     icon: matchedAct.icon,
     durationMinutes: duration,
     distanceKm: distance,
+    intensity,
+    details: [
+      duration ? `${duration} menit` : null,
+      intensity ? intensity : null,
+      distance ? `${distance} km` : null
+    ].filter(Boolean).join(" \u2022 "),
     estimatedCaloriesBurned: calBurn,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     status: "completed"
@@ -49753,12 +49872,12 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   const scheduleNote = isRest ? `Hari ini memang jadwal *Rest Day* kamu. Aktivitas tambahan ini sangat bagus untuk pemulihan aktif tanpa membebani otot! \u{1F33F}` : `Jadwal latihan utama kamu (*${todayRoutine.focus}*) tetap tersimpan di Dashboard.`;
   const details = [];
   if (duration) details.push(`\u23F1\uFE0F Durasi: *${duration} menit*`);
+  if (intensity) details.push(`\u26A1 Intensitas: *${intensity}*`);
   if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
   details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
-  const addressing = getValidatedUserAddressing(userData);
-  const validatedAddr = addressing.validatedAddress;
+  const isVagueGym = matchedAct.keywords.includes("gym") && !params.durationMinutes && !distance;
   const comment = validateAndFormatCoachNote(
-    userData.persona === "max" ? `Bagus, ${validatedAddr}! Aktivitas ekstra kamu sudah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728`,
+    userData.persona === "max" ? isVagueGym ? `Mantap, ${validatedAddr}! Sesi gym kamu sudah dicatat di Dashboard. Kalau mau catat gerakan spesifik (misal: 3 set bench press atau 30 menit treadmill), kasih tahu aku ya! \u{1F4AA}` : `Bagus, ${validatedAddr}! Aktivitas ${matchedAct.name} sudah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : isVagueGym ? `Hebat banget, ${validatedAddr}! Sesi olahraga kamu sudah tersimpan \u2728 Kalau ada gerakan spesifik atau durasi yang mau dicatat lengkap, tinggal kasih tahu aku ya!` : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728`,
     userData
   );
   return [
@@ -49780,12 +49899,17 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
   }
+  if (lower.includes("jadwal latihanku apa") || lower.includes("jadwal latihan hari ini") || lower.includes("workout apa hari ini") || lower.includes("latihan apa hari ini") || lower.includes("jadwal gym hari ini") || lower.includes("jadwal workout hari ini") || lower.includes("olahraga hari ini apa") || lower.includes("hari ini jadwal latihanku apa") || lower.includes("jadwal hari ini apa") || lower.includes("jadwal latihan besok") || lower.includes("workout besok apa")) {
+    return null;
+  }
+  const params = extractWorkoutParameters(userText);
   const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
   if (additionalActResp) {
     return additionalActResp;
   }
-  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|set|\bsets\b)/i);
-  if (!hasWorkoutSignal) {
+  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku)/i);
+  const hasStructure = Boolean(params.sets || params.reps || params.weightKg);
+  if (!hasWorkoutSignal && !hasStructure) {
     return null;
   }
   const goal = userData.goal || "healthy";
@@ -49794,76 +49918,19 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
   const todayDayName = dayNames[currentDayIdx];
   const todayRoutine = schedule.find((s) => s.day.toLowerCase() === todayDayName.toLowerCase()) || schedule[0];
-  const todayStr = getLocalDateStr();
-  const key = `gymbuddy_exercises_${phone}_${todayStr}`;
-  const altKey = `gymbuddy_exercises_${altPhone}_${todayStr}`;
+  const dateInfo = parseDateFromQuery(userText);
+  const targetDate = dateInfo.dateStr;
+  const key = `gymbuddy_exercises_${phone}_${targetDate}`;
+  const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
+  const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+  const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
   let existingExercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
   if (!Array.isArray(existingExercises) || existingExercises.length === 0 || !existingExercises[0]?.targetSets) {
     existingExercises = JSON.parse(JSON.stringify(todayRoutine.exercises || []));
   }
+  let existingActivities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+  if (!Array.isArray(existingActivities)) existingActivities = [];
   const isFullWorkout = lower.match(/(?:sudah\s*)?(?:selesai|beres|done)\s*(?:semua\s*)?(?:latihan|workout|olahraga)|(?:latihan|workout|olahraga)\s*(?:hari\s*ini\s*)?(?:sudah\s*)?(?:selesai|beres|done)/i);
-  let matchedEx = null;
-  for (const ex of existingExercises) {
-    const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-    const exWords = exNameLower.split(/\s+/).filter((w) => w.length > 2);
-    if (lower.includes(exNameLower)) {
-      matchedEx = ex;
-      break;
-    }
-    for (const w of exWords) {
-      if (w !== "day" && w !== "grip" && w !== "medium" && w !== "sets" && w !== "wide" && lower.includes(w)) {
-        matchedEx = ex;
-        break;
-      }
-    }
-    if (matchedEx) break;
-  }
-  if (!matchedEx) {
-    const dbEx = findExerciseOrEquipment(userText);
-    if (dbEx) {
-      for (const ex of existingExercises) {
-        if (ex.name.toLowerCase().includes(dbEx.name.toLowerCase()) || dbEx.name.toLowerCase().includes(ex.name.toLowerCase()) || dbEx.aliases && dbEx.aliases.some((a) => ex.name.toLowerCase().includes(a.toLowerCase()))) {
-          matchedEx = ex;
-          break;
-        }
-      }
-    }
-  }
-  if (matchedEx) {
-    const setMatch = lower.match(/(\d+)\s*(?:set|sets)/i);
-    let count = setMatch ? parseInt(setMatch[1], 10) : matchedEx.targetSets;
-    count = Math.min(matchedEx.targetSets, Math.max(1, count));
-    matchedEx.completedSets = count;
-    matchedEx.setsState = (matchedEx.setsState || []).map((_, idx) => idx < count);
-    matchedEx.status = count >= matchedEx.targetSets ? "completed" : "in_progress";
-    dbData.dailyLogs[key] = existingExercises;
-    dbData.dailyLogs[altKey] = existingExercises;
-    saveDb();
-    const nextEx = existingExercises.find((e) => e.id !== matchedEx.id && e.status !== "completed");
-    if (count >= matchedEx.targetSets) {
-      if (nextEx) {
-        const nextReps = formatRepsCompact(nextEx.targetReps, nextEx.targetSets);
-        return [
-          `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set selesai. \u2705
-
-Setelah itu tinggal *${nextEx.name}*, ${nextReps}.`
-        ];
-      } else {
-        return [
-          `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set selesai. \u2705
-
-Semua latihan hari ini sudah selesai! Luar biasa! \u{1F525}\u{1F4AA}`
-        ];
-      }
-    } else {
-      const remaining = matchedEx.targetSets - count;
-      return [
-        `Nice! *${matchedEx.name}* sudah ${count}/${matchedEx.targetSets} set. \u2705
-
-Tinggal ${remaining} set lagi.`
-      ];
-    }
-  }
   if (isFullWorkout && existingExercises.length > 0) {
     existingExercises.forEach((e) => {
       e.completedSets = e.targetSets;
@@ -49877,6 +49944,175 @@ Tinggal ${remaining} set lagi.`
       `Luar biasa! Seluruh jadwal latihan hari ini (*${todayRoutine.focus}*) sudah tercatat selesai 100%! \u{1F389}\u{1F4AA}
 
 Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u2728`
+    ];
+  }
+  let matchedScheduledEx = null;
+  for (const ex of existingExercises) {
+    const exNameLower = String(ex.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+    const exWords = exNameLower.split(/\s+/).filter((w) => w.length > 2);
+    if (lower.includes(exNameLower)) {
+      matchedScheduledEx = ex;
+      break;
+    }
+    for (const w of exWords) {
+      if (w !== "day" && w !== "grip" && w !== "medium" && w !== "sets" && w !== "wide" && lower.includes(w)) {
+        matchedScheduledEx = ex;
+        break;
+      }
+    }
+    if (matchedScheduledEx) break;
+  }
+  const dbEx = findExerciseOrEquipment(userText);
+  if (!matchedScheduledEx && dbEx) {
+    for (const ex of existingExercises) {
+      if (ex.name.toLowerCase().includes(dbEx.name.toLowerCase()) || dbEx.name.toLowerCase().includes(ex.name.toLowerCase()) || dbEx.aliases && dbEx.aliases.some((a) => ex.name.toLowerCase().includes(a.toLowerCase()))) {
+        matchedScheduledEx = ex;
+        break;
+      }
+    }
+  }
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
+  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+  if (matchedScheduledEx) {
+    const count = params.sets ? params.sets : matchedScheduledEx.targetSets;
+    const finalSets = Math.max(1, count);
+    const finalReps = params.reps || 10;
+    const finalWeight = params.weightKg;
+    matchedScheduledEx.completedSets = finalSets;
+    matchedScheduledEx.targetSets = Math.max(matchedScheduledEx.targetSets || 0, finalSets);
+    matchedScheduledEx.setsState = (matchedScheduledEx.setsState || []).map((_, idx) => idx < finalSets);
+    matchedScheduledEx.status = finalSets >= matchedScheduledEx.targetSets ? "completed" : "in_progress";
+    if (finalWeight) matchedScheduledEx.weightKg = finalWeight;
+    const actId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const calBurn = Math.round(finalSets * finalReps * 2.5);
+    const newActivity = {
+      id: actId,
+      activityName: matchedScheduledEx.name,
+      category: "strength",
+      icon: "\u{1F3CB}\uFE0F\u200D\u2642\uFE0F",
+      sets: finalSets,
+      reps: finalReps,
+      weightKg: finalWeight,
+      details: `${finalSets} Set x ${finalReps} Repetisi${finalWeight ? ` \u2022 Beban: ${finalWeight} kg` : ""}`,
+      estimatedCaloriesBurned: calBurn,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      status: "completed"
+    };
+    existingActivities.push(newActivity);
+    dbData.dailyLogs[key] = existingExercises;
+    dbData.dailyLogs[altKey] = existingExercises;
+    dbData.dailyLogs[actKey] = existingActivities;
+    dbData.dailyLogs[altActKey] = existingActivities;
+    saveDb();
+    const nextEx = existingExercises.find((e) => e.id !== matchedScheduledEx.id && e.status !== "completed");
+    const comment = validateAndFormatCoachNote(
+      userData.persona === "max" ? `Bagus, ${validatedAddr}! Latihan ${matchedScheduledEx.name} ${finalSets} set x ${finalReps} reps${finalWeight ? ` dengan beban ${finalWeight} kg` : ""} sudah tercatat. Pertahankan konsistensi lo! \u{1F525}` : `Luar biasa, ${validatedAddr}! ${matchedScheduledEx.name} ${finalSets} set x ${finalReps} reps${finalWeight ? ` beban ${finalWeight} kg` : ""} sudah tersimpan di riwayat latihan kamu \u2728`,
+      userData
+    );
+    const detailsStr = [
+      `\u{1F4CA} Detail: *${finalSets} Set x ${finalReps} Repetisi*`,
+      finalWeight ? `\u2696\uFE0F Beban: *${finalWeight} kg*` : null,
+      `\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`
+    ].filter(Boolean).join(" \u2022 ");
+    if (finalSets >= matchedScheduledEx.targetSets) {
+      if (nextEx) {
+        const nextReps = formatRepsCompact(nextEx.targetReps, nextEx.targetSets);
+        return [
+          `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
+-----------------------------
+\u2705 *${matchedScheduledEx.name}*
+${detailsStr}
+
+\u{1F4A1} *Target Berikutnya*: Tinggal *${nextEx.name}*, ${nextReps}.
+
+\u{1F4AC} *${coachName}*:
+"${comment}"`
+        ];
+      } else {
+        return [
+          `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
+-----------------------------
+\u2705 *${matchedScheduledEx.name}*
+${detailsStr}
+
+\u{1F4A1} *Status Program*: Semua latihan hari ini sudah selesai! Luar biasa! \u{1F525}\u{1F4AA}
+
+\u{1F4AC} *${coachName}*:
+"${comment}"`
+        ];
+      }
+    } else {
+      const remaining = matchedScheduledEx.targetSets - finalSets;
+      return [
+        `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
+-----------------------------
+\u2705 *${matchedScheduledEx.name}*
+${detailsStr}
+
+\u{1F4A1} *Status*: Tinggal ${remaining} set lagi untuk menyelesaikan target gerakan ini.
+
+\u{1F4AC} *${coachName}*:
+"${comment}"`
+      ];
+    }
+  }
+  if (dbEx || hasStructure) {
+    const exerciseName = dbEx ? dbEx.name : userText.split(/,|\b(?:dengan|beban|masing|\d+\s*set)\b/i)[0].replace(/^(?:aku|tadi|barusan|sudah|udah|latihan|main)\s+/i, "").trim() || "Latihan Beban";
+    const sets = params.sets || 3;
+    const reps = params.reps || 10;
+    const weight = params.weightKg;
+    const calBurn = Math.round(sets * reps * 2.5);
+    const customEx = {
+      id: `ex-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: exerciseName,
+      targetSets: sets,
+      completedSets: sets,
+      setsState: Array(sets).fill(true),
+      targetReps: `${sets} Set x ${reps} Reps${weight ? ` (${weight} kg)` : ""}`,
+      weightKg: weight,
+      status: "completed"
+    };
+    existingExercises.push(customEx);
+    const actId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newActivity = {
+      id: actId,
+      activityName: exerciseName,
+      category: "strength",
+      icon: "\u{1F3CB}\uFE0F\u200D\u2642\uFE0F",
+      sets,
+      reps,
+      weightKg: weight,
+      details: `${sets} Set x ${reps} Repetisi${weight ? ` \u2022 Beban: ${weight} kg` : ""}`,
+      estimatedCaloriesBurned: calBurn,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      status: "completed"
+    };
+    existingActivities.push(newActivity);
+    dbData.dailyLogs[key] = existingExercises;
+    dbData.dailyLogs[altKey] = existingExercises;
+    dbData.dailyLogs[actKey] = existingActivities;
+    dbData.dailyLogs[altActKey] = existingActivities;
+    saveDb();
+    const comment = validateAndFormatCoachNote(
+      userData.persona === "max" ? `Bagus, ${validatedAddr}! Latihan ${exerciseName} ${sets} set x ${reps} reps${weight ? ` dengan beban ${weight} kg` : ""} sudah tercatat rapi. Pertahankan konsistensi lo! \u{1F525}` : `Luar biasa, ${validatedAddr}! Latihan ${exerciseName} ${sets} set x ${reps} reps${weight ? ` beban ${weight} kg` : ""} sudah tersimpan di riwayat latihan kamu \u2728`,
+      userData
+    );
+    const detailsStr = [
+      `\u{1F4CA} Detail: *${sets} Set x ${reps} Repetisi*`,
+      weight ? `\u2696\uFE0F Beban: *${weight} kg*` : null,
+      `\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`
+    ].filter(Boolean).join(" \u2022 ");
+    return [
+      `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
+-----------------------------
+\u2705 *${exerciseName}*
+${detailsStr}
+
+\u{1F4A1} *Status Program*: Latihan tercatat rapi di riwayat aktivitas harian kamu.
+
+\u{1F4AC} *${coachName}*:
+"${comment}"`
     ];
   }
   return null;
@@ -51143,6 +51379,54 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     }
     res.json({ success: true, phone, date: targetDate, activities: dbData.dailyLogs[actKey] || [] });
   });
+  app.delete("/api/user/:phone/activities/:activityId", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const { activityId } = req.params;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    let activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    if (Array.isArray(activities)) {
+      activities = activities.filter((a) => String(a.id) !== String(activityId));
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
+      saveDb();
+    }
+    res.json({
+      success: true,
+      phone,
+      date: targetDate,
+      deletedActivityId: activityId,
+      activities: dbData.dailyLogs[actKey] || []
+    });
+  });
+  app.delete("/api/user/:phone/activities", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const targetDate = req.query.date || getLocalDateStr();
+    const activityId = req.query.id || req.body?.id;
+    const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
+    const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+    let activities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
+    if (Array.isArray(activities)) {
+      if (activityId) {
+        activities = activities.filter((a) => String(a.id) !== String(activityId));
+      } else {
+        activities = [];
+      }
+      dbData.dailyLogs[actKey] = activities;
+      dbData.dailyLogs[altActKey] = activities;
+      saveDb();
+    }
+    res.json({
+      success: true,
+      phone,
+      date: targetDate,
+      deletedActivityId: activityId,
+      activities: dbData.dailyLogs[actKey] || []
+    });
+  });
   app.post("/api/user/:phone/reminder", import_express.default.json(), async (req, res) => {
     try {
       const phone = normalizePhone(req.params.phone);
@@ -51431,7 +51715,7 @@ https://gymbuddygroup.com`
           const userData = calculateUserData(userProfile);
           const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
           const isWeeklyScheduleQuery = lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini");
-          const isWorkoutReqMessage = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("olahraga"));
+          const isWorkoutReqMessage = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini apa") || lowerText.includes("mau latihan apa") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
           const parsedQueryDate = parseDateFromQuery(userText);
           const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
           const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
@@ -51927,7 +52211,7 @@ Keluarkan output JSON valid:
       console.log(`[Twilio WA] \u2705 Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
       const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
       const isWeeklyScheduleQuery = lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini");
-      const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal latihan") || lowerText.includes("menu latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini") || lowerText.includes("workout") || lowerText.includes("latihan") || lowerText.includes("olahraga"));
+      const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini apa") || lowerText.includes("mau latihan apa") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
       const parsedQueryDate = parseDateFromQuery(userText);
       const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
       const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
@@ -52890,6 +53174,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   dbData,
   detectMealCorrectionIntent,
   extractMealComponents,
+  extractWorkoutParameters,
   formatDashboardInteger,
   formatDashboardMacro,
   formatDashboardPercent,
@@ -52899,6 +53184,8 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   getMealTypeByHour,
   getUserPlanCapabilities,
   getUserProfile,
+  handleAdditionalActivityLogging,
+  handleWorkoutProgressLogging,
   processMealCorrection,
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,

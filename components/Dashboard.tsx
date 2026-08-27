@@ -161,6 +161,11 @@ interface AdditionalActivity {
   icon?: string;
   durationMinutes?: number;
   distanceKm?: number;
+  sets?: number;
+  reps?: number;
+  weightKg?: number;
+  intensity?: string;
+  details?: string;
   estimatedCaloriesBurned?: number;
   timestamp: string;
   status: "completed";
@@ -2848,6 +2853,43 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setTimeout(() => setReminderNotificationMsg(null), 3000);
   };
 
+  const handleDeleteActivity = async (id: string) => {
+    const rawPhone = activeUser.phone || activeUser.normalizedPhone || "";
+    const normPhone = normalizePhone(rawPhone);
+    if (!normPhone || !id) return;
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+
+    const updated = activities.filter((act) => String(act.id) !== String(id));
+    setActivities(updated);
+
+    // Immediately persist deletion in localStorage
+    try {
+      localStorage.setItem(`gymbuddy_activities_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      localStorage.setItem(`gymbuddy_activities_${altPhone}_${selectedDate}`, JSON.stringify(updated));
+    } catch (e) {}
+
+    // Sync deletion to backend API
+    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    try {
+      fetch(`/api/user/${normPhone}/activities/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/activities/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+
+      fetch(`/api/user/${normPhone}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activities: updated, date: selectedDate })
+      }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activities: updated, date: selectedDate })
+      }).catch(() => {});
+    } catch (e) {}
+
+    setReminderNotificationMsg(lang === "EN" ? "Activity deleted successfully! 🗑️" : "Aktivitas tambahan berhasil dihapus! 🗑️");
+    setTimeout(() => setReminderNotificationMsg(null), 3000);
+  };
+
   const handleDeleteAccount = async () => {
     if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
     const normPhone = normalizePhone(activeUser.phone || "");
@@ -4600,27 +4642,54 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       <span>🏅</span>
                       <span>{isEN ? "Additional Activities (Logged via WhatsApp)" : "Aktivitas Tambahan Hari Ini"}</span>
                     </h4>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
-                      {activities.length} {isEN ? "Activity" : "Aktivitas"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {activities.some(a => a.estimatedCaloriesBurned) && (
+                        <span className="text-xs font-extrabold text-amber-400">
+                          🔥 ~{activities.reduce((sum, a) => sum + (Number(a.estimatedCaloriesBurned) || 0), 0)} kcal
+                        </span>
+                      )}
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                        {activities.length} {isEN ? "Activity" : "Aktivitas"}
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {activities.map((act) => (
-                      <div key={act.id} className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-white/[0.08]">
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl">{act.icon || "🏅"}</span>
-                          <div>
-                            <p className="font-extrabold text-xs sm:text-sm text-white">{act.activityName}</p>
-                            <p className="text-[11px] text-neutral-400 font-medium">
-                              {act.durationMinutes ? `${act.durationMinutes} menit` : ""}
-                              {act.distanceKm ? ` • ${act.distanceKm} km` : ""}
-                              {act.estimatedCaloriesBurned ? ` • ~${act.estimatedCaloriesBurned} kcal` : ""}
+                      <div key={act.id} className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-white/[0.08] hover:border-white/20 transition-all">
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <span className="text-xl flex-shrink-0">{act.icon || "🏅"}</span>
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-xs sm:text-sm text-white truncate">{act.activityName}</p>
+                            <p className="text-[11px] text-neutral-400 font-medium truncate">
+                              {act.details ? act.details : (
+                                <>
+                                  {act.durationMinutes ? `${act.durationMinutes} menit` : ""}
+                                  {act.intensity ? ` • ${act.intensity}` : ""}
+                                  {act.distanceKm ? ` • ${act.distanceKm} km` : ""}
+                                  {act.sets ? ` • ${act.sets} set` : ""}
+                                  {act.reps ? ` x ${act.reps} reps` : ""}
+                                  {act.weightKg ? ` (${act.weightKg} kg)` : ""}
+                                  {act.estimatedCaloriesBurned ? ` • ~${act.estimatedCaloriesBurned} kcal` : ""}
+                                </>
+                              )}
                             </p>
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black">
-                          ✅ {isEN ? "Done" : "Selesai"}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black">
+                            ✅ {isEN ? "Done" : "Selesai"}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteActivity(act.id)}
+                            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                            title={isEN ? "Delete activity" : "Hapus aktivitas"}
+                            aria-label={isEN ? "Delete activity" : "Hapus aktivitas"}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
