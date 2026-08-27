@@ -577,10 +577,30 @@ export async function insertFoodLog(doc: FoodLogDocument): Promise<void> {
   const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
   const cacheKey = `${clean}_${doc.date}`;
   const existing = memCache.foodLogs.get(cacheKey) || [];
-  const idx = existing.findIndex(m => m.id === doc.id);
-  if (idx >= 0) existing[idx] = doc;
-  else existing.push(doc);
-  memCache.foodLogs.set(cacheKey, existing);
+  const idx = existing.findIndex(m => String(m.id) === String(doc.id));
+  if (idx >= 0) {
+    existing[idx] = doc;
+    const cleaned = existing.filter((m, i) => i === idx || String(m.id) !== String(doc.id));
+    memCache.foodLogs.set(cacheKey, cleaned);
+  } else {
+    existing.push(doc);
+    memCache.foodLogs.set(cacheKey, existing);
+  }
+
+  const altClean = clean.startsWith("0") ? "62" + clean.substring(1) : (clean.startsWith("62") ? "0" + clean.substring(2) : clean);
+  if (altClean !== clean) {
+    const altCacheKey = `${altClean}_${doc.date}`;
+    const altExisting = memCache.foodLogs.get(altCacheKey) || [];
+    const altIdx = altExisting.findIndex(m => String(m.id) === String(doc.id));
+    if (altIdx >= 0) {
+      altExisting[altIdx] = doc;
+      const altCleaned = altExisting.filter((m, i) => i === altIdx || String(m.id) !== String(doc.id));
+      memCache.foodLogs.set(altCacheKey, altCleaned);
+    } else {
+      altExisting.push(doc);
+      memCache.foodLogs.set(altCacheKey, altExisting);
+    }
+  }
 
   // 1. Firestore Primary
   try {

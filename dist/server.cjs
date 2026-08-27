@@ -41,6 +41,7 @@ __export(server_exports, {
   formatDashboardMacro: () => formatDashboardMacro,
   formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
+  getDailyTotals: () => getDailyTotals,
   getLastFoodMeal: () => getLastFoodMeal,
   getMealTypeByHour: () => getMealTypeByHour,
   getUserPlanCapabilities: () => getUserPlanCapabilities,
@@ -46619,10 +46620,29 @@ async function insertFoodLog(doc) {
   const clean2 = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
   const cacheKey = `${clean2}_${doc.date}`;
   const existing = memCache.foodLogs.get(cacheKey) || [];
-  const idx = existing.findIndex((m) => m.id === doc.id);
-  if (idx >= 0) existing[idx] = doc;
-  else existing.push(doc);
-  memCache.foodLogs.set(cacheKey, existing);
+  const idx = existing.findIndex((m) => String(m.id) === String(doc.id));
+  if (idx >= 0) {
+    existing[idx] = doc;
+    const cleaned = existing.filter((m, i) => i === idx || String(m.id) !== String(doc.id));
+    memCache.foodLogs.set(cacheKey, cleaned);
+  } else {
+    existing.push(doc);
+    memCache.foodLogs.set(cacheKey, existing);
+  }
+  const altClean = clean2.startsWith("0") ? "62" + clean2.substring(1) : clean2.startsWith("62") ? "0" + clean2.substring(2) : clean2;
+  if (altClean !== clean2) {
+    const altCacheKey = `${altClean}_${doc.date}`;
+    const altExisting = memCache.foodLogs.get(altCacheKey) || [];
+    const altIdx = altExisting.findIndex((m) => String(m.id) === String(doc.id));
+    if (altIdx >= 0) {
+      altExisting[altIdx] = doc;
+      const altCleaned = altExisting.filter((m, i) => i === altIdx || String(m.id) !== String(doc.id));
+      memCache.foodLogs.set(altCacheKey, altCleaned);
+    } else {
+      altExisting.push(doc);
+      memCache.foodLogs.set(altCacheKey, altExisting);
+    }
+  }
   try {
     if (getFirestore()) {
       await insertFoodLogToFirestore(doc);
@@ -48594,7 +48614,11 @@ function getLastFoodMeal(rawPhone, targetDateStr) {
   const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
   const foodLogs = logs.filter((l) => l && !l.isHydration && !isPlainWaterName(l.foodName));
   if (foodLogs.length === 0) return null;
-  return foodLogs[foodLogs.length - 1];
+  const meal = foodLogs[foodLogs.length - 1];
+  if (!meal.id) {
+    meal.id = `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  }
+  return meal;
 }
 function updateExistingMealLog(rawPhone, updatedMeal, targetDateStr) {
   const phone = normalizePhone(rawPhone);
@@ -48602,11 +48626,31 @@ function updateExistingMealLog(rawPhone, updatedMeal, targetDateStr) {
   const key = `${phone}_${targetDate}`;
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const altKey = `${altPhone}_${targetDate}`;
-  if (dbData.dailyLogs[key]) {
-    dbData.dailyLogs[key] = dbData.dailyLogs[key].map((m) => m.id === updatedMeal.id ? updatedMeal : m);
+  const targetId = String(updatedMeal.id || "");
+  if (!targetId) {
+    console.error("[updateExistingMealLog] Verification Failed: Cannot update meal without valid log ID.");
+    return false;
   }
-  if (dbData.dailyLogs[altKey]) {
-    dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].map((m) => m.id === updatedMeal.id ? updatedMeal : m);
+  let updatedCount = 0;
+  if (dbData.dailyLogs[key] && Array.isArray(dbData.dailyLogs[key])) {
+    const idx = dbData.dailyLogs[key].findIndex((m) => String(m.id) === targetId);
+    if (idx >= 0) {
+      dbData.dailyLogs[key][idx] = { ...updatedMeal, id: targetId };
+      updatedCount++;
+    }
+    dbData.dailyLogs[key] = deduplicateMealLogs(dbData.dailyLogs[key]);
+  }
+  if (dbData.dailyLogs[altKey] && Array.isArray(dbData.dailyLogs[altKey])) {
+    const idx = dbData.dailyLogs[altKey].findIndex((m) => String(m.id) === targetId);
+    if (idx >= 0) {
+      dbData.dailyLogs[altKey][idx] = { ...updatedMeal, id: targetId };
+      updatedCount++;
+    }
+    dbData.dailyLogs[altKey] = deduplicateMealLogs(dbData.dailyLogs[altKey]);
+  }
+  if (updatedCount === 0) {
+    console.error(`[updateExistingMealLog] Verification Failed: Existing meal ${targetId} not found in logs for ${phone}. STOPPING to prevent duplicate entry.`);
+    return false;
   }
   insertFoodLog({
     id: String(updatedMeal.id),
@@ -48634,6 +48678,7 @@ function updateExistingMealLog(rawPhone, updatedMeal, targetDateStr) {
     createdAt: updatedMeal.createdAt ? new Date(updatedMeal.createdAt) : /* @__PURE__ */ new Date()
   }).catch((e) => console.warn("[Firestore] updateFoodLog note:", e?.message || e));
   saveDb();
+  return true;
 }
 function detectMealCorrectionIntent(userText, hasRecentMeal) {
   if (!userText || typeof userText !== "string") return false;
@@ -48679,8 +48724,15 @@ async function processMealCorrection(rawPhone, userText, userData, targetDateStr
   const updatedFiber = Math.max(0, Number((Number(parsedCorrection.fiber) || lastMeal.fiber || 0).toFixed(1)));
   const updatedSugar = Math.max(0, Number((Number(parsedCorrection.sugar) || lastMeal.sugar || 0).toFixed(1)));
   const updatedSodium = Math.max(0, Math.round(Number(parsedCorrection.sodium) || lastMeal.sodium || 0));
+  const originalLogId = String(lastMeal.id || "");
+  if (!originalLogId) {
+    console.error("[processMealCorrection] Verification Failed: No valid log ID found on meal being corrected.");
+    return null;
+  }
   const updatedMealRecord = {
     ...lastMeal,
+    id: originalLogId,
+    // CANONICAL GUARANTEE: Preserves exact original log ID
     foodName: lastMeal.foodName,
     calories: updatedCalories,
     protein: updatedProtein,
@@ -48701,9 +48753,13 @@ async function processMealCorrection(rawPhone, userText, userData, targetDateStr
       sugar: c.sugar,
       sodium: c.sodium
     })),
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    timestamp: lastMeal.timestamp || (/* @__PURE__ */ new Date()).toISOString()
   };
-  updateExistingMealLog(phone, updatedMealRecord, targetDate);
+  const updatedOk = updateExistingMealLog(phone, updatedMealRecord, targetDate);
+  if (!updatedOk) {
+    console.error(`[processMealCorrection] Failed to update existing meal ${originalLogId}. Aborting to prevent duplicate food log.`);
+    return null;
+  }
   const validatedParsed = {
     ...parsedCorrection,
     isFood: true,
@@ -52838,6 +52894,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   formatDashboardMacro,
   formatDashboardPercent,
   formatNutritionCard,
+  getDailyTotals,
   getLastFoodMeal,
   getMealTypeByHour,
   getUserPlanCapabilities,
