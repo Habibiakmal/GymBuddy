@@ -162,12 +162,14 @@ export function classifyUserInput(userText: string, hasImage: boolean): InputCat
     return "MIXED";
   }
 
-  // Check general out-of-context queries (e.g. questions about general knowledge, coding, travel, etc.)
+  // Check general out-of-context queries (e.g. general knowledge, electronics, coding, etc.)
   if (
-    /^(?:siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara)\s+(?:membuat\s+bom|presiden|ibukota|harga|cuaca)/i.test(lower) ||
-    lower.includes("coding") || lower.includes("cuaca") || lower.includes("rekomendasi film")
+    /^(?:apa\s+itu|apaan\s+itu|apa\s+artinya|siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara|jelaskan\s+tentang)\b/i.test(lower) ||
+    /\b(?:laptop|komputer|gadget|handphone|hp|smartphone|mobil|motor|pesawat|coding|koding|javascript|typescript|python|html|css|bug|syntax|crypto|bitcoin|saham|politik|pemilu|presiden|menteri|sinopsis|lirik|chord)\b/i.test(lower)
   ) {
-    return "OUT_OF_CONTEXT";
+    if (!hasNutrition && !hasWorkout) {
+      return "OUT_OF_CONTEXT";
+    }
   }
 
   return "GREETING_OR_CASUAL";
@@ -267,19 +269,19 @@ export function validatePlanContext(
       redirectMsg = isMax
         ? (isLansia
             ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. 🌿`
-            : `Waduh, kalau soal itu di luar radar kebugaran gue nih, ${validatedAddr}! Sebagai coach kamu, fokus kita di sini adalah nutrisi disiplin dan progres latihan lo. Mau lapor makanan atau catat latihan hari ini? 💪`)
+            : `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan, nutrisi, atau workout, gue siap bantu! 💪`)
         : (isLansia
             ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} ✨ Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. 🌿`
-            : `Wah, kalau soal itu di luar topik kesehatan dan kebugaran nih, ${validatedAddr} 😄 Sebagai health coach kamu, aku siap bantu untuk pencatatan makanan, hitung kalori & makro, atau program latihan kamu ya! ✨`);
+            : `Maaf ya 😊 Aku fokus membantu kamu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan, nutrisi, atau workout, aku siap bantu.`);
     } else if (capabilities.canNutrition) {
       redirectMsg = isMax
-        ? `Waduh, kalau soal itu di luar bidang nutrisi gue nih, ${validatedAddr}. Sebagai Nutrition Coach, gue fokus jaga disiplin makan, kalori, dan makro lo. Mau catat makanan atau cek nutrisi hari ini? Kirim aja! 💪`
-        : `Wah, kalau topik itu di luar keahlianku sebagai Nutrition Coach nih, ${validatedAddr} 😄 Tapi kalau kamu mau catat makanan, cek kalori, lapor air minum, atau bahas target nutrisi, aku siap bantu sepenuh hati! ✨`;
+        ? `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan atau nutrisi, gue siap bantu! 💪`
+        : `Maaf ya 😊 Aku fokus membantu kamu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan atau nutrisi, aku siap bantu ✨`;
     } else {
       // Workout only
       redirectMsg = isMax
-        ? `Kalau soal itu bukan bidang latihan fisik gue nih, ${validatedAddr}! Sebagai Workout Coach, gue fokus dampingi program latihan, repetisi, dan form alat gym lo. Mau cek jadwal latihan hari ini? 💪`
-        : `Wah, kalau topik itu di luar keahlianku sebagai Workout Coach ya, ${validatedAddr} 😄 Tapi kalau soal gerakan olahraga, jadwal latihan, atau cek teknik alat gym, aku siap pandu kamu! 🏋️‍♀️✨`;
+        ? `Sorry ya, ${validatedAddr}! Gue fokus mendampingi kamu seputar latihan dan workout di GymBuddy. Kalau ada yang mau kamu tanyakan soal latihan atau alat gym, gue siap bantu! 💪`
+        : `Maaf ya 😊 Aku fokus mendampingi kamu seputar latihan dan workout di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang olahraga atau jadwal workout, aku siap bantu 🏋️‍♀️✨`;
     }
 
     return {

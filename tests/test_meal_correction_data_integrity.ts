@@ -3,7 +3,9 @@ import {
   extractMealComponents,
   formatNutritionCard,
   sanitizeWhatsAppResponse,
-  detectMealCorrectionIntent
+  detectMealCorrectionIntent,
+  classifyUserInput,
+  validatePlanContext
 } from "../server";
 
 console.log("================================================================================");
@@ -198,6 +200,111 @@ const brokenSample = "Header\n\n━\n\n━\n\n━\n\nSection 1\n\n━━━━�
 const sanitized = sanitizeWhatsAppResponse(brokenSample);
 assert(sanitized.includes("━━━━━━━━━━━━━━"), "Sanitizer collapses broken ━ lines into continuous ━━━━━━━━━━━━━━");
 assert(!/(?:^|\n)━(?:\n|$)/.test(sanitized), "Sanitizer eliminates isolated single ━ lines");
+
+// ── GROUP 7: ITEM-LEVEL DECOMPOSITION (Prompt Example 1) ──
+console.log("\n▶ GROUP 7: Compound Meal Decomposition into Individual Items");
+
+const mockCompoundMeal = {
+  id: "meal-compound-001",
+  foodName: "Nasi Putih, Ayam Goreng, Tahu Goreng & Es Teh Manis",
+  calories: 690,
+  protein: 37.1,
+  carbs: 80.3,
+  fat: 20.2,
+  fiber: 2.1,
+  sugar: 18.2,
+  sodium: 492
+};
+
+const extractedFromCompound = extractMealComponents(mockCompoundMeal);
+assert(extractedFromCompound.length === 4, `Decomposes compound meal into 4 distinct items (got ${extractedFromCompound.length})`);
+assert(extractedFromCompound.some(c => c.name.toLowerCase().includes("nasi")), "Contains independent Item 1: Nasi Putih");
+assert(extractedFromCompound.some(c => c.name.toLowerCase().includes("ayam")), "Contains independent Item 2: Ayam Goreng");
+assert(extractedFromCompound.some(c => c.name.toLowerCase().includes("tahu")), "Contains independent Item 3: Tahu Goreng");
+assert(extractedFromCompound.some(c => c.name.toLowerCase().includes("teh")), "Contains independent Item 4: Es Teh Manis");
+
+// Correction targeting single item in compound meal
+const resTargetCompound = applyTargetedMealCorrection(mockCompoundMeal, "koreksi, nasi putihnya cuma setengah", mockUserDataMia);
+const portionLines = resTargetCompound.portionEstimates;
+
+assert(portionLines.length === 4, `Displays exactly 4 individual item lines in Estimasi Porsi (got ${portionLines.length})`);
+assert(portionLines.some(l => l.includes("Nasi Putih: 1/2 porsi") && l.includes("← diperbarui")), "Nasi Putih updated to 1/2 porsi and marked ← diperbarui");
+assert(portionLines.some(l => l.includes("Ayam Goreng") && !l.includes("← diperbarui")), "Ayam Goreng preserved without badge");
+assert(portionLines.some(l => l.includes("Tahu Goreng") && !l.includes("← diperbarui")), "Tahu Goreng preserved without badge");
+assert(portionLines.some(l => l.includes("Es Teh Manis") && !l.includes("← diperbarui")), "Es Teh Manis preserved without badge");
+
+// NEVER output combined title with 1/2 porsi
+const hasInvalidCombinedLine = portionLines.some(l => l.includes("Nasi Putih, Ayam Goreng, Tahu Goreng & Es Teh Manis: 1/2 porsi"));
+assert(!hasInvalidCombinedLine, "NEVER outputs combined meal title as portion (e.g. 'Nasi Putih, Ayam Goreng...: 1/2 porsi')");
+
+// ── GROUP 8: SEQUENTIAL CUMULATIVE CORRECTIONS (Prompt Example 2) ──
+console.log("\n▶ GROUP 8: Sequential Corrections & Cumulative State Preservation");
+
+// State after Correction 1 (from resTargetCompound)
+const intermediateMealState = {
+  ...mockCompoundMeal,
+  calories: resTargetCompound.calories,
+  protein: resTargetCompound.protein,
+  carbs: resTargetCompound.carbs,
+  fat: resTargetCompound.fat,
+  fiber: resTargetCompound.fiber,
+  sugar: resTargetCompound.sugar,
+  sodium: resTargetCompound.sodium,
+  portionEstimates: resTargetCompound.portionEstimates,
+  items: resTargetCompound.components.map(c => ({
+    food_name: c.name,
+    portion: c.portion,
+    calories: c.calories,
+    protein: c.protein,
+    carbs: c.carbs,
+    fat: c.fat,
+    fiber: c.fiber,
+    sugar: c.sugar,
+    sodium: c.sodium
+  }))
+};
+
+// Apply Correction 2: "koreksi, ayamnya juga cuma setengah potong"
+const resCorrection2 = applyTargetedMealCorrection(intermediateMealState, "koreksi, ayamnya juga cuma setengah potong", mockUserDataMia);
+const portionLines2 = resCorrection2.portionEstimates;
+
+const riceLineAfter2 = portionLines2.find(l => l.includes("Nasi Putih"));
+const chickenLineAfter2 = portionLines2.find(l => l.includes("Ayam Goreng"));
+const tofuLineAfter2 = portionLines2.find(l => l.includes("Tahu Goreng"));
+const teaLineAfter2 = portionLines2.find(l => l.includes("Es Teh Manis"));
+
+assert(riceLineAfter2?.includes("1/2 porsi") && !riceLineAfter2?.includes("← diperbarui"), "Correction 2: Nasi Putih retains 1/2 porsi from Correction 1 and has NO badge");
+assert(chickenLineAfter2?.includes("1/2 potong") && chickenLineAfter2?.includes("← diperbarui"), "Correction 2: Ayam Goreng updated to 1/2 potong and IS marked ← diperbarui");
+assert(!tofuLineAfter2?.includes("← diperbarui"), "Correction 2: Tahu Goreng untouched and has NO badge");
+assert(!teaLineAfter2?.includes("← diperbarui"), "Correction 2: Es Teh Manis untouched and has NO badge");
+
+// ── GROUP 9: AMBIGUOUS CORRECTION HANDLING (Prompt: 'koreksi ayamnya') ──
+console.log("\n▶ GROUP 9: Ambiguous Correction (Asking Clarification, No Guessing, No Database Update)");
+
+const resAmbiguous = applyTargetedMealCorrection(mockCompoundMeal, "koreksi ayamnya", mockUserDataMia);
+assert(resAmbiguous.isAmbiguous === true, "Query 'koreksi ayamnya' detected as ambiguous");
+assert(resAmbiguous.isCorrection === false, "isCorrection is false when query is ambiguous");
+assert(resAmbiguous.clarificationMessage?.includes("Mau dikoreksi bagian apa dari ayamnya?"), "Clarification message asks: 'Mau dikoreksi bagian apa dari ayamnya?'");
+assert(resAmbiguous.clarificationMessage?.includes("porsinya") && resAmbiguous.clarificationMessage?.includes("jumlah potongnya"), "Clarification options mention portion, quantity, or type");
+assert(resAmbiguous.calories === mockCompoundMeal.calories, "Calories NOT changed when query is ambiguous (Source of truth preserved)");
+
+// Bare query "koreksi"
+const resBareCorrection = applyTargetedMealCorrection(mockCompoundMeal, "koreksi", mockUserDataMia);
+assert(resBareCorrection.isAmbiguous === true, "Bare query 'koreksi' detected as ambiguous");
+assert(resBareCorrection.clarificationMessage?.includes("Mau koreksi makanan yang mana"), "Bare query asks which food to correct");
+
+// ── GROUP 10: STRICT OUT-OF-SCOPE GATE (Prompt: 'apa itu laptop?') ──
+console.log("\n▶ GROUP 10: Strict Out-of-Scope Gate");
+
+const categoryLaptop = classifyUserInput("apa itu laptop?", false);
+assert(categoryLaptop === "OUT_OF_CONTEXT", "Query 'apa itu laptop?' classified as OUT_OF_CONTEXT");
+
+const validationLaptop = validatePlanContext("apa itu laptop?", false, mockUserDataMia);
+assert(validationLaptop.canProceed === false, "canProceed is false for out-of-scope question");
+assert(validationLaptop.decision === "REDIRECT_OUT_OF_CONTEXT", "Decision is REDIRECT_OUT_OF_CONTEXT");
+assert(validationLaptop.redirectMessage.includes("Maaf ya"), "Politely apologizes in redirect");
+assert(validationLaptop.redirectMessage.includes("nutrisi, makanan, dan latihan di GymBuddy"), "Mentions GymBuddy scope (nutrition, food, workout)");
+assert(!validationLaptop.redirectMessage.toLowerCase().includes("laptop"), "Never defines or explains what a laptop is");
 
 // ── SUMMARY ──
 console.log("\n================================================================================");

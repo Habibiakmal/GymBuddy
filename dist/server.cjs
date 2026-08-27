@@ -50,6 +50,7 @@ __export(server_exports, {
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
   saveDb: () => saveDb,
   saveUserProfile: () => saveUserProfile,
+  splitCompoundFoodItems: () => splitCompoundFoodItems,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
   updateExistingMealLog: () => updateExistingMealLog,
   validatePlanContext: () => validatePlanContext
@@ -44744,6 +44745,12 @@ function validateAndFormatCoachNote(rawNote, userData) {
   }
   return cleaned.trim();
 }
+function splitCompoundFoodItems(text) {
+  if (!text) return [];
+  const protectedText = text.replace(/sambal\s*&\s*lalapan/gi, "Sambal Lalapan").replace(/sayuran?\s*&\s*acar/gi, "Sayuran Acar");
+  const rawParts = protectedText.split(/,\s*|\s*&\s*|\s*\+\s*|\s+dan\s+|\s+dengan\s+|\s+serta\s+/i);
+  return rawParts.map((p) => p.trim().replace(/^[\s•\-\*]+/, "")).filter((p) => p.length >= 2 && !/^(?:dan|dengan|serta|dan\s+juga)$/i.test(p));
+}
 function extractMealComponents(meal) {
   if (!meal) return [];
   if (Array.isArray(meal.items) && meal.items.length > 0 && typeof meal.items[0] === "object") {
@@ -44779,59 +44786,107 @@ function extractMealComponents(meal) {
   for (const rawLine of rawEstimates) {
     const cleanLine = String(rawLine).replace(/^[•\-\*]\s*/, "").replace(/\s*←\s*diperbarui/gi, "").replace(/\s*\(diperbarui\)/gi, "").trim();
     if (!cleanLine) continue;
-    let itemName = "";
-    let portion = "1 porsi";
-    let cal = 0;
+    let rawItemName = "";
+    let rawPortion = "1 porsi";
+    let lineCal = 0;
     const calMatch = cleanLine.match(/~(\d+)\s*kcal/i) || cleanLine.match(/(\d+)\s*kcal/i);
     if (calMatch) {
-      cal = parseInt(calMatch[1], 10);
+      lineCal = parseInt(calMatch[1], 10);
     }
     if (cleanLine.includes(":")) {
       const parts = cleanLine.split(":");
-      itemName = parts[0].trim();
-      portion = parts.slice(1).join(":").replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim() || "1 porsi";
+      rawItemName = parts[0].trim();
+      rawPortion = parts.slice(1).join(":").replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim() || "1 porsi";
     } else {
-      itemName = cleanLine.replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim();
-      portion = "1 porsi";
+      rawItemName = cleanLine.replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim();
+      rawPortion = "1 porsi";
     }
-    const gramMatch = portion.match(/(\d+(?:[.,]\d+)?)\s*g/i) || cleanLine.match(/(\d+(?:[.,]\d+)?)\s*g/i);
-    const weightGrams = gramMatch ? parseFloat(gramMatch[1].replace(",", ".")) : void 0;
-    const itemEst = estimateMealNutritionDeterministic(itemName);
-    let itemProt = 0;
-    let itemCarb = 0;
-    let itemFat = 0;
-    let itemFib = 0;
-    let itemSug = 0;
-    let itemSod = 0;
-    if (itemEst && itemEst.calories > 0 && cal > 0) {
-      const ratio = cal / itemEst.calories;
-      itemProt = Number((itemEst.protein * ratio).toFixed(1));
-      itemCarb = Number((itemEst.carbs * ratio).toFixed(1));
-      itemFat = Number((itemEst.fat * ratio).toFixed(1));
-      itemFib = Number(((itemEst.fiber || 0) * ratio).toFixed(1));
-      itemSug = Number(((itemEst.sugar || 0) * ratio).toFixed(1));
-      itemSod = Math.round((itemEst.sodium || 0) * ratio);
-    } else if (meal.calories > 0 && cal > 0) {
-      const ratio = cal / meal.calories;
-      itemProt = Number((meal.protein * ratio).toFixed(1));
-      itemCarb = Number((meal.carbs * ratio).toFixed(1));
-      itemFat = Number((meal.fat * ratio).toFixed(1));
-      itemFib = Number(((meal.fiber || 0) * ratio).toFixed(1));
-      itemSug = Number(((meal.sugar || 0) * ratio).toFixed(1));
-      itemSod = Math.round((meal.sodium || 0) * ratio);
+    const subItems = splitCompoundFoodItems(rawItemName);
+    if (subItems.length > 1) {
+      let totalEstimatedCal = 0;
+      const subNutrList = subItems.map((subName) => {
+        const est = estimateMealNutritionDeterministic(subName) || {
+          calories: 150,
+          protein: 5,
+          carbs: 20,
+          fat: 5,
+          fiber: 1,
+          sugar: 0,
+          sodium: 100
+        };
+        totalEstimatedCal += est.calories;
+        return { name: subName, est };
+      });
+      const effectiveTotalCal = lineCal || meal.calories || totalEstimatedCal;
+      const scaleRatio = totalEstimatedCal > 0 ? effectiveTotalCal / totalEstimatedCal : 1;
+      for (const { name: subName, est } of subNutrList) {
+        const subLower = subName.toLowerCase();
+        let subPortion = "1 porsi";
+        let subGrams;
+        if (subLower.includes("nasi") || subLower.includes("rice")) {
+          subPortion = "1 porsi (200g)";
+          subGrams = 200;
+        } else if (subLower.includes("ayam") || subLower.includes("daging") || subLower.includes("sapi") || subLower.includes("ikan") || subLower.includes("tahu") || subLower.includes("tempe") || subLower.includes("telur")) {
+          subPortion = "1 potong";
+        } else if (subLower.includes("teh") || subLower.includes("kopi") || subLower.includes("jus") || subLower.includes("susu") || subLower.includes("air")) {
+          subPortion = "1 gelas (250ml)";
+          subGrams = 250;
+        } else if (subLower.includes("sayur") || subLower.includes("sop") || subLower.includes("soto")) {
+          subPortion = "1 mangkok";
+        }
+        components.push({
+          name: subName,
+          portion: subPortion,
+          weightGrams: subGrams,
+          calories: Math.max(5, Math.round(est.calories * scaleRatio)),
+          protein: Math.max(0, Number((est.protein * scaleRatio).toFixed(1))),
+          carbs: Math.max(0, Number((est.carbs * scaleRatio).toFixed(1))),
+          fat: Math.max(0, Number((est.fat * scaleRatio).toFixed(1))),
+          fiber: Math.max(0, Number(((est.fiber || 0) * scaleRatio).toFixed(1))),
+          sugar: Math.max(0, Number(((est.sugar || 0) * scaleRatio).toFixed(1))),
+          sodium: Math.max(0, Math.round((est.sodium || 0) * scaleRatio))
+        });
+      }
+    } else {
+      const gramMatch = rawPortion.match(/(\d+(?:[.,]\d+)?)\s*g/i) || cleanLine.match(/(\d+(?:[.,]\d+)?)\s*g/i);
+      const weightGrams = gramMatch ? parseFloat(gramMatch[1].replace(",", ".")) : void 0;
+      const itemEst = estimateMealNutritionDeterministic(rawItemName);
+      let itemProt = 0;
+      let itemCarb = 0;
+      let itemFat = 0;
+      let itemFib = 0;
+      let itemSug = 0;
+      let itemSod = 0;
+      if (itemEst && itemEst.calories > 0 && lineCal > 0) {
+        const ratio = lineCal / itemEst.calories;
+        itemProt = Number((itemEst.protein * ratio).toFixed(1));
+        itemCarb = Number((itemEst.carbs * ratio).toFixed(1));
+        itemFat = Number((itemEst.fat * ratio).toFixed(1));
+        itemFib = Number(((itemEst.fiber || 0) * ratio).toFixed(1));
+        itemSug = Number(((itemEst.sugar || 0) * ratio).toFixed(1));
+        itemSod = Math.round((itemEst.sodium || 0) * ratio);
+      } else if (meal.calories > 0 && lineCal > 0) {
+        const ratio = lineCal / meal.calories;
+        itemProt = Number((meal.protein * ratio).toFixed(1));
+        itemCarb = Number((meal.carbs * ratio).toFixed(1));
+        itemFat = Number((meal.fat * ratio).toFixed(1));
+        itemFib = Number(((meal.fiber || 0) * ratio).toFixed(1));
+        itemSug = Number(((meal.sugar || 0) * ratio).toFixed(1));
+        itemSod = Math.round((meal.sodium || 0) * ratio);
+      }
+      components.push({
+        name: rawItemName,
+        portion: rawPortion,
+        weightGrams,
+        calories: lineCal || Math.round(meal.calories / Math.max(1, rawEstimates.length)),
+        protein: itemProt,
+        carbs: itemCarb,
+        fat: itemFat,
+        fiber: itemFib,
+        sugar: itemSug,
+        sodium: itemSod
+      });
     }
-    components.push({
-      name: itemName,
-      portion,
-      weightGrams,
-      calories: cal || Math.round(meal.calories / Math.max(1, rawEstimates.length)),
-      protein: itemProt,
-      carbs: itemCarb,
-      fat: itemFat,
-      fiber: itemFib,
-      sugar: itemSug,
-      sodium: itemSod
-    });
   }
   return components;
 }
@@ -44857,6 +44912,30 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
     });
   }
   const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
+  if (!cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan") {
+    const generalClarify = isMia ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya \u2728" : isLansia ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! \u{1F4AA}";
+    return {
+      isFood: true,
+      isCorrection: false,
+      isAmbiguous: true,
+      clarificationMessage: validateAndFormatCoachNote(generalClarify, userDataObj),
+      foodName: lastMeal.foodName,
+      correctedComponent: "",
+      oldPortion: "",
+      newPortion: "",
+      calories: lastMeal.calories,
+      protein: lastMeal.protein,
+      carbs: lastMeal.carbs,
+      fat: lastMeal.fat,
+      fiber: lastMeal.fiber || 0,
+      sugar: lastMeal.sugar || 0,
+      sodium: lastMeal.sodium || 0,
+      portionEstimates: components.map((c) => `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+      components,
+      coachComment: validateAndFormatCoachNote(generalClarify, userDataObj),
+      confidenceLevel: 95
+    };
+  }
   const rawClauses = cleanQuery.split(/\b(?:dan|serta|terus|lalu)\b|,/).map((s) => s.trim()).filter(Boolean);
   const clauses = rawClauses.length > 0 ? rawClauses : [cleanQuery];
   let totalDeltaCal = 0;
@@ -44968,6 +45047,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
     const explicitKcalMatch = clause.match(/(\d+)\s*(?:kcal|kalori)/i);
     const gramMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i);
     const fracMatch = clause.match(/\b(setengah|separuh|setengahnya|seperempat|tiga perempat|dua kali|dobel|double|satu setengah|1\/2|1\/4|3\/4|1\.5|2)\b/i);
+    const isPieceFraction = /\b(?:setengah|separuh|1\/2)\s*potong\b/i.test(clause);
     const pieceMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:potong|buah|butir|gelas|slice|sdm|sendok|porsi)/i);
     if (explicitKcalMatch) {
       const explicitCal = parseInt(explicitKcalMatch[1], 10);
@@ -44979,6 +45059,12 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       ratio = oldG > 0 ? newG / oldG : newG / 100;
       targetNewPortion = `${newG}g`;
       targetComp.weightGrams = newG;
+    } else if (isPieceFraction) {
+      ratio = 0.5;
+      targetNewPortion = "1/2 potong";
+      if (targetComp.weightGrams) {
+        targetComp.weightGrams = Math.round(targetComp.weightGrams * 0.5);
+      }
     } else if (fracMatch) {
       const fracStr = fracMatch[1].toLowerCase();
       if (fracStr === "setengah" || fracStr === "separuh" || fracStr === "setengahnya" || fracStr === "1/2") {
@@ -45006,8 +45092,38 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       ratio = count;
       targetNewPortion = `${count} potong`;
     } else {
-      ratio = 0.5;
-      targetNewPortion = "1/2 porsi";
+      let clarifyMsg = "";
+      const compLower = targetComp.name.toLowerCase();
+      if (compLower.includes("ayam")) {
+        clarifyMsg = isMia ? "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau jenis ayamnya?" : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ayamnya, ${validatedAddr}? Misalnya porsi atau jumlah potongnya ya. \u{1F33F}` : "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau cara masaknya? Kasih tahu gue ya! \u{1F4AA}";
+      } else if (compLower.includes("daging") || compLower.includes("sapi") || compLower.includes("ikan") || compLower.includes("tahu") || compLower.includes("tempe") || compLower.includes("telur")) {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, jumlah potongnya, atau jenisnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsi gramnya atau jumlah potongnya? Kasih tahu gue ya! \u{1F4AA}`;
+      } else if (compLower.includes("teh") || compLower.includes("kopi") || compLower.includes("minum") || compLower.includes("jus")) {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya manisnya/tanpa gula, porsi gelasnya, atau jenisnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya tanpa gula atau ukuran porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya tanpa gula atau ukuran gelasnya? Kasih tahu gue ya! \u{1F4AA}`;
+      } else {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, takaran gramnya, atau jumlahnya?` : isLansia ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsi makanannya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya atau gramnya? Kasih tahu gue ya! \u{1F4AA}`;
+      }
+      return {
+        isFood: true,
+        isCorrection: false,
+        isAmbiguous: true,
+        clarificationMessage: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+        foodName: lastMeal.foodName,
+        correctedComponent: targetComp.name,
+        oldPortion: targetComp.portion,
+        newPortion: targetComp.portion,
+        calories: lastMeal.calories,
+        protein: lastMeal.protein,
+        carbs: lastMeal.carbs,
+        fat: lastMeal.fat,
+        fiber: lastMeal.fiber || 0,
+        sugar: lastMeal.sugar || 0,
+        sodium: lastMeal.sodium || 0,
+        portionEstimates: components.map((c) => `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+        components,
+        coachComment: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+        confidenceLevel: 95
+      };
     }
     let newCompCal = Math.max(0, Math.round(origCompCal * ratio));
     if (explicitKcalMatch) {
@@ -45256,8 +45372,10 @@ function classifyUserInput(userText, hasImage) {
   if (hasNutrition && hasWorkout) {
     return "MIXED";
   }
-  if (/^(?:siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara)\s+(?:membuat\s+bom|presiden|ibukota|harga|cuaca)/i.test(lower) || lower.includes("coding") || lower.includes("cuaca") || lower.includes("rekomendasi film")) {
-    return "OUT_OF_CONTEXT";
+  if (/^(?:apa\s+itu|apaan\s+itu|apa\s+artinya|siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara|jelaskan\s+tentang)\b/i.test(lower) || /\b(?:laptop|komputer|gadget|handphone|hp|smartphone|mobil|motor|pesawat|coding|koding|javascript|typescript|python|html|css|bug|syntax|crypto|bitcoin|saham|politik|pemilu|presiden|menteri|sinopsis|lirik|chord)\b/i.test(lower)) {
+    if (!hasNutrition && !hasWorkout) {
+      return "OUT_OF_CONTEXT";
+    }
   }
   return "GREETING_OR_CASUAL";
 }
@@ -45319,11 +45437,11 @@ function validatePlanContext(userText, hasImage, userData) {
   if (category === "OUT_OF_CONTEXT") {
     let redirectMsg = "";
     if (capabilities.canNutrition && capabilities.canWorkout) {
-      redirectMsg = isMax ? isLansia ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. \u{1F33F}` : `Waduh, kalau soal itu di luar radar kebugaran gue nih, ${validatedAddr}! Sebagai coach kamu, fokus kita di sini adalah nutrisi disiplin dan progres latihan lo. Mau lapor makanan atau catat latihan hari ini? \u{1F4AA}` : isLansia ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} \u2728 Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. \u{1F33F}` : `Wah, kalau soal itu di luar topik kesehatan dan kebugaran nih, ${validatedAddr} \u{1F604} Sebagai health coach kamu, aku siap bantu untuk pencatatan makanan, hitung kalori & makro, atau program latihan kamu ya! \u2728`;
+      redirectMsg = isMax ? isLansia ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. \u{1F33F}` : `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan, nutrisi, atau workout, gue siap bantu! \u{1F4AA}` : isLansia ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} \u2728 Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. \u{1F33F}` : `Maaf ya \u{1F60A} Aku fokus membantu kamu seputar nutrisi, makanan, dan latihan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan, nutrisi, atau workout, aku siap bantu.`;
     } else if (capabilities.canNutrition) {
-      redirectMsg = isMax ? `Waduh, kalau soal itu di luar bidang nutrisi gue nih, ${validatedAddr}. Sebagai Nutrition Coach, gue fokus jaga disiplin makan, kalori, dan makro lo. Mau catat makanan atau cek nutrisi hari ini? Kirim aja! \u{1F4AA}` : `Wah, kalau topik itu di luar keahlianku sebagai Nutrition Coach nih, ${validatedAddr} \u{1F604} Tapi kalau kamu mau catat makanan, cek kalori, lapor air minum, atau bahas target nutrisi, aku siap bantu sepenuh hati! \u2728`;
+      redirectMsg = isMax ? `Sorry ya, ${validatedAddr}! Gue fokus bantu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang mau kamu tanyakan soal makanan atau nutrisi, gue siap bantu! \u{1F4AA}` : `Maaf ya \u{1F60A} Aku fokus membantu kamu seputar nutrisi dan makanan di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang makanan atau nutrisi, aku siap bantu \u2728`;
     } else {
-      redirectMsg = isMax ? `Kalau soal itu bukan bidang latihan fisik gue nih, ${validatedAddr}! Sebagai Workout Coach, gue fokus dampingi program latihan, repetisi, dan form alat gym lo. Mau cek jadwal latihan hari ini? \u{1F4AA}` : `Wah, kalau topik itu di luar keahlianku sebagai Workout Coach ya, ${validatedAddr} \u{1F604} Tapi kalau soal gerakan olahraga, jadwal latihan, atau cek teknik alat gym, aku siap pandu kamu! \u{1F3CB}\uFE0F\u200D\u2640\uFE0F\u2728`;
+      redirectMsg = isMax ? `Sorry ya, ${validatedAddr}! Gue fokus mendampingi kamu seputar latihan dan workout di GymBuddy. Kalau ada yang mau kamu tanyakan soal latihan atau alat gym, gue siap bantu! \u{1F4AA}` : `Maaf ya \u{1F60A} Aku fokus mendampingi kamu seputar latihan dan workout di GymBuddy. Kalau ada yang ingin kamu tanyakan tentang olahraga atau jadwal workout, aku siap bantu \u{1F3CB}\uFE0F\u200D\u2640\uFE0F\u2728`;
     }
     return {
       decision: "REDIRECT_OUT_OF_CONTEXT",
@@ -48541,6 +48659,14 @@ async function processMealCorrection(rawPhone, userText, userData, targetDateStr
   const lastMeal = getLastFoodMeal(phone, targetDate);
   if (!lastMeal) return null;
   const parsedCorrection = applyTargetedMealCorrection(lastMeal, userText, userData);
+  if (parsedCorrection.isAmbiguous) {
+    return {
+      mealRecord: lastMeal,
+      validatedParsed: parsedCorrection,
+      oldMeal: lastMeal,
+      card: parsedCorrection.clarificationMessage || parsedCorrection.coachComment
+    };
+  }
   const updatedCalories = Math.max(0, Math.round(Number(parsedCorrection.calories) || lastMeal.calories));
   const updatedProtein = Math.max(0, Number((Number(parsedCorrection.protein) || lastMeal.protein).toFixed(1)));
   const updatedCarbs = Math.max(0, Number((Number(parsedCorrection.carbs) || lastMeal.carbs).toFixed(1)));
@@ -51370,8 +51496,11 @@ https://gymbuddygroup.com`
                 const recentMeal = getLastFoodMeal(from);
                 const isMia = userData.persona === "mia" || userData.persona === "nikita";
                 if (recentMeal) {
-                  const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
-                  await sendMetaWhatsappMessage(from, processingMsg);
+                  const isAmbiguousQuery = !/\b(?:setengah|separuh|seperempat|tiga perempat|dobel|double|1\/2|1\/4|3\/4|g|gr|gram|kcal|kalori|potong|buah|butir|gelas|slice|sdm|sendok|tidak|nggak|gak|tanpa|tawar|batal|hapus)\b/i.test(userText);
+                  if (!isAmbiguousQuery) {
+                    const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
+                    await sendMetaWhatsappMessage(from, processingMsg);
+                  }
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
                     responseMessages = [correctionResult.card];
@@ -52671,6 +52800,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   sanitizeWhatsAppResponse,
   saveDb,
   saveUserProfile,
+  splitCompoundFoodItems,
   splitWhatsAppMessage,
   updateExistingMealLog,
   validatePlanContext

@@ -55,6 +55,7 @@ import {
   formatDashboardPercent,
   applyTargetedMealCorrection,
   extractMealComponents,
+  splitCompoundFoodItems,
   type MealComponentItem,
   type MealCorrectionResult
 } from "./services/nutritionEngine";
@@ -74,7 +75,8 @@ export {
   formatDashboardInteger,
   formatDashboardPercent,
   applyTargetedMealCorrection,
-  extractMealComponents
+  extractMealComponents,
+  splitCompoundFoodItems
 };
 export type {
   UserPlanCapabilities,
@@ -2405,6 +2407,17 @@ export async function processMealCorrection(
   // - Preserves 100% of unchanged items' portions, calories, and macros
   // - Delta-based calculation: Corrected Meal = Original Meal − Old Item + New Item
   const parsedCorrection = applyTargetedMealCorrection(lastMeal, userText, userData);
+
+  // If the correction request is ambiguous (e.g. "koreksi ayamnya" without portion/value),
+  // return clarification question directly without modifying meal or database.
+  if (parsedCorrection.isAmbiguous) {
+    return {
+      mealRecord: lastMeal,
+      validatedParsed: parsedCorrection,
+      oldMeal: lastMeal,
+      card: parsedCorrection.clarificationMessage || parsedCorrection.coachComment
+    };
+  }
 
   const updatedCalories = Math.max(0, Math.round(Number(parsedCorrection.calories) || lastMeal.calories));
   const updatedProtein = Math.max(0, Number((Number(parsedCorrection.protein) || lastMeal.protein).toFixed(1)));
@@ -5874,8 +5887,11 @@ const mediaUrl = mediaRes.data.url;
                 const recentMeal = getLastFoodMeal(from);
                 const isMia = userData.persona === "mia" || userData.persona === "nikita";
                 if (recentMeal) {
-                  const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... ✨" : "Sebentar, gue update dulu hitungannya.";
-                  await sendMetaWhatsappMessage(from, processingMsg);
+                  const isAmbiguousQuery = !/\b(?:setengah|separuh|seperempat|tiga perempat|dobel|double|1\/2|1\/4|3\/4|g|gr|gram|kcal|kalori|potong|buah|butir|gelas|slice|sdm|sendok|tidak|nggak|gak|tanpa|tawar|batal|hapus)\b/i.test(userText);
+                  if (!isAmbiguousQuery) {
+                    const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... ✨" : "Sebentar, gue update dulu hitungannya.";
+                    await sendMetaWhatsappMessage(from, processingMsg);
+                  }
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
                     responseMessages = [correctionResult.card];
