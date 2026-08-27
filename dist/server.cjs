@@ -32,11 +32,13 @@ __export(server_exports, {
   applyDeterministicCorrection: () => applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
   calculateUserData: () => calculateUserData,
+  classifyUserInput: () => classifyUserInput,
   dbData: () => dbData,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
   formatNutritionCard: () => formatNutritionCard,
   getLastFoodMeal: () => getLastFoodMeal,
   getMealTypeByHour: () => getMealTypeByHour,
+  getUserPlanCapabilities: () => getUserPlanCapabilities,
   getUserProfile: () => getUserProfile,
   processMealCorrection: () => processMealCorrection,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
@@ -44,7 +46,8 @@ __export(server_exports, {
   saveDb: () => saveDb,
   saveUserProfile: () => saveUserProfile,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
-  updateExistingMealLog: () => updateExistingMealLog
+  updateExistingMealLog: () => updateExistingMealLog,
+  validatePlanContext: () => validatePlanContext
 });
 module.exports = __toCommonJS(server_exports);
 var import_express = __toESM(require("express"), 1);
@@ -44717,6 +44720,296 @@ function validateAndFormatCoachNote(rawNote, userData) {
   return cleaned.trim();
 }
 
+// services/planContextEngine.ts
+function getUserPlanCapabilities(userData) {
+  const rawService = String(
+    userData?.activeService || userData?.subscription?.activeService || userData?.selectedFeature || userData?.plan || "both"
+  ).toLowerCase().trim();
+  if (rawService === "nutritionist" || rawService === "nutrition") {
+    return {
+      activePlan: "nutritionist",
+      canNutrition: true,
+      canWorkout: false,
+      planDisplayName: "AI Nutritionist"
+    };
+  }
+  if (rawService === "workout" || rawService === "coach") {
+    return {
+      activePlan: "workout",
+      canNutrition: false,
+      canWorkout: true,
+      planDisplayName: "AI Workout Coach"
+    };
+  }
+  return {
+    activePlan: "both",
+    canNutrition: true,
+    canWorkout: true,
+    planDisplayName: "All-Access Premium"
+  };
+}
+var CASUAL_GREETING_REGEX = /^(?:halo|hai|hey|hei|pagi|selamat\s+(?:pagi|siang|sore|malam)|assalamu['’]?alaikum|salam|terima\s*kasih|makasih|thanks|thank\s*you|ok|oke|siap|sip|baik|iya|yoi|yo|mantap|keren|paham|mengerti|nice|good)(?:\s+(?:coach|max|mia|min|gymbuddy|bro|kak))?[\s!.]*$/i;
+var NUTRITION_KEYWORDS = [
+  "makan",
+  "sarapan",
+  "lunch",
+  "dinner",
+  "minum",
+  "kalori",
+  "protein",
+  "karbo",
+  "lemak",
+  "gula",
+  "natrium",
+  "sodium",
+  "air putih",
+  "nasi",
+  "ayam",
+  "telur",
+  "daging",
+  "ikan",
+  "sayur",
+  "buah",
+  "susu",
+  "kopi",
+  "teh",
+  "snack",
+  "camilan",
+  "boba",
+  "mie",
+  "roti",
+  "keju",
+  "porsi",
+  "rekap nutrisi",
+  "rekap makan",
+  "cek kalori",
+  "rekomendasi makanan",
+  "menu diet",
+  "resep",
+  "kurang garam",
+  "tinggi protein",
+  "update bb",
+  "berat badan",
+  "timbang"
+];
+var WORKOUT_KEYWORDS = [
+  "workout",
+  "latihan",
+  "olahraga",
+  "gym",
+  "angkat beban",
+  "push up",
+  "pull up",
+  "sit up",
+  "squat",
+  "bench press",
+  "deadlift",
+  "dumbbell",
+  "barbell",
+  "treadmill",
+  "lari",
+  "running",
+  "jogging",
+  "joging",
+  "sepeda",
+  "cycling",
+  "berenang",
+  "swimming",
+  "futsal",
+  "basket",
+  "badminton",
+  "yoga",
+  "pilates",
+  "set",
+  "sets",
+  "reps",
+  "repetisi",
+  "jadwal workout",
+  "jadwal latihan",
+  "program latihan",
+  "split",
+  "alat gym",
+  "cara pakai",
+  "mesin latihan",
+  "postur",
+  "form latihan",
+  "recovery",
+  "kardio",
+  "cardio",
+  "stretching",
+  "otot dada",
+  "otot punggung",
+  "otot kaki"
+];
+var AMBIGUOUS_KEYWORDS = [
+  "capek",
+  "capek banget",
+  "lelah",
+  "pegal",
+  "pegel",
+  "lemas",
+  "lemes",
+  "kurang fit",
+  "drop",
+  "kurang tenaga",
+  "butuh tips",
+  "bingung",
+  "sakit badan"
+];
+var UNRELATED_OFFTOPIC_REGEX = /\b(?:cuaca|hujan|panas\s+hari\s+ini|presiden|politik|pemilu|menteri|partai|koding|coding|javascript|typescript|python|html|css|bug|syntax|error\s+code|film|movie|bioskop|netflix|sinopsis|lagu|chord|lirik|resep\s+racun|crypto|bitcoin|saham|investasi|trading|forex|jodoh|pacar|mantan|zodiak|ramalan|prancis|amerika|indonesia\s+merdeka|sejarah\s+dunia|matematika|rumus\s+excel)\b/i;
+function classifyUserInput(userText, hasImage) {
+  const trimmed = userText.trim();
+  const lower = trimmed.toLowerCase();
+  if (hasImage) {
+    if (lower.includes("alat") || lower.includes("mesin") || lower.includes("gym")) {
+      return "WORKOUT";
+    }
+    return "NUTRITION";
+  }
+  if (!trimmed) {
+    return "GREETING_OR_CASUAL";
+  }
+  if (CASUAL_GREETING_REGEX.test(trimmed)) {
+    return "GREETING_OR_CASUAL";
+  }
+  const isAmbiguousOnly = AMBIGUOUS_KEYWORDS.some((k) => lower.includes(k)) && !NUTRITION_KEYWORDS.some((k) => lower.includes(k)) && !WORKOUT_KEYWORDS.some((k) => lower.includes(k));
+  if (isAmbiguousOnly && trimmed.split(/\s+/).length <= 6) {
+    return "AMBIGUOUS";
+  }
+  const hasNutrition = NUTRITION_KEYWORDS.some((k) => lower.includes(k));
+  const hasWorkout = WORKOUT_KEYWORDS.some((k) => lower.includes(k));
+  const hasUnrelated = UNRELATED_OFFTOPIC_REGEX.test(lower);
+  if (hasUnrelated && (hasNutrition || hasWorkout)) {
+    return "MIXED";
+  }
+  if (hasUnrelated && !hasNutrition && !hasWorkout) {
+    return "OUT_OF_CONTEXT";
+  }
+  if (hasNutrition && !hasWorkout) {
+    return "NUTRITION";
+  }
+  if (hasWorkout && !hasNutrition) {
+    return "WORKOUT";
+  }
+  if (hasNutrition && hasWorkout) {
+    return "MIXED";
+  }
+  if (/^(?:siapa|kapan|dimana|kenapa|mengapa|bagaimana\s+cara)\s+(?:membuat\s+bom|presiden|ibukota|harga|cuaca)/i.test(lower) || lower.includes("coding") || lower.includes("cuaca") || lower.includes("rekomendasi film")) {
+    return "OUT_OF_CONTEXT";
+  }
+  return "GREETING_OR_CASUAL";
+}
+function validatePlanContext(userText, hasImage, userData) {
+  const capabilities = getUserPlanCapabilities(userData);
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
+  const isLansia = addressing.ageGroup === "Lansia";
+  const isMax = (userData?.persona || "mia").toLowerCase() === "max";
+  const category = classifyUserInput(userText, hasImage);
+  if (category === "GREETING_OR_CASUAL") {
+    return {
+      decision: "PROCESS_CASUAL",
+      inputCategory: category,
+      canProceed: true
+    };
+  }
+  if (category === "MIXED") {
+    const lower = userText.toLowerCase();
+    const hasNutrition = hasImage || NUTRITION_KEYWORDS.some((k) => lower.includes(k));
+    const hasWorkout = WORKOUT_KEYWORDS.some((k) => lower.includes(k));
+    if (capabilities.canNutrition && hasNutrition) {
+      return {
+        decision: "PROCESS_NUTRITION",
+        inputCategory: "MIXED",
+        canProceed: true
+      };
+    }
+    if (capabilities.canWorkout && hasWorkout) {
+      return {
+        decision: "PROCESS_WORKOUT",
+        inputCategory: "MIXED",
+        canProceed: true
+      };
+    }
+    if (!capabilities.canNutrition && hasNutrition) {
+      return buildUnsupportedRedirect("workout", isMax, isLansia, validatedAddr, userData);
+    }
+    if (!capabilities.canWorkout && hasWorkout) {
+      return buildUnsupportedRedirect("nutrition", isMax, isLansia, validatedAddr, userData);
+    }
+  }
+  if (category === "AMBIGUOUS") {
+    let clarifyMsg = "";
+    if (capabilities.canWorkout && capabilities.canNutrition) {
+      clarifyMsg = isMax ? isLansia ? `Apakah rasa lelah ini setelah berolahraga atau karena aktivitas fisik harian, ${validatedAddr}? Ceritakan sedikit agar Saya dapat membantu meninjau pemulihan Anda. \u{1F4AA}` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit, nanti gue bantu cek recovery atau asupan energi lo! \u{1F4AA}` : isLansia ? `Apakah Anda merasa lelah setelah beraktivitas atau berolahraga, ${validatedAddr}? Boleh ceritakan sedikit agar aku dapat membantu memeriksa asupan dan pemulihan Anda \u2728` : `Capeknya setelah workout atau aktivitas tertentu, ${validatedAddr}? Ceritain sedikit ya, nanti aku bantu cek recovery dan istirahat kamu \u2728`;
+    } else if (capabilities.canWorkout) {
+      clarifyMsg = isMax ? `Capeknya setelah sesi workout apa nih, ${validatedAddr}? Ceritain latihan lo hari ini biar gue bantu evaluasi pemulihan otot lo! \u{1F4AA}` : `Capeknya setelah workout atau latihan tertentu, ${validatedAddr}? Ceritakan sedikit ya, nanti aku bantu cek panduan recovery kamu \u2728`;
+    } else {
+      clarifyMsg = isMax ? `Lagi kurang bertenaga ya, ${validatedAddr}? Coba cek apakah sudah cukup minum air dan makan teratur hari ini? Ceritain asupan lo biar gue cek energinya! \u{1F4AA}` : `Lagi merasa lelah atau kurang bertenaga ya, ${validatedAddr}? Apakah sudah cukup makan dan minum air putih hari ini? Ceritakan sedikit asupanmu hari ini ya \u2728`;
+    }
+    return {
+      decision: "CLARIFY_AMBIGUOUS",
+      inputCategory: "AMBIGUOUS",
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(clarifyMsg, userData)
+    };
+  }
+  if (category === "OUT_OF_CONTEXT") {
+    let redirectMsg = "";
+    if (capabilities.canNutrition && capabilities.canWorkout) {
+      redirectMsg = isMax ? isLansia ? `Topik tersebut di luar bidang kesehatan dan kebugaran, ${validatedAddr}. Saya siap mendampingi Anda untuk pencatatan menu makan, nutrisi, hidrasi, maupun panduan latihan fisik harian Anda. \u{1F33F}` : `Waduh, kalau soal itu di luar radar kebugaran gue nih, ${validatedAddr}! Sebagai coach kamu, fokus kita di sini adalah nutrisi disiplin dan progres latihan lo. Mau lapor makanan atau catat latihan hari ini? \u{1F4AA}` : isLansia ? `Topik tersebut berada di luar ruang lingkup kesehatan dan nutrisi ya, ${validatedAddr} \u2728 Aku siap membantu Anda untuk pencatatan makanan, cek kalori, maupun program latihan fisik yang aman. \u{1F33F}` : `Wah, kalau soal itu di luar topik kesehatan dan kebugaran nih, ${validatedAddr} \u{1F604} Sebagai health coach kamu, aku siap bantu untuk pencatatan makanan, hitung kalori & makro, atau program latihan kamu ya! \u2728`;
+    } else if (capabilities.canNutrition) {
+      redirectMsg = isMax ? `Waduh, kalau soal itu di luar bidang nutrisi gue nih, ${validatedAddr}. Sebagai Nutrition Coach, gue fokus jaga disiplin makan, kalori, dan makro lo. Mau catat makanan atau cek nutrisi hari ini? Kirim aja! \u{1F4AA}` : `Wah, kalau topik itu di luar keahlianku sebagai Nutrition Coach nih, ${validatedAddr} \u{1F604} Tapi kalau kamu mau catat makanan, cek kalori, lapor air minum, atau bahas target nutrisi, aku siap bantu sepenuh hati! \u2728`;
+    } else {
+      redirectMsg = isMax ? `Kalau soal itu bukan bidang latihan fisik gue nih, ${validatedAddr}! Sebagai Workout Coach, gue fokus dampingi program latihan, repetisi, dan form alat gym lo. Mau cek jadwal latihan hari ini? \u{1F4AA}` : `Wah, kalau topik itu di luar keahlianku sebagai Workout Coach ya, ${validatedAddr} \u{1F604} Tapi kalau soal gerakan olahraga, jadwal latihan, atau cek teknik alat gym, aku siap pandu kamu! \u{1F3CB}\uFE0F\u200D\u2640\uFE0F\u2728`;
+    }
+    return {
+      decision: "REDIRECT_OUT_OF_CONTEXT",
+      inputCategory: "OUT_OF_CONTEXT",
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(redirectMsg, userData)
+    };
+  }
+  if (category === "NUTRITION" && !capabilities.canNutrition) {
+    return buildUnsupportedRedirect("workout", isMax, isLansia, validatedAddr, userData);
+  }
+  if (category === "WORKOUT" && !capabilities.canWorkout) {
+    return buildUnsupportedRedirect("nutrition", isMax, isLansia, validatedAddr, userData);
+  }
+  if (category === "NUTRITION") {
+    return {
+      decision: "PROCESS_NUTRITION",
+      inputCategory: "NUTRITION",
+      canProceed: true
+    };
+  }
+  return {
+    decision: "PROCESS_WORKOUT",
+    inputCategory: "WORKOUT",
+    canProceed: true
+  };
+}
+function buildUnsupportedRedirect(currentFocus, isMax, isLansia, validatedAddr, userData) {
+  let msg = "";
+  if (currentFocus === "nutrition") {
+    msg = isMax ? isLansia ? `Untuk plan Anda saat ini, Saya berfokus mendampingi asupan nutrisi dan pola makan sehat, ${validatedAddr}. Anda dapat mengirimkan menu makanan, asupan air minum, atau konsultasi kebutuhan nutrisi harian Anda. Apabila Anda membutuhkan panduan latihan fisik, Anda dapat melakukan upgrade ke Paket Workout atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi nutrisi dan manajemen kalori lo, ${validatedAddr}. Lo bisa kirim laporan makan, minuman, cek makro, atau target nutrisi lo ya. Kalau lo mau program latihan & panduan alat gym, lo bisa upgrade ke Paket Workout atau Premium! \u{1F4AA}` : isLansia ? `Untuk plan Anda saat ini, aku berfokus mendampingi pola makan dan nutrisi sehat ya, ${validatedAddr} \u2728 Anda bisa berkonsultasi seputar makanan, hidrasi, atau target gizi harian. Jika membutuhkan panduan olahraga, Anda dapat beralih ke Paket Workout atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya, ${validatedAddr} \u2728 Kamu bisa cerita tentang makanan, minuman, kalori, atau target nutrisi kamu. Kalau butuh panduan latihan dan jadwal workout, kamu bisa upgrade ke Paket Workout atau Premium ya! \u{1F966}`;
+    return {
+      decision: "REDIRECT_UNSUPPORTED_WORKOUT",
+      inputCategory: "WORKOUT",
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(msg, userData)
+    };
+  } else {
+    msg = isMax ? isLansia ? `Untuk plan Anda saat ini, Saya berfokus mendampingi program latihan fisik dan kebugaran, ${validatedAddr}. Anda dapat menanyakan panduan gerakan, mencatat aktivitas fisik harian, atau konsultasi pemulihan aktif Anda. Untuk pencatatan nutrisi lengkap, Anda dapat beralih ke Paket Nutritionist atau Premium ya. \u{1F33F}` : `Untuk plan kamu saat ini, fokus gue adalah mendampingi jadwal workout, form latihan, dan progres fisik lo, ${validatedAddr}! Lo bisa lapor set latihan, tanya panduan alat gym, atau jadwal harian lo. Buat tracking kalori & nutrisi lengkap, lo bisa upgrade ke Paket Nutritionist atau Premium! \u{1F525}` : isLansia ? `Untuk plan Anda saat ini, aku berfokus mendampingi latihan fisik dan kebugaran ya, ${validatedAddr} \u2728 Anda dapat menanyakan gerakan, jadwal olahraga, atau teknik alat gym. Untuk pencatatan menu makanan dan kalori, Anda dapat mengaktifkan Paket Nutritionist atau Premium \u{1F33F}` : `Untuk plan kamu saat ini, aku fokus mendampingi program latihan dan teknik workout kamu ya, ${validatedAddr} \u2728 Kamu bisa lapor hasil latihan, tanya gerakan, panduan alat gym, atau jadwal latihan harian. Untuk pencatatan kalori & nutrisi lengkap, kamu bisa upgrade ke Paket Nutritionist atau Premium ya! \u{1F3CB}\uFE0F\u200D\u2640\uFE0F`;
+    return {
+      decision: "REDIRECT_UNSUPPORTED_NUTRITION",
+      inputCategory: "NUTRITION",
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(msg, userData)
+    };
+  }
+}
+
 // services/cardGenerator.ts
 var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
@@ -50810,113 +51103,142 @@ https://gymbuddygroup.com`
             }
             const currentCalculated = calculateUserData(userProfile);
             responseMessages = generateWelcomeMessages(currentCalculated);
-          } else if (waterMatch) {
-            const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
-            const unit = (waterMatch[2] || "gelas").toLowerCase();
-            let actualMl;
-            if (unit === "ml") {
-              actualMl = rawAmount;
-            } else if (unit === "l" || unit === "liter") {
-              actualMl = rawAmount * 1e3;
-            } else {
-              actualMl = Math.round(rawAmount) * 250;
-            }
-            const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-            const currentCups = getWaterCups(from);
-            const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
-            const liters = (newTotalCups * 0.25).toFixed(1);
-            const waterEntry = {
-              id: `wa-water-${Date.now()}`,
-              foodName: `Air Putih ${actualMl} ml`,
-              calories: 0,
-              protein: 0,
-              carbs: 0,
-              fat: 0,
-              isHydration: true,
-              volumeMl: actualMl,
-              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-              mealType: getMealTypeByHour(userText)
-            };
-            addMealLog(from, waterEntry);
-            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-            const comment = userData.persona === "max" ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
-            responseMessages = [
-              `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
+          } else {
+            const planCapabilities = getUserPlanCapabilities(userData);
+            const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
+            if (!planValidation.canProceed) {
+              responseMessages = [planValidation.redirectMessage];
+            } else if (waterMatch) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+              } else {
+                const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
+                const unit = (waterMatch[2] || "gelas").toLowerCase();
+                let actualMl;
+                if (unit === "ml") {
+                  actualMl = rawAmount;
+                } else if (unit === "l" || unit === "liter") {
+                  actualMl = rawAmount * 1e3;
+                } else {
+                  actualMl = Math.round(rawAmount) * 250;
+                }
+                const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
+                const currentCups = getWaterCups(from);
+                const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
+                const liters = (newTotalCups * 0.25).toFixed(1);
+                const waterEntry = {
+                  id: `wa-water-${Date.now()}`,
+                  foodName: `Air Putih ${actualMl} ml`,
+                  calories: 0,
+                  protein: 0,
+                  carbs: 0,
+                  fat: 0,
+                  isHydration: true,
+                  volumeMl: actualMl,
+                  timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+                  mealType: getMealTypeByHour(userText)
+                };
+                addMealLog(from, waterEntry);
+                const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+                const comment = userData.persona === "max" ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
+                responseMessages = [
+                  `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
 -----------------------------
 \u2705 Kamu menambah *${actualMl} ml* air putih!
 \u{1F4CA} Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)
 
 \u{1F4AC} *${coachName}*:
 "${comment}"`
-            ];
-          } else if (handleReminderCommand(userText, userProfile, from, userData)) {
-            responseMessages = handleReminderCommand(userText, userProfile, from, userData);
-          } else if (handleWorkoutProgressLogging(from, userText, userData)) {
-            responseMessages = handleWorkoutProgressLogging(from, userText, userData);
-          } else if (weightMatch) {
-            const newW = parseFloat(weightMatch[1].replace(",", "."));
-            if (!isNaN(newW) && newW > 30 && newW < 300) {
-              const resProg = addWeeklyProgress(from, newW, "Update via WhatsApp");
-              if (resProg) {
-                responseMessages = [formatWeeklyProgressCard(resProg)];
-              } else {
-                responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
-              }
-            }
-          } else if (isProgressHistoryMessage) {
-            responseMessages = [formatProgressHistoryCard(from)];
-          } else if (isWeeklyScheduleQuery) {
-            responseMessages = [generateWeeklyWorkoutSchedule(userData)];
-          } else if (isWorkoutReqMessage) {
-            const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
-            responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
-          } else if (isRecommendationMessage) {
-            responseMessages = [generateMealRecommendations(userData, from, userText)];
-          } else if (isCheckSummaryMessage) {
-            const parsedDate = parseDateFromQuery(userText);
-            const totals = getDailyTotals(from, parsedDate.dateStr);
-            if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
-              responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
-            } else {
-              responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-            }
-          } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
-            const recentMeal = getLastFoodMeal(from);
-            const isMia = userData.persona === "mia" || userData.persona === "nikita";
-            if (recentMeal) {
-              const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
-              await sendMetaWhatsappMessage(from, processingMsg);
-              const correctionResult = await processMealCorrection(from, userText, userData);
-              if (correctionResult) {
-                responseMessages = [correctionResult.card];
-              } else {
-                responseMessages = [
-                  isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
                 ];
               }
-            } else {
-              responseMessages = [
-                isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
-              ];
-            }
-          } else if (getAi()) {
-            const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
-            if (isGenericImageCaption && !imagePart) {
-              const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
-              responseMessages = [
-                `\u{1F4F8} *FOTO BELUM BERHASIL DIPROSES*
+            } else if (handleReminderCommand(userText, userProfile, from, userData)) {
+              responseMessages = handleReminderCommand(userText, userProfile, from, userData);
+            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
+              if (!planCapabilities.canWorkout) {
+                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+              } else {
+                responseMessages = handleWorkoutProgressLogging(from, userText, userData);
+              }
+            } else if (weightMatch) {
+              const newW = parseFloat(weightMatch[1].replace(",", "."));
+              if (!isNaN(newW) && newW > 30 && newW < 300) {
+                const resProg = addWeeklyProgress(from, newW, "Update via WhatsApp");
+                if (resProg) {
+                  responseMessages = [formatWeeklyProgressCard(resProg)];
+                } else {
+                  responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
+                }
+              }
+            } else if (isProgressHistoryMessage) {
+              responseMessages = [formatProgressHistoryCard(from)];
+            } else if (isWeeklyScheduleQuery) {
+              if (!planCapabilities.canWorkout) {
+                responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+              } else {
+                responseMessages = [generateWeeklyWorkoutSchedule(userData)];
+              }
+            } else if (isWorkoutReqMessage) {
+              if (!planCapabilities.canWorkout) {
+                responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+              } else {
+                const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
+                responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
+              }
+            } else if (isRecommendationMessage) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+              } else {
+                responseMessages = [generateMealRecommendations(userData, from, userText)];
+              }
+            } else if (isCheckSummaryMessage) {
+              const parsedDate = parseDateFromQuery(userText);
+              const totals = getDailyTotals(from, parsedDate.dateStr);
+              if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
+                responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
+              } else {
+                responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+              }
+            } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+              } else {
+                const recentMeal = getLastFoodMeal(from);
+                const isMia = userData.persona === "mia" || userData.persona === "nikita";
+                if (recentMeal) {
+                  const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
+                  await sendMetaWhatsappMessage(from, processingMsg);
+                  const correctionResult = await processMealCorrection(from, userText, userData);
+                  if (correctionResult) {
+                    responseMessages = [correctionResult.card];
+                  } else {
+                    responseMessages = [
+                      isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+                    ];
+                  }
+                } else {
+                  responseMessages = [
+                    isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
+                  ];
+                }
+              }
+            } else if (getAi()) {
+              const isGenericImageCaption = /^(?:aku\s+)?makan\s+ini|^ini\s+makanan|^foto\s+ini|^ini$|^makan$/i.test(userText.trim());
+              if (isGenericImageCaption && !imagePart) {
+                const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
+                responseMessages = [
+                  `\u{1F4F8} *FOTO BELUM BERHASIL DIPROSES*
 -----------------------------
 Halo ${getValidatedUserAddressing(userData).validatedAddress}! Fotonya belum berhasil terunduh oleh sistem WhatsApp Meta.
 
 \u{1F4A1} *Solusi Cepat*:
 Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! \u{1F957}\u2728`
-              ];
-            } else {
-              const isMia = userData.persona === "mia" || userData.persona === "nikita";
-              const addressing = getValidatedUserAddressing(userData);
-              const processingMsg = isMia ? `Sebentar ya ${addressing.validatedAddress}, aku cek dulu... \u2728` : `Sebentar ${addressing.validatedAddress}. Aku cek dulu.`;
-              await sendMetaWhatsappMessage(from, processingMsg);
-              const personaInstruction = isMia ? `PERSONA COACH MIA:
+                ];
+              } else {
+                const isMia = userData.persona === "mia" || userData.persona === "nikita";
+                const addressing = getValidatedUserAddressing(userData);
+                const processingMsg = isMia ? `Sebentar ya ${addressing.validatedAddress}, aku cek dulu... \u2728` : `Sebentar ${addressing.validatedAddress}. Aku cek dulu.`;
+                await sendMetaWhatsappMessage(from, processingMsg);
+                const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
 - Gaya Bicara & Sapaan:
   \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
@@ -50932,9 +51254,9 @@ Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + A
 - BATASAN MUTLAK:
   \u2022 Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   \u2022 Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
-              const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
-              const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
-              const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
+                const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+                const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
+                const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama Lengkap: ${userData.name}
 - Nama Panggilan (Nickname): ${addressing.nickname}
@@ -50976,6 +51298,14 @@ ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 5. JANGAN menyebut kondisi kesehatan pada kalimat motivasi kasual yang tidak relevan.
 
 ${personaInstruction}
+
+BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
+- Plan Pengguna: ${planCapabilities.planDisplayName} (Nutrition Coach: ${planCapabilities.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities.canWorkout ? "AKTIF" : "NON-AKTIF"})
+- AI DILARANG KERAS memperluas kapabilitas di luar paket aktif pengguna. Izin paket menentukan kapabilitas Coach yang tersedia, bukan kepribadian coach.
+- AI tidak boleh menjawab suatu permintaan hanya karena AI mampu menjawabnya; AI harus memverifikasi bahwa kapabilitas tersebut termasuk dalam paket aktif pengguna.
+- Jika pengguna meminta kapabilitas yang TIDAK aktif pada paketnya (misal meminta latihan/workout padahal paket Nutritionist, atau meminta kalori/makanan padahal paket Workout Coach): JANGAN berikan jawaban sebagai coach bidang tersebut. Berikan pengalihan sopan yang menjelaskan fokus paket saat ini dan arahkan ke fitur yang didukung serta upgrade paket.
+- Jika pengguna bertanya hal di luar konteks (cuaca, koding, politik, dsb): JANGAN jawab pertanyaan di luar topik tersebut. Alihkan secara ramah ke kapabilitas GymBuddy sesuai paket pengguna.
+- Jika pesan bersifat campuran (mixed): Prioritaskan dan proses HANYA bagian yang didukung oleh paket GymBuddy, abaikan pertanyaan di luar topik.
 
 TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
@@ -51059,17 +51389,49 @@ Keluarkan output JSON valid:
   "generalReply": "Pesan balasan coach yang alami dan sesuai persona"
 }
 `;
-              try {
-                const rawText = await generateGeminiContent(prompt, imagePart);
-                let parsed = extractAndParseJson(rawText);
-                if (!parsed) {
-                  const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
-                  parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
-                }
-                if (parsed.isFood) {
+                try {
+                  const rawText = await generateGeminiContent(prompt, imagePart);
+                  let parsed = extractAndParseJson(rawText);
+                  if (!parsed) {
+                    const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
+                    parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
+                  }
+                  if (parsed.isFood) {
+                    if (!planCapabilities.canNutrition) {
+                      const redirectRes = validatePlanContext("makanan", true, userData);
+                      responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+                    } else {
+                      const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                        userText,
+                        parsed,
+                        Boolean(imagePart)
+                      );
+                      addMealLog(from, mealRecord);
+                      const dailyTotals = getDailyTotals(from);
+                      const card = formatNutritionCard(
+                        validatedParsed,
+                        imagePart ? "Foto" : "Teks",
+                        userData,
+                        dailyTotals
+                      );
+                      responseMessages = [card];
+                    }
+                  } else if (parsed.isEquipment) {
+                    if (!planCapabilities.canWorkout) {
+                      const redirectRes = validatePlanContext("alat gym", true, userData);
+                      responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+                    } else {
+                      const eqCard = formatEquipmentCard(parsed, userData);
+                      responseMessages = [eqCard];
+                    }
+                  } else {
+                    responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
+                  }
+                } catch (e) {
+                  console.error("Gemini AI Error:", e);
                   const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                     userText,
-                    parsed,
+                    null,
                     Boolean(imagePart)
                   );
                   addMealLog(from, mealRecord);
@@ -51081,28 +51443,7 @@ Keluarkan output JSON valid:
                     dailyTotals
                   );
                   responseMessages = [card];
-                } else if (parsed.isEquipment) {
-                  const eqCard = formatEquipmentCard(parsed, userData);
-                  responseMessages = [eqCard];
-                } else {
-                  responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
                 }
-              } catch (e) {
-                console.error("Gemini AI Error:", e);
-                const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-                  userText,
-                  null,
-                  Boolean(imagePart)
-                );
-                addMealLog(from, mealRecord);
-                const dailyTotals = getDailyTotals(from);
-                const card = formatNutritionCard(
-                  validatedParsed,
-                  imagePart ? "Foto" : "Teks",
-                  userData,
-                  dailyTotals
-                );
-                responseMessages = [card];
               }
             }
           }
@@ -51371,94 +51712,113 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           const currentCalculated = calculateUserData(userProfile);
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
-      } else if (waterMatch) {
-        const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
-        const unit = (waterMatch[2] || "gelas").toLowerCase();
-        let actualMl;
-        if (unit === "ml") {
-          actualMl = rawAmount;
-        } else if (unit === "l" || unit === "liter") {
-          actualMl = rawAmount * 1e3;
-        } else {
-          actualMl = Math.round(rawAmount) * 250;
-        }
-        const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-        const currentCups = getWaterCups(normFrom);
-        const newTotalCups = setWaterCups(normFrom, currentCups + cupsToAdd);
-        const liters = (newTotalCups * 0.25).toFixed(1);
-        const waterEntry = {
-          id: `wa-water-${Date.now()}`,
-          foodName: `Air Putih ${actualMl} ml`,
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          isHydration: true,
-          volumeMl: actualMl,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          mealType: getMealTypeByHour(userText)
-        };
-        addMealLog(normFrom, waterEntry);
-        const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
-        const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-        const comment = userData.persona === "max" ? isFemale ? "Mantap! Jaga terus hidrasi tubuh kamu biar metabolisme makin kencang! \u{1F525}" : "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
-        responseMessages = [
-          `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
+      } else {
+        const planCapabilities = getUserPlanCapabilities(userData);
+        const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
+        if (!planValidation.canProceed) {
+          responseMessages = [planValidation.redirectMessage];
+        } else if (waterMatch) {
+          if (!planCapabilities.canNutrition) {
+            responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+          } else {
+            const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
+            const unit = (waterMatch[2] || "gelas").toLowerCase();
+            let actualMl;
+            if (unit === "ml") {
+              actualMl = rawAmount;
+            } else if (unit === "l" || unit === "liter") {
+              actualMl = rawAmount * 1e3;
+            } else {
+              actualMl = Math.round(rawAmount) * 250;
+            }
+            const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
+            const currentCups = getWaterCups(normFrom);
+            const newTotalCups = setWaterCups(normFrom, currentCups + cupsToAdd);
+            const liters = (newTotalCups * 0.25).toFixed(1);
+            const waterEntry = {
+              id: `wa-water-${Date.now()}`,
+              foodName: `Air Putih ${actualMl} ml`,
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              isHydration: true,
+              volumeMl: actualMl,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+              mealType: getMealTypeByHour(userText)
+            };
+            addMealLog(normFrom, waterEntry);
+            const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
+            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+            const comment = userData.persona === "max" ? isFemale ? "Mantap! Jaga terus hidrasi tubuh kamu biar metabolisme makin kencang! \u{1F525}" : "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
+            responseMessages = [
+              `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
 -----------------------------
 \u2705 Kamu menambah *${actualMl} ml* air putih!
 \u{1F4CA} Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)
 
 \u{1F4AC} *${coachName}*:
 "${comment}"`
-        ];
-      } else if (weightMatch) {
-        const newW = parseFloat(weightMatch[1].replace(",", "."));
-        if (!isNaN(newW) && newW > 30 && newW < 300) {
-          const resProg = addWeeklyProgress(normFrom, newW, "Update via WhatsApp");
-          if (resProg) {
-            responseMessages = [formatWeeklyProgressCard(resProg)];
-          } else {
-            responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
+            ];
           }
-        }
-      } else if (isProgressHistoryMessage) {
-        responseMessages = [formatProgressHistoryCard(normFrom)];
-      } else if (isRecommendationMessage) {
-        responseMessages = [generateMealRecommendations(userData, normFrom, userText)];
-      } else if (isCheckSummaryMessage) {
-        const parsedDate = parseDateFromQuery(userText);
-        const totals = getDailyTotals(normFrom, parsedDate.dateStr);
-        if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
-          responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
-        } else {
-          responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
-        }
-      } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
-        responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
-      } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
-        responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
-      } else if (isMealCorrection) {
-        if (recentFoodMeal) {
-          console.log(`[Twilio WA] Executing meal correction on "${recentFoodMeal.foodName}" for ${normFrom}: "${userText}"`);
-          const correctionResult = await processMealCorrection(normFrom, userText, userData);
-          if (correctionResult) {
-            responseMessages = [correctionResult.card];
+        } else if (weightMatch) {
+          const newW = parseFloat(weightMatch[1].replace(",", "."));
+          if (!isNaN(newW) && newW > 30 && newW < 300) {
+            const resProg = addWeeklyProgress(normFrom, newW, "Update via WhatsApp");
+            if (resProg) {
+              responseMessages = [formatWeeklyProgressCard(resProg)];
+            } else {
+              responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
+            }
+          }
+        } else if (isProgressHistoryMessage) {
+          responseMessages = [formatProgressHistoryCard(normFrom)];
+        } else if (isRecommendationMessage) {
+          if (!planCapabilities.canNutrition) {
+            responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+          } else {
+            responseMessages = [generateMealRecommendations(userData, normFrom, userText)];
+          }
+        } else if (isCheckSummaryMessage) {
+          const parsedDate = parseDateFromQuery(userText);
+          const totals = getDailyTotals(normFrom, parsedDate.dateStr);
+          if (parsedDate.isSpecificDate || parsedDate.isYesterday || !parsedDate.isToday) {
+            responseMessages = [formatHistoricalFoodLog(userData, totals, parsedDate)];
+          } else {
+            responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
+          }
+        } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
+          responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
+        } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
+          if (!planCapabilities.canWorkout) {
+            responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+          } else {
+            responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
+          }
+        } else if (isMealCorrection) {
+          if (!planCapabilities.canNutrition) {
+            responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+          } else if (recentFoodMeal) {
+            console.log(`[Twilio WA] Executing meal correction on "${recentFoodMeal.foodName}" for ${normFrom}: "${userText}"`);
+            const correctionResult = await processMealCorrection(normFrom, userText, userData);
+            if (correctionResult) {
+              responseMessages = [correctionResult.card];
+            } else {
+              const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+              responseMessages = [
+                isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+              ];
+            }
           } else {
             const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
             responseMessages = [
-              isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+              isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
             ];
           }
         } else {
-          const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
-          responseMessages = [
-            isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
-          ];
-        }
-      } else {
-        const isMia = userData.persona === "mia" || userData.persona === "nikita";
-        const addressing = getValidatedUserAddressing(userData);
-        const personaInstruction = isMia ? `PERSONA COACH MIA:
+          const isMia = userData.persona === "mia" || userData.persona === "nikita";
+          const addressing = getValidatedUserAddressing(userData);
+          const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
 - Gaya Bicara & Sapaan:
   \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
@@ -51474,17 +51834,16 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
 - BATASAN MUTLAK:
   \u2022 Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   \u2022 Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
-        const activeService = userData.activeService || "both";
-        const serviceInstruction = activeService === "nutritionist" ? `BATASAN LAYANAN PENGGUNA: User berlangganan Paket AI Nutritionist.
-Fokuslah 100% pada konsultasi nutrisi, evaluasi porsi makan, kalori, dan makro.
-Jika user meminta program/jadwal workout yang detail, berikan jawaban singkat lalu ingatkan secara sopan:
-"\u{1F4A1} *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Nutritionist. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Workout Coach penuh! \u{1F3CB}\uFE0F\u200D\u2642\uFE0F"` : activeService === "workout" ? `BATASAN LAYANAN PENGGUNA: User berlangganan Paket AI Workout Coach.
-Fokuslah 100% pada teknik latihan, posture check, rekomendasi workout, dan alat gym.
-Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingatkan secara sopan:
-"\u{1F4A1} *Catatan Coach*: Layanan aktif kamu saat ini adalah AI Workout Coach. Kamu bisa upgrade ke Paket Premium untuk mengaktifkan AI Nutritionist penuh! \u{1F966}"` : `BATASAN LAYANAN PENGGUNA: User berlangganan Paket Premium (All-Access). Berikan pendampingan penuh untuk nutrisi maupun latihan.`;
-        const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
-        const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
-        const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
+          const planInstruction = `BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
+- Plan Pengguna: ${planCapabilities.planDisplayName} (Nutrition Coach: ${planCapabilities.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities.canWorkout ? "AKTIF" : "NON-AKTIF"})
+- AI DILARANG KERAS memperluas kapabilitas di luar paket aktif pengguna. Izin paket menentukan kapabilitas Coach yang tersedia, bukan kepribadian coach.
+- AI tidak boleh menjawab suatu permintaan hanya karena AI mampu menjawabnya; AI harus memverifikasi bahwa kapabilitas tersebut termasuk dalam paket aktif pengguna.
+- Jika pengguna meminta kapabilitas yang TIDAK aktif pada paketnya (misal meminta latihan/workout padahal paket Nutritionist, atau meminta kalori/makanan padahal paket Workout Coach): JANGAN berikan jawaban sebagai coach bidang tersebut. Berikan pengalihan sopan yang menjelaskan fokus paket saat ini dan arahkan ke fitur yang didukung serta upgrade paket.
+- Jika pengguna bertanya hal di luar konteks (cuaca, koding, politik, dsb): JANGAN jawab pertanyaan di luar topik tersebut. Alihkan secara ramah ke kapabilitas GymBuddy sesuai paket pengguna.
+- Jika pesan bersifat campuran (mixed): Prioritaskan dan proses HANYA bagian yang didukung oleh paket GymBuddy, abaikan pertanyaan di luar topik.`;
+          const isFemale = (userData.gender || "").toLowerCase() === "wanita" || (userData.gender || "").toLowerCase() === "female";
+          const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
+          const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
 - Nama Lengkap: ${userData.name}
 - Nama Panggilan (Nickname): ${addressing.nickname}
@@ -51496,6 +51855,8 @@ INFORMASI PENGGUNA:
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
+
+${planInstruction}
 
 ATURAN SAPAAN PENGGUNA & NICKNAME BERDASARKAN USIA (SOURCE OF TRUTH MUTLAK):
 1. IDENTITAS & FORMAT SAPAAN WAJIB:
@@ -51548,8 +51909,6 @@ ATURAN PENANGANAN REFERENSI TIDAK DIKENAL & OUT-OF-CONTEXT INPUT:
    - Input di luar kapabilitas: Jelaskan secara singkat dan ramah.
 
 ${personaInstruction}
-${serviceInstruction}
-
 TUGASMU:
 User mengirim ${imagePart ? "FOTO MAKANAN/MINUMAN BESERTA PESAN" : "PESAN TEKS"} di WhatsApp: "${userText}"
 
@@ -51652,95 +52011,106 @@ Keluarkan output JSON valid:
   "generalReply": "Pesan balasan coach yang alami, jujur terhadap konteks, dan sesuai persona"
 }
 `;
-        try {
-          const rawText = await generateGeminiContent(prompt, imagePart);
-          let parsed = extractAndParseJson(rawText);
-          if (!parsed) {
-            const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
-            parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
-          }
-          const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
-          if (parsed.isFood) {
-            if (parsed.needsClarification && !userText.trim()) {
-              const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
-              responseMessages = [validateAndFormatCoachNote(parsed.clarificationQuestion || defaultClarification, userData)];
-            } else {
-              const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-                userText,
-                parsed,
-                Boolean(imagePart)
-              );
-              addMealLog(normFrom, mealRecord);
-              const dailyTotals = getDailyTotals(normFrom);
-              const card = formatNutritionCard(
-                validatedParsed,
-                imagePart ? "Foto" : "Teks",
-                userData,
-                dailyTotals
-              );
-              responseMessages = [card];
-              if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
-                const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-                const mealTypeStr = validatedParsed.mealType;
-                const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-                const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
-                cardMediaCache.set(cardId, {
-                  foodName: mealRecord.foodName,
-                  calories: mealRecord.calories,
-                  protein: mealRecord.protein,
-                  carbs: mealRecord.carbs,
-                  fat: mealRecord.fat,
-                  sodium: mealRecord.sodium || 0,
-                  fiber: mealRecord.fiber || 0,
-                  sugar: mealRecord.sugar || 0,
-                  mealType: mealTypeStr,
-                  dateStr,
-                  dailyTargetCalories: userData.targetCalories || 1966,
-                  consumedTodayCalories: dailyTotals.calories,
-                  dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
-                  dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
-                  dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
-                  insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
-                  imageBufferOrBase64: photoDataUri,
-                  createdAt: Date.now()
-                });
-                const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-                const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
-                const dynamicOrigin = `${proto}://${host}`;
-                const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
-                mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
+          try {
+            const rawText = await generateGeminiContent(prompt, imagePart);
+            let parsed = extractAndParseJson(rawText);
+            if (!parsed) {
+              const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
+              parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
+            }
+            const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
+            if (parsed.isFood) {
+              if (parsed.needsClarification && !userText.trim()) {
+                const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
+                responseMessages = [validateAndFormatCoachNote(parsed.clarificationQuestion || defaultClarification, userData)];
               } else {
-                mediaUrlToSend = "";
+                if (!planCapabilities.canNutrition) {
+                  const redirectRes = validatePlanContext("makanan", true, userData);
+                  responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+                } else {
+                  const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+                    userText,
+                    parsed,
+                    Boolean(imagePart)
+                  );
+                  addMealLog(normFrom, mealRecord);
+                  const dailyTotals = getDailyTotals(normFrom);
+                  const card = formatNutritionCard(
+                    validatedParsed,
+                    imagePart ? "Foto" : "Teks",
+                    userData,
+                    dailyTotals
+                  );
+                  responseMessages = [card];
+                  if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
+                    const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                    const mealTypeStr = validatedParsed.mealType;
+                    const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+                    const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
+                    cardMediaCache.set(cardId, {
+                      foodName: mealRecord.foodName,
+                      calories: mealRecord.calories,
+                      protein: mealRecord.protein,
+                      carbs: mealRecord.carbs,
+                      fat: mealRecord.fat,
+                      sodium: mealRecord.sodium || 0,
+                      fiber: mealRecord.fiber || 0,
+                      sugar: mealRecord.sugar || 0,
+                      mealType: mealTypeStr,
+                      dateStr,
+                      dailyTargetCalories: userData.targetCalories || 1966,
+                      consumedTodayCalories: dailyTotals.calories,
+                      dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
+                      dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
+                      dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
+                      insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
+                      imageBufferOrBase64: photoDataUri,
+                      createdAt: Date.now()
+                    });
+                    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+                    const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
+                    const dynamicOrigin = `${proto}://${host}`;
+                    const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
+                    mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
+                  } else {
+                    mediaUrlToSend = "";
+                  }
+                }
               }
+            } else if (isEquipmentMatch) {
+              if (!planCapabilities.canWorkout) {
+                const redirectRes = validatePlanContext("alat gym", true, userData);
+                responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+              } else {
+                if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
+                parsed.isEquipment = true;
+                const dbMatch = findExerciseOrEquipment(parsed.equipmentName || userText);
+                const eqCard = formatEquipmentCard(parsed, userData);
+                responseMessages = [eqCard];
+                if (dbMatch && (dbMatch.gifUrl || dbMatch.imageFrames?.[0])) {
+                  mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
+                }
+              }
+            } else {
+              responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
             }
-          } else if (isEquipmentMatch) {
-            if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
-            parsed.isEquipment = true;
-            const dbMatch = findExerciseOrEquipment(parsed.equipmentName || userText);
-            const eqCard = formatEquipmentCard(parsed, userData);
-            responseMessages = [eqCard];
-            if (dbMatch && (dbMatch.gifUrl || dbMatch.imageFrames?.[0])) {
-              mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
-            }
-          } else {
-            responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
+          } catch (e) {
+            console.error("Gemini AI Error:", e);
+            const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
+              userText,
+              null,
+              Boolean(imagePart)
+            );
+            addMealLog(normFrom, mealRecord);
+            const dailyTotals = getDailyTotals(normFrom);
+            const card = formatNutritionCard(
+              validatedParsed,
+              imagePart ? "Foto" : "Teks",
+              userData,
+              dailyTotals
+            );
+            responseMessages = [card];
           }
-        } catch (e) {
-          console.error("Gemini AI Error:", e);
-          const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-            userText,
-            null,
-            Boolean(imagePart)
-          );
-          addMealLog(normFrom, mealRecord);
-          const dailyTotals = getDailyTotals(normFrom);
-          const card = formatNutritionCard(
-            validatedParsed,
-            imagePart ? "Foto" : "Teks",
-            userData,
-            dailyTotals
-          );
-          responseMessages = [card];
         }
       }
       const messagesToSend = responseMessages && responseMessages.length > 0 ? responseMessages : ["Sip, data kamu sudah tercatat!"];
@@ -52118,11 +52488,13 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   applyDeterministicCorrection,
   buildSingleSourceOfTruthMealRecord,
   calculateUserData,
+  classifyUserInput,
   dbData,
   detectMealCorrectionIntent,
   formatNutritionCard,
   getLastFoodMeal,
   getMealTypeByHour,
+  getUserPlanCapabilities,
   getUserProfile,
   processMealCorrection,
   resolveCleanFoodNameAndMealType,
@@ -52130,6 +52502,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   saveDb,
   saveUserProfile,
   splitWhatsAppMessage,
-  updateExistingMealLog
+  updateExistingMealLog,
+  validatePlanContext
 });
 //# sourceMappingURL=server.cjs.map
