@@ -49,7 +49,10 @@ import {
   cleanSingleFoodItemName,
   extractDetectedFoodItems,
   getValidatedUserAddressing,
-  validateAndFormatCoachNote
+  validateAndFormatCoachNote,
+  formatDashboardMacro,
+  formatDashboardInteger,
+  formatDashboardPercent
 } from "./services/nutritionEngine";
 import {
   getUserPlanCapabilities,
@@ -62,7 +65,10 @@ import {
 export {
   getUserPlanCapabilities,
   classifyUserInput,
-  validatePlanContext
+  validatePlanContext,
+  formatDashboardMacro,
+  formatDashboardInteger,
+  formatDashboardPercent
 };
 export type {
   UserPlanCapabilities,

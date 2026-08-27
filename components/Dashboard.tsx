@@ -69,7 +69,14 @@ import {
 import PWAInstallBanner from "./PWAInstallBanner";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
 import { notificationService } from "../services/notificationService";
-import { estimateMealNutritionDeterministic, FoodItemNutrition, MealNutritionResult } from "../services/nutritionEngine";
+import {
+  estimateMealNutritionDeterministic,
+  FoodItemNutrition,
+  MealNutritionResult,
+  formatDashboardMacro,
+  formatDashboardInteger,
+  formatDashboardPercent
+} from "../services/nutritionEngine";
 import { getApiBaseUrl } from "../utils/api";
 
 function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
@@ -3337,8 +3344,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             <Flame size={16} className={isOverCal ? "text-amber-400 animate-pulse" : "text-[#D4FF00] animate-pulse"} />
                             <span className={`text-lg sm:text-xl font-black leading-none mt-0.5 ${isOverCal ? "text-amber-400" : "text-white"}`}>
                               {isOverCal 
-                                ? `+${(totalCaloriesConsumed - targetCal).toLocaleString()}` 
-                                : Math.max(0, calDiff).toLocaleString()}
+                                ? `+${formatDashboardInteger(totalCaloriesConsumed - targetCal)}` 
+                                : formatDashboardInteger(Math.max(0, calDiff))}
                             </span>
                             <span className="text-[8px] text-neutral-400 font-extrabold uppercase tracking-wider mt-0.5">
                               {isOverCal ? (isEN ? "kcal over" : "kcal lebih") : (isEN ? "kcal left" : "kcal sisa")}
@@ -3352,13 +3359,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             {t.dailyTargetLabel}
                           </span>
                           <h3 className="text-xl font-black text-white">
-                            {totalCaloriesConsumed.toLocaleString()}{" "}
-                            <span className="text-neutral-400 text-xs font-semibold">/ {targetCal.toLocaleString()} kcal</span>
+                            {formatDashboardInteger(totalCaloriesConsumed)}{" "}
+                            <span className="text-neutral-400 text-xs font-semibold">/ {formatDashboardInteger(targetCal)} kcal</span>
                           </h3>
                           <div className="pt-0.5">
                             {isOverCal ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-lg border border-rose-400/20">
-                                🔴 +{Math.abs(calDiff).toLocaleString()} kcal ({calPercent}%) · Melebihi Target
+                                🔴 +{formatDashboardInteger(Math.abs(calDiff))} kcal ({formatDashboardInteger(calPercent)}%) · Melebihi Target
                               </span>
                             ) : isExactCal ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-black text-[#D4FF00] bg-[#D4FF00]/10 px-2 py-0.5 rounded-lg border border-[#D4FF00]/20">
@@ -3366,7 +3373,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-lg border border-amber-400/20">
-                                🟡 {Math.max(0, calDiff).toLocaleString()} kcal sisa ({calPercent}%) · Belum Cukup
+                                🟡 {formatDashboardInteger(Math.max(0, calDiff))} kcal sisa ({formatDashboardInteger(calPercent)}%) · Belum Cukup
                               </span>
                             )}
                           </div>
@@ -3383,9 +3390,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.proteinLabel}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalProteinConsumed} <span className="text-neutral-500 font-normal">/ {targetProt}g</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardMacro(totalProteinConsumed)} <span className="text-neutral-500 font-normal">/ {formatDashboardMacro(targetProt)}g</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverProt ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactProt ? "bg-[#D4FF00]/20 text-[#D4FF00]" : "bg-white/5 text-neutral-300"}`}>
-                                {isOverProt ? `+${Math.abs(protDiff)}g (${protPercent}%) 🔴 Melebihi Target` : isExactProt ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${protDiff}g sisa (${protPercent}%) 🟡`}
+                                {isOverProt ? `+${formatDashboardMacro(Math.abs(protDiff))}g (${formatDashboardInteger(protPercent)}%) 🔴 Melebihi Target` : isExactProt ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${formatDashboardMacro(protDiff)}g sisa (${formatDashboardInteger(protPercent)}%) 🟡`}
                               </span>
                             </div>
                           </div>
@@ -3405,9 +3412,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.carbsLabel || "Karbohidrat"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalCarbsConsumed} <span className="text-neutral-500 font-normal">/ {targetCarb}g</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardMacro(totalCarbsConsumed)} <span className="text-neutral-500 font-normal">/ {formatDashboardMacro(targetCarb)}g</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverCarb ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactCarb ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-300"}`}>
-                                {isOverCarb ? `+${Math.abs(carbDiff)}g (${carbPercent}%) 🔴 Melebihi Target` : isExactCarb ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${carbDiff}g sisa (${carbPercent}%) 🟡`}
+                                {isOverCarb ? `+${formatDashboardMacro(Math.abs(carbDiff))}g (${formatDashboardInteger(carbPercent)}%) 🔴 Melebihi Target` : isExactCarb ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${formatDashboardMacro(carbDiff)}g sisa (${formatDashboardInteger(carbPercent)}%) 🟡`}
                               </span>
                             </div>
                           </div>
@@ -3427,9 +3434,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>{t.fatLabel || "Lemak"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalFatConsumed} <span className="text-neutral-500 font-normal">/ {targetF}g</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardMacro(totalFatConsumed)} <span className="text-neutral-500 font-normal">/ {formatDashboardMacro(targetF)}g</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverFat ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactFat ? "bg-emerald-400/20 text-emerald-400" : "bg-white/5 text-neutral-300"}`}>
-                                {isOverFat ? `+${Math.abs(fatDiff)}g (${fatPercent}%) 🔴 Melebihi Target` : isExactFat ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${fatDiff}g sisa (${fatPercent}%) 🟡`}
+                                {isOverFat ? `+${formatDashboardMacro(Math.abs(fatDiff))}g (${formatDashboardInteger(fatPercent)}%) 🔴 Melebihi Target` : isExactFat ? (isEN ? "✓ 100% Target" : "✓ 100% Tercapai") : `${formatDashboardMacro(fatDiff)}g sisa (${formatDashboardInteger(fatPercent)}%) 🟡`}
                               </span>
                             </div>
                           </div>
@@ -3449,9 +3456,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>🧂 {t.sodiumLabel || "Natrium"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalSodiumConsumed.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetSod.toLocaleString()} mg</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardInteger(totalSodiumConsumed)} <span className="text-neutral-500 font-normal">/ {formatDashboardInteger(targetSod)} mg</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverSod ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactSod ? "bg-amber-400/20 text-amber-400" : "bg-emerald-400/20 text-emerald-400"}`}>
-                                {isOverSod ? `+${Math.abs(sodDiff).toLocaleString()} mg (${sodPercent}%) 🔴 Melebihi Batas` : isExactSod ? "🟡 100% Batas Maksimal" : `${sodDiff.toLocaleString()} mg sisa (${sodPercent}%) 🟢 Dalam Batas`}
+                                {isOverSod ? `+${formatDashboardInteger(Math.abs(sodDiff))} mg (${formatDashboardInteger(sodPercent)}%) 🔴 Melebihi Batas` : isExactSod ? "🟡 100% Batas Maksimal" : `${formatDashboardInteger(sodDiff)} mg sisa (${formatDashboardInteger(sodPercent)}%) 🟢 Dalam Batas`}
                               </span>
                             </div>
                           </div>
@@ -3471,9 +3478,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>🍯 {t.sugarLabel || "Gula"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalSugarConsumed.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetSug}g</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardMacro(totalSugarConsumed)} <span className="text-neutral-500 font-normal">/ {formatDashboardMacro(targetSug)}g</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverSug ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactSug ? "bg-amber-400/20 text-amber-400" : "bg-emerald-400/20 text-emerald-400"}`}>
-                                {isOverSug ? `+${Math.abs(sugDiff)}g (${sugPercent}%) 🔴 Melebihi Batas` : isExactSug ? "🟡 100% Batas Maksimal" : `${sugDiff}g tersisa (${sugPercent}%) 🟢 Dalam Batas`}
+                                {isOverSug ? `+${formatDashboardMacro(Math.abs(sugDiff))}g (${formatDashboardInteger(sugPercent)}%) 🔴 Melebihi Batas` : isExactSug ? "🟡 100% Batas Maksimal" : `${formatDashboardMacro(sugDiff)}g tersisa (${formatDashboardInteger(sugPercent)}%) 🟢 Dalam Batas`}
                               </span>
                             </div>
                           </div>
@@ -3493,9 +3500,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <span>💧 {t.waterLabel || "Air"}</span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono text-[11px]">{totalHydrationMl.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetWater.toLocaleString()} ml</span></span>
+                              <span className="text-white font-mono text-[11px]">{formatDashboardInteger(totalHydrationMl)} <span className="text-neutral-500 font-normal">/ {formatDashboardInteger(targetWater)} ml</span></span>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${waterDiff <= 0 ? "bg-[#00D2FF]/20 text-[#00D2FF]" : "bg-white/5 text-neutral-300"}`}>
-                                {waterDiff <= 0 ? "✓ Target Tercapai" : `${waterDiff.toLocaleString()} ml sisa`}
+                                {waterDiff <= 0 ? "✓ Target Tercapai" : `${formatDashboardInteger(waterDiff)} ml sisa`}
                               </span>
                             </div>
                           </div>
@@ -4053,11 +4060,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-neutral-400 font-medium mt-1 flex-wrap">
-                                  <span className="text-white font-black">{item.calories} kcal</span>
+                                  <span className="text-white font-black">{formatDashboardInteger(item.calories)} kcal</span>
                                   <span className="text-neutral-600">•</span>
-                                  <span className="text-indigo-300 font-medium">P: {item.protein}g</span>
-                                  <span className="text-emerald-300 font-medium">C: {item.carbs}g</span>
-                                  <span className="text-rose-300 font-medium">F: {item.fat}g</span>
+                                  <span className="text-indigo-300 font-medium">P: {formatDashboardMacro(item.protein)}g</span>
+                                  <span className="text-emerald-300 font-medium">C: {formatDashboardMacro(item.carbs)}g</span>
+                                  <span className="text-rose-300 font-medium">F: {formatDashboardMacro(item.fat)}g</span>
                                   {item.time && (
                                     <>
                                       <span className="text-neutral-600">•</span>
@@ -4935,7 +4942,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         }`}
                       >
                         <span className="text-[10px] text-neutral-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                          {dayCal}
+                          {formatDashboardInteger(dayCal)}
                         </span>
 
                         <div className="w-full max-w-[36px] bg-[#181818] rounded-xl overflow-hidden h-32 flex flex-col justify-end p-1 border border-white/[0.08]">
@@ -5463,7 +5470,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <p className="text-xs text-neutral-400 font-medium">{scanResult.portion}</p>
                         </div>
                         <div className="text-right">
-                          <span className="text-xl font-black text-[#D4FF00]">{scanResult.calories}</span>
+                          <span className="text-xl font-black text-[#D4FF00]">{formatDashboardInteger(scanResult.calories)}</span>
                           <span className="text-xs text-neutral-400 block font-bold">kcal</span>
                         </div>
                       </div>
@@ -5471,15 +5478,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-white/[0.08] text-xs font-bold">
                         <div className="bg-white/5 rounded-xl p-2">
                           <span className="block text-[10px] text-neutral-400 font-semibold">Protein</span>
-                          <span className="text-indigo-400 font-black">{scanResult.protein}g</span>
+                          <span className="text-indigo-400 font-black">{formatDashboardMacro(scanResult.protein)}g</span>
                         </div>
                         <div className="bg-white/5 rounded-xl p-2">
                           <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Carbs" : "Karbo"}</span>
-                          <span className="text-emerald-400 font-black">{scanResult.carbs}g</span>
+                          <span className="text-emerald-400 font-black">{formatDashboardMacro(scanResult.carbs)}g</span>
                         </div>
                         <div className="bg-white/5 rounded-xl p-2">
                           <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Fat" : "Lemak"}</span>
-                          <span className="text-rose-400 font-black">{scanResult.fat}g</span>
+                          <span className="text-rose-400 font-black">{formatDashboardMacro(scanResult.fat)}g</span>
                         </div>
                       </div>
 
@@ -6899,20 +6906,20 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                         </div>
                                       </div>
                                       <span className="text-xs font-black text-white whitespace-nowrap">
-                                        {it.calories} kcal
+                                        {formatDashboardInteger(it.calories)} kcal
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/[0.08]/80 flex-wrap">
-                                      <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
-                                      <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
-                                      <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                                      <span>P: <strong className="text-indigo-400">{formatDashboardMacro(it.protein)}g</strong></span>
+                                      <span>C: <strong className="text-emerald-400">{formatDashboardMacro(it.carbs)}g</strong></span>
+                                      <span>F: <strong className="text-rose-400">{formatDashboardMacro(it.fat)}g</strong></span>
                                       {it.fiber !== undefined && it.fiber > 0 && (
-                                        <span>Fib: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                                        <span>Fib: <strong className="text-amber-400">{formatDashboardMacro(it.fiber)}g</strong></span>
                                       )}
                                       {it.sugar !== undefined && it.sugar > 0 && (
-                                        <span>Sug: <strong className="text-cyan-400">{it.sugar}g</strong></span>
+                                        <span>Sug: <strong className="text-cyan-400">{formatDashboardMacro(it.sugar)}g</strong></span>
                                       )}
-                                      <span>Na: <strong className="text-purple-400">{(it as any).sodium !== undefined && Number((it as any).sodium) > 0 ? `${(it as any).sodium}mg` : "Not estimated"}</strong></span>
+                                      <span>Na: <strong className="text-purple-400">{(it as any).sodium !== undefined && Number((it as any).sodium) > 0 ? `${formatDashboardInteger((it as any).sodium)}mg` : "Not estimated"}</strong></span>
                                     </div>
                                   </div>
                                 );
@@ -6940,29 +6947,29 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             : (Number(itemSugarInput) || 0);
 
                           const hasValidSodium = (aiPreview as any).sodium !== undefined && Number((aiPreview as any).sodium) > 0;
-                          const displaySodiumText = hasValidSodium ? `${Math.round(Number((aiPreview as any).sodium))} mg` : "Not estimated";
+                          const displaySodiumText = hasValidSodium ? `${formatDashboardInteger((aiPreview as any).sodium)} mg` : "Not estimated";
 
                           return (
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold text-neutral-200 pt-0.5">
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-indigo-400 font-bold">Protein</span>
-                                <span className="font-black text-white">{displayProtein}g</span>
+                                <span className="font-black text-white">{formatDashboardMacro(displayProtein)}g</span>
                               </div>
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-emerald-400 font-bold">Carbs</span>
-                                <span className="font-black text-white">{displayCarbs}g</span>
+                                <span className="font-black text-white">{formatDashboardMacro(displayCarbs)}g</span>
                               </div>
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-rose-400 font-bold">Fat</span>
-                                <span className="font-black text-white">{displayFat}g</span>
+                                <span className="font-black text-white">{formatDashboardMacro(displayFat)}g</span>
                               </div>
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-amber-400 font-bold">Fiber</span>
-                                <span className="font-black text-white">{displayFiber}g</span>
+                                <span className="font-black text-white">{formatDashboardMacro(displayFiber)}g</span>
                               </div>
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-cyan-400 font-bold">Sugar</span>
-                                <span className="font-black text-white">{displaySugar}g</span>
+                                <span className="font-black text-white">{formatDashboardMacro(displaySugar)}g</span>
                               </div>
                               <div className="bg-[#181818] rounded-xl p-1.5 sm:p-2 border border-white/[0.08]/80">
                                 <span className="block text-[9px] sm:text-[10px] text-purple-400 font-bold">Sodium</span>
@@ -7616,11 +7623,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       <div className="grid grid-cols-2 gap-3 text-center">
                         <div className="bg-[#181818] rounded-xl p-2.5">
                           <span className="text-[10px] text-neutral-400 block font-semibold">{t.caloriesLabel}</span>
-                          <span className="text-base font-black text-white">{previewCal} kcal</span>
+                          <span className="text-base font-black text-white">{formatDashboardInteger(previewCal)} kcal</span>
                         </div>
                         <div className="bg-[#181818] rounded-xl p-2.5">
                           <span className="text-[10px] text-neutral-400 block font-semibold">{t.proteinLabel}</span>
-                          <span className="text-base font-black text-[#D4FF00]">{previewProt} g</span>
+                          <span className="text-base font-black text-[#D4FF00]">{formatDashboardMacro(previewProt)} g</span>
                         </div>
                       </div>
                     </div>
@@ -8199,34 +8206,34 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <Sparkles size={13} className="text-[#D4FF00]" /> {isEN ? "Total Nutrition" : "Total Nutrisi"}
                   </span>
                   <span className="text-sm font-black text-black bg-[#D4FF00] px-3 py-0.5 rounded-lg shadow-sm">
-                    ~{Number(selectedMealDetail.calories || 0).toLocaleString()} kcal
+                    ~{formatDashboardInteger(selectedMealDetail.calories)} kcal
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-[10px] sm:text-[11px] font-bold">
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-indigo-400 font-bold">Protein</span>
-                    <span className="text-white font-black">{selectedMealDetail.protein || 0}g</span>
+                    <span className="text-white font-black">{formatDashboardMacro(selectedMealDetail.protein)}g</span>
                   </div>
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-emerald-400 font-bold">{isEN ? "Carbs" : "Karbo"}</span>
-                    <span className="text-white font-black">{selectedMealDetail.carbs || 0}g</span>
+                    <span className="text-white font-black">{formatDashboardMacro(selectedMealDetail.carbs)}g</span>
                   </div>
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-rose-400 font-bold">{isEN ? "Fat" : "Lemak"}</span>
-                    <span className="text-white font-black">{selectedMealDetail.fat || 0}g</span>
+                    <span className="text-white font-black">{formatDashboardMacro(selectedMealDetail.fat)}g</span>
                   </div>
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-amber-400 font-bold">{isEN ? "Fiber" : "Serat"}</span>
-                    <span className="text-white font-black">{selectedMealDetail.fiber || 0}g</span>
+                    <span className="text-white font-black">{formatDashboardMacro(selectedMealDetail.fiber)}g</span>
                   </div>
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-cyan-400 font-bold">{isEN ? "Sugar" : "Gula"}</span>
-                    <span className="text-white font-black">{selectedMealDetail.sugar || 0}g</span>
+                    <span className="text-white font-black">{formatDashboardMacro(selectedMealDetail.sugar)}g</span>
                   </div>
                   <div className="bg-[#181818] rounded-xl p-2 border border-white/[0.08]/80">
                     <span className="block text-[9px] text-purple-400 font-bold">{isEN ? "Sodium" : "Natrium"}</span>
-                    <span className="text-white font-black">{(selectedMealDetail as any).sodium || 0}mg</span>
+                    <span className="text-white font-black">{formatDashboardInteger((selectedMealDetail as any).sodium)}mg</span>
                   </div>
                 </div>
               </div>
@@ -8258,15 +8265,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                             </span>
                           </div>
                           <span className="text-xs font-black text-white whitespace-nowrap">
-                            {it.calories} kcal
+                            {formatDashboardInteger(it.calories)} kcal
                           </span>
                         </div>
                         <div className="flex items-center gap-3 text-[10px] text-neutral-400 pt-0.5 border-t border-white/[0.08]/80">
-                          <span>P: <strong className="text-indigo-400">{it.protein}g</strong></span>
-                          <span>C: <strong className="text-emerald-400">{it.carbs}g</strong></span>
-                          <span>F: <strong className="text-rose-400">{it.fat}g</strong></span>
+                          <span>P: <strong className="text-indigo-400">{formatDashboardMacro(it.protein)}g</strong></span>
+                          <span>C: <strong className="text-emerald-400">{formatDashboardMacro(it.carbs)}g</strong></span>
+                          <span>F: <strong className="text-rose-400">{formatDashboardMacro(it.fat)}g</strong></span>
                           {it.fiber !== undefined && it.fiber > 0 && (
-                            <span>{isEN ? "Fib" : "Serat"}: <strong className="text-amber-400">{it.fiber}g</strong></span>
+                            <span>{isEN ? "Fib" : "Serat"}: <strong className="text-amber-400">{formatDashboardMacro(it.fiber)}g</strong></span>
                           )}
                         </div>
                       </div>
@@ -8275,7 +8282,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 ) : (
                   <div className="p-3 bg-[#181818]/60 rounded-xl border border-white/[0.08]/80 text-xs text-neutral-400 font-medium">
                     {isEN ? "Meal logged as a single complete menu: " : "Makanan dicatat sebagai satu menu komplit: "}
-                    <strong className="text-white">{selectedMealDetail.foodName}</strong> (~{selectedMealDetail.calories} kcal).
+                    <strong className="text-white">{selectedMealDetail.foodName}</strong> (~{formatDashboardInteger(selectedMealDetail.calories)} kcal).
                   </div>
                 )}
               </div>

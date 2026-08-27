@@ -35,6 +35,9 @@ __export(server_exports, {
   classifyUserInput: () => classifyUserInput,
   dbData: () => dbData,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
+  formatDashboardInteger: () => formatDashboardInteger,
+  formatDashboardMacro: () => formatDashboardMacro,
+  formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
   getLastFoodMeal: () => getLastFoodMeal,
   getMealTypeByHour: () => getMealTypeByHour,
@@ -44471,6 +44474,26 @@ function calculateDailyNutritionSummary(dailyTotals, userTargets) {
     }
   };
 }
+function formatDashboardMacro(value) {
+  if (value === void 0 || value === null || value === "") return "0";
+  const num = Number(value);
+  if (isNaN(num)) return "0";
+  const rounded = Math.round(num * 10) / 10;
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+}
+function formatDashboardInteger(value, useLocale = true) {
+  if (value === void 0 || value === null || value === "") return "0";
+  const num = Number(value);
+  if (isNaN(num)) return "0";
+  const rounded = Math.round(num);
+  return useLocale ? rounded.toLocaleString() : String(rounded);
+}
+function formatDashboardPercent(value) {
+  if (value === void 0 || value === null || value === "") return "0%";
+  const num = Number(value);
+  if (isNaN(num)) return "0%";
+  return `${Math.round(num)}%`;
+}
 function makeProgressBar(current, target, length = 10) {
   if (!target || target <= 0) return `[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 0% \xB7 \u{1F7E1} Belum Cukup`;
   const statusInfo = calculateNutrientStatus(current, target, false);
@@ -52491,6 +52514,9 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   classifyUserInput,
   dbData,
   detectMealCorrectionIntent,
+  formatDashboardInteger,
+  formatDashboardMacro,
+  formatDashboardPercent,
   formatNutritionCard,
   getLastFoodMeal,
   getMealTypeByHour,

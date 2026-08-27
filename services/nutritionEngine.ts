@@ -2015,6 +2015,52 @@ export function calculateDailyNutritionSummary(
 }
 
 /**
+ * Formats a macronutrient value for display (Protein, Carbohydrates, Fat, Fiber, Sugar).
+ * 
+ * Rules:
+ * - Precision: up to 1 decimal place.
+ * - Rounds values to 1 decimal place using Math.round(val * 10) / 10.
+ * - Removes unnecessary trailing zeros (e.g. 100.0 -> "100", 50.0 -> "50", 108.4 -> "108.4").
+ * - Eliminates raw floating point precision artifacts:
+ *   38.599999999999994 -> "38.6"
+ *   75.69999999999999  -> "75.7"
+ *   16.599999999999994 -> "16.6"
+ */
+export function formatDashboardMacro(value: number | string | undefined | null): string {
+  if (value === undefined || value === null || value === "") return "0";
+  const num = Number(value);
+  if (isNaN(num)) return "0";
+  const rounded = Math.round(num * 10) / 10;
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+}
+
+/**
+ * Formats an integer metric for display (Calories, Sodium, Water, Percentages).
+ * 
+ * Rules:
+ * - Precision: whole numbers with 0 decimal places.
+ * - Rounds values using Math.round.
+ * - Formats with thousands separator (e.g. 1,958, 2,000, 2,650).
+ */
+export function formatDashboardInteger(value: number | string | undefined | null, useLocale: boolean = true): string {
+  if (value === undefined || value === null || value === "") return "0";
+  const num = Number(value);
+  if (isNaN(num)) return "0";
+  const rounded = Math.round(num);
+  return useLocale ? rounded.toLocaleString() : String(rounded);
+}
+
+/**
+ * Formats percentage as a whole number with 0 decimal places (e.g. 134%).
+ */
+export function formatDashboardPercent(value: number | string | undefined | null): string {
+  if (value === undefined || value === null || value === "") return "0%";
+  const num = Number(value);
+  if (isNaN(num)) return "0%";
+  return `${Math.round(num)}%`;
+}
+
+/**
  * Standard Progress Bar Formatter
  * Progress bar is visual only; status is derived strictly from numerical comparison.
  */
