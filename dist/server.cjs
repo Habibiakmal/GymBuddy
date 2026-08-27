@@ -44631,6 +44631,91 @@ Keluarkan JSON valid:
   ]
 };`;
 }
+function getValidatedUserAddressing(userData) {
+  let rawName = String(userData?.nickname || userData?.name || "Member").trim();
+  const strippedName = rawName.replace(/^(pak|bapak|bu|ibu|kak|bang|mas)\s+/i, "").trim() || rawName;
+  const nickname = strippedName.split(/\s+/)[0] || "Member";
+  const age = Number(userData?.age) || 25;
+  let ageGroup = userData?.ageGroup;
+  let ageGroupKey = userData?.ageGroupKey;
+  if (!ageGroup) {
+    if (age < 13) {
+      ageGroup = "Anak";
+      ageGroupKey = "child";
+    } else if (age <= 17) {
+      ageGroup = "Remaja";
+      ageGroupKey = "teen";
+    } else if (age < 60) {
+      ageGroup = "Dewasa";
+      ageGroupKey = "adult";
+    } else {
+      ageGroup = "Lansia";
+      ageGroupKey = "older_adult";
+    }
+  }
+  const genderStr = String(userData?.gender || "pria").toLowerCase();
+  const isFemale = genderStr === "wanita" || genderStr === "female";
+  let honorific = "";
+  let validatedAddress = nickname;
+  let pronounUser = "kamu";
+  let pronounCoach = "Aku";
+  if (ageGroup === "Lansia") {
+    honorific = isFemale ? "Bu" : "Pak";
+    validatedAddress = `${honorific} ${nickname}`;
+    pronounUser = "Anda";
+    pronounCoach = "Saya";
+  } else {
+    honorific = "";
+    validatedAddress = nickname;
+    pronounUser = "kamu";
+    pronounCoach = "Aku";
+  }
+  return {
+    nickname,
+    validatedAddress,
+    honorific,
+    ageGroup,
+    ageGroupKey,
+    pronounUser,
+    pronounCoach,
+    forbiddenTerms: ["bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan", "woy bro"]
+  };
+}
+function validateAndFormatCoachNote(rawNote, userData) {
+  if (!rawNote || typeof rawNote !== "string") return "";
+  const addressing = getValidatedUserAddressing(userData);
+  const isLansia = addressing.ageGroup === "Lansia";
+  const isAnak = addressing.ageGroup === "Anak";
+  const addr = addressing.validatedAddress;
+  let cleaned = rawNote.trim();
+  cleaned = cleaned.replace(/^["“]|["”]$/g, "").trim();
+  cleaned = cleaned.replace(/\b(?:woy\s+)?bro\b/gi, addr);
+  cleaned = cleaned.replace(/\b(?:woy\s+)?sis\b/gi, addr);
+  cleaned = cleaned.replace(/\bguys\b/gi, addr);
+  cleaned = cleaned.replace(/\bboss\b/gi, addr);
+  cleaned = cleaned.replace(/\bbestie\b/gi, addr);
+  cleaned = cleaned.replace(/\bsob\b/gi, addr);
+  cleaned = cleaned.replace(/\bbray\b/gi, addr);
+  cleaned = cleaned.replace(/\bgan\b/gi, addr);
+  cleaned = cleaned.replace(/,\s*,/g, ",");
+  cleaned = cleaned.replace(/\s+,/g, ",");
+  cleaned = cleaned.replace(/\s+/g, " ");
+  if (isLansia) {
+    cleaned = cleaned.replace(/\blo\b|\blu\b/gi, "Anda");
+    cleaned = cleaned.replace(/\bgue\b/gi, "Saya");
+    cleaned = cleaned.replace(/\bkamu\b/gi, "Anda");
+    cleaned = cleaned.replace(/(\w+)mu\b/gi, "$1 Anda");
+    cleaned = cleaned.replace(/\bmaksimalkan\b/gi, "optimalkan");
+    cleaned = cleaned.replace(/\bSikat\b/gi, "Lakukan");
+  } else if (isAnak) {
+    cleaned = cleaned.replace(/\blo\b|\blu\b/gi, "kamu");
+    cleaned = cleaned.replace(/\bgue\b/gi, "aku");
+  } else {
+    cleaned = cleaned.replace(/\blo\b/gi, "kamu");
+    cleaned = cleaned.replace(/\blu\b/gi, "kamu");
+  }
+  return cleaned.trim();
+}
 
 // services/cardGenerator.ts
 var import_fs = __toESM(require("fs"), 1);
@@ -47305,8 +47390,20 @@ function calculateUserData(profile) {
     activeService,
     status: "active"
   };
+  const nickname = (profile?.nickname || name.trim().split(/\s+/)[0] || "Member").trim();
+  const addressing = getValidatedUserAddressing({
+    name,
+    nickname,
+    age,
+    ageGroup,
+    ageGroupKey,
+    gender: isMale ? "Pria" : "Wanita",
+    persona
+  });
   return {
     name,
+    nickname,
+    addressing,
     weight,
     startWeight,
     targetWeight,
@@ -47779,7 +47876,7 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
   }
   return false;
 }
-function applyDeterministicCorrection(lastMeal, userText, isMia, userName) {
+function applyDeterministicCorrection(lastMeal, userText, isMia, user = "Member") {
   const lower = userText.toLowerCase();
   const rawEstimates = Array.isArray(lastMeal.portionEstimates) && lastMeal.portionEstimates.length > 0 ? [...lastMeal.portionEstimates] : [`\u2022 ${lastMeal.foodName}: 1 porsi (~${lastMeal.calories} kcal)`];
   let requestedGrams = null;
@@ -47897,7 +47994,13 @@ function applyDeterministicCorrection(lastMeal, userText, isMia, userName) {
   const newProtein = Number((lastMeal.protein * calRatio).toFixed(1));
   const newCarbs = Number((lastMeal.carbs * calRatio).toFixed(1));
   const newFat = Number((lastMeal.fat * calRatio).toFixed(1));
-  const coachComment = isMia ? `Siap, ${userName}. Aku sudah memperbarui porsi ${targetKeyword} dari ${oldGrams}g menjadi ${newGrams}g dan menghitung ulang total nutrisi ${lastMeal.foodName} kamu! \u2728` : `Beres, ${userName}! Porsi ${targetKeyword} udah gue update dari ${oldGrams}g jadi ${newGrams}g dan total nutrisi ${lastMeal.foodName} lo udah dihitung ulang! \u{1F4AA}`;
+  const userDataObj = typeof user === "object" && user !== null ? user : { name: String(user || "Member"), nickname: String(user || "Member"), persona: isMia ? "mia" : "max" };
+  const addressing = getValidatedUserAddressing(userDataObj);
+  const validatedAddr = addressing.validatedAddress;
+  const coachComment = validateAndFormatCoachNote(
+    isMia ? `Siap, ${validatedAddr}. Aku sudah memperbarui porsi ${targetKeyword} dari ${oldGrams}g menjadi ${newGrams}g dan menghitung ulang total nutrisi ${lastMeal.foodName} kamu! \u2728` : `Beres, ${validatedAddr}! Porsi ${targetKeyword} udah diupdate dari ${oldGrams}g jadi ${newGrams}g dan total nutrisi ${lastMeal.foodName} kamu udah dihitung ulang! \u{1F4AA}`,
+    userDataObj
+  );
   return {
     isFood: true,
     isCorrection: true,
@@ -48022,7 +48125,10 @@ Keluarkan HANYA JSON valid:
     sugar: updatedSugar,
     sodium: updatedSodium,
     portionEstimates: parsedCorrection.portionEstimates,
-    coachComment: parsedCorrection.coachComment || (isMia ? `Siap, ${userName}. Aku sudah memperbarui porsi ${parsedCorrection.correctedComponent || "makanan"} kamu dan menghitung ulang total nutrisinya! \u2728` : `Beres, ${userName}! Porsi ${parsedCorrection.correctedComponent || "makanan"} lo udah gue update dan total nutrisinya udah dihitung ulang! \u{1F4AA}`),
+    coachComment: validateAndFormatCoachNote(
+      parsedCorrection.coachComment || (isMia ? `Siap, ${getValidatedUserAddressing(userData).validatedAddress}. Aku sudah memperbarui porsi ${parsedCorrection.correctedComponent || "makanan"} kamu dan menghitung ulang total nutrisinya! \u2728` : `Beres, ${getValidatedUserAddressing(userData).validatedAddress}! Porsi ${parsedCorrection.correctedComponent || "makanan"} kamu udah diupdate dan total nutrisinya udah dihitung ulang! \u{1F4AA}`),
+      userData
+    ),
     confidenceLevel: 95
   };
   const dailyTotals = getDailyTotals(phone, targetDate);
@@ -48306,24 +48412,28 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const sodBar = makeSodiumProgressBar(totalTodaySodium, sodiumLimit);
   const sugBar = makeSugarProgressBar(totalTodaySugar, sugarLimit);
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
+  const isLansia = addressing.ageGroup === "Lansia";
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
   if (!coachComment || !parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.sugar.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver)) {
     if (nutritionSummary.sodium.isOver) {
-      coachComment = isMax ? `Sodium lo udah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini bro! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
+      coachComment = isMax ? isLansia ? `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. \u{1F4AA}` : isLansia ? `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.` : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
     } else if (nutritionSummary.sugar.isOver) {
-      coachComment = isMax ? `Gula harian lo udah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g) bro! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! \u26A1` : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`;
+      coachComment = isMax ? isLansia ? `Asupan gula Anda sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g), ${validatedAddr}. Mohon imbangi dengan banyak minum air putih dan batasi asupan manis untuk sisa hari ini ya. \u{1F4AA}` : `Gula harian kamu sudah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g), ${validatedAddr}! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! \u26A1` : isLansia ? `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya, ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih minuman tanpa gula nanti.` : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ${validatedAddr} \u2728 Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`;
     } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
-      coachComment = isMax ? `Asupan lemak lo udah lewat target hari ini (${totalTodayFat}/${targetFat}g), sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! \u{1F525}` : `Lemak harian kamu sudah sedikit melebihi target ya. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728`;
+      coachComment = isMax ? isLansia ? `Asupan lemak Anda sudah melampaui target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}. Untuk makan selanjutnya prioritaskan protein sehat tanpa banyak minyak ya. \u{1F4AA}` : `Asupan lemak kamu sudah lewat target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}, sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! \u{1F525}` : isLansia ? `Lemak harian Anda sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728` : `Lemak harian kamu sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya \u2728`;
     } else if (nutritionSummary.calories.isOver) {
-      coachComment = isMax ? `Kalori harian lo udah melampaui target (${totalTodayCal}/${targetCal} kcal) bro! Kunci disiplin lo hari ini, perbanyak minum air putih dan maksimalkan istirahat! \u26A1` : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal). Cukupi hidrasi air putih dan istirahat optimal ya \u2728`;
+      coachComment = isMax ? isLansia ? `Target kalori harian Anda sudah terpenuhi (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan optimalkan istirahat ya. \u{1F4AA}` : `Kalori harian kamu sudah melampaui target (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}! Kunci disiplin kamu hari ini, perbanyak minum air putih dan maksimalkan istirahat! \u26A1` : isLansia ? `Kalori harian Anda sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728` : `Kalori harian kamu sudah terpenuhi hari ini (${totalTodayCal}/${targetCal} kcal), ${validatedAddr}. Cukupi hidrasi air putih dan istirahat optimal ya \u2728`;
     } else if (nutritionSummary.protein.isReached) {
-      coachComment = isMax ? `Target protein harian lo udah tembus (${totalTodayProt}/${targetProt}g)! Mantap banget disiplin makro lo bro! \u{1F4AA}\u{1F525}` : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g)! Pertahankan pola makan sehat ini ya \u2728`;
+      coachComment = isMax ? isLansia ? `Target protein harian Anda sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan konsistensi nutrisi sehat ini. \u{1F4AA}` : `Target protein harian kamu sudah tembus (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Mantap banget disiplin kamu! \u{1F4AA}\u{1F525}` : isLansia ? `Luar biasa, target protein Anda hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728` : `Luar biasa, target protein kamu hari ini sudah tercapai (${totalTodayProt}/${targetProt}g), ${validatedAddr}! Pertahankan pola makan sehat ini ya \u2728`;
     } else if (protein >= 25) {
-      coachComment = isMax ? `Pilihan mantap bro! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot lo! \u{1F4AA}` : `Pilihan makanan yang bagus! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu \u2728`;
+      coachComment = isMax ? isLansia ? `Pilihan yang sangat baik, ${validatedAddr}. Menu ini memberikan suplai protein padat (${protein}g) yang sangat bagus untuk kebugaran tubuh Anda. \u{1F4AA}` : `Pilihan mantap, ${validatedAddr}! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot kamu! \u{1F4AA}` : `Pilihan makanan yang bagus, ${validatedAddr}! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu \u2728`;
     } else {
-      coachComment = isMax ? `Mantap bro! Makanan lo udah tercatat, jaga terus konsistensi nutrisi lo hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya. Semangat terus jaga pola makan seimbangmu! \u2728`;
+      coachComment = isMax ? isLansia ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! \u2728`;
     }
   }
+  coachComment = validateAndFormatCoachNote(coachComment, userData);
   const sections = [];
   sections.push(`\u{1F37D}\uFE0F *${cleanFoodName.toUpperCase()}*
 
@@ -48601,14 +48711,18 @@ function generateDailySummaryCard(userData, dailyTotals, dateLabel = "Hari Ini")
   }
   const isMax = (userData?.persona || "mia").toLowerCase() === "max";
   const coachName = isMax ? "Coach Max" : "Coach Mia";
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
+  const isLansia = addressing.ageGroup === "Lansia";
   let quote = "";
   if (sodiumVal > 2e3) {
-    quote = isMax ? `Jaga terus ritme lo bro! Natrium lo (${sodiumVal.toLocaleString("id-ID")} mg) udah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! \u{1F4AA}` : `Kamu hebat sudah konsisten mencatat hari ini! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728`;
+    quote = isMax ? isLansia ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, mohon banyakin minum air putih hangat dan kurangi makanan asin ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Natrium kamu (${sodiumVal.toLocaleString("id-ID")} mg) sudah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! \u{1F4AA}` : isLansia ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Asupan natrium Anda (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih \u2728`;
   } else if (sugarVal > 50) {
-    quote = isMax ? `Jaga terus ritme lo bro! Gula lo (${sugarVal}g) udah lewat batas anjuran 50g hari ini, jadi perbanyak minum air putih dan kurangi makanan/minuman manis ya! \u{1F4AA}` : `Kamu hebat sudah konsisten mencatat hari ini! Asupan gula harianmu (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728`;
+    quote = isMax ? isLansia ? `Jaga terus ritme Anda, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, mohon perbanyak minum air putih dan kurangi makanan/minuman manis ya. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Gula kamu (${sugarVal}g) sudah lewat batas anjuran 50g hari ini, jadi perbanyak minum air putih dan kurangi makanan/minuman manis ya! \u{1F4AA}` : isLansia ? `Pencatatan yang sangat baik hari ini, ${validatedAddr}. Asupan gula Anda (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728` : `Kamu hebat sudah konsisten mencatat hari ini, ${validatedAddr}! Asupan gula harianmu (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih \u2728`;
   } else {
-    quote = isMax ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil. \u{1F4AA}" : "Kamu hebat sudah konsisten ngetrack hari ini! Tetap semangat ya \u2728";
+    quote = isMax ? isLansia ? `Konsistensi yang sangat baik, ${validatedAddr}. Tetap jaga pola makan sehat dan istirahat optimal Anda. \u{1F4AA}` : `Jaga terus ritme kamu, ${validatedAddr}! Konsistensi kamu mantap hari ini, jangan kendor di jam-jam rawan ngemil. \u{1F4AA}` : isLansia ? `Pencatatan yang luar biasa hari ini, ${validatedAddr}. Tetap semangat menjaga kebugaran ya \u2728` : `Kamu hebat sudah konsisten ngetrack hari ini, ${validatedAddr}! Tetap semangat ya \u2728`;
   }
+  quote = validateAndFormatCoachNote(quote, userData);
   return `\u{1F4C6} *Rekap ${dateLabel}*
 
 \u2696\uFE0F *Berat*: ${userData.weight} kg
@@ -48758,8 +48872,13 @@ function formatEquipmentCard(parsedAi, userData) {
     return guide.text;
   }
   const isAligned = parsedAi.isAlignedWithGoal !== false;
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
   if (!isAligned) {
-    const redirectionMsg = parsedAi.politeRedirection || (persona === "max" ? `Kayaknya alat ${equipmentName} ini kurang cocok buat goal lo (${userData.goalTitle}) dulu ya bro. Kita fokus ke gerakan utama yang lebih efektif & aman!` : `Wah, sepertinya alat ${equipmentName} ini belum menjadi prioritas utama untuk goal ${userData.goalTitle} kamu ya \u2728 Yuk fokus ke latihan dasar yang lebih sesuai dulu!`);
+    const redirectionMsg = validateAndFormatCoachNote(
+      parsedAi.politeRedirection || (persona === "max" ? `Kayaknya alat ${equipmentName} ini kurang cocok buat goal kamu (${userData.goalTitle}) dulu ya, ${validatedAddr}. Kita fokus ke gerakan utama yang lebih efektif & aman! \u{1F4AA}` : `Wah, sepertinya alat ${equipmentName} ini belum menjadi prioritas utama untuk goal ${userData.goalTitle} kamu ya, ${validatedAddr} \u2728 Yuk fokus ke latihan dasar yang lebih sesuai dulu!`),
+      userData
+    );
     return `\u{1F3CB}\uFE0F *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*
 
 \u26A0\uFE0F *Status Goal Alignment*:
@@ -48779,7 +48898,10 @@ ${parsedAi.alignmentExplanation || "Gunakan latihan dasar yang lebih sesuai deng
   ).join("\n\n") : `\u2022 *Custom Exercise*
   \u{1F522} Target: 3 Sets x 12 Reps
   \u{1F4A1} Tips: Kontrol gerakan saat eccentric.`;
-  const comment = parsedAi.coachComment || (persona === "max" ? `Alat ini mantap banget buat goal lo! Sikat gerakan di atas & pastikan form lo bersih!` : `Alat ini sangat cocok untuk mendukung ${userData.goalTitle} kamu! Lakukan dengan perlahan dan nikmati prosesnya ya \u2728`);
+  const comment = validateAndFormatCoachNote(
+    parsedAi.coachComment || (persona === "max" ? `Alat ini mantap banget buat goal kamu, ${validatedAddr}! Lakukan gerakan di atas & pastikan form kamu bersih! \u{1F4AA}` : `Alat ini sangat cocok untuk mendukung ${userData.goalTitle} kamu, ${validatedAddr}! Lakukan dengan perlahan dan nikmati prosesnya ya \u2728`),
+    userData
+  );
   return `\u{1F3CB}\uFE0F *PANDUAN ALAT GYM: ${equipmentName.toUpperCase()}*
 
 \u2705 *Status Goal Alignment*:
@@ -48988,7 +49110,12 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   if (duration) details.push(`\u23F1\uFE0F Durasi: *${duration} menit*`);
   if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
   details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
-  const comment = userData.persona === "max" ? "Mantap bro! Aktivitas ekstra lo udah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}" : "Bagus banget tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728";
+  const addressing = getValidatedUserAddressing(userData);
+  const validatedAddr = addressing.validatedAddress;
+  const comment = validateAndFormatCoachNote(
+    userData.persona === "max" ? `Bagus, ${validatedAddr}! Aktivitas ekstra kamu sudah tercatat. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : `Bagus banget, ${validatedAddr}! Tetap aktif bergerak! Jangan lupa cukupi minum air putih dan istirahat ya \u2728`,
+    userData
+  );
   return [
     `\u{1F3C5} *AKTIVITAS TAMBAHAN DICATAT*
 -----------------------------
@@ -50764,12 +50891,12 @@ https://gymbuddygroup.com`
                 responseMessages = [correctionResult.card];
               } else {
                 responseMessages = [
-                  isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry bro, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+                  isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
                 ];
               }
             } else {
               responseMessages = [
-                isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi bro! Kirim foto atau sebutkan makanan lo dulu! \u{1F4AA}`
+                isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
               ];
             }
           } else if (getAi()) {
@@ -50779,26 +50906,29 @@ https://gymbuddygroup.com`
               responseMessages = [
                 `\u{1F4F8} *FOTO BELUM BERHASIL DIPROSES*
 -----------------------------
-Halo ${userData.name}! Fotonya belum berhasil terunduh oleh sistem WhatsApp Meta.
+Halo ${getValidatedUserAddressing(userData).validatedAddress}! Fotonya belum berhasil terunduh oleh sistem WhatsApp Meta.
 
 \u{1F4A1} *Solusi Cepat*:
 Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + Ayam Goreng"*), maka ${coachName} akan langsung mencatat kalori & makronya! \u{1F957}\u2728`
               ];
             } else {
               const isMia = userData.persona === "mia" || userData.persona === "nikita";
-              const processingMsg = isMia ? "Sebentar ya, aku cek dulu... \u2728" : "Sebentar. Aku cek dulu.";
+              const addressing = getValidatedUserAddressing(userData);
+              const processingMsg = isMia ? `Sebentar ya ${addressing.validatedAddress}, aku cek dulu... \u2728` : `Sebentar ${addressing.validatedAddress}. Aku cek dulu.`;
               await sendMetaWhatsappMessage(from, processingMsg);
               const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
-- BATASAN MUTLAK:
-  \u2022 DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
-  \u2022 Hindari pujian berlebihan atau kata klise yang diulang-ulang.
+- Gaya Bicara & Sapaan:
+  \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
+  \u2022 DILARANG KERAS menggunakan panggilan seperti "sayang", "cinta", "beb", "sis", "bestie", dll.
   \u2022 Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.` : `PERSONA COACH MAX:
 - Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
-- Gaya Bicara:
-  \u2022 Untuk user LAKI-LAKI: Bahasa santai (lo/gue) atau bro yang percaya diri.
-  \u2022 Untuk user PEREMPUAN: Percaya diri, direct, dan natural (kamu/aku atau kamu/gue). JANGAN PERNAH memanggil perempuan dengan "bro", "woy bro", atau "bang".
-  \u2022 Untuk user LANSIA (60+ th): Tetap tegas namun santun dan respectful (Pak/Bu [Nama], Anda/kamu), tanpa slang jalanan.
+- Gaya Bicara & Sapaan:
+  \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
+  \u2022 DILARANG KERAS memanggil pengguna dengan istilah slang umum seperti "bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan" atau sapaan buatan lainnya. Kata "bro" DILARANG digunakan kecuali jika itu adalah nama panggilan resmi tervalidasi pengguna.
+  \u2022 Karakter tegas Coach Max TIDAK BOLEH mengesampingkan format sapaan tervalidasi pengguna.
+  \u2022 Contoh BENAR: "Bagus, ${addressing.validatedAddress}! Aktivitas ekstra kamu sudah tercatat..."
+  \u2022 Contoh SALAH: "Mantap bro! Aktivitas ekstra lo udah tercatat."
 - BATASAN MUTLAK:
   \u2022 Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   \u2022 Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
@@ -50806,24 +50936,37 @@ Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + A
               const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
               const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
-- Nama: ${userData.name}
+- Nama Lengkap: ${userData.name}
+- Nama Panggilan (Nickname): ${addressing.nickname}
+- Sapaan Wajib: ${addressing.validatedAddress}
 - Gender: ${genderLabel}
-- Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
+- Usia: ${userData.age} tahun (Kelompok Usia: ${addressing.ageGroup})
 - Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
 
-ATURAN KOMUNIKASI & PERSONALISASI GENDER/USIA:
-1. SESUAIKAN SAPAAN DENGAN GENDER & USIA:
-   - DILARANG memanggil semua user dengan "bro", "woy bro", "bang", atau "mas" secara default.
-   - User Perempuan: Gunakan sapaan alami seperti "Hai ${userData.name}", "Halo ${userData.name}", atau "kamu/aku". DILARANG memanggil perempuan dengan "bro".
-   - User Laki-laki: Boleh gunakan sapaan santai "lo/gue" atau "bro" jika persona Max, atau "kamu/aku" jika persona Mia.
-   - User Lansia (60+ th): Gunakan bahasa yang sopan, santun, dan respectful (Pak/Bu ${userData.name}, Anda/kamu), hindari slang jalanan.
-   - User Anak (<13 th): Gunakan bahasa yang sederhana, ceria, dan mudah dipahami.
-2. DILARANG MEMBUAT STEREOTIP GENDER ("cewek biasanya...", "cowok harusnya...").
-3. Nama user harus digunakan secara natural, jangan dipaksakan di setiap kalimat.
+ATURAN SAPAAN PENGGUNA & NICKNAME BERDASARKAN USIA (SOURCE OF TRUTH MUTLAK):
+1. IDENTITAS & FORMAT SAPAAN WAJIB:
+   - Nama Panggilan / Nickname: "${addressing.nickname}"
+   - Format Sapaan Tervalidasi: "${addressing.validatedAddress}"
+   - Kategori Usia: "${addressing.ageGroup}" (${userData.age} tahun)
+   - Kata Ganti Pengguna: "${addressing.pronounUser}"
+2. ATURAN SAPAAN KETAT:
+   - Sapa pengguna HANYA dengan format sapaan tervalidasi: "${addressing.validatedAddress}".
+   - DILARANG KERAS memanggil atau mengganti sapaan dengan istilah gaul/slang seperti "bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan" atau sapaan informal buatan sendiri.
+   - Kata "bro" DILARANG dihasilkan kecuali jika itu adalah nama panggilan resmi tervalidasi pengguna.
+3. KEPRIBADIAN COACH MAX & COACH MIA:
+   - Coach Mia: Ramah, hangat, menyemangati secara halus, empatik, suportif.
+   - Coach Max: Tegas, disiplin, percaya diri, to-the-point, fokus pada akuntabilitas.
+   - KEDUA COACH WAJIB MEMATUHI ATURAN SAPAAN YANG SAMA. Kepribadian coach TIDAK BOLEH mengesampingkan sapaan valid pengguna.
+   Contoh BENAR:
+   "Bagus, ${addressing.validatedAddress}! Aktivitas ekstra kamu sudah tercatat..."
+   Contoh SALAH:
+   "Mantap bro! Aktivitas ekstra lo udah tercatat."
+4. DILARANG MEMBUAT STEREOTIP GENDER ("cewek biasanya...", "cowok harusnya...").
+5. Nama user harus digunakan secara natural, jangan dipaksakan di setiap kalimat.
 
 ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 1. DILARANG KERAS mendiagnosis pengguna (misal jika lutut sakit, jangan simpulkan arthritis).
@@ -50942,7 +51085,7 @@ Keluarkan output JSON valid:
                   const eqCard = formatEquipmentCard(parsed, userData);
                   responseMessages = [eqCard];
                 } else {
-                  responseMessages = [parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?"];
+                  responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
                 }
               } catch (e) {
                 console.error("Gemini AI Error:", e);
@@ -51303,28 +51446,31 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           } else {
             const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
             responseMessages = [
-              isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry bro, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
+              isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
             ];
           }
         } else {
           const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
           responseMessages = [
-            isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi bro! Kirim foto atau sebutkan makanan lo dulu! \u{1F4AA}`
+            isMia ? `Belum ada catatan makanan hari ini yang bisa dikoreksi ya \u2728 Silakan catat atau foto makananmu terlebih dahulu!` : `Belum ada log makanan hari ini yang bisa dikoreksi, ${getValidatedUserAddressing(userData).validatedAddress}! Kirim foto atau sebutkan makanan kamu dulu ya! \u{1F4AA}`
           ];
         }
       } else {
         const isMia = userData.persona === "mia" || userData.persona === "nikita";
+        const addressing = getValidatedUserAddressing(userData);
         const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
-- BATASAN MUTLAK:
-  \u2022 DILARANG KERAS menggunakan panggilan "sayang", "cinta", "beb", dll.
-  \u2022 Hindari pujian berlebihan atau kata klise yang diulang-ulang.
-  \u2022 Jangan terdengar kekanak-kanakan. Tetap 100% profesional, ilmiah, dan terpercaya.` : `PERSONA COACH MAX:
+- Gaya Bicara & Sapaan:
+  \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
+  \u2022 DILARANG KERAS menggunakan panggilan seperti "sayang", "cinta", "beb", "sis", "bestie", dll.
+  \u2022 Tetap profesional, hangat, ilmiah, dan terpercaya.` : `PERSONA COACH MAX:
 - Karakter: Tegas, disiplin, percaya diri, fokus pada akuntabilitas (accountability), dan motivasi ringkas to-the-point.
-- Gaya Bicara:
-  \u2022 Untuk user LAKI-LAKI: Bahasa santai (lo/gue) atau bro yang percaya diri.
-  \u2022 Untuk user PEREMPUAN: Percaya diri, direct, dan natural (kamu/aku atau kamu/gue). JANGAN PERNAH memanggil perempuan dengan "bro", "woy bro", atau "bang".
-  \u2022 Untuk user LANSIA (60+ th): Tetap tegas namun santun dan respectful (Pak/Bu [Nama], Anda/kamu), tanpa slang jalanan.
+- Gaya Bicara & Sapaan:
+  \u2022 Sapaan Wajib: Panggil pengguna HANYA dengan sapaan tervalidasi: "${addressing.validatedAddress}".
+  \u2022 DILARANG KERAS memanggil pengguna dengan istilah slang umum seperti "bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan" atau sapaan buatan lainnya. Kata "bro" DILARANG digunakan kecuali jika itu adalah nama panggilan resmi tervalidasi pengguna.
+  \u2022 Karakter tegas Coach Max TIDAK BOLEH mengesampingkan format sapaan tervalidasi pengguna.
+  \u2022 Contoh BENAR: "Bagus, ${addressing.validatedAddress}! Aktivitas ekstra kamu sudah tercatat..."
+  \u2022 Contoh SALAH: "Mantap bro! Aktivitas ekstra lo udah tercatat."
 - BATASAN MUTLAK:
   \u2022 Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   \u2022 Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
@@ -51340,14 +51486,37 @@ Jika user meminta pencatatan kalori/makanan, berikan estimasi singkat lalu ingat
         const genderLabel = isFemale ? "Perempuan" : "Laki-laki";
         const prompt = `GYMBUDDY AI MASTER INSTRUCTION:
 INFORMASI PENGGUNA:
-- Nama: ${userData.name}
+- Nama Lengkap: ${userData.name}
+- Nama Panggilan (Nickname): ${addressing.nickname}
+- Sapaan Wajib: ${addressing.validatedAddress}
 - Gender: ${genderLabel}
-- Usia: ${userData.age} tahun (Kelompok: ${userData.ageGroup || "Dewasa"})
+- Usia: ${userData.age} tahun (Kelompok Usia: ${addressing.ageGroup})
 - Kondisi Kesehatan: ${userData.healthConditionsSummary || "Tidak ada kondisi khusus / Sehat"}
 - Berat Saat Ini: ${userData.weight} kg | Target BB: ${userData.targetWeight} kg
 - Target Kalori Harian: ${userData.targetCalories} kcal
 - Target Makro: Protein ${userData.proteinGrams}g, Karbo ${userData.carbGrams}g, Lemak ${userData.fatGrams}g, Serat ${userData.fiberGrams}g
 - Goal Utama: ${userData.goalTitle}
+
+ATURAN SAPAAN PENGGUNA & NICKNAME BERDASARKAN USIA (SOURCE OF TRUTH MUTLAK):
+1. IDENTITAS & FORMAT SAPAAN WAJIB:
+   - Nama Panggilan / Nickname: "${addressing.nickname}"
+   - Format Sapaan Tervalidasi: "${addressing.validatedAddress}"
+   - Kategori Usia: "${addressing.ageGroup}" (${userData.age} tahun)
+   - Kata Ganti Pengguna: "${addressing.pronounUser}"
+2. ATURAN SAPAAN KETAT:
+   - Sapa pengguna HANYA dengan format sapaan tervalidasi: "${addressing.validatedAddress}".
+   - DILARANG KERAS memanggil atau mengganti sapaan dengan istilah gaul/slang seperti "bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan" atau sapaan informal buatan sendiri.
+   - Kata "bro" DILARANG dihasilkan kecuali jika itu adalah nama panggilan resmi tervalidasi pengguna.
+3. KEPRIBADIAN COACH MAX & COACH MIA:
+   - Coach Mia: Ramah, hangat, menyemangati secara halus, empatik, suportif.
+   - Coach Max: Tegas, disiplin, percaya diri, to-the-point, fokus pada akuntabilitas.
+   - KEDUA COACH WAJIB MEMATUHI ATURAN SAPAAN YANG SAMA. Kepribadian coach TIDAK BOLEH mengesampingkan sapaan valid pengguna.
+   Contoh BENAR:
+   "Bagus, ${addressing.validatedAddress}! Aktivitas ekstra kamu sudah tercatat..."
+   Contoh SALAH:
+   "Mantap bro! Aktivitas ekstra lo udah tercatat."
+4. DILARANG MEMBUAT STEREOTIP GENDER ("cewek biasanya...", "cowok harusnya...").
+5. Nama user harus digunakan secara natural, jangan dipaksakan di setiap kalimat.
 
 ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 1. DILARANG KERAS mendiagnosis pengguna (misal jika lutut sakit, jangan simpulkan arthritis).
@@ -51363,8 +51532,8 @@ ATURAN PENANGANAN REFERENSI TIDAK DIKENAL & OUT-OF-CONTEXT INPUT:
      \u2022 DILARANG pura-pura tahu ("A tentu punya...", "A memang dikenal sebagai...", "Si A adalah role model hebat!").
      \u2022 DILARANG forced positivity ("Wah keren banget! Kamu pasti bisa seperti A!").
      \u2022 TANYAKAN KLARIFIKASI SECARA SINGKAT & ALAMI:
-       Contoh Coach Max: "Si A yang lo maksud siapa nih bro? Kasih tahu namanya atau sedikit konteks tentang dia biar gue nggak salah nangkep. \u{1F4AA}"
-       Contoh Coach Mia: "Si A yang kamu maksud siapa ya? \u{1F604} Boleh kasih tahu namanya atau sedikit konteks tentang dia biar aku nggak salah paham \u2728"
+       Contoh Coach Max: "Si A yang kamu maksud siapa nih, ${addressing.validatedAddress}? Kasih tahu namanya atau sedikit konteks tentang dia biar aku nggak salah nangkep. \u{1F4AA}"
+       Contoh Coach Mia: "Si A yang kamu maksud siapa ya, ${addressing.validatedAddress}? \u{1F604} Boleh kasih tahu namanya atau sedikit konteks tentang dia biar aku nggak salah paham \u2728"
        Jika konteks fisik/latihan: "Si A yang kamu maksud siapa? Kalau kamu kasih tahu nama atau bentuk tubuh/goal yang kamu maksud, aku bisa bantu breakdown targetnya."
        Jika konteks makanan: "Si A yang kamu maksud siapa? Kalau kamu punya contoh menu atau pola makannya, kirim aja dan aku bisa bantu analisis."
 2. BEDAKAN KNOWN CONTEXT VS UNKNOWN CONTEXT:
@@ -51493,8 +51662,8 @@ Keluarkan output JSON valid:
           const isEquipmentMatch = parsed.isEquipment || imagePart && !parsed.isFood || lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym");
           if (parsed.isFood) {
             if (parsed.needsClarification && !userText.trim()) {
-              const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Bro, fotonya udah gue cek. Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
-              responseMessages = [parsed.clarificationQuestion || defaultClarification];
+              const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
+              responseMessages = [validateAndFormatCoachNote(parsed.clarificationQuestion || defaultClarification, userData)];
             } else {
               const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                 userText,
@@ -51548,13 +51717,13 @@ Keluarkan output JSON valid:
             if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
             parsed.isEquipment = true;
             const dbMatch = findExerciseOrEquipment(parsed.equipmentName || userText);
-            const eqCard = formatEquipmentTutorialCard(parsed, userData);
+            const eqCard = formatEquipmentCard(parsed, userData);
             responseMessages = [eqCard];
             if (dbMatch && (dbMatch.gifUrl || dbMatch.imageFrames?.[0])) {
               mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
             }
           } else {
-            responseMessages = [parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?"];
+            responseMessages = [validateAndFormatCoachNote(parsed.generalReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?", userData)];
           }
         } catch (e) {
           console.error("Gemini AI Error:", e);

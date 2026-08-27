@@ -986,7 +986,7 @@ export default function Dashboard({
 
   const applyNotifSchedulers = (settings: typeof notifSettings) => {
     notificationService.stopAllSchedulers();
-    const userName = activeUser.name?.split(" ")[0] || "Bro";
+    const userName = activeUser.nickname || activeUser.name?.split(" ")[0] || "Member";
     const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
     if (settings.workoutEnabled) {
       notificationService.startDailyWorkoutScheduler(userName, focus, settings.workoutHour, settings.workoutMinute);
@@ -2244,7 +2244,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     // ── Auto-start notification schedulers if permission already granted ──
     if (notificationService.getPermission() === "granted") {
-      const userName = activeUser.name?.split(" ")[0] || "Bro";
+      const userName = activeUser.nickname || activeUser.name?.split(" ")[0] || "Member";
       const focus = todayScheduleObj?.focus || "Latihan Hari Ini";
       notificationService.startAllSchedulers(userName, focus, 7);
     }

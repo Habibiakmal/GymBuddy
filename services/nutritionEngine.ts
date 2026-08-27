@@ -2310,3 +2310,142 @@ Keluarkan JSON valid:
   ]
 };`;
 }
+
+// ─── COACH ADDRESSING & AGE-BASED NICKNAME VALIDATION ────────────────────────
+
+export interface UserAddressing {
+  nickname: string;           // e.g. "Budi", "Siti", "Habibi"
+  validatedAddress: string;   // e.g. "Pak Budi", "Bu Siti", "Budi"
+  honorific: string;          // "Pak" | "Bu" | ""
+  ageGroup: "Anak" | "Remaja" | "Dewasa" | "Lansia";
+  ageGroupKey: "child" | "teen" | "adult" | "older_adult";
+  pronounUser: "Anda" | "kamu";
+  pronounCoach: "Saya" | "Aku";
+  forbiddenTerms: string[];
+}
+
+/**
+ * Derives the strict, validated form of address for a user according to their validated age category
+ * and configured nickname. The Coach must NOT independently invent or infer how to address the user.
+ */
+export function getValidatedUserAddressing(userData: any): UserAddressing {
+  // 1. Retrieve configured nickname / validated clean name
+  let rawName = String(userData?.nickname || userData?.name || "Member").trim();
+  // Strip leading honorific if user previously stored "Pak Budi" into name field so we can re-apply cleanly
+  const strippedName = rawName.replace(/^(pak|bapak|bu|ibu|kak|bang|mas)\s+/i, "").trim() || rawName;
+  const nickname = strippedName.split(/\s+/)[0] || "Member";
+
+  // 2. Retrieve validated age category
+  const age = Number(userData?.age) || 25;
+  let ageGroup: "Anak" | "Remaja" | "Dewasa" | "Lansia" = userData?.ageGroup;
+  let ageGroupKey: "child" | "teen" | "adult" | "older_adult" = userData?.ageGroupKey;
+
+  if (!ageGroup) {
+    if (age < 13) {
+      ageGroup = "Anak";
+      ageGroupKey = "child";
+    } else if (age <= 17) {
+      ageGroup = "Remaja";
+      ageGroupKey = "teen";
+    } else if (age < 60) {
+      ageGroup = "Dewasa";
+      ageGroupKey = "adult";
+    } else {
+      ageGroup = "Lansia";
+      ageGroupKey = "older_adult";
+    }
+  }
+
+  const genderStr = String(userData?.gender || "pria").toLowerCase();
+  const isFemale = genderStr === "wanita" || genderStr === "female";
+
+  let honorific = "";
+  let validatedAddress = nickname;
+  let pronounUser: "Anda" | "kamu" = "kamu";
+  let pronounCoach: "Saya" | "Aku" = "Aku";
+
+  if (ageGroup === "Lansia") {
+    honorific = isFemale ? "Bu" : "Pak";
+    validatedAddress = `${honorific} ${nickname}`;
+    pronounUser = "Anda";
+    pronounCoach = "Saya";
+  } else {
+    honorific = "";
+    validatedAddress = nickname;
+    pronounUser = "kamu";
+    pronounCoach = "Aku";
+  }
+
+  return {
+    nickname,
+    validatedAddress,
+    honorific,
+    ageGroup,
+    ageGroupKey,
+    pronounUser,
+    pronounCoach,
+    forbiddenTerms: ["bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan", "woy bro"]
+  };
+}
+
+/**
+ * Validates and formats a Coach Note according to strict 7-point Coach Addressing Rules:
+ * 1. Identify current user.
+ * 2. Retrieve user's validated age category.
+ * 3. Retrieve corresponding addressing rule.
+ * 4. Retrieve user's configured nickname.
+ * 5. Generate / sanitize Coach Note using that exact form of address.
+ * 6. Verify address does not conflict with age category.
+ * 7. Never substitute validated address with generic casual slang ("bro", "sis", "guys", "boss", "bestie").
+ */
+export function validateAndFormatCoachNote(rawNote: string, userData: any): string {
+  if (!rawNote || typeof rawNote !== "string") return "";
+
+  const addressing = getValidatedUserAddressing(userData);
+  const isLansia = addressing.ageGroup === "Lansia";
+  const isAnak = addressing.ageGroup === "Anak";
+  const addr = addressing.validatedAddress;
+
+  let cleaned = rawNote.trim();
+
+  // Strip leading/trailing quote marks if wrapped
+  cleaned = cleaned.replace(/^["“]|["”]$/g, "").trim();
+
+  // Step 1: Remove/replace forbidden generic slang ("bro", "sis", "guys", "boss", "bestie", "sob", "bray", "gan")
+  // Patterns like "Mantap bro!" -> "Mantap, Budi!"
+  cleaned = cleaned.replace(/\b(?:woy\s+)?bro\b/gi, addr);
+  cleaned = cleaned.replace(/\b(?:woy\s+)?sis\b/gi, addr);
+  cleaned = cleaned.replace(/\bguys\b/gi, addr);
+  cleaned = cleaned.replace(/\bboss\b/gi, addr);
+  cleaned = cleaned.replace(/\bbestie\b/gi, addr);
+  cleaned = cleaned.replace(/\bsob\b/gi, addr);
+  cleaned = cleaned.replace(/\bbray\b/gi, addr);
+  cleaned = cleaned.replace(/\bgan\b/gi, addr);
+
+  // Clean duplicate commas or spaces created by replacement (e.g. ", Budi,")
+  cleaned = cleaned.replace(/,\s*,/g, ",");
+  cleaned = cleaned.replace(/\s+,/g, ",");
+  cleaned = cleaned.replace(/\s+/g, " ");
+
+  // Step 2: Lansia specific grammar & respect check
+  if (isLansia) {
+    // Replace Jakarta slang "lo/lu/gue" and informal "kamu/mu" with "Anda/Saya"
+    cleaned = cleaned.replace(/\blo\b|\blu\b/gi, "Anda");
+    cleaned = cleaned.replace(/\bgue\b/gi, "Saya");
+    cleaned = cleaned.replace(/\bkamu\b/gi, "Anda");
+    cleaned = cleaned.replace(/(\w+)mu\b/gi, "$1 Anda");
+    cleaned = cleaned.replace(/\bmaksimalkan\b/gi, "optimalkan");
+    cleaned = cleaned.replace(/\bSikat\b/gi, "Lakukan");
+  } else if (isAnak) {
+    // Anak: simple, clear, cheerful, never "lo/lu/gue"
+    cleaned = cleaned.replace(/\blo\b|\blu\b/gi, "kamu");
+    cleaned = cleaned.replace(/\bgue\b/gi, "aku");
+  } else {
+    // Dewasa / Remaja: replace any remaining "lo" when used informally
+    cleaned = cleaned.replace(/\blo\b/gi, "kamu");
+    cleaned = cleaned.replace(/\blu\b/gi, "kamu");
+  }
+
+  return cleaned.trim();
+}
+

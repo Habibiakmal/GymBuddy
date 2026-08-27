@@ -160,7 +160,7 @@ export class GymBuddyNotificationService {
   // On iOS, only fires if app is open (iOS limitation for web push).
 
   public startDailyWorkoutScheduler(
-    userName: string = "Bro",
+    userName: string = "Member",
     workoutFocus: string = "Latihan Hari Ini",
     targetHour: number = 7,
     targetMinute: number = 0
@@ -237,7 +237,7 @@ export class GymBuddyNotificationService {
   // ─── STREAK REMINDER ──────────────────────────────────────────────────────
   // Fires if the user hasn't logged anything by 8pm.
 
-  public scheduleStreakReminder(userName: string = "Bro"): void {
+  public scheduleStreakReminder(userName: string = "Member"): void {
     const key = "streak-reminder";
     if (this.schedulerTimers.has(key)) return;
 
