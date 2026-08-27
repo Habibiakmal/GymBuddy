@@ -52,7 +52,11 @@ import {
   validateAndFormatCoachNote,
   formatDashboardMacro,
   formatDashboardInteger,
-  formatDashboardPercent
+  formatDashboardPercent,
+  applyTargetedMealCorrection,
+  extractMealComponents,
+  type MealComponentItem,
+  type MealCorrectionResult
 } from "./services/nutritionEngine";
 import {
   getUserPlanCapabilities,
@@ -68,11 +72,15 @@ export {
   validatePlanContext,
   formatDashboardMacro,
   formatDashboardInteger,
-  formatDashboardPercent
+  formatDashboardPercent,
+  applyTargetedMealCorrection,
+  extractMealComponents
 };
 export type {
   UserPlanCapabilities,
-  PlanValidationResult
+  PlanValidationResult,
+  MealComponentItem,
+  MealCorrectionResult
 };
 import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
@@ -90,14 +98,19 @@ export function sanitizeWhatsAppResponse(text: string): string {
   if (!text || typeof text !== "string") return "";
 
   let cleaned = text
+    // Merge broken single-character separator lines (e.g. isolated '━' characters on separate lines) into a single continuous separator
+    .replace(/(?:^[━─\-=]{1,3}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
+    .replace(/(?:━\s*[\r\n]+){2,}━/g, "━━━━━━━━━━━━━━")
     // Replace 2 or more consecutive separator lines with a single clean separator
-    .replace(/(?:^[━─\-=]{5,}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
+    .replace(/(?:^[━─\-=]{4,}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
+    // Normalize isolated short separator lines to the canonical continuous separator line
+    .replace(/^[━─\-=]{1,5}$/gm, "━━━━━━━━━━━━━━")
     // Remove isolated empty bullets
     .replace(/^[•\-\*]\s*$/gm, "")
     // Normalize 3+ newlines to max 2 newlines
     .replace(/\n{3,}/g, "\n\n")
     // Strip trailing empty separators at end of message
-    .replace(/[\r\n]+[━─\-=]{5,}\s*$/g, "")
+    .replace(/[\r\n]+[━─\-=]{4,}\s*$/g, "")
     .trim();
 
   return cleaned;
@@ -2368,144 +2381,10 @@ export function detectMealCorrectionIntent(userText: string, hasRecentMeal: bool
 }
 
 export function applyDeterministicCorrection(lastMeal: MealLog, userText: string, isMia: boolean, user: any = "Member"): any {
-  const lower = userText.toLowerCase();
-  const rawEstimates: string[] = Array.isArray((lastMeal as any).portionEstimates) && (lastMeal as any).portionEstimates.length > 0
-    ? [...(lastMeal as any).portionEstimates]
-    : [`• ${lastMeal.foodName}: 1 porsi (~${lastMeal.calories} kcal)`];
-
-  // Extract requested new quantity (e.g. 50g, 50, 0.5 for setengah)
-  let requestedGrams: number | null = null;
-  let requestedFraction: number | null = null;
-
-  const numMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i) || lower.match(/(?:cuma|hanya|jadi|sebanyak|porsi)\s*(\d+(?:[.,]\d+)?)/i);
-  if (numMatch) {
-    requestedGrams = parseFloat(numMatch[1].replace(',', '.'));
-  }
-  if (lower.includes("setengah") || lower.includes("separuh") || lower.includes("1/2") || lower.includes("setengahnya")) {
-    requestedFraction = 0.5;
-  } else if (lower.includes("seperempat") || lower.includes("1/4")) {
-    requestedFraction = 0.25;
-  } else if (lower.includes("dua kali") || lower.includes("2 porsi") || lower.includes("dobel") || lower.includes("double")) {
-    requestedFraction = 2.0;
-  }
-
-  // Keywords to find matching component
-  const componentKeywords = [
-    "daging", "beef", "sapi", "ayam", "chicken", "roti", "bread", "sub",
-    "keju", "cheese", "sayur", "sayuran", "salad", "saus", "sauce", "sambal",
-    "nasi", "rice", "telur", "egg", "minyak", "oil", "kuah", "kentang", "potato",
-    "ikan", "fish", "tahu", "tempe", "susu", "milk", "kopi", "coffee", "teh", "tea", "gula", "sugar"
-  ];
-
-  let matchedIdx = -1;
-  let targetKeyword = "";
-  for (const kw of componentKeywords) {
-    if (lower.includes(kw)) {
-      const idx = rawEstimates.findIndex(line => line.toLowerCase().includes(kw));
-      if (idx !== -1) {
-        matchedIdx = idx;
-        targetKeyword = kw;
-        break;
-      }
-    }
-  }
-
-  // If no specific component matched, default to the first component or whole meal
-  if (matchedIdx === -1) {
-    matchedIdx = 0;
-    targetKeyword = "porsi";
-  }
-
-  const targetLine = rawEstimates[matchedIdx];
-  const oldGramMatch = targetLine.match(/(\d+(?:[.,]\d+)?)\s*g/i);
-  const oldCalMatch = targetLine.match(/~(\d+)\s*kcal/i);
-
-  const oldGrams = oldGramMatch ? parseFloat(oldGramMatch[1].replace(',', '.')) : 100;
-  const oldCal = oldCalMatch ? parseInt(oldCalMatch[1], 10) : Math.round(lastMeal.calories / Math.max(1, rawEstimates.length));
-
-  let newGrams = oldGrams;
-  let ratio = 1.0;
-
-  if (requestedGrams !== null && requestedGrams > 0) {
-    newGrams = requestedGrams;
-    ratio = oldGrams > 0 ? (newGrams / oldGrams) : 1.0;
-  } else if (requestedFraction !== null) {
-    ratio = requestedFraction;
-    newGrams = Math.round(oldGrams * ratio);
-  } else {
-    ratio = 0.7;
-    newGrams = Math.round(oldGrams * ratio);
-  }
-
-  const newCal = Math.max(0, Math.round(oldCal * ratio));
-
-  // Build clean updated line and strip any previous '← diperbarui' markers from other lines
-  const cleanEstimates = rawEstimates.map(line => line.replace(/\s*←\s*diperbarui/gi, "").replace(/\s*\(diperbarui\)/gi, "").trim());
-
-  let updatedTargetLine = cleanEstimates[matchedIdx];
-  if (oldGramMatch) {
-    updatedTargetLine = updatedTargetLine.replace(/(\d+(?:[.,]\d+)?)\s*g/i, `${newGrams}g`);
-  }
-  if (oldCalMatch) {
-    updatedTargetLine = updatedTargetLine.replace(/~(\d+)\s*kcal/i, `~${newCal} kcal`);
-  } else {
-    updatedTargetLine += ` (~${newCal} kcal)`;
-  }
-  updatedTargetLine = `${updatedTargetLine} ← diperbarui`;
-
-  cleanEstimates[matchedIdx] = updatedTargetLine;
-
-  // Sum total calories across all components
-  let newTotalCal = 0;
-  let hasCalCount = 0;
-  cleanEstimates.forEach(line => {
-    const m = line.match(/~(\d+)\s*kcal/i);
-    if (m) {
-      newTotalCal += parseInt(m[1], 10);
-      hasCalCount++;
-    }
-  });
-
-  if (hasCalCount === 0 || newTotalCal <= 0) {
-    const diffCal = newCal - oldCal;
-    newTotalCal = Math.max(50, lastMeal.calories + diffCal);
-  }
-
-  // Scale total macros proportionally
-  const calRatio = lastMeal.calories > 0 ? (newTotalCal / lastMeal.calories) : 1.0;
-  const newProtein = Number((lastMeal.protein * calRatio).toFixed(1));
-  const newCarbs = Number((lastMeal.carbs * calRatio).toFixed(1));
-  const newFat = Number((lastMeal.fat * calRatio).toFixed(1));
-
   const userDataObj = typeof user === "object" && user !== null
     ? user
     : { name: String(user || "Member"), nickname: String(user || "Member"), persona: isMia ? "mia" : "max" };
-  const addressing = getValidatedUserAddressing(userDataObj);
-  const validatedAddr = addressing.validatedAddress;
-  const coachComment = validateAndFormatCoachNote(
-    isMia
-      ? `Siap, ${validatedAddr}. Aku sudah memperbarui porsi ${targetKeyword} dari ${oldGrams}g menjadi ${newGrams}g dan menghitung ulang total nutrisi ${lastMeal.foodName} kamu! ✨`
-      : `Beres, ${validatedAddr}! Porsi ${targetKeyword} udah diupdate dari ${oldGrams}g jadi ${newGrams}g dan total nutrisi ${lastMeal.foodName} kamu udah dihitung ulang! 💪`,
-    userDataObj
-  );
-
-  return {
-    isFood: true,
-    isCorrection: true,
-    foodName: lastMeal.foodName,
-    correctedComponent: targetKeyword,
-    oldPortion: `${oldGrams}g`,
-    newPortion: `${newGrams}g`,
-    calories: newTotalCal,
-    protein: newProtein,
-    carbs: newCarbs,
-    fat: newFat,
-    fiber: lastMeal.fiber || 0,
-    sugar: (lastMeal as any).sugar || 0,
-    sodium: (lastMeal as any).sodium || 0,
-    portionEstimates: cleanEstimates,
-    coachComment
-  };
+  return applyTargetedMealCorrection(lastMeal, userText, userDataObj);
 }
 
 // Master Process Meal Correction Handler
@@ -2520,79 +2399,12 @@ export async function processMealCorrection(
   const lastMeal = getLastFoodMeal(phone, targetDate);
   if (!lastMeal) return null;
 
-  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
-  const userName = userData?.name ? userData.name.split(" ")[0] : "kamu";
-
-  const existingEstimates = Array.isArray((lastMeal as any).portionEstimates) && (lastMeal as any).portionEstimates.length > 0
-    ? (lastMeal as any).portionEstimates.join("\n")
-    : (lastMeal.foodName + ` (~${lastMeal.calories} kcal)`);
-
-  const prompt = `KAMU ADALAH NUTRITION CORRECTION ENGINE UNTUK GYMBUDDY.
-User sedang mengoreksi satu atau beberapa komponen porsi dari makanan terakhir yang SUDAH dicatat.
-
-DATA MAKANAN SEBELUMNYA:
-- Nama Makanan Utama: "${lastMeal.foodName}"
-- Komponen & Porsi Sebelumnya:
-${existingEstimates}
-- Total Nutrisi Sebelumnya:
-  • Kalori: ${lastMeal.calories} kcal
-  • Protein: ${lastMeal.protein}g
-  • Karbo: ${lastMeal.carbs}g
-  • Lemak: ${lastMeal.fat}g
-  • Serat: ${lastMeal.fiber || 0}g
-  • Gula: ${(lastMeal as any).sugar || 0}g
-  • Natrium: ${(lastMeal as any).sodium || 0}mg
-
-PESAN KOREKSI DARI USER:
-"${userText}"
-
-INSTRUKSI PENTING & ATURAN MUTLAK:
-1. USER TIDAK SEDANG MEMBUAT MAKANAN BARU. User sedang MENGUBAH satu atribut/komponen dari makanan "${lastMeal.foodName}".
-2. Identifikasi komponen apa yang dikoreksi user (misalnya "daging", "roti", "keju", "sayur", dll.) dan porsi barunya (misalnya 50g, setengah, 1 porsi, dll.).
-3. PERTAHANKAN seluruh komponen lain yang TIDAK dikoreksi dengan nilai/porsi sebelumnya.
-4. Hitung ulang nutrisi untuk komponen yang diubah, lalu JUMLAHKAN SELURUH KOMPONEN untuk mendapatkan TOTAL NUTRISI BARU MAKANAN LENGKAP.
-5. Format nama makanan HARUS TETAP "${lastMeal.foodName}". JANGAN PERNAH mengubah nama makanan menjadi teks koreksi user.
-6. Pada array "portionEstimates", sebutkan SEMUA komponen makanan dan berikan penanda " ← diperbarui" pada komponen yang baru saja dikoreksi.
-7. Buat kalimat "coachComment" yang ramah dan empatik sesuai persona Coach ${isMia ? "Mia" : "Max"}:
-   - Menyebut nama user ("${userName}")
-   - Menjelaskan komponen apa yang diubah (misalnya "porsi daging sapi dari 70g menjadi 50g")
-   - Mengonfirmasi bahwa seluruh total nutrisi makanan "${lastMeal.foodName}" sudah dihitung ulang secara lengkap.
-
-Keluarkan HANYA JSON valid:
-{
-  "isFood": true,
-  "isCorrection": true,
-  "foodName": "${lastMeal.foodName}",
-  "correctedComponent": "Nama Komponen Yang Diubah",
-  "oldPortion": "Porsi Lama",
-  "newPortion": "Porsi Baru",
-  "calories": 366,
-  "protein": 24.5,
-  "carbs": 42.0,
-  "fat": 11.2,
-  "fiber": 3.0,
-  "sugar": 4.0,
-  "sodium": 580,
-  "portionEstimates": [
-    "• Roti Sub Herb/Gandum 6 inch: 80g (~190 kcal)",
-    "• Irisan daging sapi: 50g (~86 kcal) ← diperbarui",
-    "• Keju leleh: 20g (~70 kcal)",
-    "• Sayuran & acar: 80g (~21 kcal)"
-  ],
-  "coachComment": "Pesan konfirmasi koreksi sesuai persona coach"
-}`;
-
-  let parsedCorrection: any = null;
-  try {
-    const rawText = await generateGeminiContent(prompt);
-    parsedCorrection = extractAndParseJson(rawText);
-  } catch (err) {
-    console.error("[MealCorrection] AI call error, applying deterministic fallback:", err);
-  }
-
-  if (!parsedCorrection || !parsedCorrection.calories || isNaN(Number(parsedCorrection.calories))) {
-    parsedCorrection = applyDeterministicCorrection(lastMeal, userText, isMia, userName);
-  }
+  // 1. Apply targeted correction:
+  // - Treats previously logged meal as SOURCE OF TRUTH (EDIT, NOT NEW ESTIMATION)
+  // - Modifies ONLY specific item(s) explicitly mentioned by the user
+  // - Preserves 100% of unchanged items' portions, calories, and macros
+  // - Delta-based calculation: Corrected Meal = Original Meal − Old Item + New Item
+  const parsedCorrection = applyTargetedMealCorrection(lastMeal, userText, userData);
 
   const updatedCalories = Math.max(0, Math.round(Number(parsedCorrection.calories) || lastMeal.calories));
   const updatedProtein = Math.max(0, Number((Number(parsedCorrection.protein) || lastMeal.protein).toFixed(1)));
@@ -2613,9 +2425,22 @@ Keluarkan HANYA JSON valid:
     sugar: updatedSugar,
     sodium: updatedSodium,
     portionEstimates: parsedCorrection.portionEstimates || (lastMeal as any).portionEstimates,
+    items: parsedCorrection.components.map(c => ({
+      food_name: c.name,
+      portion: c.portion,
+      calories: c.calories,
+      protein: c.protein,
+      carbs: c.carbs,
+      fat: c.fat,
+      fiber: c.fiber,
+      sugar: c.sugar,
+      sodium: c.sodium
+    })),
     timestamp: new Date().toISOString()
   };
 
+  // 2. Replace original meal in database (replaces old meal by ID)
+  // Ensures New Daily Total = Previous Daily Total − Original Meal Total + Corrected Meal Total
   updateExistingMealLog(phone, updatedMealRecord, targetDate);
 
   const validatedParsed = {
@@ -2631,16 +2456,15 @@ Keluarkan HANYA JSON valid:
     sugar: updatedSugar,
     sodium: updatedSodium,
     portionEstimates: parsedCorrection.portionEstimates,
-    coachComment: validateAndFormatCoachNote(
-      parsedCorrection.coachComment || (isMia
-        ? `Siap, ${getValidatedUserAddressing(userData).validatedAddress}. Aku sudah memperbarui porsi ${parsedCorrection.correctedComponent || "makanan"} kamu dan menghitung ulang total nutrisinya! ✨`
-        : `Beres, ${getValidatedUserAddressing(userData).validatedAddress}! Porsi ${parsedCorrection.correctedComponent || "makanan"} kamu udah diupdate dan total nutrisinya udah dihitung ulang! 💪`),
-      userData
-    ),
+    coachComment: parsedCorrection.coachComment,
     confidenceLevel: 95
   };
 
+  // 3. Daily totals recalculated from database logs:
+  // Previous Daily Total − Original Meal Total + Corrected Meal Total = New Daily Total
   const dailyTotals = getDailyTotals(phone, targetDate);
+
+  // 4. Response structure formatted identically to standard meal response
   const card = formatNutritionCard(
     validatedParsed,
     "Koreksi",

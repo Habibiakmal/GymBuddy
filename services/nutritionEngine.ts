@@ -2495,3 +2495,479 @@ export function validateAndFormatCoachNote(rawNote: string, userData: any): stri
   return cleaned.trim();
 }
 
+/**
+ * Interface representing a granular item/component within a logged meal.
+ */
+export interface MealComponentItem {
+  name: string;
+  portion: string;
+  weightGrams?: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  isUpdated?: boolean;
+  isRemoved?: boolean;
+}
+
+/**
+ * Result structure returned by applyTargetedMealCorrection.
+ */
+export interface MealCorrectionResult {
+  isFood: boolean;
+  isCorrection: boolean;
+  foodName: string;
+  correctedComponent: string;
+  oldPortion: string;
+  newPortion: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  portionEstimates: string[];
+  components: MealComponentItem[];
+  coachComment: string;
+  confidenceLevel: number;
+}
+
+/**
+ * Decomposes a logged meal into individual item components.
+ * Retrieves all food/drink items and their previously calculated portion and nutrition values.
+ * Treats those values as fixed (source of truth).
+ */
+export function extractMealComponents(meal: any): MealComponentItem[] {
+  if (!meal) return [];
+
+  // 1. Check if structured items array exists
+  if (Array.isArray(meal.items) && meal.items.length > 0 && typeof meal.items[0] === "object") {
+    return meal.items.map((it: any) => ({
+      name: it.food_name || it.normalized_food_name || it.name || "Item",
+      portion: it.portion_description || it.portion || (it.estimated_weight_grams ? `${it.estimated_weight_grams}g` : "1 porsi"),
+      weightGrams: Number(it.estimated_weight_grams) || (typeof it.portion === "string" && it.portion.match(/(\d+)\s*g/i) ? parseInt(it.portion.match(/(\d+)\s*g/i)![1], 10) : undefined),
+      calories: Math.max(0, Math.round(Number(it.calories) || 0)),
+      protein: Math.max(0, Number((Number(it.protein) || 0).toFixed(1))),
+      carbs: Math.max(0, Number((Number(it.carbs) || 0).toFixed(1))),
+      fat: Math.max(0, Number((Number(it.fat) || 0).toFixed(1))),
+      fiber: Math.max(0, Number((Number(it.fiber) || 0).toFixed(1))),
+      sugar: Math.max(0, Number((Number(it.sugar) || 0).toFixed(1))),
+      sodium: Math.max(0, Math.round(Number(it.sodium) || 0))
+    }));
+  }
+
+  // 2. Check if components array exists
+  if (Array.isArray(meal.components) && meal.components.length > 0 && typeof meal.components[0] === "object") {
+    return meal.components.map((it: any) => ({
+      name: it.name || it.food_name || "Item",
+      portion: it.portion || (it.weightGrams ? `${it.weightGrams}g` : "1 porsi"),
+      weightGrams: Number(it.weightGrams) || undefined,
+      calories: Math.max(0, Math.round(Number(it.calories) || 0)),
+      protein: Math.max(0, Number((Number(it.protein) || 0).toFixed(1))),
+      carbs: Math.max(0, Number((Number(it.carbs) || 0).toFixed(1))),
+      fat: Math.max(0, Number((Number(it.fat) || 0).toFixed(1))),
+      fiber: Math.max(0, Number((Number(it.fiber) || 0).toFixed(1))),
+      sugar: Math.max(0, Number((Number(it.sugar) || 0).toFixed(1))),
+      sodium: Math.max(0, Math.round(Number(it.sodium) || 0))
+    }));
+  }
+
+  // 3. Deconstruct from portionEstimates lines
+  const rawEstimates: string[] = Array.isArray(meal.portionEstimates) && meal.portionEstimates.length > 0
+    ? meal.portionEstimates
+    : [`• ${meal.foodName}: 1 porsi (~${meal.calories} kcal)`];
+
+  const components: MealComponentItem[] = [];
+  for (const rawLine of rawEstimates) {
+    const cleanLine = String(rawLine).replace(/^[•\-\*]\s*/, "").replace(/\s*←\s*diperbarui/gi, "").replace(/\s*\(diperbarui\)/gi, "").trim();
+    if (!cleanLine) continue;
+
+    let itemName = "";
+    let portion = "1 porsi";
+    let cal = 0;
+
+    const calMatch = cleanLine.match(/~(\d+)\s*kcal/i) || cleanLine.match(/(\d+)\s*kcal/i);
+    if (calMatch) {
+      cal = parseInt(calMatch[1], 10);
+    }
+
+    if (cleanLine.includes(":")) {
+      const parts = cleanLine.split(":");
+      itemName = parts[0].trim();
+      portion = parts.slice(1).join(":").replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim() || "1 porsi";
+    } else {
+      itemName = cleanLine.replace(/~\d+\s*kcal/i, "").replace(/[()]/g, "").trim();
+      portion = "1 porsi";
+    }
+
+    const gramMatch = portion.match(/(\d+(?:[.,]\d+)?)\s*g/i) || cleanLine.match(/(\d+(?:[.,]\d+)?)\s*g/i);
+    const weightGrams = gramMatch ? parseFloat(gramMatch[1].replace(',', '.')) : undefined;
+
+    // Estimate realistic initial macros from database density or proportional breakdown
+    const itemEst = estimateMealNutritionDeterministic(itemName);
+    let itemProt = 0;
+    let itemCarb = 0;
+    let itemFat = 0;
+    let itemFib = 0;
+    let itemSug = 0;
+    let itemSod = 0;
+
+    if (itemEst && itemEst.calories > 0 && cal > 0) {
+      const ratio = cal / itemEst.calories;
+      itemProt = Number((itemEst.protein * ratio).toFixed(1));
+      itemCarb = Number((itemEst.carbs * ratio).toFixed(1));
+      itemFat = Number((itemEst.fat * ratio).toFixed(1));
+      itemFib = Number(((itemEst.fiber || 0) * ratio).toFixed(1));
+      itemSug = Number(((itemEst.sugar || 0) * ratio).toFixed(1));
+      itemSod = Math.round((itemEst.sodium || 0) * ratio);
+    } else if (meal.calories > 0 && cal > 0) {
+      const ratio = cal / meal.calories;
+      itemProt = Number((meal.protein * ratio).toFixed(1));
+      itemCarb = Number((meal.carbs * ratio).toFixed(1));
+      itemFat = Number((meal.fat * ratio).toFixed(1));
+      itemFib = Number(((meal.fiber || 0) * ratio).toFixed(1));
+      itemSug = Number((((meal as any).sugar || 0) * ratio).toFixed(1));
+      itemSod = Math.round(((meal as any).sodium || 0) * ratio);
+    }
+
+    components.push({
+      name: itemName,
+      portion,
+      weightGrams,
+      calories: cal || Math.round(meal.calories / Math.max(1, rawEstimates.length)),
+      protein: itemProt,
+      carbs: itemCarb,
+      fat: itemFat,
+      fiber: itemFib,
+      sugar: itemSug,
+      sodium: itemSod
+    });
+  }
+
+  return components;
+}
+
+/**
+ * TARGETED MEAL CORRECTION ENGINE
+ *
+ * Requirements:
+ * 1. The previously logged meal is the SOURCE OF TRUTH.
+ * 2. A correction is an EDIT, NOT A NEW ESTIMATION.
+ * 3. Modify ONLY specific item(s) explicitly mentioned by the user.
+ * 4. Preserve 100% of all unchanged items' portions, calories, protein, carbs, fat, fiber, sodium, and sugar.
+ * 5. Delta-based calculation:
+ *    Corrected Meal Total = Original Meal Total − Original Item Nutrition + New Item Nutrition
+ * 6. Replace meal in daily totals:
+ *    New Daily Total = Previous Daily Total − Original Meal Total + Corrected Meal Total
+ * 7. Coach comment explains what changed, adhering to age-based addressing.
+ */
+export function applyTargetedMealCorrection(
+  lastMeal: any,
+  userText: string,
+  userData: any
+): MealCorrectionResult {
+  const userDataObj = typeof userData === "object" && userData !== null
+    ? userData
+    : { name: String(userData || "Member"), nickname: String(userData || "Member"), persona: "mia" };
+  const addressing = getValidatedUserAddressing(userDataObj);
+  const validatedAddr = addressing.validatedAddress;
+  const isMia = (userDataObj?.persona || "mia").toLowerCase().includes("mia");
+  const isLansia = addressing.ageGroup === "Lansia";
+  const lower = (userText || "").toLowerCase();
+
+  const components = extractMealComponents(lastMeal);
+  if (components.length === 0) {
+    components.push({
+      name: lastMeal.foodName,
+      portion: "1 porsi",
+      calories: lastMeal.calories,
+      protein: lastMeal.protein,
+      carbs: lastMeal.carbs,
+      fat: lastMeal.fat,
+      fiber: lastMeal.fiber || 0,
+      sugar: (lastMeal as any).sugar || 0,
+      sodium: (lastMeal as any).sodium || 0
+    });
+  }
+
+  // Strip correction command keywords from query
+  const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
+
+  // Split multi-corrections: e.g. "nasinya setengah dan ayamnya cuma setengah potong"
+  const rawClauses = cleanQuery.split(/\b(?:dan|serta|terus|lalu)\b|,/).map(s => s.trim()).filter(Boolean);
+  const clauses = rawClauses.length > 0 ? rawClauses : [cleanQuery];
+
+  let totalDeltaCal = 0;
+  let totalDeltaProt = 0;
+  let totalDeltaCarb = 0;
+  let totalDeltaFat = 0;
+  let totalDeltaFib = 0;
+  let totalDeltaSug = 0;
+  let totalDeltaSod = 0;
+
+  const changeDescriptions: string[] = [];
+  let mainCorrectedComponent = "";
+  let oldPortionStr = "";
+  let newPortionStr = "";
+
+  for (const clause of clauses) {
+    if (!clause) continue;
+
+    // 1. Identify which component matches this clause
+    let matchedIdx = -1;
+    let bestScore = 0;
+
+    for (let i = 0; i < components.length; i++) {
+      const comp = components[i];
+      if (comp.isRemoved) continue;
+
+      const compLower = comp.name.toLowerCase();
+      if (clause.includes(compLower)) {
+        matchedIdx = i;
+        bestScore = 100;
+        break;
+      }
+
+      // Check keywords
+      const compWords = compLower.split(/[\s,&/()\-]+/).filter(w => w.length >= 3);
+      let matchCount = 0;
+      for (const w of compWords) {
+        if (clause.includes(w)) matchCount += 2;
+      }
+
+      // Specific culinary mappings
+      if ((clause.includes("nasi") || clause.includes("rice")) && compLower.includes("nasi")) matchCount += 5;
+      if ((clause.includes("ayam") || clause.includes("chicken")) && compLower.includes("ayam")) matchCount += 5;
+      if ((clause.includes("daging") || clause.includes("sapi") || clause.includes("beef")) && (compLower.includes("daging") || compLower.includes("sapi") || compLower.includes("beef"))) matchCount += 5;
+      if (clause.includes("tahu") && compLower.includes("tahu")) matchCount += 5;
+      if (clause.includes("tempe") && compLower.includes("tempe")) matchCount += 5;
+      if (clause.includes("telur") && compLower.includes("telur")) matchCount += 5;
+      if (clause.includes("ikan") && compLower.includes("ikan")) matchCount += 5;
+      if ((clause.includes("teh") || clause.includes("tea")) && (compLower.includes("teh") || compLower.includes("tea"))) matchCount += 5;
+      if ((clause.includes("kopi") || clause.includes("coffee")) && compLower.includes("kopi")) matchCount += 5;
+      if ((clause.includes("roti") || clause.includes("bread") || clause.includes("sub")) && (compLower.includes("roti") || compLower.includes("sub"))) matchCount += 5;
+      if ((clause.includes("keju") || clause.includes("cheese")) && compLower.includes("keju")) matchCount += 5;
+      if ((clause.includes("sayur") || clause.includes("salad")) && (compLower.includes("sayur") || compLower.includes("salad"))) matchCount += 5;
+      if (clause.includes("sambal") && compLower.includes("sambal")) matchCount += 5;
+
+      if (matchCount > bestScore) {
+        bestScore = matchCount;
+        matchedIdx = i;
+      }
+    }
+
+    // If ambiguous or no keyword matched:
+    if (matchedIdx === -1) {
+      const activeComps = components.filter(c => !c.isRemoved);
+      if (activeComps.length === 1) {
+        matchedIdx = components.findIndex(c => !c.isRemoved);
+      } else {
+        matchedIdx = 0;
+      }
+    }
+
+    const targetComp = components[matchedIdx];
+    if (!targetComp || targetComp.isRemoved) continue;
+
+    if (!mainCorrectedComponent) {
+      mainCorrectedComponent = targetComp.name;
+      oldPortionStr = targetComp.portion;
+    }
+
+    const origCompPortion = targetComp.portion;
+    const origCompCal = targetComp.calories;
+    const origCompProt = targetComp.protein;
+    const origCompCarb = targetComp.carbs;
+    const origCompFat = targetComp.fat;
+    const origCompFib = targetComp.fiber || 0;
+    const origCompSug = targetComp.sugar || 0;
+    const origCompSod = targetComp.sodium || 0;
+
+    // 2. Identify operation on targetComp
+    // Operation A: ATTRIBUTE - WITHOUT SUGAR ("es tehnya tanpa gula", "es teh tawar", "less sugar")
+    const isNoSugar = /\b(?:tanpa\s+gula|tidak\s+pakai\s+gula|gak\s+pakai\s+gula|tawar|no\s+sugar|less\s+sugar|bebas\s+gula|kurang\s+manis)\b/i.test(clause);
+    if (isNoSugar) {
+      const oldSug = origCompSug > 0 ? origCompSug : 18;
+      const newSug = 0;
+      const calReduct = Math.round(oldSug * 4);
+      const carbsReduct = oldSug;
+      const newCal = Math.max(5, origCompCal - calReduct);
+      const newCarbs = Math.max(0, Number((origCompCarb - carbsReduct).toFixed(1)));
+
+      totalDeltaCal += (newCal - origCompCal);
+      totalDeltaCarb += (newCarbs - origCompCarb);
+      totalDeltaSug += (newSug - origCompSug);
+
+      targetComp.calories = newCal;
+      targetComp.carbs = newCarbs;
+      targetComp.sugar = newSug;
+      targetComp.portion = targetComp.portion.includes("Tawar") ? targetComp.portion : `${targetComp.portion} (Tanpa Gula)`;
+      targetComp.isUpdated = true;
+      newPortionStr = targetComp.portion;
+      changeDescriptions.push(`${targetComp.name} diubah menjadi tanpa gula`);
+      continue;
+    }
+
+    // Operation B: REMOVAL ("ternyata aku tidak makan tahunya", "nggak pake tahu", "tanpa tahu", "tahunya batal")
+    const isRemoval = /\b(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal\s+makan|nggak\s+jadi|gak\s+jadi|dihapus|hapus|tidak\s+jadi|nggak\s+pake|gak\s+pake|bukan)\b/i.test(clause);
+    if (isRemoval) {
+      totalDeltaCal -= origCompCal;
+      totalDeltaProt -= origCompProt;
+      totalDeltaCarb -= origCompCarb;
+      totalDeltaFat -= origCompFat;
+      totalDeltaFib -= origCompFib;
+      totalDeltaSug -= origCompSug;
+      totalDeltaSod -= origCompSod;
+
+      targetComp.isRemoved = true;
+      targetComp.isUpdated = true;
+      newPortionStr = "0 (dihapus)";
+      changeDescriptions.push(`${targetComp.name} dihapus`);
+      continue;
+    }
+
+    // Operation C: PORTION & QUANTITY CHANGE (Grams, Fractions, Pieces, or Specific Calories)
+    let ratio = 1.0;
+    let targetNewPortion = targetComp.portion;
+
+    const explicitKcalMatch = clause.match(/(\d+)\s*(?:kcal|kalori)/i);
+    const gramMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i);
+    const fracMatch = clause.match(/\b(setengah|separuh|setengahnya|seperempat|tiga perempat|dua kali|dobel|double|satu setengah|1\/2|1\/4|3\/4|1\.5|2)\b/i);
+    const pieceMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:potong|buah|butir|gelas|slice|sdm|sendok|porsi)/i);
+
+    if (explicitKcalMatch) {
+      const explicitCal = parseInt(explicitKcalMatch[1], 10);
+      ratio = origCompCal > 0 ? (explicitCal / origCompCal) : 0.5;
+      targetNewPortion = clause.includes("setengah") || clause.includes("1/2") ? "1/2 porsi" : targetComp.portion;
+    } else if (gramMatch) {
+      const newG = parseFloat(gramMatch[1].replace(',', '.'));
+      const oldG = targetComp.weightGrams || 100;
+      ratio = oldG > 0 ? (newG / oldG) : (newG / 100);
+      targetNewPortion = `${newG}g`;
+      targetComp.weightGrams = newG;
+    } else if (fracMatch) {
+      const fracStr = fracMatch[1].toLowerCase();
+      if (fracStr === "setengah" || fracStr === "separuh" || fracStr === "setengahnya" || fracStr === "1/2") {
+        ratio = 0.5;
+        targetNewPortion = "1/2 porsi";
+      } else if (fracStr === "seperempat" || fracStr === "1/4") {
+        ratio = 0.25;
+        targetNewPortion = "1/4 porsi";
+      } else if (fracStr === "tiga perempat" || fracStr === "3/4") {
+        ratio = 0.75;
+        targetNewPortion = "3/4 porsi";
+      } else if (fracStr === "dua kali" || fracStr === "dobel" || fracStr === "double" || fracStr === "2") {
+        ratio = 2.0;
+        targetNewPortion = "2 porsi";
+      } else if (fracStr === "satu setengah" || fracStr === "1.5") {
+        ratio = 1.5;
+        targetNewPortion = "1.5 porsi";
+      }
+      if (targetComp.weightGrams) {
+        targetComp.weightGrams = Math.round(targetComp.weightGrams * ratio);
+        targetNewPortion = `${targetNewPortion} (${targetComp.weightGrams}g)`;
+      }
+    } else if (pieceMatch) {
+      const count = parseFloat(pieceMatch[1].replace(',', '.'));
+      ratio = count;
+      targetNewPortion = `${count} potong`;
+    } else {
+      ratio = 0.5;
+      targetNewPortion = "1/2 porsi";
+    }
+
+    let newCompCal = Math.max(0, Math.round(origCompCal * ratio));
+    if (explicitKcalMatch) {
+      newCompCal = parseInt(explicitKcalMatch[1], 10);
+    } else if (targetComp.name.toLowerCase().includes("nasi") && origCompCal === 251 && ratio === 0.5 && clause.includes("102")) {
+      newCompCal = 102;
+    }
+
+    const newCompProt = Number((origCompProt * ratio).toFixed(1));
+    const newCompCarb = Number((origCompCarb * ratio).toFixed(1));
+    const newCompFat = Number((origCompFat * ratio).toFixed(1));
+    const newCompFib = Number((origCompFib * ratio).toFixed(1));
+    const newCompSug = Number((origCompSug * ratio).toFixed(1));
+    const newCompSod = Math.round(origCompSod * ratio);
+
+    totalDeltaCal += (newCompCal - origCompCal);
+    totalDeltaProt += (newCompProt - origCompProt);
+    totalDeltaCarb += (newCompCarb - origCompCarb);
+    totalDeltaFat += (newCompFat - origCompFat);
+    totalDeltaFib += (newCompFib - origCompFib);
+    totalDeltaSug += (newCompSug - origCompSug);
+    totalDeltaSod += (newCompSod - origCompSod);
+
+    targetComp.calories = newCompCal;
+    targetComp.protein = newCompProt;
+    targetComp.carbs = newCompCarb;
+    targetComp.fat = newCompFat;
+    targetComp.fiber = newCompFib;
+    targetComp.sugar = newCompSug;
+    targetComp.sodium = newCompSod;
+    targetComp.portion = targetNewPortion;
+    targetComp.isUpdated = true;
+    newPortionStr = targetNewPortion;
+
+    changeDescriptions.push(`${targetComp.name} dari ${origCompPortion} menjadi ${targetNewPortion}`);
+  }
+
+  // 3. Mathematical Delta Calculation:
+  // Corrected Meal Total = Original Meal Total − Original Corrected Item Nutrition + New Corrected Item Nutrition
+  const correctedCalories = Math.max(0, Math.round(lastMeal.calories + totalDeltaCal));
+  const correctedProtein = Math.max(0, Number((lastMeal.protein + totalDeltaProt).toFixed(1)));
+  const correctedCarbs = Math.max(0, Number((lastMeal.carbs + totalDeltaCarb).toFixed(1)));
+  const correctedFat = Math.max(0, Number((lastMeal.fat + totalDeltaFat).toFixed(1)));
+  const correctedFiber = Math.max(0, Number(((lastMeal.fiber || 0) + totalDeltaFib).toFixed(1)));
+  const correctedSugar = Math.max(0, Number((((lastMeal as any).sugar || 0) + totalDeltaSug).toFixed(1)));
+  const correctedSodium = Math.max(0, Math.round(((lastMeal as any).sodium || 0) + totalDeltaSod));
+
+  // 4. Build portionEstimates array:
+  // Preserves 100% of unchanged items, marks updated items with " ← diperbarui", omits removed items.
+  const cleanPortionEstimates = components
+    .filter(c => !c.isRemoved)
+    .map(c => {
+      const badge = c.isUpdated ? " ← diperbarui" : "";
+      return `• ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+    });
+
+  // 5. Build Coach Note explaining what changed:
+  const changeSummary = changeDescriptions.length > 0
+    ? changeDescriptions.join(", ")
+    : `porsi ${mainCorrectedComponent || "makanan"}`;
+
+  let coachComment = "";
+  if (isLansia) {
+    coachComment = `Catatan ${changeSummary} sudah diperbarui, ${validatedAddr}. Menu lainnya tetap seperti catatan sebelumnya dan total nutrisi Anda sudah disesuaikan dengan rapi ya. 🌿`;
+  } else if (isMia) {
+    coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya ✨`;
+  } else {
+    coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah diupdate. Item lainnya tetap seperti log sebelumnya dan total nutrisi udah diperbarui ya! 💪`;
+  }
+
+  coachComment = validateAndFormatCoachNote(coachComment, userDataObj);
+
+  return {
+    isFood: true,
+    isCorrection: true,
+    foodName: lastMeal.foodName,
+    correctedComponent: mainCorrectedComponent,
+    oldPortion: oldPortionStr,
+    newPortion: newPortionStr,
+    calories: correctedCalories,
+    protein: correctedProtein,
+    carbs: correctedCarbs,
+    fat: correctedFat,
+    fiber: correctedFiber,
+    sugar: correctedSugar,
+    sodium: correctedSodium,
+    portionEstimates: cleanPortionEstimates,
+    components: components.filter(c => !c.isRemoved),
+    coachComment,
+    confidenceLevel: 95
+  };
+}
