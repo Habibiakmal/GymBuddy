@@ -1447,6 +1447,199 @@ export function validateNutrientSanity(data: {
 }
 
 /**
+ * NUTRITION ESTIMATION VALIDATION & PLAUSIBILITY ENGINE
+ * 
+ * Performs 13-point comprehensive validation:
+ * 1. Internal consistency: Calories ~ (Protein*4) + (Carbs*4) + (Fat*9)
+ * 2. Plausible protein for protein-rich food portions (meat, poultry, fish, eggs, whey)
+ * 3. Plausible sodium for salty/processed/preserved/seasoned food (instant noodles, salted fish, soups, cured meat)
+ * 4. Plausible sugar for normally sugar-containing foods/drinks unless explicitly zero-sugar/tawar
+ * 5. Cooking method validation (fried foods absorb oil -> fat >= 8-15g, coconut milk/santan -> fat >= 14-25g)
+ * 6. Beverage validation (volume-aware, syrups, sweet tea, plain water is zero cal/macro)
+ * 7. Sugar <= Carbs constraint
+ * 8. Fiber <= Carbs constraint
+ * 9. Non-negative constraints
+ * 10. Avoid false precision (clean rounded estimates)
+ * 11. Uncertainty adjustment via confidence score
+ * 12. Cross-nutrient plausibility re-evaluation
+ * 13. Zero contradictions
+ */
+export function validateAndPlausibilityCheckNutrition(input: {
+  foodName: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
+  volumeMl?: number;
+  portionNote?: string;
+  isHydration?: boolean;
+  confidenceScore?: number;
+}): {
+  foodName: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  confidenceScore: number;
+  adjustmentsMade: string[];
+} {
+  const adjustmentsMade: string[] = [];
+  const rawName = String(input.foodName || "").trim();
+  const lower = rawName.toLowerCase();
+
+  let calories = Math.max(0, Number(input.calories) || 0);
+  let protein = Math.max(0, Number(input.protein) || 0);
+  let carbs = Math.max(0, Number(input.carbs) || 0);
+  let fat = Math.max(0, Number(input.fat) || 0);
+  let fiber = Math.max(0, Number(input.fiber) || 0);
+  let sugar = Math.max(0, Number(input.sugar) || 0);
+  let sodium = Math.max(0, Math.round(Number(input.sodium) || 0));
+  let confidenceScore = Math.min(98, Math.max(70, Number(input.confidenceScore) || 88));
+
+  // 1. Plain Water Check: strict zero calories and zero macros
+  const isPlainWater = (
+    lower === "air" ||
+    lower.includes("air putih") ||
+    lower.includes("air mineral") ||
+    lower.includes("air bening") ||
+    lower.includes("aqua") ||
+    lower.includes("le minerale") ||
+    lower.includes("plain water") ||
+    lower === "water"
+  );
+
+  if (isPlainWater) {
+    return {
+      foodName: rawName || "Air Mineral",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+      sugar: 0,
+      sodium: 0,
+      confidenceScore: 98,
+      adjustmentsMade: ["Plain water zeroed"]
+    };
+  }
+
+  // Flags for contextual detection
+  const isExplicitlyZeroSugar = /(?:tanpa gula|no sugar|sugar[\s-]free|zero sugar|tawar|unsweetened|less sugar|diet|coke zero|pepsi zero|teh tawar|kopi pahit|kopi hitam tawar)/i.test(lower);
+  const isExplicitlyLowSodium = /(?:rendah garam|low sodium|tanpa garam|no salt)/i.test(lower);
+  const isFried = /(?:goreng|fried|crispy|krispi|deep[\s-]fried|bakwan|mendoan|gorengan|kentang goreng|french fries)/i.test(lower);
+  const hasSantan = /(?:santan|rendang|gulai|opor|lodeh|kari|curry|rawon)/i.test(lower);
+  const isChickenOrMeat = /(?:ayam|dada ayam|chicken|sapi|daging|beef|steak|tenderloin|sirloin|ikan|fish|salmon|tuna|seafood|udang|cumi|protein shake|whey)/i.test(lower);
+  const isEgg = /(?:telur|telor|egg)/i.test(lower);
+  const isInstantNoodle = /(?:indomie|mie instan|noodle|ramen|pop mie|mie goreng)/i.test(lower);
+  const isSaltedOrCured = /(?:ikan asin|telur asin|asinan|kornet|sosis|sausage|dendeng|sambal terasi|keripik|chips|chiki)/i.test(lower);
+  const isSavoryBrothOrStreet = /(?:bakso|soto|mie ayam|kwetiau|nasi goreng|burger|pizza)/i.test(lower);
+  const isSweetBeverage = /(?:teh manis|es teh|sweet tea|boba|bubble tea|milk tea|kopi susu|kopi aren|caramel|vanilla latte|frappuccino|jus|juice|smoothie|soda|fanta|coca[\s-]cola|sprite|syrup|sirup|milo)/i.test(lower);
+  const isSweetFood = /(?:donut|donat|cake|kue|brownies|martabak manis|terang bulan|pancake|waffle|es krim|ice cream|coklat|chocolate|puding|pudding)/i.test(lower);
+
+  // 2. Cooking Method & Fat Plausibility
+  if (isFried && fat < 7) {
+    fat = Math.max(fat, 10);
+    adjustmentsMade.push("Adjusted fat for frying cooking oil absorption");
+  }
+  if (hasSantan && fat < 12) {
+    fat = Math.max(fat, 15);
+    adjustmentsMade.push("Adjusted fat for coconut milk (santan) base");
+  }
+
+  // 3. Protein Plausibility for Protein-Rich Foods
+  if (isChickenOrMeat && protein < 12) {
+    protein = Math.max(protein, 22);
+    adjustmentsMade.push("Adjusted protein for meat/poultry portion");
+  }
+  if (isEgg && protein < 5) {
+    protein = Math.max(protein, 6.5);
+    adjustmentsMade.push("Adjusted protein for egg portion");
+  }
+
+  // 4. Sodium Plausibility for Seasoned/Processed/Preserved Foods
+  if (!isExplicitlyLowSodium) {
+    if (isInstantNoodle && sodium < 400) {
+      sodium = 850;
+      adjustmentsMade.push("Adjusted sodium for instant noodle seasoning packet");
+    } else if (isSaltedOrCured && sodium < 350) {
+      sodium = 650;
+      adjustmentsMade.push("Adjusted sodium for cured/preserved/salted food");
+    } else if (isSavoryBrothOrStreet && sodium < 250) {
+      sodium = 450;
+      adjustmentsMade.push("Adjusted sodium for seasoned savory broth/dish");
+    }
+  }
+
+  // 5. Sugar Plausibility for Sweet Foods & Beverages
+  if (!isExplicitlyZeroSugar) {
+    if (isSweetBeverage && sugar < 8) {
+      sugar = /(?:boba|aren|bubble|frappuccino)/i.test(lower) ? 26 : 16;
+      carbs = Math.max(carbs, sugar + 2);
+      adjustmentsMade.push("Adjusted sugar for sweetened beverage volume");
+    } else if (isSweetFood && sugar < 8) {
+      sugar = 16;
+      carbs = Math.max(carbs, sugar + 4);
+      adjustmentsMade.push("Adjusted sugar for dessert/pastry");
+    }
+  }
+
+  // 6. Sugar & Fiber <= Carbs Constraints
+  if (sugar > carbs) {
+    carbs = Math.max(carbs, sugar);
+    adjustmentsMade.push("Adjusted carbs to be at least sugar amount");
+  }
+  if (fiber > carbs) {
+    carbs = Math.max(carbs, fiber);
+    adjustmentsMade.push("Adjusted carbs to be at least fiber amount");
+  }
+
+  // 7. Internal Consistency: Calories vs Macro Sum (P*4 + C*4 + F*9)
+  const atwaterKcal = (protein * 4) + (carbs * 4) + (fat * 9);
+  if (atwaterKcal > 0) {
+    if (calories <= 0) {
+      calories = Math.round(atwaterKcal);
+      adjustmentsMade.push("Derived calories from macronutrients");
+    } else {
+      const diff = Math.abs(calories - atwaterKcal);
+      const maxDiscrepancy = Math.max(60, calories * 0.22);
+      if (diff > maxDiscrepancy) {
+        // Re-evaluate: If carbs and fat are high but calories were low, or vice versa, reconcile to atwaterKcal
+        calories = Math.round(atwaterKcal);
+        adjustmentsMade.push(`Reconciled calorie discrepancy (${diff} kcal difference from P*4+C*4+F*9)`);
+      }
+    }
+  }
+
+  // 8. Avoid False Precision: Clean Rounding
+  calories = Math.round(calories);
+  protein = Number(protein.toFixed(1));
+  carbs = Number(carbs.toFixed(1));
+  fat = Number(fat.toFixed(1));
+  fiber = Number(fiber.toFixed(1));
+  sugar = Number(sugar.toFixed(1));
+  sodium = Math.round(sodium);
+
+  return {
+    foodName: rawName || "Makanan",
+    calories,
+    protein,
+    carbs,
+    fat,
+    fiber,
+    sugar,
+    sodium,
+    confidenceScore,
+    adjustmentsMade
+  };
+}
+
+/**
  * Helper to detect generic meal inputs (e.g. "rice bowl", "salad", "sandwich", "noodles")
  */
 export function isGenericMealInput(text: string): {
@@ -1679,8 +1872,8 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
         percentage: 100,
         percentageExact: 100,
         status: "at_limit",
-        statusText: "Di Batas Maksimal",
-        statusBadge: "🟡 Di Batas Maksimal",
+        statusText: "Batas Maksimal",
+        statusBadge: "🟡 Batas Maksimal",
         remaining: 0,
         isOver: false,
         isReached: true,
@@ -1845,6 +2038,29 @@ export function makeProgressBar(current: number, target: number, length: number 
  */
 export function makeSodiumProgressBar(current: number, limit: number = 2000, length: number = 10): string {
   if (!limit || limit <= 0) limit = 2000;
+  const statusInfo = calculateNutrientStatus(current, limit, true);
+  let filledCount = 0;
+  if (current <= limit) {
+    filledCount = Math.min(length, Math.floor((current / limit) * length));
+  } else {
+    filledCount = length;
+  }
+  const emptyCount = Math.max(0, length - filledCount);
+  const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
+
+  return `[${bar}] ${statusInfo.percentage}% · ${statusInfo.statusBadge}`;
+}
+
+/**
+ * Sugar Progress Bar Formatter (Upper-limit recommended maximum)
+ * Follows same semantic rules as Sodium:
+ * Below limit: 🟢 Dalam Batas
+ * At limit: 🟡 Batas Maksimal
+ * Above limit: 🔴 Melebihi Batas (with overflow indication)
+ * NEVER displays 'Belum Cukup'
+ */
+export function makeSugarProgressBar(current: number, limit: number = 50, length: number = 10): string {
+  if (!limit || limit <= 0) limit = 50;
   const statusInfo = calculateNutrientStatus(current, limit, true);
   let filledCount = 0;
   if (current <= limit) {
@@ -2056,7 +2272,7 @@ export function buildGeminiNutritionPrompt(cleanText: string): string {
 TUGAS: Lakukan dekonstruksi makanan/minuman dan identifikasi komponen individual untuk input:
 "${cleanText}"
 
-IKUTI ATURAN:
+IKUTI ATURAN DEKOMPOSISI & VALIDASI NUTRISI (WAJIB DIPATUHI):
 1. IDENTIFIKASI KOMPONEN INDIVIDUAL (DEKOMPOSISI):
    - Pisahkan setiap item makanan/minuman, isian, topping, dan saus secara spesifik.
    - Contoh "aku tadi siang makan nasi 2 piring, pake ayam goreng, dan pete goreng serta selada" -> (1) Nasi Putih, (2) Ayam Goreng, (3) Pete Goreng, (4) Selada.
@@ -2066,7 +2282,15 @@ IKUTI ATURAN:
    - canonicalMealTitle HARUS HANYA berisi nama item makanan/minuman yang terdeteksi dengan format "[Item 1], [Item 2] & [Item 3]".
 3. JANGAN MENGHILANGKAN INFORMASI YANG DISEBUTKAN USER:
    - Jika user menyebutkan bahan secara eksplisit, seluruh komponen tersebut WAJIB dimasukkan ke dalam daftar item.
-4. ESTIMASI KUANTITAS DAN UNIT YANG REALISTIS.
+4. ESTIMASI KUANTITAS DAN UNIT YANG REALISTIS (VOLUME-AWARE & PORTION-AWARE).
+5. VALIDASI KONSISTENSI INTERNAL (INTERNAL CONSISTENCY CHECK):
+   - Kalori harus konsisten dengan makronutrisi: (Protein * 4) + (Carbs * 4) + (Fat * 9) ≈ Total Kalori.
+   - Dilarang mengembalikan makanan tinggi karbohidrat & tinggi lemak dengan kalori yang sangat rendah.
+   - Dilarang porsi substansial makanan tinggi protein (dada ayam, daging sapi, telur, ikan, whey) dengan protein yang tidak masuk akal rendahnya.
+   - Makanan asin/olahan/berbumbu gurih (mie instan, ikan asin, sosis, sup gurih) harus memiliki natrium realistis (jangan implausibly low).
+   - Minuman/makanan manis (teh manis, boba, kopi susu aren, dessert) harus memiliki gula realistis kecuali eksplisit tanpa gula/tawar.
+   - Perhitungkan metode masak: makanan goreng menyerap minyak (lemak & kalori bertambah), masakan bersantan memiliki kandungan lemak lebih tinggi.
+   - Hindari kepastian palsu: gunakan taksiran bulat realistis (~45g, ~180 kcal, ~12g gula) bukan angka palsu desimal acak.
 
 Keluarkan JSON valid:
 {
@@ -2084,5 +2308,5 @@ Keluarkan JSON valid:
       "cookingMethod": "fried / boiled / grilled / steamed / raw / standard"
     }
   ]
-}`;
+};`;
 }

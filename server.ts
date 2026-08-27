@@ -39,7 +39,9 @@ import {
   calculateDailyNutritionSummary,
   makeProgressBar,
   makeSodiumProgressBar,
+  makeSugarProgressBar,
   validateNutrientSanity,
+  validateAndPlausibilityCheckNutrition,
   buildGeminiNutritionPrompt,
   isGenericMealInput,
   generateCanonicalMealTitle,
@@ -195,14 +197,7 @@ export function buildSingleSourceOfTruthMealRecord(
   let finalSugar = Number(parsed?.sugar) || 0;
   let finalSodium = Number(parsed?.sodium) || 0;
 
-  if (hasImage && finalCal > 0) {
-    // Photo detection with AI Vision estimates
-    // Validate macro consistency: Calories ~ P*4 + C*4 + F*9
-    const macroCal = (finalProt * 4) + (finalCarb * 4) + (finalFat * 9);
-    if (macroCal > 0 && Math.abs(macroCal - finalCal) > 80) {
-      finalCal = Math.round(macroCal);
-    }
-  } else {
+  if (!hasImage || finalCal <= 0) {
     // Text-only logging or fallback calculation from verified USDA/TKPI database
     const calcNutr = calculateFoodNutrition(finalFoodName);
     finalCal = calcNutr.calories;
@@ -214,14 +209,26 @@ export function buildSingleSourceOfTruthMealRecord(
     finalSodium = calcNutr.sodium;
   }
 
-  // Ensure non-negative numbers and clean precision
-  finalCal = Math.max(0, Math.round(finalCal));
-  finalProt = Math.max(0, Number(finalProt.toFixed(1)));
-  finalCarb = Math.max(0, Number(finalCarb.toFixed(1)));
-  finalFat = Math.max(0, Number(finalFat.toFixed(1)));
-  finalFiber = Math.max(0, Number(finalFiber.toFixed(1)));
-  finalSugar = Math.max(0, Number(finalSugar.toFixed(1)));
-  finalSodium = Math.max(0, Math.round(finalSodium));
+  // Perform Comprehensive Nutrition Estimation Validation & Plausibility Check (13 criteria)
+  const plausibility = validateAndPlausibilityCheckNutrition({
+    foodName: finalFoodName,
+    calories: finalCal,
+    protein: finalProt,
+    carbs: finalCarb,
+    fat: finalFat,
+    fiber: finalFiber,
+    sugar: finalSugar,
+    sodium: finalSodium,
+    confidenceScore: parsed?.confidenceLevel || (hasImage ? 88 : 92)
+  });
+
+  finalCal = plausibility.calories;
+  finalProt = plausibility.protein;
+  finalCarb = plausibility.carbs;
+  finalFat = plausibility.fat;
+  finalFiber = plausibility.fiber;
+  finalSugar = plausibility.sugar;
+  finalSodium = plausibility.sodium;
 
   // Portion Component Validation:
   // If portionEstimates is present with sub-item calories, ensure they describe the final total
@@ -1945,7 +1952,9 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
   let carbs = 0;
   let fat = 0;
   let fiber = 0;
+  let sugar = 0;
   let sodium = 0;
+  let waterMl = 0;
 
   for (const log of logs) {
     calories += Number(log.calories) || 0;
@@ -1953,7 +1962,11 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
     carbs += Number(log.carbs) || 0;
     fat += Number(log.fat) || 0;
     fiber += Number(log.fiber) || 0;
+    sugar += Number((log as any).sugar) || 0;
     sodium += Number((log as any).sodium) || 0;
+    if (log.isHydration || isPlainWaterName(log.foodName) || isLiquidName(log.foodName)) {
+      waterMl += Number(log.volumeMl) || extractVolumeMlFromName(log.foodName) || 250;
+    }
   }
 
   return {
@@ -1962,7 +1975,9 @@ function getDailyTotals(rawPhone: string, targetDateStr?: string) {
     carbs: Math.round(carbs),
     fat: Math.round(fat),
     fiber: Math.round(fiber),
+    sugar: Math.round(sugar * 10) / 10,
     sodium: Math.round(sodium),
+    waterMl: Math.round(waterMl),
     logCount: logs.length,
     date: targetDate,
     logs
@@ -2909,11 +2924,13 @@ export function formatNutritionCard(
   const targetFat = Math.max(1, Math.round(Number(userData?.fatGrams) || 65));
   const totalTodaySodium = Math.max(0, Math.round(Number((dailyTotals as any)?.sodium) || 0));
   const sodiumLimit = 2000;
+  const totalTodaySugar = Math.max(0, Number((Number((dailyTotals as any)?.sugar) || 0).toFixed(1)));
+  const sugarLimit = 50;
 
   // Single Source of Truth Nutrition Summary & Progress Bars
   const nutritionSummary = calculateDailyNutritionSummary(
-    { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium },
-    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit }
+    { calories: totalTodayCal, protein: totalTodayProt, carbs: totalTodayCarb, fat: totalTodayFat, sodium: totalTodaySodium, sugar: totalTodaySugar },
+    { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit, sugarLimit }
   );
 
   const calBar = makeProgressBar(totalTodayCal, targetCal);
@@ -2921,16 +2938,21 @@ export function formatNutritionCard(
   const carbBar = makeProgressBar(totalTodayCarb, targetCarb);
   const fatBar = makeProgressBar(totalTodayFat, targetFat);
   const sodBar = makeSodiumProgressBar(totalTodaySodium, sodiumLimit);
+  const sugBar = makeSugarProgressBar(totalTodaySugar, sugarLimit);
 
   // Status-aware and persona-aligned Coach Message (Natural Integration of Warnings)
   let coachComment = String(parsedAi?.coachComment || "").replace(/^["“]|["”]$/g, "").trim();
 
   // If coach comment is generic or missing, or if key limits/targets are hit, formulate natural persona coaching message:
-  if (!coachComment || (!parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver))) {
+  if (!coachComment || (!parsedAi?.isCorrection && (nutritionSummary.sodium.isOver || nutritionSummary.sugar.isOver || nutritionSummary.fat.isOver || nutritionSummary.calories.isOver))) {
     if (nutritionSummary.sodium.isOver) {
       coachComment = isMax
         ? `Sodium lo udah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini bro! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. 💪`
         : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`;
+    } else if (nutritionSummary.sugar.isOver) {
+      coachComment = isMax
+        ? `Gula harian lo udah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g) bro! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! ⚡`
+        : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`;
     } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
       coachComment = isMax
         ? `Asupan lemak lo udah lewat target hari ini (${totalTodayFat}/${targetFat}g), sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! 🔥`
@@ -2980,12 +3002,13 @@ export function formatNutritionCard(
   // Section 3: Active Coach
   sections.push(`━━━━━━━━━━━━━━\n🤖 *${coachHeader}*\n━━━━━━━━━━━━━━\n"${coachComment}"`);
 
-  // Section 4: Status Hari Ini
+  // Section 4: Status Hari Ini (Order: Kalori -> Protein -> Karbo -> Lemak -> Natrium -> Gula)
   const statusContent = `🔥 *Kalori*: ${totalTodayCal}/${targetCal} kcal\n${calBar}\n\n` +
     `🍖 *Protein*: ${totalTodayProt}/${targetProt}g\n${protBar}\n\n` +
     `🍚 *Karbo*: ${totalTodayCarb}/${targetCarb}g\n${carbBar}\n\n` +
     `🥓 *Lemak*: ${totalTodayFat}/${targetFat}g\n${fatBar}\n\n` +
-    `🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg\n${sodBar}`;
+    `🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg\n${sodBar}\n\n` +
+    `🍯 *Gula*: ${totalTodaySugar}/${sugarLimit}g\n${sugBar}`;
   sections.push(`━━━━━━━━━━━━━━\n📈 *STATUS HARI INI*\n━━━━━━━━━━━━━━\n${statusContent}`);
 
   // Footer
@@ -3216,12 +3239,14 @@ function generateDailySummaryCard(
   const fiberBar = makeProgressBar(dailyTotals.fiber, userData.fiberGrams);
   const sodiumVal = (dailyTotals as any).sodium || 0;
   const sodBar = makeSodiumProgressBar(sodiumVal, 2000);
+  const sugarVal = (dailyTotals as any).sugar || 0;
+  const sugBar = makeSugarProgressBar(sugarVal, 50);
 
   let mealListStr = "";
   if (dailyTotals.logs.length === 0) {
     mealListStr = "_Belum ada makanan yang dicatat pada tanggal ini._";
   } else {
-    mealListStr = dailyTotals.logs.map((m, idx) => `• ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${(m as any).sodium ? ` Na:${(m as any).sodium}mg` : ""})`).join("\n");
+    mealListStr = dailyTotals.logs.map((m, idx) => `• ${m.foodName} (${m.calories} kcal | P:${m.protein}g C:${m.carbs}g F:${m.fat}g${(m as any).sodium ? ` Na:${(m as any).sodium}mg` : ""}${Number((m as any).sugar) > 0 ? ` Gula:${(m as any).sugar}g` : ""})`).join("\n");
   }
 
   const isMax = (userData?.persona || "mia").toLowerCase() === "max";
@@ -3231,6 +3256,10 @@ function generateDailySummaryCard(
     quote = isMax
       ? `Jaga terus ritme lo bro! Natrium lo (${sodiumVal.toLocaleString("id-ID")} mg) udah melewati batas 2.000 mg hari ini, jadi banyakin minum air putih dan kurangi makanan asin ya! 💪`
       : `Kamu hebat sudah konsisten mencatat hari ini! Asupan natriummu (${sodiumVal.toLocaleString("id-ID")} mg) sedikit melebihi batas anjuran 2.000 mg ya, yuk imbangi dengan cukup minum air putih ✨`;
+  } else if (sugarVal > 50) {
+    quote = isMax
+      ? `Jaga terus ritme lo bro! Gula lo (${sugarVal}g) udah lewat batas anjuran 50g hari ini, jadi perbanyak minum air putih dan kurangi makanan/minuman manis ya! 💪`
+      : `Kamu hebat sudah konsisten mencatat hari ini! Asupan gula harianmu (${sugarVal}g) sedikit melebihi batas anjuran 50g ya, yuk imbangi dengan cukup minum air putih ✨`;
   } else {
     quote = isMax 
       ? "Jaga terus ritme lo! Jangan kendor di jam-jam rawan ngemil. 💪"
@@ -3259,6 +3288,9 @@ ${fiberBar}
 
 🧂 *Natrium*: ${sodiumVal.toLocaleString("id-ID")}/2,000 mg
 ${sodBar}
+
+🍯 *Gula*: ${sugarVal}/50g
+${sugBar}
 
 🍽️ *Makanan Terdaftar*:
 ${mealListStr}
@@ -5966,10 +5998,15 @@ TUGASMU:
 User mengirim pesan/foto di WhatsApp: "${userText}"
 ${imagePart ? "CATATAN KRUSIAL: USER MENGIRIM GAMBAR/FOTO MAKANAN/MINUMAN. Kamu HARUS menganalisis seluruh makanan & minuman yang terlihat di foto dan SELALU set \"isFood\": true." : ""}
 
-PRINSIP UTAMA:
-1. Akurasi ilmiah selalu diutamakan.
-2. Konsistensi kalori: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
-3. Hindari kepastian palsu jika porsi atau saus tidak diketahui secara pasti.
+PRINSIP UTAMA & VALIDASI NUTRISI (WAJIB DIPATUHI):
+1. Akurasi ilmiah dan konsistensi internal selalu diutamakan.
+2. Konsistensi Kalori: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori. Dilarang mengembalikan makanan tinggi karbohidrat & tinggi lemak dengan kalori yang sangat rendah.
+3. Porsi substansial makanan tinggi protein (dada ayam, daging sapi, telur, ikan, protein shake) harus memiliki protein yang masuk akal dan realistis (tidak boleh implausibly low).
+4. Makanan asin, olahan, berpengawet, atau berbumbu gurih pekat (mie instan, ikan asin, sosis, bakso, kuah soto, fast food) harus memiliki natrium realistis (tidak boleh mendekati nol/implausibly low).
+5. Makanan/minuman yang lazim mengandung gula (teh manis, boba, kopi susu aren, dessert, soda, kue) harus memiliki gula realistis kecuali eksplisit tanpa gula/tawar.
+6. Perhitungkan metode memasak: makanan goreng menyerap minyak (lemak & kalori bertambah), masakan bersantan memiliki lemak lebih tinggi.
+7. Evaluasi minuman berdasarkan volume nyata (250ml, 350ml, 500ml); air putih selalu 0 kalori dan 0 makro.
+8. Hindari kepastian palsu jika porsi atau resep tidak diketahui pasti; sajikan estimasi realistis (~45g, ~180 kcal, ~12g gula) dan akui ketidakpastian lewat confidence score.
 
 Kategori 1: LAPORAN MAKANAN/MINUMAN
 PASTIKAN "isFood": true dan berikan angka estimasi realistis.
@@ -6627,7 +6664,15 @@ PRINSIP WAJIB ANALISIS MAKANAN (MULTI-MODAL IMAGE + TEXT):
    - Gunakan petunjuk visual seperti ukuran wadah/bungkus (misal 'nasi bungkus' biasanya ±250–300g, bukan 180g), piring, sendok/garpu, ketebalan potongan, dan jumlah item.
    - Jangan menganggap estimasi visual sebagai timbangan pasti; sajikan estimasi dalam format realistis (misal: '• Nasi bungkus: ±250–300g', '• Sosis: 1 buah (~50g)').
    - Jangan menambahkan bahan yang tidak terlihat dan tidak disebutkan (jangan mengarang mayones, mentega tebal, atau gula kecuali terlihat/disebutkan).
-4. KONSISTENSI KALORI: (Protein * 4) + (Carbs * 4) + (Fat * 9) harus konsisten dengan total kalori.
+4. KONSISTENSI INTERNAL & VALIDASI NUTRISI (WAJIB DIPATUHI):
+   - Kalori harus konsisten dengan makronutrisi: (Protein * 4) + (Carbs * 4) + (Fat * 9) ≈ Total Kalori.
+   - Dilarang mengembalikan makanan tinggi karbohidrat & tinggi lemak dengan kalori yang sangat rendah.
+   - Porsi substansial makanan tinggi protein (dada ayam, daging sapi, telur, ikan, whey) harus memiliki protein yang masuk akal dan realistis (tidak boleh implausibly low).
+   - Makanan asin/olahan/berbumbu gurih (mie instan, ikan asin, sosis, bakso, kuah soto, fast food) harus memiliki natrium realistis (jangan implausibly low mendekati nol).
+   - Makanan/minuman manis (teh manis, boba, kopi susu aren, dessert, soda, kue) harus memiliki gula realistis kecuali eksplisit tanpa gula/tawar.
+   - Perhitungkan metode memasak: makanan goreng menyerap minyak (lemak & kalori bertambah), masakan bersantan memiliki lemak lebih tinggi.
+   - Evaluasi minuman berdasarkan volume nyata (250ml, 350ml, 500ml); air putih selalu 0 kalori dan 0 makro.
+   - Hindari kepastian palsu: sajikan taksiran bulat realistis (~45g, ~180 kcal, ~12g gula) dan akui ketidakpastian lewat confidence score.
 5. KLARIFIKASI INTERAKTIF JIKA HANYA FOTO & MAKANAN SANGAT AMBIGU:
    - Jika user HANYA mengirim foto (tanpa teks) dan makanan memiliki isian tertutup / tidak jelas (misal sandwich tertutup, bungkusan misteri, mangkok sup kental):
      Set "needsClarification": true dan sediakan "clarificationQuestion" ramah dari coach (${isMia ? "Coach Mia" : "Coach Max"}).

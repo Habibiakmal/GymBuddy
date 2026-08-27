@@ -397,6 +397,7 @@ const translations = {
     carbsLabel: "Karbohidrat",
     fatLabel: "Lemak",
     sodiumLabel: "Natrium",
+    sugarLabel: "Gula",
     waterLabel: "Air",
     overallGoalProgress: "Progress Goal Keseluruhan",
     howDoYouFeel: "Bagaimana perasaanmu hari ini?",
@@ -486,6 +487,7 @@ const translations = {
     carbsLabel: "Carbohydrates",
     fatLabel: "Fat",
     sodiumLabel: "Sodium",
+    sugarLabel: "Sugar",
     waterLabel: "Water",
     overallGoalProgress: "Overall Goal Progress",
     howDoYouFeel: "How do you feel today?",
@@ -2056,6 +2058,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const totalCarbsConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0);
   const totalFatConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.fat) || 0), 0);
   const totalSodiumConsumed = allLogs.reduce((sum, item) => sum + (Number((item as any).sodium) || ((item as any).sodiumMg ? Number((item as any).sodiumMg) : 0)), 0);
+  const totalSugarConsumed = allLogs.reduce((sum, item) => sum + (Number((item as any).sugar) || 0), 0);
 
   const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
@@ -3242,6 +3245,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   ? 100
                   : Math.min(99, Math.floor((totalSodiumConsumed / targetSod) * 100));
 
+                const targetSug = Math.max(1, Number((customTargets as any)?.sugarLimit || (customTargets as any)?.sugar) || 50);
+                const sugDiff = targetSug - totalSugarConsumed;
+                const isOverSug = totalSugarConsumed > targetSug;
+                const isExactSug = totalSugarConsumed === targetSug && totalSugarConsumed > 0;
+                const sugPercent = isOverSug
+                  ? Math.max(101, Math.round((totalSugarConsumed / targetSug) * 100))
+                  : isExactSug
+                  ? 100
+                  : Math.min(99, Math.floor((totalSugarConsumed / targetSug) * 100));
+
                 const targetWater = Math.max(1, targetHydrationGoal || 2500);
                 const waterDiff = targetWater - totalHydrationMl;
                 const isOverWater = totalHydrationMl >= targetWater && totalHydrationMl > 0;
@@ -3360,7 +3373,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         </div>
                       </div>
 
-                      {/* 2. Daily Nutrition Metrics in Exact Order: Calories -> Protein -> Karbo -> Lemak -> Natrium -> Air */}
+                      {/* 2. Daily Nutrition Metrics in Exact Order: Calories -> Protein -> Karbo -> Lemak -> Natrium -> Gula -> Air */}
                       <div className="space-y-2.5">
                         {/* 1. Protein */}
                         <div className="space-y-1">
@@ -3428,7 +3441,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </div>
                         </div>
 
-                        {/* 4. Sodium (Directly below Fat and above Water) */}
+                        {/* 4. Sodium (Directly below Fat and above Sugar) */}
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
@@ -3450,7 +3463,29 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </div>
                         </div>
 
-                        {/* 5. Water Intake (Last item in Daily Nutrition) */}
+                        {/* 5. Sugar (Directly below Sodium and above Water) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-neutral-300 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-400" />
+                              <span>🍯 {t.sugarLabel || "Gula"}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono text-[11px]">{totalSugarConsumed.toLocaleString()} <span className="text-neutral-500 font-normal">/ {targetSug}g</span></span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${isOverSug ? "bg-rose-400/20 text-rose-400 border border-rose-400/30" : isExactSug ? "bg-amber-400/20 text-amber-400" : "bg-emerald-400/20 text-emerald-400"}`}>
+                                {isOverSug ? `+${Math.abs(sugDiff)}g (${sugPercent}%) 🔴 Melebihi Batas` : isExactSug ? "🟡 100% Batas Maksimal" : `${sugDiff}g tersisa (${sugPercent}%) 🟢 Dalam Batas`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-full h-1.5 bg-[#181818] rounded-full overflow-hidden border border-white/[0.08]">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${isOverSug ? "bg-gradient-to-r from-amber-500 via-rose-500 to-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-gradient-to-r from-amber-400 to-emerald-400"}`}
+                              style={{ width: `${Math.min(isOverSug ? 100 : 99, sugPercent)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 6. Water Intake (Last item in Daily Nutrition) */}
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className="text-neutral-300 flex items-center gap-1.5">
