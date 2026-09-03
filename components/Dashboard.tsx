@@ -78,13 +78,23 @@ import {
   formatDashboardPercent
 } from "../services/nutritionEngine";
 import { getApiBaseUrl } from "../utils/api";
+import {
+  classifyMealType,
+  isSmartSnack,
+  getMealTypeFromTimeWindow,
+  extractHourMinute,
+  getMealTypeLabel,
+  type MealType
+} from "../services/mealClassifier";
 
-function getMealTypeByHour(): "breakfast" | "lunch" | "snack" | "dinner" {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return "breakfast";
-  if (hour >= 11 && hour < 15) return "lunch";
-  if (hour >= 15 && hour < 18) return "snack";
-  return "dinner";
+function getMealTypeByHour(
+  timeOrDate?: string | Date,
+  foodName?: string,
+  items?: any[],
+  calories?: number,
+  userText?: string
+): "breakfast" | "lunch" | "snack" | "dinner" {
+  return classifyMealType({ timeOrDate, foodName, items, calories, userText });
 }
 
 interface MealItem {
@@ -1298,6 +1308,36 @@ export default function Dashboard({
     portion: string;
   } | null>(null);
 
+  interface ReviewMealData {
+    foodName: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+    sugar: number;
+    sodium: number;
+    portion: string;
+    mealTime: string;
+    mealType: "breakfast" | "lunch" | "dinner" | "snack";
+    components: string[];
+  }
+
+  const [reviewMealData, setReviewMealData] = useState<ReviewMealData | null>(null);
+  const [reviewMealState, setReviewMealState] = useState<"review" | "edit" | null>(null);
+  const [reviewEditName, setReviewEditName] = useState("");
+  const [reviewEditPortion, setReviewEditPortion] = useState("");
+  const [reviewEditComponents, setReviewEditComponents] = useState("");
+  const [reviewEditCal, setReviewEditCal] = useState("");
+  const [reviewEditProt, setReviewEditProt] = useState("");
+  const [reviewEditCarb, setReviewEditCarb] = useState("");
+  const [reviewEditFat, setReviewEditFat] = useState("");
+  const [reviewEditFib, setReviewEditFib] = useState("");
+  const [reviewEditSug, setReviewEditSug] = useState("");
+  const [reviewEditSod, setReviewEditSod] = useState("");
+  const [reviewEditTime, setReviewEditTime] = useState("");
+  const [reviewEditType, setReviewEditType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
+
   const [customDrinkName, setCustomDrinkName] = useState("Air Mineral");
   const [customDrinkMl, setCustomDrinkMl] = useState("250");
 
@@ -1371,9 +1411,196 @@ export default function Dashboard({
     });
   };
 
+  const initiateReviewMeal = (parsed: any) => {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const name = parsed.foodName || (isEN ? "Detected Meal" : "Makanan Terdeteksi");
+    const prot = Math.max(0, Math.round(Number(parsed.protein) || 0));
+    const carb = Math.max(0, Math.round(Number(parsed.carbs) || 0));
+    const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
+    const macroCal = (prot * 4) + (carb * 4) + (fat * 9);
+    const cal = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
+    const fib = Math.max(0, Math.round(Number(parsed.fiber) || 0));
+    const sug = Math.max(0, Math.round(Number(parsed.sugar) || 0));
+    const sod = Math.max(0, Math.round(Number(parsed.sodium) || 0));
+    const portion = parsed.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar");
+
+    // Extract components
+    let components: string[] = [];
+    if (Array.isArray(parsed.detectedFoods) && parsed.detectedFoods.length > 0) {
+      components = parsed.detectedFoods.map((f: any) => (typeof f === "string" ? f : f.foodName || f.name)).filter(Boolean);
+    } else if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+      components = parsed.items.map((f: any) => (typeof f === "string" ? f : f.foodName || f.name)).filter(Boolean);
+    } else if (name.includes(",") || name.includes("+") || /\bdan\b/i.test(name)) {
+      components = name.split(/,|\+|\bdan\b/i).map((s: string) => s.trim()).filter(Boolean);
+    } else {
+      components = [name];
+    }
+
+    // Smart Meal & Snack Classification (considers food composition + time)
+    const mealType = classifyMealType({
+      foodName: name,
+      items: components,
+      timeOrDate: timeStr,
+      calories: cal
+    });
+
+    const data: ReviewMealData = {
+      foodName: name,
+      calories: cal,
+      protein: prot,
+      carbs: carb,
+      fat,
+      fiber: fib,
+      sugar: sug,
+      sodium: sod,
+      portion,
+      mealTime: timeStr,
+      mealType,
+      components
+    };
+
+    setReviewMealData(data);
+    setScanResult(data);
+    setScanMealType(mealType);
+    setReviewMealState("review");
+    setScanLoading(false);
+  };
+
+  const handleStartEditReviewMeal = () => {
+    if (!reviewMealData) return;
+    setReviewEditName(reviewMealData.foodName);
+    setReviewEditPortion(reviewMealData.portion);
+    setReviewEditComponents(reviewMealData.components.join(", "));
+    setReviewEditCal(String(reviewMealData.calories));
+    setReviewEditProt(String(reviewMealData.protein));
+    setReviewEditCarb(String(reviewMealData.carbs));
+    setReviewEditFat(String(reviewMealData.fat));
+    setReviewEditFib(String(reviewMealData.fiber));
+    setReviewEditSug(String(reviewMealData.sugar));
+    setReviewEditSod(String(reviewMealData.sodium));
+    setReviewEditTime(reviewMealData.mealTime);
+    setReviewEditType(reviewMealData.mealType);
+    setReviewMealState("edit");
+  };
+
+  const handleReviewEditTimeChange = (newTime: string) => {
+    setReviewEditTime(newTime);
+    const reclassified = classifyMealType({
+      foodName: reviewEditName,
+      items: reviewEditComponents.split(",").map(s => s.trim()).filter(Boolean),
+      timeOrDate: newTime,
+      calories: Number(reviewEditCal) || 0
+    });
+    setReviewEditType(reclassified);
+  };
+
+  const handleReviewEditNameChange = (newName: string) => {
+    setReviewEditName(newName);
+    const reclassified = classifyMealType({
+      foodName: newName,
+      items: reviewEditComponents.split(",").map(s => s.trim()).filter(Boolean),
+      timeOrDate: reviewEditTime,
+      calories: Number(reviewEditCal) || 0
+    });
+    setReviewEditType(reclassified);
+  };
+
+  const handleSaveReviewEdits = () => {
+    if (!reviewMealData) return;
+    const comps = reviewEditComponents
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+    const cal = Math.max(0, Number(reviewEditCal) || 0);
+    const prot = Math.max(0, Number(reviewEditProt) || 0);
+    const carb = Math.max(0, Number(reviewEditCarb) || 0);
+    const fat = Math.max(0, Number(reviewEditFat) || 0);
+    const fib = Math.max(0, Number(reviewEditFib) || 0);
+    const sug = Math.max(0, Number(reviewEditSug) || 0);
+    const sod = Math.max(0, Number(reviewEditSod) || 0);
+
+    const updatedData: ReviewMealData = {
+      ...reviewMealData,
+      foodName: reviewEditName.trim() || reviewMealData.foodName,
+      portion: reviewEditPortion.trim() || reviewMealData.portion,
+      components: comps.length > 0 ? comps : [reviewEditName.trim() || reviewMealData.foodName],
+      calories: cal,
+      protein: prot,
+      carbs: carb,
+      fat,
+      fiber: fib,
+      sugar: sug,
+      sodium: sod,
+      mealTime: reviewEditTime || reviewMealData.mealTime,
+      mealType: reviewEditType
+    };
+    setReviewMealData(updatedData);
+    setScanResult(updatedData);
+    setScanMealType(reviewEditType);
+    setReviewMealState("review");
+  };
+
+  const handleConfirmSaveReviewMeal = () => {
+    if (!reviewMealData) return;
+    const newMeal: MealItem = {
+      id: Date.now().toString(),
+      foodName: reviewMealData.foodName,
+      calories: reviewMealData.calories,
+      protein: reviewMealData.protein,
+      carbs: reviewMealData.carbs,
+      fat: reviewMealData.fat,
+      fiber: reviewMealData.fiber,
+      sugar: reviewMealData.sugar,
+      sodium: reviewMealData.sodium,
+      time: reviewMealData.mealTime,
+      timestamp: new Date().toISOString(),
+      mealType: reviewMealData.mealType,
+      items: reviewMealData.components && reviewMealData.components.length > 0
+        ? reviewMealData.components.map(c => ({ name: c, foodName: c }))
+        : undefined
+    };
+
+    const updated = [newMeal, ...allLogs];
+    setAllLogs(updated);
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (normPhone) {
+      const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+      try {
+        localStorage.setItem(localKey, JSON.stringify(updated));
+      } catch (e) {}
+
+      // Async server sync
+      fetch(`/api/user/${normPhone}/meals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newMeal, date: selectedDate })
+      }).catch(() => {});
+    }
+
+    // Reset scan & close modal
+    setShowScanModal(false);
+    setScanImage(null);
+    setScanResult(null);
+    setReviewMealData(null);
+    setReviewMealState(null);
+    setReminderNotificationMsg(isEN ? "Meal saved to food journal! 🥗" : "Makanan berhasil dicatat ke jurnal! 🥗");
+    setTimeout(() => setReminderNotificationMsg(null), 3500);
+  };
+
+  const handleDeleteScanPhoto = () => {
+    setScanImage(null);
+    setScanResult(null);
+    setReviewMealData(null);
+    setReviewMealState(null);
+    setScanNonFoodMessage(null);
+  };
+
   const handlePhotoSelected = async (file: File) => {
     setScanLoading(true);
     setScanResult(null);
+    setReviewMealData(null);
+    setReviewMealState(null);
     setScanNonFoodMessage(null);
 
     const { base64, cleanData, mimeType } = await compressImageForAi(file);
@@ -1439,16 +1666,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               const macroCal = (protein * 4) + (carbs * 4) + (fat * 9);
               const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
 
-              setScanResult({
-                foodName: parsed.foodName || (isEN ? "Detected Food" : "Makanan Terdeteksi"),
-                calories,
-                protein,
-                carbs,
-                fat,
-                portion: parsed.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar")
-              });
-              if (parsed.mealType) setScanMealType(parsed.mealType);
-              setScanLoading(false);
+              initiateReviewMeal(parsed);
               return;
             }
           }
@@ -1487,16 +1705,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             return;
           }
 
-          setScanResult({
-            foodName: data.foodName || (isEN ? "Detected Meal" : "Makanan Terdeteksi"),
-            calories: Number(data.calories) || 0,
-            protein: Number(data.protein) || 0,
-            carbs: Number(data.carbs) || 0,
-            fat: Number(data.fat) || 0,
-            portion: data.portion || (isEN ? "1 Standard Portion" : "1 Porsi Standar")
-          });
-          if (data.mealType) setScanMealType(data.mealType);
-          setScanLoading(false);
+          initiateReviewMeal(data);
           return;
         }
       }
@@ -1507,15 +1716,15 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     // Heuristic fallback for coffee/meals
     const lowerName = (file.name || "").toLowerCase();
     if (lowerName.includes("butterscotch") || lowerName.includes("aren") || lowerName.includes("latte") || lowerName.includes("kopi")) {
-      setScanResult({
+      initiateReviewMeal({
         foodName: "Butterscotch Aren Latte",
         calories: 220,
         protein: 4,
         carbs: 34,
         fat: 7,
-        portion: "1 Cup (350ml)"
+        portion: "1 Cup (350ml)",
+        detectedFoods: ["Espresso", "Susu Sapi", "Gula Aren", "Butterscotch Syrup"]
       });
-      setScanLoading(false);
       return;
     }
 
@@ -1858,6 +2067,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
   // Edit Meal Form Inputs
   const [editMealName, setEditMealName] = useState("");
+  const [editMealTime, setEditMealTime] = useState("");
   const [editMealType, setEditMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
   const [editMealCal, setEditMealCal] = useState("");
   const [editMealProt, setEditMealProt] = useState("");
@@ -1867,10 +2077,40 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [editMealSug, setEditMealSug] = useState("0");
   const [editMealSod, setEditMealSod] = useState("0");
 
+  const handleEditTimeChange = (newTime: string) => {
+    setEditMealTime(newTime);
+    const autoType = classifyMealType({
+      foodName: editMealName,
+      items: editingMeal?.items,
+      timeOrDate: newTime,
+      calories: Number(editMealCal) || 0
+    });
+    setEditMealType(autoType);
+  };
+
+  const handleEditNameChange = (newName: string) => {
+    setEditMealName(newName);
+    const autoType = classifyMealType({
+      foodName: newName,
+      items: editingMeal?.items,
+      timeOrDate: editMealTime || editingMeal?.time,
+      calories: Number(editMealCal) || 0
+    });
+    setEditMealType(autoType);
+  };
+
   const handleOpenEditMeal = (meal: MealItem) => {
     setEditingMeal(meal);
     setEditMealName(meal.foodName);
-    setEditMealType((meal.mealType as any) || "lunch");
+    const mTime = meal.time || (meal.timestamp && meal.timestamp.includes("T") ? meal.timestamp.split("T")[1].substring(0, 5) : "") || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setEditMealTime(mTime);
+    const resolvedType = meal.mealType || classifyMealType({
+      foodName: meal.foodName,
+      items: meal.items,
+      timeOrDate: mTime,
+      calories: meal.calories
+    });
+    setEditMealType(resolvedType);
     setEditMealCal(String(meal.calories || 0));
     setEditMealProt(String(meal.protein || 0));
     setEditMealCarb(String(meal.carbs || 0));
@@ -1895,6 +2135,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       ...editingMeal,
       foodName: editMealName.trim() || editingMeal.foodName,
       mealType: editMealType,
+      time: editMealTime || editingMeal.time,
       calories: cal,
       protein: prot,
       carbs: carb,
@@ -4095,11 +4336,13 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                   <h4 className="font-extrabold text-sm text-white group-hover:text-[#D4FF00] transition-colors truncate">
                                     {item.foodName}
                                   </h4>
-                                  {item.mealType && (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#222222] text-neutral-400 border border-white/[0.08] capitalize shrink-0">
-                                      {item.mealType}
-                                    </span>
-                                  )}
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#222222] text-[#D4FF00] border border-white/[0.08] uppercase shrink-0">
+                                    {getMealTypeLabel(
+                                      item.mealType || getMealTypeByHour(item.time || item.timestamp, item.foodName, item.items, item.calories),
+                                      isEN ? "EN" : "ID",
+                                      item.time || item.timestamp
+                                    )}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-neutral-400 font-medium mt-1 flex-wrap">
                                   <span className="text-white font-black">{formatDashboardInteger(item.calories)} kcal</span>
@@ -5424,6 +5667,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     setShowScanModal(false);
                     setScanImage(null);
                     setScanResult(null);
+                    setReviewMealData(null);
+                    setReviewMealState(null);
+                    setScanNonFoodMessage(null);
                   }}
                   className="text-neutral-400 hover:text-white p-1 rounded-lg"
                 >
@@ -5523,75 +5769,308 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     </motion.div>
                   )}
 
-                  {/* AI Results */}
-                  {scanResult && !scanLoading && (
+                  {/* DEDICATED REVIEW MEAL STATE (Rule 3: Remove auto-save, explicit user actions) */}
+                  {reviewMealData && !scanLoading && reviewMealState === "review" && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-[#181818] border border-[#D4FF00]/40 rounded-2xl p-4 space-y-3 shadow-md"
+                      className="bg-[#181818] border border-[#D4FF00]/40 rounded-2xl p-5 space-y-4 shadow-xl"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] font-black uppercase text-[#D4FF00] tracking-wider">
-                            ✨ AI Detection Result
+                      {/* Status / Category Banner */}
+                      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-[#D4FF00] text-black tracking-wider">
+                            {getMealTypeLabel(reviewMealData.mealType, isEN ? "EN" : "ID", reviewMealData.mealTime)}
                           </span>
-                          <h4 className="font-extrabold text-base text-white">{scanResult.foodName}</h4>
-                          <p className="text-xs text-neutral-400 font-medium">{scanResult.portion}</p>
+                          <span className="text-xs text-neutral-400 font-mono flex items-center gap-1">
+                            <Clock size={12} className="text-[#D4FF00]" />
+                            {reviewMealData.mealTime}
+                          </span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-xl font-black text-[#D4FF00]">{formatDashboardInteger(scanResult.calories)}</span>
+                        <span className="text-[10px] font-extrabold text-[#D4FF00] bg-[#D4FF00]/10 px-2.5 py-0.5 rounded-full border border-[#D4FF00]/30">
+                          ✨ {isEN ? "AI Estimate" : "Estimasi AI"}
+                        </span>
+                      </div>
+
+                      {/* Meal Title & Portion */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-extrabold text-base sm:text-lg text-white leading-snug">
+                            {reviewMealData.foodName}
+                          </h4>
+                          <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                            {reviewMealData.portion}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-2xl font-black text-[#D4FF00]">
+                            ~{formatDashboardInteger(reviewMealData.calories)}
+                          </span>
                           <span className="text-xs text-neutral-400 block font-bold">kcal</span>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-white/[0.08] text-xs font-bold">
-                        <div className="bg-white/5 rounded-xl p-2">
+                      {/* Macronutrient Breakdown */}
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold">
+                        <div className="bg-white/5 border border-white/[0.06] rounded-xl p-2.5">
                           <span className="block text-[10px] text-neutral-400 font-semibold">Protein</span>
-                          <span className="text-indigo-400 font-black">{formatDashboardMacro(scanResult.protein)}g</span>
+                          <span className="text-indigo-400 font-black text-sm">{formatDashboardMacro(reviewMealData.protein)}g</span>
                         </div>
-                        <div className="bg-white/5 rounded-xl p-2">
+                        <div className="bg-white/5 border border-white/[0.06] rounded-xl p-2.5">
                           <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Carbs" : "Karbo"}</span>
-                          <span className="text-emerald-400 font-black">{formatDashboardMacro(scanResult.carbs)}g</span>
+                          <span className="text-emerald-400 font-black text-sm">{formatDashboardMacro(reviewMealData.carbs)}g</span>
                         </div>
-                        <div className="bg-white/5 rounded-xl p-2">
+                        <div className="bg-white/5 border border-white/[0.06] rounded-xl p-2.5">
                           <span className="block text-[10px] text-neutral-400 font-semibold">{isEN ? "Fat" : "Lemak"}</span>
-                          <span className="text-rose-400 font-black">{formatDashboardMacro(scanResult.fat)}g</span>
+                          <span className="text-rose-400 font-black text-sm">{formatDashboardMacro(reviewMealData.fat)}g</span>
                         </div>
                       </div>
 
-                      {/* Meal Type Selection */}
-                      <div className="pt-2">
-                        <label className="text-[11px] font-bold text-neutral-400 block mb-1.5">{isEN ? "Meal Type:" : "Waktu Makan:"}</label>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(["breakfast", "lunch", "dinner", "snack"] as const).map((m) => {
-                            const mLabel = isEN
-                              ? (m === "breakfast" ? "Breakfast" : m === "lunch" ? "Lunch" : m === "dinner" ? "Dinner" : "Snack")
-                              : (m === "breakfast" ? "Sarapan" : m === "lunch" ? "Siang" : m === "dinner" ? "Malam" : "Camilan");
-                            return (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => setScanMealType(m)}
-                                className={`py-1.5 rounded-xl text-[11px] font-bold capitalize transition-all cursor-pointer border ${
-                                  scanMealType === m
-                                    ? "bg-[#D4FF00] text-black border-[#D4FF00]"
-                                    : "bg-[#181818] text-neutral-400 border-white/[0.08] hover:text-white"
-                                }`}
+                      {/* Additional Micronutrients (Fiber, Sugar, Sodium) if present */}
+                      {(reviewMealData.fiber > 0 || reviewMealData.sugar > 0 || reviewMealData.sodium > 0) && (
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold pt-1">
+                          <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg py-1.5 px-2">
+                            <span className="block text-[9px] text-neutral-500 font-semibold">Serat</span>
+                            <span className="text-cyan-400 font-bold text-xs">{formatDashboardMacro(reviewMealData.fiber)}g</span>
+                          </div>
+                          <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg py-1.5 px-2">
+                            <span className="block text-[9px] text-neutral-500 font-semibold">Gula</span>
+                            <span className="text-amber-400 font-bold text-xs">{formatDashboardMacro(reviewMealData.sugar)}g</span>
+                          </div>
+                          <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg py-1.5 px-2">
+                            <span className="block text-[9px] text-neutral-500 font-semibold">Natrium</span>
+                            <span className="text-purple-400 font-bold text-xs">{formatDashboardInteger(reviewMealData.sodium)}mg</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Detected Food Components / Ingredients */}
+                      {Array.isArray(reviewMealData.components) && reviewMealData.components.length > 0 && (
+                        <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
+                          <span className="text-[11px] font-bold text-neutral-400 block">
+                            {isEN ? "Detected Components:" : "Komponen Makanan Terdeteksi:"}
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {reviewMealData.components.map((comp, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[11px] font-semibold px-2.5 py-1 bg-white/[0.06] text-neutral-200 border border-white/[0.08] rounded-lg"
                               >
-                                {mLabel}
-                              </button>
-                            );
-                          })}
+                                {comp}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Transparency & Edit Notice */}
+                      <p className="text-[11px] text-neutral-400 font-medium italic pt-1 leading-relaxed border-t border-white/[0.08]">
+                        ℹ️ {isEN
+                          ? "AI is an assistant. Values are estimates and can be corrected before saving."
+                          : "Nilai di atas merupakan estimasi AI. Kamu dapat mengoreksi data sebelum menyimpannya ke jurnal."}
+                      </p>
+
+                      {/* THREE MANDATORY ACTIONS: Save Meal, Correct/Edit, Delete Photo */}
+                      <div className="space-y-2 pt-2">
+                        {/* PRIMARY: Save Meal */}
+                        <button
+                          type="button"
+                          onClick={handleConfirmSaveReviewMeal}
+                          className="w-full py-3.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-['Archivo_Black'] text-sm uppercase rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                        >
+                          <Check size={18} strokeWidth={3} />
+                          <span>{isEN ? "Save Meal" : "Simpan Makanan"}</span>
+                        </button>
+
+                        {/* SECONDARY: Correct / Edit */}
+                        <button
+                          type="button"
+                          onClick={handleStartEditReviewMeal}
+                          className="w-full py-3 bg-[#181818] hover:bg-[#252525] border border-white/[0.12] hover:border-[#D4FF00]/50 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
+                        >
+                          <Edit3 size={15} className="text-[#D4FF00]" />
+                          <span>{isEN ? "Correct / Edit" : "Koreksi / Edit"}</span>
+                        </button>
+
+                        {/* DESTRUCTIVE: Delete Photo */}
+                        <button
+                          type="button"
+                          onClick={handleDeleteScanPhoto}
+                          className="w-full py-2.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                          <span>{isEN ? "Delete Photo" : "Hapus Foto"}</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* INLINE EDIT FORM WITHIN REVIEW MEAL */}
+                  {reviewMealData && !scanLoading && reviewMealState === "edit" && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-[#181818] border border-white/[0.12] rounded-2xl p-5 space-y-4 shadow-xl"
+                    >
+                      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                        <div>
+                          <h4 className="font-['Archivo_Black'] text-sm text-white flex items-center gap-1.5">
+                            <Edit3 size={15} className="text-[#D4FF00]" />
+                            <span>{isEN ? "Edit AI Meal Details" : "Koreksi Hasil Analisis AI"}</span>
+                          </h4>
+                          <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                            {isEN ? "Adjust detected details before confirming." : "Sesuaikan nama, jam, dan nutrisi makanan."}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-black bg-[#D4FF00] px-2 py-0.5 rounded-md">
+                          {getMealTypeLabel(reviewEditType, isEN ? "EN" : "ID", reviewEditTime)}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 text-xs">
+                        {/* Meal Name */}
+                        <div>
+                          <label className="font-bold text-neutral-300 block mb-1">
+                            {isEN ? "Meal Name:" : "Nama Makanan:"}
+                          </label>
+                          <input
+                            type="text"
+                            value={reviewEditName}
+                            onChange={(e) => handleReviewEditNameChange(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-bold focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* Portion */}
+                        <div>
+                          <label className="font-bold text-neutral-300 block mb-1">
+                            {isEN ? "Portion / Serving:" : "Porsi / Takaran:"}
+                          </label>
+                          <input
+                            type="text"
+                            value={reviewEditPortion}
+                            onChange={(e) => setReviewEditPortion(e.target.value)}
+                            className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-medium focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* Food Components / Ingredients */}
+                        <div>
+                          <label className="font-bold text-neutral-300 block mb-1">
+                            {isEN ? "Food Components (comma separated):" : "Komponen Makanan (pisahkan koma):"}
+                          </label>
+                          <input
+                            type="text"
+                            value={reviewEditComponents}
+                            onChange={(e) => setReviewEditComponents(e.target.value)}
+                            placeholder="Nasi Putih, Ayam Bakar, Sambal"
+                            className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-medium focus:outline-none focus:border-[#D4FF00]"
+                          />
+                        </div>
+
+                        {/* Meal Time & Category */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="font-bold text-neutral-300">
+                              {isEN ? "Meal Time:" : "Waktu Makan:"}
+                            </label>
+                            <span className="text-[10px] font-bold text-neutral-400">
+                              {isEN ? "Auto-classifies category" : "Otomatis menentukan kategori"}
+                            </span>
+                          </div>
+                          <div className="relative mb-2">
+                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                            <input
+                              type="time"
+                              value={reviewEditTime}
+                              onChange={(e) => handleReviewEditTimeChange(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-mono font-bold focus:outline-none focus:border-[#D4FF00]"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(["breakfast", "lunch", "dinner", "snack"] as const).map((m) => {
+                              const mLabel = isEN
+                                ? (m === "breakfast" ? "Breakfast" : m === "lunch" ? "Lunch" : m === "dinner" ? "Dinner" : "Snack")
+                                : (m === "breakfast" ? "Sarapan" : m === "lunch" ? "Siang" : m === "dinner" ? "Malam" : "Camilan");
+                              return (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => setReviewEditType(m)}
+                                  className={`py-1.5 rounded-xl text-[11px] font-bold capitalize transition-all cursor-pointer border ${
+                                    reviewEditType === m
+                                      ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                                      : "bg-[#181818] text-neutral-400 border-white/[0.08] hover:text-white"
+                                  }`}
+                                >
+                                  {mLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Nutrition Values */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="font-bold text-white block mb-1">
+                              {isEN ? "Calories (kcal)" : "Kalori (kcal)"}
+                            </label>
+                            <input
+                              type="number"
+                              value={reviewEditCal}
+                              onChange={(e) => setReviewEditCal(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-bold focus:outline-none focus:border-[#D4FF00]"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-indigo-400 block mb-1">Protein (g)</label>
+                            <input
+                              type="number"
+                              value={reviewEditProt}
+                              onChange={(e) => setReviewEditProt(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-bold focus:outline-none focus:border-[#D4FF00]"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-emerald-400 block mb-1">{isEN ? "Carbs (g)" : "Karbo (g)"}</label>
+                            <input
+                              type="number"
+                              value={reviewEditCarb}
+                              onChange={(e) => setReviewEditCarb(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-bold focus:outline-none focus:border-[#D4FF00]"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-rose-400 block mb-1">{isEN ? "Fat (g)" : "Lemak (g)"}</label>
+                            <input
+                              type="number"
+                              value={reviewEditFat}
+                              onChange={(e) => setReviewEditFat(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#111620] border border-white/[0.08] rounded-xl text-white font-bold focus:outline-none focus:border-[#D4FF00]"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <button
-                        onClick={handleSaveScannedMeal}
-                        className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
-                      >
-                        <Check size={16} strokeWidth={3} />
-                        <span>{isEN ? "Save to Today's Food Journal" : "Simpan ke Jurnal Makan Hari Ini"}</span>
-                      </button>
+                      {/* Edit Actions */}
+                      <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                        <button
+                          type="button"
+                          onClick={handleSaveReviewEdits}
+                          className="w-full py-3 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-98"
+                        >
+                          <Check size={16} strokeWidth={3} />
+                          <span>{isEN ? "Done Editing" : "Selesai Edit & Simpan Perubahan"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewMealState("review")}
+                          className="w-full py-2.5 text-neutral-400 hover:text-white font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          <span>{isEN ? "Cancel" : "Batal"}</span>
+                        </button>
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -7944,7 +8423,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-neutral-300">
-                      {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                      {isEN ? "Date of Birth" : "Tanggal Lahir"}
                     </label>
                     <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
                       {getDashboardAgeGroupLabel(Number(profAge) || 25)}
@@ -8244,9 +8723,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#D4FF00] text-black">
-                      {isEN
-                        ? (selectedMealDetail.mealType === "breakfast" ? "Breakfast" : selectedMealDetail.mealType === "lunch" ? "Lunch" : selectedMealDetail.mealType === "dinner" ? "Dinner" : "Snacks")
-                        : (selectedMealDetail.mealType === "breakfast" ? "Sarapan" : selectedMealDetail.mealType === "lunch" ? "Makan Siang" : selectedMealDetail.mealType === "dinner" ? "Makan Malam" : "Camilan")}
+                      {getMealTypeLabel(
+                        selectedMealDetail.mealType || getMealTypeByHour(selectedMealDetail.time || selectedMealDetail.timestamp, selectedMealDetail.foodName, selectedMealDetail.items, selectedMealDetail.calories),
+                        isEN ? "EN" : "ID",
+                        selectedMealDetail.time || selectedMealDetail.timestamp
+                      )}
                     </span>
                     {selectedMealDetail.time && (
                       <span className="text-xs text-neutral-400 font-mono flex items-center gap-1">
@@ -8415,14 +8896,28 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   <input
                     type="text"
                     value={editMealName}
-                    onChange={(e) => setEditMealName(e.target.value)}
+                    onChange={(e) => handleEditNameChange(e.target.value)}
                     className="w-full mt-1 px-3.5 py-2.5 bg-[#181818] border border-white/[0.08] rounded-xl text-xs font-bold text-white focus:outline-none focus:border-[#D4FF00]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-neutral-300">{isEN ? "Meal Type" : "Waktu Makan"}</label>
-                  <div className="grid grid-cols-4 gap-1.5 mt-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-neutral-300">{isEN ? "Meal Time & Category" : "Waktu Makan & Kategori"}</label>
+                    <span className="text-[10px] font-black uppercase text-black bg-[#D4FF00] px-2 py-0.5 rounded-md shadow-xs">
+                      {getMealTypeLabel(editMealType, isEN ? "EN" : "ID", editMealTime)}
+                    </span>
+                  </div>
+                  <div className="relative mb-2">
+                    <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                    <input
+                      type="time"
+                      value={editMealTime}
+                      onChange={(e) => handleEditTimeChange(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-[#181818] border border-white/[0.08] rounded-xl text-xs font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
                     {(["breakfast", "lunch", "dinner", "snack"] as const).map((mType) => {
                       const mLabel = isEN
                         ? (mType === "breakfast" ? "Breakfast" : mType === "lunch" ? "Lunch" : mType === "dinner" ? "Dinner" : "Snack")
@@ -8820,7 +9315,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <span className="text-[11px] font-semibold text-neutral-400 block mb-1.5">
-                      {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                      {isEN ? "Date of Birth" : "Tanggal Lahir"}
                     </span>
                     <div className="relative">
                       <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />

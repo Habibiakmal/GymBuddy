@@ -66,6 +66,14 @@ import {
   type UserPlanCapabilities,
   type PlanValidationResult
 } from "./services/planContextEngine";
+import {
+  classifyMealType,
+  isSmartSnack,
+  getMealTypeFromTimeWindow,
+  extractHourMinute,
+  getMealTypeLabel,
+  type MealType
+} from "./services/mealClassifier";
 
 export {
   getUserPlanCapabilities,
@@ -76,13 +84,19 @@ export {
   formatDashboardPercent,
   applyTargetedMealCorrection,
   extractMealComponents,
-  splitCompoundFoodItems
+  splitCompoundFoodItems,
+  classifyMealType,
+  isSmartSnack,
+  getMealTypeFromTimeWindow,
+  extractHourMinute,
+  getMealTypeLabel
 };
 export type {
   UserPlanCapabilities,
   PlanValidationResult,
   MealComponentItem,
-  MealCorrectionResult
+  MealCorrectionResult,
+  MealType
 };
 import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
@@ -133,24 +147,13 @@ export function resolveCleanFoodNameAndMealType(
   const cleanCaption = String(rawUserText || "").trim();
   const lowerCaption = cleanCaption.toLowerCase();
 
-  // 1. Extract Meal Type from caption or fallback
-  let mealType = detectedMealType || "";
-  if (/(?:sarapan|breakfast|pagi)/i.test(lowerCaption)) {
-    mealType = "Breakfast";
-  } else if (/(?:snack|camilan|ngemil|cemilan|sore)/i.test(lowerCaption)) {
-    mealType = "Snack";
-  } else if (/(?:siang|lunch)/i.test(lowerCaption)) {
-    mealType = "Lunch";
-  } else if (/(?:malam|dinner)/i.test(lowerCaption)) {
-    mealType = "Dinner";
-  }
-
-  if (!mealType) {
-    const rawType = getMealTypeByHour(cleanCaption);
-    mealType = rawType.charAt(0).toUpperCase() + rawType.slice(1);
-  } else {
-    mealType = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-  }
+  // 1. Extract Meal Type using smart classifier (combines explicit user intent, smart snack composition, and 4 time windows)
+  const classifiedType = classifyMealType({
+    foodName: detectedFoodName,
+    items: detectedFoodsList,
+    userText: cleanCaption
+  });
+  let mealType = classifiedType.charAt(0).toUpperCase() + classifiedType.slice(1);
 
   // 2. Identify if userText is purely conversational / generic intent phrase
   const isGenericCaption = !cleanCaption || /(?:^(?:aku\s+|saya\s+|gw\s+|gue\s+)?(?:makan|santap|ngemil|minum|makanan|foto|ini|nih|buat|untuk|tadi|lagi|sarapan|lunch|dinner|snack|camilan|makan\s+siang|makan\s+malam|makan\s+pagi)(?:\s+(?:ini|nih|ya|dong|gan|bro|coach|mia|max|tadi|tadi\s+siang|tadi\s+malam|pagi|siang|malam|untuk\s+sarapan|untuk\s+lunch|untuk\s+dinner|untuk\s+snack|buat\s+sarapan|buat\s+lunch|buat\s+snack|buat\s+dinner))*[\.!\?]*$)/i.test(lowerCaption) ||
@@ -1035,34 +1038,15 @@ function setWaterCups(rawPhone: string, cups: number, dateStr?: string): number 
   return newCups;
 }
 
-// Helper to determine meal type by keyword or hour — always computed in WIB (UTC+7)
-export function getMealTypeByHour(userText?: string): "breakfast" | "lunch" | "snack" | "dinner" {
-  if (userText) {
-    const lower = String(userText).toLowerCase();
-    if (/(?:sarapan|pagi|breakfast|sahur)/i.test(lower)) return "breakfast";
-    if (/(?:siang|lunch|makan siang|tadi siang)/i.test(lower)) return "lunch";
-    if (/(?:sore|snack|ngemil|camilan|cemilan|tadi sore)/i.test(lower)) return "snack";
-    if (/(?:malam|dinner|makan malam|tadi malam)/i.test(lower)) return "dinner";
-  }
-
-  // Use Intl.DateTimeFormat to get the current hour in WIB timezone reliably
-  try {
-    const wibHour = parseInt(
-      new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(new Date()),
-      10
-    );
-    if (wibHour >= 5 && wibHour < 11) return "breakfast";
-    if (wibHour >= 11 && wibHour < 15) return "lunch";
-    if (wibHour >= 15 && wibHour < 18) return "snack";
-    return "dinner";
-  } catch (e) {
-    // Fallback: UTC+7 offset arithmetic
-    const hour = (new Date().getUTCHours() + 7) % 24;
-    if (hour >= 5 && hour < 11) return "breakfast";
-    if (hour >= 11 && hour < 15) return "lunch";
-    if (hour >= 15 && hour < 18) return "snack";
-    return "dinner";
-  }
+// Helper to determine meal type by food composition, keyword, or hour — always computed in WIB (UTC+7)
+export function getMealTypeByHour(
+  userText?: string,
+  timeOrDate?: string | Date,
+  foodName?: string,
+  items?: any[],
+  calories?: number
+): "breakfast" | "lunch" | "snack" | "dinner" {
+  return classifyMealType({ userText, timeOrDate, foodName, items, calories });
 }
 
 // ─── Firestore Persistent Storage (Dedicated Cloud Store) ─────────────────────
@@ -1354,6 +1338,77 @@ function getWibTimeStr(d: Date = new Date()): string {
     const minutes = String(wibDate.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
   }
+}
+
+// ─── WhatsApp Login Confirmation Session Store & Helper ───────────────────────
+export interface PendingLoginSession {
+  sessionId: string;
+  phone: string;
+  normPhone: string;
+  altPhone: string;
+  device: string;
+  location: string;
+  timeStr: string;
+  status: "pending" | "approved" | "rejected" | "expired" | "cancelled";
+  otpCode: string;
+  createdAt: number;
+  expiresAt: number;
+  profile: any;
+}
+
+export const authPendingSessions = new Map<string, PendingLoginSession>();
+
+export function getPendingSession(sessionId: string): PendingLoginSession | null {
+  const sess = authPendingSessions.get(sessionId);
+  if (!sess) return null;
+  if (sess.status === "pending" && Date.now() > sess.expiresAt) {
+    sess.status = "expired";
+  }
+  return sess;
+}
+
+export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText: string): Promise<string | null> {
+  const normPhone = normalizePhone(rawPhone);
+  if (!normPhone) return null;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+
+  // Find active pending session for this user
+  let activeSession: PendingLoginSession | null = null;
+  for (const sess of authPendingSessions.values()) {
+    if (
+      (sess.normPhone === normPhone || sess.altPhone === normPhone || sess.phone === normPhone || sess.phone === altPhone) &&
+      sess.status === "pending" &&
+      Date.now() <= sess.expiresAt
+    ) {
+      activeSession = sess;
+      break;
+    }
+  }
+
+  if (!activeSession) return null;
+
+  const trimmed = userText.trim().toLowerCase();
+
+  // Approve keywords: "ya", "yes", "1", "benar", "setuju", "it's me", "its me"
+  if (/^(?:ya|yes|1|benar|setuju|it'?s\s*me)\b/i.test(trimmed)) {
+    activeSession.status = "approved";
+    return `✅ *Login Dikonfirmasi!*\n\nAkses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! ✨`;
+  }
+
+  // Reject keywords: "tidak", "no", "2", "bukan", "tolak", "secure", "amankan"
+  if (/^(?:tidak|no|2|bukan|tolak|secure|amankan)\b/i.test(trimmed)) {
+    activeSession.status = "rejected";
+    return `🛡️ *Login Ditolak & Akun Diamankan*\n\nAkses Dashboard tersebut telah diblokir segera. Jika ini bukan aktivitas kamu, akun kamu tetap aman.`;
+  }
+
+  // Check 6-digit OTP match
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 6 && digits === activeSession.otpCode) {
+    activeSession.status = "approved";
+    return `✅ *Kode Verifikasi Benar!*\n\nAkses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. ✨`;
+  }
+
+  return null;
 }
 
 // Helper to handle reminder set/change/disable commands across all webhooks
@@ -4275,6 +4330,238 @@ async function startServer() {
     }
   });
 
+  // ─── WhatsApp Login Confirmation for Existing Users ───────────────────────
+  app.post("/api/auth/login-request", express.json(), async (req, res) => {
+    try {
+      const { phone, device: clientDevice, location: clientLocation, timeStr: clientTimeStr } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
+      }
+
+      const cleanedPhone = phone.replace(/\D/g, "");
+      const normPhone = cleanedPhone.startsWith("62")
+        ? "0" + cleanedPhone.substring(2)
+        : (cleanedPhone.startsWith("8") ? "0" + cleanedPhone : cleanedPhone);
+      const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+
+      let user = (await findUserByPhoneOrId(normPhone)) || getUserProfile(normPhone) ||
+                 (await findUserByPhoneOrId(altPhone)) || getUserProfile(altPhone);
+
+      // Support built-in demo accounts (Alex & Mia)
+      if (!user && (normPhone === "08111111111" || altPhone === "62811111111" || cleanedPhone === "08111111111" || cleanedPhone === "62811111111")) {
+        user = {
+          userId: "usr_alex_demo",
+          name: "Alex",
+          phone: "08111111111",
+          gender: "pria",
+          age: 26,
+          weight: 75,
+          startWeight: 75,
+          targetWeight: 70,
+          height: 175,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          persona: "max",
+          activeService: "nutritionist",
+          selectedFeature: "nutrition",
+          plan: "nutrition",
+          targetCalories: 2100
+        };
+      } else if (!user && (normPhone === "08222222222" || altPhone === "62822222222" || cleanedPhone === "08222222222" || cleanedPhone === "62822222222")) {
+        user = {
+          userId: "usr_mia_demo",
+          name: "Mia",
+          phone: "08222222222",
+          gender: "wanita",
+          age: 24,
+          weight: 58,
+          startWeight: 58,
+          targetWeight: 54,
+          height: 165,
+          goal: "gain",
+          goalTitle: "Membentuk Otot & Tone",
+          persona: "mia",
+          activeService: "workout",
+          selectedFeature: "workout",
+          plan: "workout",
+          targetCalories: 1850
+        };
+      }
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: "not_registered",
+          message: "Nomor WhatsApp ini belum terdaftar. Silakan daftar dan isi data tubuh kamu melalui kuesioner onboarding terlebih dahulu."
+        });
+      }
+
+      const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const device = clientDevice || (req.headers["user-agent"] ? "Chrome on Windows" : "Browser");
+      const location = clientLocation || "Jakarta, Indonesia";
+      const nowFormatted = clientTimeStr || new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Jakarta",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }).format(new Date());
+
+      const session: PendingLoginSession = {
+        sessionId,
+        phone,
+        normPhone,
+        altPhone,
+        device,
+        location,
+        timeStr: nowFormatted,
+        status: "pending",
+        otpCode,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        profile: user
+      };
+
+      authPendingSessions.set(sessionId, session);
+
+      // Compose WhatsApp Confirmation Message
+      const waMsg = [
+        `🔐 *GymBuddy Login Confirmation*`,
+        `-----------------------------`,
+        `Seseorang sedang mencoba mengakses Dashboard GymBuddy kamu.`,
+        ``,
+        `📱 *Perangkat*: ${device}`,
+        `📍 *Perkiraan Lokasi*: ${location}`,
+        `⏱️ *Waktu*: ${nowFormatted}`,
+        ``,
+        `Apakah ini kamu?`,
+        ``,
+        `Balas *YA* (atau *1*) jika ini kamu.`,
+        `Balas *TIDAK* (atau *2*) untuk menolak & mengamankan akun.`,
+        ``,
+        `Kode verifikasi alternatif: *${otpCode}*`,
+        `(Berlaku selama 5 menit)`
+      ].join("\n");
+
+      sendWhatsAppDirect(normPhone, waMsg).catch((err) => {
+        console.warn("[Auth WA] Delivery note:", err?.message || err);
+      });
+
+      res.json({
+        success: true,
+        sessionId,
+        device,
+        location,
+        timeStr: nowFormatted,
+        expiresAt: session.expiresAt,
+        otpCode // Provided for test automation / dev environments
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Gagal memproses permintaan login." });
+    }
+  });
+
+  app.get("/api/auth/login-status/:sessionId", (req, res) => {
+    const session = getPendingSession(req.params.sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "session_not_found" });
+    }
+    const remainingSeconds = Math.max(0, Math.round((session.expiresAt - Date.now()) / 1000));
+    res.json({
+      success: true,
+      status: session.status,
+      profile: session.status === "approved" ? session.profile : undefined,
+      remainingSeconds
+    });
+  });
+
+  app.post("/api/auth/login-verify-otp", express.json(), (req, res) => {
+    const { sessionId, otpCode } = req.body;
+    const session = getPendingSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "session_not_found" });
+    }
+    if (session.status === "expired" || Date.now() > session.expiresAt) {
+      return res.status(410).json({ success: false, error: "expired", message: "Sesi verifikasi telah kedaluwarsa." });
+    }
+    if (String(otpCode).trim() === session.otpCode) {
+      session.status = "approved";
+      return res.json({
+        success: true,
+        status: "approved",
+        profile: session.profile
+      });
+    }
+    return res.status(400).json({ success: false, error: "invalid_otp", message: "Kode OTP salah. Silakan periksa kembali." });
+  });
+
+  app.post("/api/auth/login-action", express.json(), (req, res) => {
+    const { sessionId, action } = req.body;
+    const session = getPendingSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "session_not_found" });
+    }
+    if (action === "approve") {
+      session.status = "approved";
+      return res.json({ success: true, status: "approved", profile: session.profile });
+    } else if (action === "reject") {
+      session.status = "rejected";
+      return res.json({ success: true, status: "rejected" });
+    }
+    return res.status(400).json({ success: false, error: "invalid_action" });
+  });
+
+  app.post("/api/auth/login-resend", express.json(), (req, res) => {
+    const { sessionId } = req.body;
+    const session = getPendingSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "session_not_found" });
+    }
+    session.otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    session.createdAt = Date.now();
+    session.expiresAt = Date.now() + 5 * 60 * 1000;
+    session.status = "pending";
+
+    const waMsg = [
+      `🔐 *GymBuddy Login Confirmation (Kirim Ulang)*`,
+      `-----------------------------`,
+      `Seseorang sedang mencoba mengakses Dashboard GymBuddy kamu.`,
+      ``,
+      `📱 *Perangkat*: ${session.device}`,
+      `📍 *Perkiraan Lokasi*: ${session.location}`,
+      `⏱️ *Waktu*: ${session.timeStr}`,
+      ``,
+      `Apakah ini kamu?`,
+      ``,
+      `Balas *YA* (atau *1*) jika ini kamu.`,
+      `Balas *TIDAK* (atau *2*) untuk menolak & mengamankan akun.`,
+      ``,
+      `Kode verifikasi alternatif: *${session.otpCode}*`,
+      `(Berlaku selama 5 menit)`
+    ].join("\n");
+
+    sendWhatsAppDirect(session.normPhone, waMsg).catch(() => {});
+
+    res.json({
+      success: true,
+      sessionId: session.sessionId,
+      expiresAt: session.expiresAt,
+      otpCode: session.otpCode
+    });
+  });
+
+  app.post("/api/auth/login-cancel", express.json(), (req, res) => {
+    const { sessionId } = req.body;
+    const session = getPendingSession(sessionId);
+    if (session) {
+      session.status = "cancelled";
+    }
+    res.json({ success: true, status: "cancelled" });
+  });
+
   app.get("/api/auth/me", requireAuthMiddleware, async (req: any, res) => {
     try {
       const phone = req.user?.phone;
@@ -6046,6 +6333,13 @@ const mediaUrl = mediaRes.data.url;
 
           const lowerText = userText.toLowerCase();
 
+          // Check for pending login confirmation
+          const loginAck = await handleWhatsAppLoginConfirmation(from, userText);
+          if (loginAck) {
+            await sendWhatsAppDirect(from, loginAck);
+            return res.status(200).send("EVENT_RECEIVED");
+          }
+
           const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                    (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
@@ -6581,6 +6875,13 @@ function escapeXml(unsafe: string): string {
 
       let userText = Body || "";
       const lowerText = userText.toLowerCase();
+
+      // Check for pending login confirmation
+      const loginAck = await handleWhatsAppLoginConfirmation(rawFrom, userText);
+      if (loginAck) {
+        await sendWhatsAppAsync(rawFrom, loginAck, req.body?.To);
+        return res.type("text/xml").send("<Response></Response>");
+      }
       const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 

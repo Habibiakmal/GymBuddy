@@ -93,6 +93,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
   const [weight, setWeight] = useState("65");
   const [height, setHeight] = useState("170");
   const [dob, setDob] = useState("");
+  const [dobError, setDobError] = useState(false);
   const [age, setAge] = useState("25");
   const [userTargetWeight, setUserTargetWeight] = useState("");
   const [allergies, setAllergies] = useState<string[]>(["none"]);
@@ -104,6 +105,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
 
   const handleDobChange = (newDob: string) => {
     setDob(newDob);
+    if (newDob && newDob.trim()) {
+      setDobError(false);
+    }
     if (newDob && /^\d{4}-\d{2}-\d{2}$/.test(newDob)) {
       const d = new Date(newDob);
       if (!isNaN(d.getTime())) {
@@ -299,7 +303,13 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     }
   }, [step, phone, name, goal, goalEvent, goalSecondary, emotionalVision, gender, weight, height, age, dob, healthStatus, healthConditions, otherCondition, activityLevel, experience, satisfaction, challenges, persona, selectedPlan, selectedFeature]);
 
-  const handleNext = () => setStep((p) => Math.min(p + 1, 14));
+  const handleNext = () => {
+    if (step === 6 && !dob.trim()) {
+      setDobError(true);
+      return;
+    }
+    setStep((p) => Math.min(p + 1, 14));
+  };
   const handlePrev = () => setStep((p) => Math.max(p - 1, 1));
 
   const toggleSecondaryGoal = (id: string) => {
@@ -383,7 +393,7 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
       case 3: return goalEvent !== "" && goalSecondary.length > 0;
       case 4: return emotionalVision !== "";
       case 5: return true; // Analysis 1 screen
-      case 6: return weight !== "" && height !== "" && age !== "";
+      case 6: return weight !== "" && height !== "" && age !== "" && dob.trim() !== "";
       case 7: return activityLevel !== "" && experience !== "" && satisfaction !== "";
       case 8: return challenges.length > 0;
       case 9: return true; // Analysis 2 screen
@@ -1042,20 +1052,44 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-['Inter'] font-bold text-neutral-400 uppercase tracking-wider">
-                          {isEN ? "Date of Birth (Optional)" : "Tanggal Lahir (Opsional)"}
+                        <label className="block text-xs font-['Inter'] font-bold text-neutral-300 uppercase tracking-wider">
+                          {isEN ? "Date of Birth" : "Tanggal Lahir"} <span className="text-[#D4FF00] font-black">*</span>
                         </label>
                       </div>
                       <div className="relative">
-                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                        <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 ${dobError ? "text-rose-400" : "text-neutral-500"}`} size={18} />
                         <input
                           type="date"
+                          required
                           max={new Date().toISOString().split("T")[0]}
                           value={dob}
                           onChange={(e) => handleDobChange(e.target.value)}
-                          className="w-full bg-[#111620] border border-neutral-800 rounded-xl pl-11 pr-4 py-3.5 text-sm sm:text-base font-bold text-white focus:outline-none focus:border-[#D4FF00]"
+                          className={`w-full bg-[#111620] border ${
+                            dobError
+                              ? "border-rose-500 focus:border-rose-400 ring-1 ring-rose-500/40"
+                              : "border-neutral-800 focus:border-[#D4FF00]"
+                          } rounded-xl pl-11 pr-4 py-3.5 text-sm sm:text-base font-bold text-white focus:outline-none transition-all`}
                         />
                       </div>
+                      {dobError && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-xs text-rose-400 font-semibold mt-2 flex items-start gap-1.5 leading-snug"
+                        >
+                          <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-400" />
+                          <span>
+                            {isEN
+                              ? "Date of birth is required to calculate your personalized health recommendations."
+                              : "Tanggal lahir diperlukan untuk menghitung rekomendasi kesehatan kamu."}
+                          </span>
+                        </motion.div>
+                      )}
+                      <p className="text-[11px] text-neutral-400 font-medium mt-1.5 leading-relaxed">
+                        {isEN
+                          ? "Required for calculating your personalized BMR, TDEE, and nutrition recommendations."
+                          : "Diperlukan untuk menghitung kebutuhan kalori dan rekomendasi kesehatan kamu."}
+                      </p>
                     </div>
 
                     <div>
