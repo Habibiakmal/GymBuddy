@@ -1445,6 +1445,9 @@ export interface PendingLoginSession {
   profile: any;
   token?: string;
   claimed?: boolean;
+  otpCode?: string;
+  attempts?: number;
+  maxAttempts?: number;
 }
 
 export const authPendingSessions = new Map<string, PendingLoginSession>();
@@ -1617,9 +1620,11 @@ export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText
   if (!activeSession) return null;
 
   const trimmed = userText.trim().toLowerCase();
+  const rawDigits = userText.trim().replace(/\D/g, "");
 
-  // Approve: "Ya, ini saya", "YA", "YES", "1", interactive reply button with auth_approve
+  const isOtpMatch = Boolean(activeSession.otpCode) && rawDigits === activeSession.otpCode;
   const isApprove =
+    isOtpMatch ||
     trimmed === "ya, ini saya" ||
     trimmed === "ya ini saya" ||
     trimmed.includes("auth_approve") ||
@@ -1628,6 +1633,9 @@ export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText
   if (isApprove) {
     activeSession.status = "approved";
     await savePendingSession(activeSession);
+    if (isOtpMatch) {
+      return `✅ *Kode Verifikasi Benar & Login Dikonfirmasi!*\n\nAkses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! ✨`;
+    }
     return `✅ *Login Dikonfirmasi!*\n\nAkses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! ✨`;
   }
 
@@ -4681,6 +4689,8 @@ async function startServer() {
         hour12: false
       }).format(new Date());
 
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
       const session: PendingLoginSession = {
         sessionId,
         phone,
@@ -4693,28 +4703,28 @@ async function startServer() {
         status: "pending",
         createdAt: Date.now(),
         expiresAt: Date.now() + 5 * 60 * 1000,
-        profile: user
+        profile: user,
+        otpCode,
+        attempts: 0,
+        maxAttempts: 5
       };
 
       await savePendingSession(session);
 
-      // Compose Production WhatsApp Confirmation Message (Strictly Zero OTP)
+      // Compose WhatsApp OTP verification message
       const waMsg = [
         `🔐 *GymBuddy Login*`,
         ``,
-        `Ada permintaan masuk ke akun GymBuddy kamu.`,
+        `Kode verifikasi (OTP) masuk ke akun GymBuddy kamu adalah:`,
+        `*${otpCode}*`,
         ``,
         `📱 *Perangkat*: ${device}`,
         `📍 *Lokasi*: ${location}`,
         `⏱️ *Waktu*: ${nowFormatted}`,
         ``,
-        `Apakah ini kamu?`,
+        `Kode ini berlaku selama 5 menit. Masukkan kode ini pada website GymBuddy untuk masuk ke dashboard.`,
         ``,
-        `[ Ya, ini saya ]`,
-        `[ Bukan saya ]`,
-        ``,
-        `Balas *YA* untuk menyetujui.`,
-        `Balas *TIDAK* untuk menolak.`
+        `_Demi keamanan akun kamu, jangan berikan kode ini kepada siapapun._`
       ].join("\n");
 
       const delivered = await sendWhatsAppLoginMessage(normPhone, waMsg, sessionId);
@@ -4739,6 +4749,89 @@ async function startServer() {
       });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message || "Gagal memproses permintaan login." });
+    }
+  });
+
+  // Verify 6-digit WhatsApp OTP endpoint (Synchronous & Instant)
+  app.post("/api/auth/login-verify-otp", express.json(), async (req, res) => {
+    try {
+      const { sessionId, otp } = req.body;
+      if (!sessionId || !otp) {
+        return res.status(400).json({ success: false, error: "missing_fields", message: "Session ID dan kode OTP wajib diisi." });
+      }
+
+      const session = await getPendingSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ success: false, error: "session_not_found", message: "Sesi verifikasi tidak ditemukan atau telah kedaluwarsa. Silakan minta kode baru." });
+      }
+
+      if (session.status === "cancelled") {
+        return res.status(400).json({ success: false, error: "session_cancelled", message: "Sesi verifikasi telah dibatalkan. Silakan minta kode baru." });
+      }
+
+      if (session.status === "approved" && session.token) {
+        return res.json({
+          success: true,
+          status: "approved",
+          token: session.token,
+          profile: session.profile,
+          message: "Login berhasil terverifikasi."
+        });
+      }
+
+      if (Date.now() > session.expiresAt || session.status === "expired") {
+        session.status = "expired";
+        await savePendingSession(session);
+        return res.status(400).json({ success: false, error: "otp_expired", message: "Kode OTP telah kedaluwarsa (berlaku 5 menit). Silakan kirim ulang kode baru." });
+      }
+
+      const maxAttempts = session.maxAttempts || 5;
+      const currentAttempts = session.attempts || 0;
+      if (currentAttempts >= maxAttempts) {
+        session.status = "expired";
+        await savePendingSession(session);
+        return res.status(429).json({ success: false, error: "too_many_attempts", message: "Terlalu banyak percobaan kode yang salah. Silakan kirim ulang kode baru." });
+      }
+
+      const cleanOtp = String(otp).trim().replace(/\D/g, "");
+      if (session.otpCode !== cleanOtp) {
+        session.attempts = currentAttempts + 1;
+        if (session.attempts >= maxAttempts) {
+          session.status = "expired";
+        }
+        await savePendingSession(session);
+        const remaining = Math.max(0, maxAttempts - session.attempts);
+        return res.status(400).json({
+          success: false,
+          error: "invalid_otp",
+          message: remaining > 0 ? `Kode OTP salah. Sisa kesempatan: ${remaining} kali.` : "Kode OTP salah. Kesempatan habis, silakan kirim ulang kode baru.",
+          remainingAttempts: remaining
+        });
+      }
+
+      // OTP is valid! Mark as approved and issue token
+      session.status = "approved";
+      const userId = session.profile?.userId || `usr_${session.normPhone}`;
+      session.token = generateAuthToken({ userId, phone: session.normPhone });
+      await savePendingSession(session);
+
+      res.cookie("gymbuddy_token", session.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      });
+
+      return res.json({
+        success: true,
+        status: "approved",
+        token: session.token,
+        profile: session.profile,
+        message: "Login berhasil terverifikasi."
+      });
+    } catch (e: any) {
+      console.error("[LoginVerifyOtp] Error:", e);
+      return res.status(500).json({ success: false, error: "server_error", message: e.message || "Gagal memverifikasi kode OTP." });
     }
   });
 
@@ -4804,27 +4897,25 @@ async function startServer() {
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1000;
     session.status = "pending";
+    session.otpCode = newOtp;
+    session.attempts = 0;
     await savePendingSession(session);
 
     const waMsg = [
       `🔐 *GymBuddy Login (Kirim Ulang)*`,
       ``,
-      `Ada permintaan masuk ke akun GymBuddy kamu.`,
+      `Kode verifikasi (OTP) login GymBuddy kamu yang baru adalah:`,
+      `*${newOtp}*`,
       ``,
       `📱 *Perangkat*: ${session.device}`,
       `📍 *Lokasi*: ${session.location}`,
       `⏱️ *Waktu*: ${session.timeStr}`,
       ``,
-      `Apakah ini kamu?`,
-      ``,
-      `[ Ya, ini saya ]`,
-      `[ Bukan saya ]`,
-      ``,
-      `Balas *YA* untuk menyetujui.`,
-      `Balas *TIDAK* untuk menolak.`
+      `Kode ini berlaku selama 5 menit. Masukkan kode ini pada website GymBuddy untuk masuk ke dashboard.`
     ].join("\n");
 
     const delivered = await sendWhatsAppLoginMessage(session.normPhone, waMsg, session.sessionId);

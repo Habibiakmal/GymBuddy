@@ -48,7 +48,7 @@ function createFreshSession(sessionId: string, overrides: Partial<PendingLoginSe
 
 // Logic function simulating server-side verify endpoint
 function verifyOtpLogic(sessionId: string, inputOtp: string, clientPhone?: string): { success: boolean; status: string; message?: string } {
-  const session = getPendingSession(sessionId);
+  const session = authPendingSessions.get(sessionId) || null;
   if (!session) {
     return { success: false, status: "not_found", message: "Sesi verifikasi tidak ditemukan." };
   }

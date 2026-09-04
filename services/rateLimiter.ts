@@ -39,10 +39,10 @@ export const aiRateLimiter = rateLimit({
  */
 export const authRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req: Request) => req.path.includes("login-status") || req.path.includes("login-cancel"),
+  skip: (req: Request) => req.path.includes("login-status") || req.path.includes("login-cancel") || req.path.includes("login-verify-otp"),
   message: {
     success: false,
     error: "Too many login attempts. Please wait a minute before trying again."

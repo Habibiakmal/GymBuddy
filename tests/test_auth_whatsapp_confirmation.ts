@@ -44,15 +44,15 @@ const sampleSession: PendingLoginSession = {
 
 authPendingSessions.set(testSessionId, sampleSession);
 
-// 1. Check getPendingSession
-const retrieved = getPendingSession(testSessionId);
-assert(retrieved !== null, "Session is retrievable by sessionId");
-assert(retrieved?.status === "pending", "Session initial status is pending");
-assert(retrieved?.location === "Jakarta, Indonesia", "Location matches approximate city+country");
-assert(retrieved?.device === "Chrome on Windows", "Device matches context");
-
-// 2. Test WhatsApp approval keywords: "YA"
 (async () => {
+  // 1. Check getPendingSession
+  const retrieved = await getPendingSession(testSessionId);
+  assert(retrieved !== null, "Session is retrievable by sessionId");
+  assert(retrieved?.status === "pending", "Session initial status is pending");
+  assert(retrieved?.location === "Jakarta, Indonesia", "Location matches approximate city+country");
+  assert(retrieved?.device === "Chrome on Windows", "Device matches context");
+
+  // 2. Test WhatsApp approval keywords: "YA"
   const replyAck = await handleWhatsAppLoginConfirmation(testAltPhone, "YA");
   assert(replyAck !== null, "Reply acknowledgment returned for 'YA'");
   assert(replyAck!.includes("Login Dikonfirmasi"), "Reply contains confirmation success text");
@@ -134,7 +134,7 @@ assert(retrieved?.device === "Chrome on Windows", "Device matches context");
   };
   authPendingSessions.set(expiredSessionId, expiredSession);
 
-  const checkedExpired = getPendingSession(expiredSessionId);
+  const checkedExpired = await getPendingSession(expiredSessionId);
   assert(checkedExpired?.status === "expired", "Session automatically marked expired after 5 minutes");
 
   console.log("🎉 ALL WHATSAPP 2FA CONFIRMATION & SECURITY TESTS PASSED!");

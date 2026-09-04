@@ -78,7 +78,7 @@ export default function LoginModal({
     }
   }, [initialPhone]);
 
-  type VerificationStep = "credentials" | "waiting_whatsapp" | "approved" | "rejected" | "expired";
+  type VerificationStep = "credentials" | "otp_input" | "approved";
 
   interface VerificationSession {
     sessionId: string;
@@ -92,6 +92,9 @@ export default function LoginModal({
 
   const [verificationStep, setVerificationStep] = useState<VerificationStep>("credentials");
   const [verificationSession, setVerificationSession] = useState<VerificationSession | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [remainingTime, setRemainingTime] = useState<number>(300);
   const [resending, setResending] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
@@ -103,24 +106,24 @@ export default function LoginModal({
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  // 1. Countdown timer for WhatsApp confirmation (5 minutes)
+  // 1. Countdown timer for OTP expiry (5 minutes)
   useEffect(() => {
-    if (verificationStep !== "waiting_whatsapp" || !verificationSession?.expiresAt) return;
+    if (verificationStep !== "otp_input" || !verificationSession?.expiresAt) return;
     const updateTime = () => {
       const diff = Math.max(0, Math.round((verificationSession.expiresAt - Date.now()) / 1000));
       setRemainingTime(diff);
       if (diff <= 0) {
-        setVerificationStep("expired");
+        setOtpError(isEN ? "OTP code expired. Please click Resend Code." : "Kode OTP kedaluwarsa. Silakan klik Kirim Ulang Kode.");
       }
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
-  }, [verificationStep, verificationSession?.expiresAt]);
+  }, [verificationStep, verificationSession?.expiresAt, isEN]);
 
-  // 2. Polling interval to check confirmation status
+  // 2. Background polling fallback (if user confirms via WhatsApp directly)
   useEffect(() => {
-    if (verificationStep !== "waiting_whatsapp" || !verificationSession?.sessionId) return;
+    if (verificationStep !== "otp_input" || !verificationSession?.sessionId) return;
     let isMounted = true;
     const interval = setInterval(async () => {
       if (!isMounted || !verificationSession?.sessionId) return;
@@ -131,17 +134,85 @@ export default function LoginModal({
           : `/api/auth/login-status/${verificationSession.sessionId}`;
         let res = await fetch(primaryUrl, { headers: { Accept: "application/json" } }).catch(() => null);
 
-        // If primaryUrl returned non-200 or HTML error page, retry with the alternate URL
-        if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && primaryUrl !== `${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`) {
-          res = await fetch(`${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`, { headers: { Accept: "application/json" } }).catch(() => null);
+        if (res && res.ok && res.headers.get("content-type")?.includes("application/json")) {
+          const data = await res.json().catch(() => null);
+          if (data && data.status === "approved" && isMounted) {
+            clearInterval(interval);
+            setVerificationStep("approved");
+            const prof = data.profile || verificationSession.profile;
+            try {
+              const p = prof.phone || phone;
+              const norm = p.replace(/\D/g, "");
+              localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(prof));
+              localStorage.setItem("gymbuddy_active_session", JSON.stringify(prof));
+              localStorage.setItem("gymbuddy_last_user", JSON.stringify(prof));
+              if (data.token) localStorage.setItem("gymbuddy_token", data.token);
+            } catch (e) {}
+            setUserProfile(prof);
+            if (verificationSession.progress) setProgressData(verificationSession.progress);
+            setTimeout(() => {
+              if (isMounted) {
+                if (onLoginSuccess) onLoginSuccess(prof);
+                onClose();
+              }
+            }, 1200);
+          }
         }
+      } catch (e) {}
+    }, 2500);
 
-        if (!res || !res.ok || !res.headers.get("content-type")?.includes("application/json")) return;
-        const data = await res.json().catch(() => null);
-        if (!data || !isMounted) return;
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [verificationStep, verificationSession]);
 
-        if (data.status === "approved") {
-          clearInterval(interval);
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    await handleVerifyOtpDirect(otpCode);
+  };
+
+  const handleVerifyOtpDirect = async (codeToVerify: string) => {
+    if (!verificationSession?.sessionId) return;
+    const cleanOtp = codeToVerify.trim().replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      setOtpError(isEN ? "Please enter all 6 digits of the OTP." : "Masukkan 6 digit kode OTP yang lengkap.");
+      return;
+    }
+
+    setVerifyingOtp(true);
+    setOtpError("");
+    const API_BASE_URL = getApiBaseUrl();
+    const primaryUrl = API_BASE_URL
+      ? `${API_BASE_URL}/api/auth/login-verify-otp`
+      : `/api/auth/login-verify-otp`;
+
+    try {
+      let res = await fetch(primaryUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          sessionId: verificationSession.sessionId,
+          otp: cleanOtp,
+          phone: verificationSession.profile?.phone || phone
+        })
+      }).catch(() => null);
+
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && primaryUrl !== `${API_BASE_URL}/api/auth/login-verify-otp`) {
+        res = await fetch(`${API_BASE_URL}/api/auth/login-verify-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            sessionId: verificationSession.sessionId,
+            otp: cleanOtp,
+            phone: verificationSession.profile?.phone || phone
+          })
+        }).catch(() => null);
+      }
+
+      if (res && res.ok && res.headers.get("content-type")?.includes("application/json")) {
+        const data = await res.json();
+        if (data.success && data.status === "approved") {
           setVerificationStep("approved");
           const prof = data.profile || verificationSession.profile;
 
@@ -160,41 +231,37 @@ export default function LoginModal({
           if (verificationSession.progress) setProgressData(verificationSession.progress);
 
           setTimeout(() => {
-            if (isMounted) {
-              if (onLoginSuccess) onLoginSuccess(prof);
-              onClose();
-            }
-          }, 1400);
-        } else if (data.status === "rejected") {
-          clearInterval(interval);
-          setVerificationStep("rejected");
-        } else if (data.status === "expired") {
-          clearInterval(interval);
-          setVerificationStep("expired");
+            if (onLoginSuccess) onLoginSuccess(prof);
+            onClose();
+          }, 1200);
+          setVerifyingOtp(false);
+          return;
         }
-      } catch (e) {}
-    }, 2000);
+      }
 
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [verificationStep, verificationSession]);
+      const errData = res ? await res.json().catch(() => null) : null;
+      setOtpError(errData?.message || (isEN ? "Invalid or expired OTP code." : "Kode OTP salah atau telah kedaluwarsa."));
+    } catch (err: any) {
+      setOtpError(isEN ? "Verification error. Please try again." : "Gagal memverifikasi kode OTP. Silakan coba lagi.");
+    }
+    setVerifyingOtp(false);
+  };
 
-  const handleResendConfirmation = async () => {
+  const handleResendOtp = async () => {
     if (!verificationSession?.sessionId) return;
     setResending(true);
     setResendSuccess(false);
+    setOtpError("");
     const API_BASE_URL = getApiBaseUrl();
-    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-resend` : "/api/auth/login-resend";
+    const primaryUrl = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-resend` : "/api/auth/login-resend";
     try {
-      let res = await fetch(url, {
+      let res = await fetch(primaryUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ sessionId: verificationSession.sessionId })
       }).catch(() => null);
 
-      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && url !== `${API_BASE_URL}/api/auth/login-resend`) {
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && primaryUrl !== `${API_BASE_URL}/api/auth/login-resend`) {
         res = await fetch(`${API_BASE_URL}/api/auth/login-resend`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -207,45 +274,13 @@ export default function LoginModal({
         if (data.success) {
           setVerificationSession((prev) => (prev ? { ...prev, expiresAt: data.expiresAt } : null));
           setRemainingTime(300);
+          setOtpCode("");
           setResendSuccess(true);
           setTimeout(() => setResendSuccess(false), 4000);
         }
       }
     } catch (e) {}
     setResending(false);
-  };
-
-  const handleSimulateAction = async (action: "approve" | "reject") => {
-    if (!verificationSession?.sessionId) return;
-    const API_BASE_URL = getApiBaseUrl();
-    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-action` : "/api/auth/login-action";
-    try {
-      await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: verificationSession.sessionId, action })
-      });
-      if (action === "approve") {
-        setVerificationStep("approved");
-        const prof = verificationSession.profile;
-        try {
-          const p = prof.phone || phone;
-          const norm = p.replace(/\D/g, "");
-          localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(prof));
-          localStorage.setItem("gymbuddy_active_session", JSON.stringify(prof));
-          localStorage.setItem("gymbuddy_last_user", JSON.stringify(prof));
-        } catch (e) {}
-
-        setUserProfile(prof);
-        if (verificationSession.progress) setProgressData(verificationSession.progress);
-        setTimeout(() => {
-          if (onLoginSuccess) onLoginSuccess(prof);
-          onClose();
-        }, 1200);
-      } else {
-        setVerificationStep("rejected");
-      }
-    } catch (e) {}
   };
 
   const handleCancelLogin = () => {
@@ -260,6 +295,8 @@ export default function LoginModal({
     }
     setVerificationStep("credentials");
     setVerificationSession(null);
+    setOtpCode("");
+    setOtpError("");
     setErrorMsg("");
   };
 
@@ -469,7 +506,9 @@ export default function LoginModal({
             progress: foundProgress
           });
           setRemainingTime(300);
-          setVerificationStep("waiting_whatsapp");
+          setOtpCode("");
+          setOtpError("");
+          setVerificationStep("otp_input");
           setLoading(false);
           return;
         }
@@ -795,8 +834,8 @@ export default function LoginModal({
                 </>
               )}
 
-              {/* ─── 2. WAITING FOR WHATSAPP CONFIRMATION SCREEN (Requirement 4) ─── */}
-              {verificationStep === "waiting_whatsapp" && (
+              {/* ─── 2. OTP INPUT VERIFICATION SCREEN ─── */}
+              {verificationStep === "otp_input" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -806,132 +845,104 @@ export default function LoginModal({
                   <div className="space-y-1">
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#25D366]/15 border border-[#25D366]/30 rounded-full text-[11px] font-bold text-[#25D366]">
                       <WhatsAppIcon className="w-3.5 h-3.5" />
-                      <span>{isEN ? "WhatsApp 2-Step Verification" : "Verifikasi 2 Langkah WhatsApp"}</span>
+                      <span>{isEN ? "WhatsApp OTP Verification" : "Verifikasi Kode OTP WhatsApp"}</span>
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                      {isEN ? "Verify your login" : "Verifikasi login kamu"}
+                      {isEN ? "Enter Verification Code" : "Masukkan Kode Verifikasi"}
                     </h2>
                     <p className="text-xs sm:text-sm text-neutral-400 font-medium leading-relaxed">
                       {isEN
-                        ? "We sent a confirmation request to your WhatsApp."
-                        : "Kami mengirim permintaan konfirmasi ke WhatsApp kamu."}
+                        ? `We sent a 6-digit code to your WhatsApp (${verificationSession?.profile?.phone || phone}).`
+                        : `Kami telah mengirimkan 6 digit kode keamanan ke WhatsApp kamu (${verificationSession?.profile?.phone || phone}).`}
                     </p>
                   </div>
 
-                  {/* Login Context Card */}
-                  <div className="bg-[#161B22] border border-white/[0.08] rounded-2xl p-3.5 space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-neutral-400 border-b border-white/[0.06] pb-1.5">
-                      <span className="font-semibold text-[11px] uppercase tracking-wider">{isEN ? "Login Context" : "Detail Percobaan Akses"}</span>
-                      <span className="font-mono text-[11px] text-[#D4FF00] font-bold">{verificationSession?.profile?.phone}</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-1.5 text-neutral-300">
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-400 flex items-center gap-1.5 text-[11px]">
-                          <Smartphone size={12} className="text-[#D4FF00]" />
-                          {isEN ? "Device" : "Perangkat"}
-                        </span>
-                        <span className="font-bold text-white text-xs">{verificationSession?.device || "Chrome on Windows"}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-400 flex items-center gap-1.5 text-[11px]">
-                          <MapPin size={12} className="text-[#D4FF00]" />
-                          {isEN ? "Approximate location" : "Perkiraan Lokasi"}
-                        </span>
-                        <span className="font-bold text-white text-xs">{verificationSession?.location || "Jakarta, Indonesia"}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-400 flex items-center gap-1.5 text-[11px]">
-                          <Clock size={12} className="text-[#D4FF00]" />
-                          {isEN ? "Time" : "Waktu"}
-                        </span>
-                        <span className="font-mono font-bold text-white text-xs">{verificationSession?.timeStr}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Waiting State Card */}
-                  <div className="bg-black/50 border border-[#25D366]/40 rounded-2xl p-4 text-center space-y-2 relative overflow-hidden">
-                    <div className="w-12 h-12 rounded-full bg-[#25D366]/15 border border-[#25D366]/40 flex items-center justify-center mx-auto text-[#25D366] relative">
-                      <div className="w-full h-full rounded-full absolute animate-ping bg-[#25D366]/20" />
-                      <WhatsAppIcon className="w-6 h-6 relative z-10" />
-                    </div>
-
+                  {/* OTP Form */}
+                  <form onSubmit={handleVerifyOtp} className="space-y-4">
                     <div>
-                      <h4 className="font-['Archivo_Black'] text-sm sm:text-base text-white">
-                        {isEN ? "Check your WhatsApp" : "Cek WhatsApp kamu"}
-                      </h4>
-                      <p className="text-xs text-neutral-300 font-medium mt-0.5">
-                        {isEN
-                          ? "Confirm that this login was made by you."
-                          : "Konfirmasi bahwa login ini memang dilakukan oleh kamu."}
-                      </p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        autoFocus
+                        value={otpCode}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          setOtpCode(val);
+                          setOtpError("");
+                          if (val.length === 6) {
+                            setTimeout(() => handleVerifyOtpDirect(val), 50);
+                          }
+                        }}
+                        placeholder="••••••"
+                        className="w-full py-4 px-4 bg-[#161B22] border-2 border-white/[0.12] focus:border-[#D4FF00] rounded-2xl text-center text-3xl font-mono font-black tracking-[0.35em] text-white focus:outline-none transition-all placeholder:tracking-normal placeholder:text-neutral-600 shadow-inner"
+                      />
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full text-xs font-mono font-bold text-neutral-300 border border-white/10">
-                      <Clock size={12} className="text-[#D4FF00]" />
-                      <span>{formatTime(remainingTime)}</span>
+                    {otpError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-bold text-center flex items-center justify-center gap-1.5"
+                      >
+                        <AlertCircle size={14} />
+                        <span>{otpError}</span>
+                      </motion.div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
+                      <span className="flex items-center gap-1.5 font-mono text-neutral-300">
+                        <Clock size={13} className="text-[#D4FF00]" />
+                        <span>{formatTime(remainingTime)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        disabled={resending}
+                        className="text-neutral-400 hover:text-[#D4FF00] transition-colors font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={12} className={resending ? "animate-spin text-[#D4FF00]" : ""} />
+                        <span>{resending ? (isEN ? "Sending..." : "Mengirim...") : (isEN ? "Resend code" : "Kirim ulang kode")}</span>
+                      </button>
                     </div>
-                  </div>
 
-                  {/* Resend feedback toast */}
-                  {resendSuccess && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-2 bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] rounded-xl text-xs font-bold text-center"
-                    >
-                      ✓ {isEN ? "Confirmation resent to your WhatsApp!" : "Konfirmasi berhasil dikirim ulang ke WhatsApp kamu!"}
-                    </motion.div>
-                  )}
+                    {resendSuccess && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-2.5 bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] rounded-xl text-xs font-bold text-center"
+                      >
+                        ✓ {isEN ? "New OTP code sent to your WhatsApp!" : "Kode OTP baru berhasil dikirim ke WhatsApp kamu!"}
+                      </motion.div>
+                    )}
 
-                  {/* Mandatory Actions */}
-                  <div className="space-y-2">
                     <button
-                      type="button"
-                      onClick={handleResendConfirmation}
-                      disabled={resending}
-                      className="w-full py-3 bg-[#161B22] hover:bg-[#1f2630] border border-white/[0.08] hover:border-white/20 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                      type="submit"
+                      disabled={verifyingOtp || otpCode.length !== 6}
+                      className="w-full py-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-98"
                     >
-                      <RefreshCw size={14} className={resending ? "animate-spin text-[#D4FF00]" : "text-[#D4FF00]"} />
-                      <span>{resending ? (isEN ? "Resending..." : "Mengirim ulang...") : (isEN ? "Resend confirmation" : "Kirim ulang konfirmasi")}</span>
+                      {verifyingOtp ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin text-black" />
+                          <span>{isEN ? "Verifying..." : "Memverifikasi..."}</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={16} />
+                          <span>{isEN ? "Verify & Enter Dashboard" : "Verifikasi & Masuk Dashboard"}</span>
+                        </>
+                      )}
                     </button>
 
                     <button
                       type="button"
                       onClick={handleCancelLogin}
-                      className="w-full py-2 text-neutral-500 hover:text-red-400 font-medium text-xs transition-colors cursor-pointer"
+                      className="w-full py-1.5 text-neutral-400 hover:text-white font-medium text-xs transition-colors cursor-pointer"
                     >
-                      {isEN ? "Cancel login" : "Batalkan login"}
+                      {isEN ? "← Change WhatsApp number" : "← Ganti nomor WhatsApp"}
                     </button>
-                  </div>
-
-                  {/* Simulator Controls (Only in DEV mode, stripped from production build) */}
-                  {import.meta.env.DEV && (
-                    <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500 block text-center">
-                        🛠️ Simulator Uji Coba WhatsApp (Dev Only)
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSimulateAction("approve")}
-                          className="py-2 px-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                        >
-                          ✓ Yes, it's me
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSimulateAction("reject")}
-                          className="py-2 px-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                        >
-                          ✕ No, secure account
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  </form>
                 </motion.div>
               )}
 
