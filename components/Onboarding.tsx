@@ -327,21 +327,22 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
     try {
       const API_BASE_URL = getApiBaseUrl();
-      let res = await fetch("/api/auth/check-phone", {
+      const checkUrl = API_BASE_URL ? `${API_BASE_URL}/api/auth/check-phone` : "/api/auth/check-phone";
+      let res = await fetch(checkUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ phone: canonicalPhone })
       }).catch(() => null);
 
-      if ((!res || !res.ok) && API_BASE_URL) {
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && checkUrl !== `${API_BASE_URL}/api/auth/check-phone`) {
         res = await fetch(`${API_BASE_URL}/api/auth/check-phone`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ phone: canonicalPhone })
         }).catch(() => null);
       }
 
-      if (!res || !res.ok) {
+      if (!res || !res.ok || !res.headers.get("content-type")?.includes("application/json")) {
         setPhoneCheckError(
           isEN
             ? "Could not verify account status with server. Please check your connection and try again."
@@ -2648,16 +2649,17 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                         // Server check & registration
                         const API_BASE_URL = getApiBaseUrl();
                         try {
-                          let onboardRes = await fetch("/api/onboarding", {
+                          const onboardUrl = API_BASE_URL ? `${API_BASE_URL}/api/onboarding` : "/api/onboarding";
+                          let onboardRes = await fetch(onboardUrl, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { "Content-Type": "application/json", Accept: "application/json" },
                             body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
                           }).catch(() => null);
 
-                          if ((!onboardRes || !onboardRes.ok) && API_BASE_URL) {
+                          if ((!onboardRes || !onboardRes.ok || onboardRes.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && onboardUrl !== `${API_BASE_URL}/api/onboarding`) {
                             onboardRes = await fetch(`${API_BASE_URL}/api/onboarding`, {
                               method: "POST",
-                              headers: { "Content-Type": "application/json" },
+                              headers: { "Content-Type": "application/json", Accept: "application/json" },
                               body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
                             }).catch(() => null);
                           }

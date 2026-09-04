@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import GymBuddyLogo from "./Logo";
+import { getApiBaseUrl } from "../utils/api";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ChevronLeft,
@@ -287,9 +288,11 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({
       const amount = selectedPlan === "monthly" ? 49000 : 380000;
       const plan = selectedPlan === "monthly" ? "premium" : "advanced";
       
-      const res = await fetch("/api/midtrans/create-transaction", {
+      const API_BASE_URL = getApiBaseUrl();
+      const txUrl = API_BASE_URL ? `${API_BASE_URL}/api/midtrans/create-transaction` : "/api/midtrans/create-transaction";
+      const res = await fetch(txUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           phone: paymentPhone, // Bug #9 fix: real user phone
           planId: selectedPlan,

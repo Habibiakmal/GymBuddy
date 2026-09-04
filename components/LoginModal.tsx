@@ -126,9 +126,14 @@ export default function LoginModal({
     if (verificationStep !== "waiting_whatsapp" || !verificationSession?.sessionId) return;
     let isMounted = true;
     const interval = setInterval(async () => {
+      if (!isMounted || !verificationSession?.sessionId) return;
       try {
-        const res = await fetch(`/api/auth/login-status/${verificationSession.sessionId}`);
-        if (!res.ok) return;
+        const API_BASE_URL = getApiBaseUrl();
+        const url = API_BASE_URL
+          ? `${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`
+          : `/api/auth/login-status/${verificationSession.sessionId}`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) return;
         const data = await res.json();
         if (!isMounted) return;
 
@@ -175,22 +180,23 @@ export default function LoginModal({
     setResending(true);
     setResendSuccess(false);
     const API_BASE_URL = getApiBaseUrl();
+    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-resend` : "/api/auth/login-resend";
     try {
-      let res = await fetch("/api/auth/login-resend", {
+      let res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ sessionId: verificationSession.sessionId })
       }).catch(() => null);
 
-      if ((!res || !res.ok) && API_BASE_URL) {
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && url !== `${API_BASE_URL}/api/auth/login-resend`) {
         res = await fetch(`${API_BASE_URL}/api/auth/login-resend`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ sessionId: verificationSession.sessionId })
         }).catch(() => null);
       }
 
-      if (res && res.ok) {
+      if (res && res.ok && res.headers.get("content-type")?.includes("application/json")) {
         const data = await res.json();
         if (data.success) {
           setVerificationSession((prev) => (prev ? { ...prev, expiresAt: data.expiresAt } : null));
@@ -212,20 +218,21 @@ export default function LoginModal({
     setLoading(true);
     setOtpError("");
     const API_BASE_URL = getApiBaseUrl();
+    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-verify-otp` : "/api/auth/login-verify-otp";
     try {
-      let res = await fetch("/api/auth/login-verify-otp", {
+      let res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           sessionId: verificationSession.sessionId,
           otpCode: otpInput.trim()
         })
       }).catch(() => null);
 
-      if ((!res || !res.ok) && API_BASE_URL) {
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && url !== `${API_BASE_URL}/api/auth/login-verify-otp`) {
         res = await fetch(`${API_BASE_URL}/api/auth/login-verify-otp`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
             sessionId: verificationSession.sessionId,
             otpCode: otpInput.trim()
@@ -238,6 +245,16 @@ export default function LoginModal({
           isEN
             ? "Network error. Please check your connection and try again."
             : "Koneksi jaringan bermasalah. Periksa koneksi dan coba lagi."
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!res.headers.get("content-type")?.includes("application/json")) {
+        setOtpError(
+          isEN
+            ? "Server communication error. Please try again."
+            : "Terjadi kesalahan respon server. Silakan coba lagi."
         );
         setLoading(false);
         return;
@@ -273,8 +290,10 @@ export default function LoginModal({
 
   const handleSimulateAction = async (action: "approve" | "reject") => {
     if (!verificationSession?.sessionId) return;
+    const API_BASE_URL = getApiBaseUrl();
+    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-action` : "/api/auth/login-action";
     try {
-      await fetch("/api/auth/login-action", {
+      await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: verificationSession.sessionId, action })
@@ -304,7 +323,9 @@ export default function LoginModal({
 
   const handleCancelLogin = () => {
     if (verificationSession?.sessionId) {
-      fetch("/api/auth/login-cancel", {
+      const API_BASE_URL = getApiBaseUrl();
+      const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-cancel` : "/api/auth/login-cancel";
+      fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: verificationSession.sessionId })
@@ -485,9 +506,10 @@ export default function LoginModal({
         hour12: false
       }).format(new Date());
 
-      let res = await fetch("/api/auth/login-request", {
+      const loginUrl = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-request` : "/api/auth/login-request";
+      let res = await fetch(loginUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           phone: normPhone,
           device: detectedDevice,
@@ -496,10 +518,10 @@ export default function LoginModal({
         })
       }).catch(() => null);
 
-      if ((!res || !res.ok) && API_BASE_URL) {
+      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && loginUrl !== `${API_BASE_URL}/api/auth/login-request`) {
         res = await fetch(`${API_BASE_URL}/api/auth/login-request`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
             phone: normPhone,
             device: detectedDevice,
@@ -509,7 +531,7 @@ export default function LoginModal({
         }).catch(() => null);
       }
 
-      if (res && res.ok) {
+      if (res && res.ok && res.headers.get("content-type")?.includes("application/json")) {
         const data = await res.json();
         if (data.success && data.sessionId) {
           setVerificationSession({
