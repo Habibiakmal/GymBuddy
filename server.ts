@@ -74,6 +74,12 @@ import {
   getMealTypeLabel,
   type MealType
 } from "./services/mealClassifier";
+import {
+  normalizePhoneToE164,
+  normalizePhoneToLocal,
+  getLegacyPhoneVariations,
+  isValidIndonesianMobile
+} from "./services/phoneNormalizer";
 
 export {
   getUserPlanCapabilities,
@@ -89,7 +95,11 @@ export {
   isSmartSnack,
   getMealTypeFromTimeWindow,
   extractHourMinute,
-  getMealTypeLabel
+  getMealTypeLabel,
+  normalizePhoneToE164,
+  normalizePhoneToLocal,
+  getLegacyPhoneVariations,
+  isValidIndonesianMobile
 };
 export type {
   UserPlanCapabilities,
@@ -1346,11 +1356,14 @@ export interface PendingLoginSession {
   phone: string;
   normPhone: string;
   altPhone: string;
+  canonicalPhone: string;
   device: string;
   location: string;
   timeStr: string;
   status: "pending" | "approved" | "rejected" | "expired" | "cancelled";
   otpCode: string;
+  attempts: number;
+  maxAttempts: number;
   createdAt: number;
   expiresAt: number;
   profile: any;
@@ -1367,16 +1380,69 @@ export function getPendingSession(sessionId: string): PendingLoginSession | null
   return sess;
 }
 
+// Global concurrency lock to prevent race-condition duplicate account creation
+export const activeRegistrationLocks = new Set<string>();
+
+/**
+ * Checks whether a phone number already belongs to an existing GymBuddy account.
+ * Checks canonical E.164 (+628...) across in-memory cache, dbData.users, demo accounts, and Firestore.
+ */
+export async function isExistingUserPhone(phoneInput: string): Promise<boolean> {
+  const canonical = normalizePhoneToE164(phoneInput);
+  if (!canonical) return false;
+
+  // 1. Check in-memory dbData.users direct keys
+  if (dbData && dbData.users) {
+    if (dbData.users[canonical]) return true;
+    for (const v of getLegacyPhoneVariations(canonical)) {
+      if (dbData.users[v]) return true;
+    }
+  }
+
+  // 2. Check local dbData.users
+  if (dbData && dbData.users) {
+    for (const [k, u] of Object.entries(dbData.users)) {
+      if (!u) continue;
+      const uCanonical = (u as any).normalizedPhone || normalizePhoneToE164((u as any).phone || k);
+      if (uCanonical === canonical) return true;
+      const kCanonical = normalizePhoneToE164(k);
+      if (kCanonical === canonical) return true;
+    }
+  }
+
+  // 3. Check built-in demo test accounts
+  const localDigits = normalizePhoneToLocal(canonical);
+  if (localDigits === "08111111111" || localDigits === "08222222222") return true;
+
+  // 4. Check persistent store (MongoDB / Firestore / local DB)
+  try {
+    const userFound = await findUserByPhoneOrId(canonical);
+    if (userFound) return true;
+    if (localDigits && localDigits !== canonical) {
+      const localUser = await findUserByPhoneOrId(localDigits);
+      if (localUser) return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText: string): Promise<string | null> {
   const normPhone = normalizePhone(rawPhone);
-  if (!normPhone) return null;
+  const canonicalPhone = normalizePhoneToE164(rawPhone);
+  if (!normPhone && !canonicalPhone) return null;
   const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
 
   // Find active pending session for this user
   let activeSession: PendingLoginSession | null = null;
   for (const sess of authPendingSessions.values()) {
     if (
-      (sess.normPhone === normPhone || sess.altPhone === normPhone || sess.phone === normPhone || sess.phone === altPhone) &&
+      (sess.canonicalPhone === canonicalPhone ||
+        sess.normPhone === normPhone ||
+        sess.altPhone === normPhone ||
+        sess.phone === normPhone ||
+        sess.phone === altPhone ||
+        sess.phone === canonicalPhone) &&
       sess.status === "pending" &&
       Date.now() <= sess.expiresAt
     ) {
@@ -4330,6 +4396,39 @@ async function startServer() {
     }
   });
 
+  // ─── Check Phone Eligibility for Onboarding (Canonical E.164) ───────────────────────
+  app.post("/api/auth/check-phone", express.json(), async (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone || typeof phone !== "string" || phone.trim() === "") {
+        return res.status(400).json({ success: false, error: "phone_required", message: "Nomor telepon harus diisi." });
+      }
+
+      const canonicalPhone = normalizePhoneToE164(phone);
+      if (!canonicalPhone) {
+        return res.status(400).json({ success: false, error: "invalid_phone", message: "Format nomor WhatsApp tidak valid." });
+      }
+
+      // Check if canonical phone exists in system
+      const exists = await isExistingUserPhone(canonicalPhone);
+      if (exists) {
+        return res.json({
+          exists: true,
+          canOnboard: false,
+          nextAction: "login"
+        });
+      }
+
+      return res.json({
+        exists: false,
+        canOnboard: true
+      });
+    } catch (err: any) {
+      console.error("[Check Phone API Error]:", err);
+      return res.status(500).json({ success: false, error: "server_error" });
+    }
+  });
+
   // ─── WhatsApp Login Confirmation for Existing Users ───────────────────────
   app.post("/api/auth/login-request", express.json(), async (req, res) => {
     try {
@@ -4338,21 +4437,24 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
       }
 
+      const canonicalPhone = normalizePhoneToE164(phone);
       const cleanedPhone = phone.replace(/\D/g, "");
-      const normPhone = cleanedPhone.startsWith("62")
-        ? "0" + cleanedPhone.substring(2)
-        : (cleanedPhone.startsWith("8") ? "0" + cleanedPhone : cleanedPhone);
+      const normPhone = normalizePhoneToLocal(canonicalPhone);
       const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
 
-      let user = (await findUserByPhoneOrId(normPhone)) || getUserProfile(normPhone) ||
-                 (await findUserByPhoneOrId(altPhone)) || getUserProfile(altPhone);
+      let user = (await findUserByPhoneOrId(canonicalPhone)) ||
+                 (await findUserByPhoneOrId(normPhone)) ||
+                 getUserProfile(normPhone) ||
+                 (await findUserByPhoneOrId(altPhone)) ||
+                 getUserProfile(altPhone);
 
       // Support built-in demo accounts (Alex & Mia)
-      if (!user && (normPhone === "08111111111" || altPhone === "62811111111" || cleanedPhone === "08111111111" || cleanedPhone === "62811111111")) {
+      if (!user && (normPhone === "08111111111" || altPhone === "62811111111" || cleanedPhone === "08111111111" || cleanedPhone === "62811111111" || canonicalPhone === "+62811111111")) {
         user = {
           userId: "usr_alex_demo",
           name: "Alex",
           phone: "08111111111",
+          normalizedPhone: "+62811111111",
           gender: "pria",
           age: 26,
           weight: 75,
@@ -4367,11 +4469,12 @@ async function startServer() {
           plan: "nutrition",
           targetCalories: 2100
         };
-      } else if (!user && (normPhone === "08222222222" || altPhone === "62822222222" || cleanedPhone === "08222222222" || cleanedPhone === "62822222222")) {
+      } else if (!user && (normPhone === "08222222222" || altPhone === "62822222222" || cleanedPhone === "08222222222" || cleanedPhone === "62822222222" || canonicalPhone === "+62822222222")) {
         user = {
           userId: "usr_mia_demo",
           name: "Mia",
           phone: "08222222222",
+          normalizedPhone: "+62822222222",
           gender: "wanita",
           age: 24,
           weight: 58,
@@ -4415,11 +4518,14 @@ async function startServer() {
         phone,
         normPhone,
         altPhone,
+        canonicalPhone,
         device,
         location,
         timeStr: nowFormatted,
         status: "pending",
         otpCode,
+        attempts: 0,
+        maxAttempts: 5,
         createdAt: Date.now(),
         expiresAt: Date.now() + 5 * 60 * 1000,
         profile: user
@@ -4450,14 +4556,14 @@ async function startServer() {
         console.warn("[Auth WA] Delivery note:", err?.message || err);
       });
 
+      // STRICT SECURITY: DO NOT expose otpCode to the frontend in API response!
       res.json({
         success: true,
         sessionId,
         device,
         location,
         timeStr: nowFormatted,
-        expiresAt: session.expiresAt,
-        otpCode // Provided for test automation / dev environments
+        expiresAt: session.expiresAt
       });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message || "Gagal memproses permintaan login." });
@@ -4479,23 +4585,72 @@ async function startServer() {
   });
 
   app.post("/api/auth/login-verify-otp", express.json(), (req, res) => {
-    const { sessionId, otpCode } = req.body;
+    const { sessionId, otpCode, phone } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: "session_required", message: "ID sesi verifikasi diperlukan." });
+    }
     const session = getPendingSession(sessionId);
     if (!session) {
-      return res.status(404).json({ success: false, error: "session_not_found" });
+      return res.status(404).json({ success: false, error: "session_not_found", message: "Sesi verifikasi tidak ditemukan." });
     }
+
+    // Phone matching guard
+    if (phone) {
+      const canonicalInput = normalizePhoneToE164(phone);
+      if (canonicalInput && session.canonicalPhone && canonicalInput !== session.canonicalPhone) {
+        return res.status(403).json({ success: false, error: "wrong_phone", message: "Nomor telepon tidak sesuai dengan sesi ini." });
+      }
+    }
+
+    if (session.status === "approved") {
+      return res.status(400).json({ success: false, error: "otp_already_used", message: "Kode verifikasi ini sudah pernah digunakan." });
+    }
+
+    if (session.status === "cancelled") {
+      return res.status(400).json({ success: false, error: "session_cancelled", message: "Sesi verifikasi ini telah dibatalkan." });
+    }
+
+    if (session.status === "rejected") {
+      return res.status(403).json({ success: false, error: "session_rejected", message: "Percobaan login ini telah ditolak." });
+    }
+
     if (session.status === "expired" || Date.now() > session.expiresAt) {
-      return res.status(410).json({ success: false, error: "expired", message: "Sesi verifikasi telah kedaluwarsa." });
+      session.status = "expired";
+      return res.status(410).json({ success: false, error: "session_expired", message: "Sesi verifikasi telah kedaluwarsa. Silakan minta kode baru." });
     }
-    if (String(otpCode).trim() === session.otpCode) {
-      session.status = "approved";
-      return res.json({
-        success: true,
-        status: "approved",
-        profile: session.profile
+
+    if (session.attempts >= session.maxAttempts) {
+      session.status = "expired";
+      return res.status(429).json({ success: false, error: "too_many_attempts", message: "Batas percobaan salah telah tercapai (maksimal 5 kali). Sesi dibatalkan demi keamanan." });
+    }
+
+    const cleanInputOtp = String(otpCode || "").trim();
+    if (cleanInputOtp.length !== 6 || cleanInputOtp !== session.otpCode) {
+      session.attempts += 1;
+      const remainingAttempts = Math.max(0, session.maxAttempts - session.attempts);
+      if (session.attempts >= session.maxAttempts) {
+        session.status = "expired";
+        return res.status(429).json({
+          success: false,
+          error: "too_many_attempts",
+          message: "Batas percobaan salah telah tercapai (5 kali). Sesi dibatalkan demi keamanan.",
+          remainingAttempts: 0
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: "invalid_otp",
+        message: `Kode verifikasi salah. Sisa percobaan: ${remainingAttempts} kali.`,
+        remainingAttempts
       });
     }
-    return res.status(400).json({ success: false, error: "invalid_otp", message: "Kode OTP salah. Silakan periksa kembali." });
+
+    session.status = "approved";
+    return res.json({
+      success: true,
+      status: "approved",
+      profile: session.profile
+    });
   });
 
   app.post("/api/auth/login-action", express.json(), (req, res) => {
@@ -4524,6 +4679,7 @@ async function startServer() {
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1000;
     session.status = "pending";
+    session.attempts = 0; // Reset attempts on resend
 
     const waMsg = [
       `🔐 *GymBuddy Login Confirmation (Kirim Ulang)*`,
@@ -4545,11 +4701,11 @@ async function startServer() {
 
     sendWhatsAppDirect(session.normPhone, waMsg).catch(() => {});
 
+    // STRICT SECURITY: DO NOT expose otpCode to the frontend!
     res.json({
       success: true,
       sessionId: session.sessionId,
-      expiresAt: session.expiresAt,
-      otpCode: session.otpCode
+      expiresAt: session.expiresAt
     });
   });
 
@@ -4577,40 +4733,73 @@ async function startServer() {
     }
   });
 
-  // Save onboarding registration data & user profile (Fresh Account Creation)
+  // Save onboarding registration data & user profile (Fresh Account Creation with Concurrency Lock & Canonical Uniqueness)
   app.post("/api/onboarding", async (req, res) => {
     const { phone, profile } = req.body;
-    if (profile) {
-      const norm = normalizePhone(phone || profile.phone || "");
-      const altNorm = norm.startsWith("0") ? "62" + norm.substring(1) : (norm.startsWith("62") ? "0" + norm.substring(2) : norm);
+    if (!profile) {
+      return res.status(400).json({ success: false, error: "Profile object is required" });
+    }
 
-      if (norm) {
-        // Preserve all existing food logs and history
-        const saved = saveUserProfile(norm, profile);
-        saveDb();
+    const rawPhone = phone || profile.phone || "";
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
+    if (!canonicalPhone) {
+      return res.status(400).json({ success: false, error: "valid_phone_required", message: "Nomor telepon valid wajib diisi." });
+    }
 
-        // Also persist directly to Firestore collections and await completion
-        try {
-          await saveUserDocument({
-            userId: `usr_${norm}`,
-            phone: norm,
-            ...profile,
-            updatedAt: new Date()
-          });
-          await saveAppDataToFirestore(dbData);
-        } catch (fErr: any) {
-          console.warn("[Firestore] User onboarding sync note:", fErr?.message || fErr);
-        }
+    // Concurrency Lock to prevent race-condition duplicate accounts
+    if (activeRegistrationLocks.has(canonicalPhone)) {
+      return res.status(409).json({
+        success: false,
+        error: "account_already_exists",
+        message: "Pendaftaran untuk nomor ini sedang diproses. Silakan coba login."
+      });
+    }
 
-        console.log("Saved clean user profile in database for:", norm);
-        const token = generateAuthToken({ userId: `usr_${norm}`, phone: norm });
-        return res.json({ success: true, profile: saved, token });
+    activeRegistrationLocks.add(canonicalPhone);
+    try {
+      // Backend Uniqueness Check: Never overwrite existing user during onboarding!
+      const alreadyExists = await isExistingUserPhone(canonicalPhone);
+      if (alreadyExists) {
+        return res.status(409).json({
+          success: false,
+          error: "account_already_exists",
+          message: "Akun dengan nomor WhatsApp ini sudah terdaftar. Silakan login."
+        });
       }
 
+      const localPhone = normalizePhoneToLocal(canonicalPhone);
+      const finalProfile = {
+        ...profile,
+        normalizedPhone: canonicalPhone,
+        phone: canonicalPhone,
+        userId: profile.userId || `usr_${localPhone}`
+      };
+
+      // Save under canonical and local keys
+      const saved = saveUserProfile(canonicalPhone, finalProfile);
+      saveUserProfile(localPhone, finalProfile);
       saveDb();
-      return res.json({ success: true, profile });
+
+      // Persist to Firestore
+      try {
+        await saveUserDocument({
+          userId: finalProfile.userId,
+          phone: canonicalPhone,
+          normalizedPhone: canonicalPhone,
+          ...finalProfile,
+          updatedAt: new Date()
+        });
+        await saveAppDataToFirestore(dbData);
+      } catch (fErr: any) {
+        console.warn("[Firestore] User onboarding sync note:", fErr?.message || fErr);
+      }
+
+      console.log("Saved clean user profile in database for canonical:", canonicalPhone);
+      const token = generateAuthToken({ userId: finalProfile.userId, phone: canonicalPhone });
+      return res.json({ success: true, profile: saved, token });
+    } finally {
+      activeRegistrationLocks.delete(canonicalPhone);
     }
-    return res.status(400).json({ error: "Profile object is required" });
   });
 
   // Get user profile endpoint
@@ -5632,16 +5821,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, phone, date: targetDate, logs });
   });
 
-  // REST API: Add meal log for user
+  // REST API: Add meal log for user (Idempotent by client-generated meal ID)
   app.post("/api/user/:phone/meals", express.json(), async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
     const meal = req.body;
     const targetDate = meal.date || (req.query.date as string) || getLocalDateStr();
     if (!meal || !meal.foodName) {
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
     const mealObj: MealLog = {
-      id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       foodName: meal.foodName,
       calories: Number(meal.calories) || 0,
       protein: Number(meal.protein) || 0,
@@ -5659,11 +5850,28 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const key = `${phone}_${targetDate}`;
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const altKey = `${altPhone}_${targetDate}`;
+    const canonicalKey = `${canonicalPhone}_${targetDate}`;
+
+    const upsertMealInList = (list: MealLog[], item: MealLog) => {
+      const idx = list.findIndex(m => m && m.id && String(m.id) === String(item.id));
+      if (idx >= 0) {
+        list[idx] = item;
+      } else {
+        list.push(item);
+      }
+    };
 
     if (!dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
     if (!dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = [];
-    dbData.dailyLogs[key].push(mealObj);
-    dbData.dailyLogs[altKey].push(mealObj);
+    if (!dbData.dailyLogs[canonicalKey]) dbData.dailyLogs[canonicalKey] = [];
+
+    upsertMealInList(dbData.dailyLogs[key], mealObj);
+    upsertMealInList(dbData.dailyLogs[altKey], mealObj);
+    upsertMealInList(dbData.dailyLogs[canonicalKey], mealObj);
+
+    dbData.dailyLogs[key] = deduplicateMealLogs(dbData.dailyLogs[key]);
+    dbData.dailyLogs[altKey] = deduplicateMealLogs(dbData.dailyLogs[altKey]);
+    dbData.dailyLogs[canonicalKey] = deduplicateMealLogs(dbData.dailyLogs[canonicalKey]);
     saveDb();
 
     // Save to persistent database layer

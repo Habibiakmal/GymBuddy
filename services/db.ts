@@ -357,16 +357,21 @@ const memCache = {
   waterLogs: new Map<string, WaterLogDocument>(),
 };
 
+let firestoreAuthFailed = false;
+
 export async function findUserByPhoneOrId(identifier: string): Promise<UserDocument | null> {
   const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
 
-  // 1. Try Firestore first if initialized
+  // 1. Try Firestore first if initialized and credentials available
   try {
-    if (getFirestore()) {
+    if (!firestoreAuthFailed && getFirestore()) {
       const firestoreUser = await findUserInFirestore(identifier);
       if (firestoreUser) return firestoreUser;
     }
   } catch (e: any) {
+    if (String(e?.message || e).includes("default credentials")) {
+      firestoreAuthFailed = true;
+    }
     console.warn("[Firestore] findUser fallback note:", e?.message || e);
   }
 

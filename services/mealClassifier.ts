@@ -178,7 +178,7 @@ export function classifyMealType(params: MealClassificationParams): MealType {
   const combinedText = `${userText} ${foodName}`.trim();
 
   // STEP 1: Explicit User Intent Override
-  if (/(?:sarapan|breakfast|makan pagi|pagi-pagi)/i.test(combinedText)) {
+  if (/(?:sarapan|breakfast|makan pagi|pagi-pagi|tadi pagi|\bpagi\b)/i.test(combinedText)) {
     return "breakfast";
   }
   if (/(?:makan siang|lunch|tadi siang)/i.test(combinedText)) {

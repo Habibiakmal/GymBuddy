@@ -1,18 +1,455 @@
 {
   "users": {},
-  "dailyLogs": {},
-  "weeklyProgress": {
-    "08999998888": [
+  "dailyLogs": {
+    "gymbuddy_activities_081299990001_2026-09-04": [
       {
-        "week": 0,
-        "weight": 78,
-        "changeFromStart": 0,
-        "changeFromLastWeek": 0,
-        "progressPercent": 0,
-        "date": "2026-08-25T12:46:02.862Z",
-        "notes": "Baseline Kuesioner Awal"
+        "id": "act-1788510553499-m392j",
+        "activityName": "Treadmill",
+        "category": "cardio",
+        "icon": "🏃",
+        "durationMinutes": 30,
+        "intensity": "Kecepatan Sedang",
+        "details": "30 menit • Kecepatan Sedang",
+        "estimatedCaloriesBurned": 319,
+        "timestamp": "2026-09-04T08:29:13.499Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553504-4cgu",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 25,
+        "details": "3 Set x 12 Repetisi • Beban: 25 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.504Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553505-ievlx",
+        "activityName": "Treadmill",
+        "category": "cardio",
+        "icon": "🏃",
+        "durationMinutes": 30,
+        "details": "30 menit",
+        "estimatedCaloriesBurned": 319,
+        "timestamp": "2026-09-04T08:29:13.505Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553507-4jb5g",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 10,
+        "details": "3 Set x 10 Repetisi",
+        "estimatedCaloriesBurned": 75,
+        "timestamp": "2026-09-04T08:29:13.507Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553508-763yz",
+        "activityName": "Olahraga Tambahan",
+        "category": "general",
+        "icon": "🏋️",
+        "durationMinutes": 45,
+        "details": "45 menit",
+        "estimatedCaloriesBurned": 338,
+        "timestamp": "2026-09-04T08:29:13.508Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553512-zo0ac",
+        "activityName": "Elliptical Trainer",
+        "category": "cardio",
+        "icon": "🏃‍♀️",
+        "durationMinutes": 35,
+        "intensity": "Kecepatan Sedang",
+        "details": "35 menit • Kecepatan Sedang",
+        "estimatedCaloriesBurned": 328,
+        "timestamp": "2026-09-04T08:29:13.512Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553512-6lewo",
+        "activityName": "Push-Up",
+        "category": "calisthenics",
+        "icon": "💪",
+        "details": "",
+        "estimatedCaloriesBurned": 206,
+        "timestamp": "2026-09-04T08:29:13.512Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553513-nfz4j",
+        "activityName": "Sit-Up / Crunches",
+        "category": "core",
+        "icon": "🤸‍♂️",
+        "details": "",
+        "estimatedCaloriesBurned": 188,
+        "timestamp": "2026-09-04T08:29:13.513Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553517-07wov",
+        "activityName": "Stretching / Peregangan",
+        "category": "flexibility",
+        "icon": "🤸‍♀️",
+        "durationMinutes": 15,
+        "details": "15 menit",
+        "estimatedCaloriesBurned": 56,
+        "timestamp": "2026-09-04T08:29:13.517Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553518-7m5u",
+        "activityName": "Seated Cable Row Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 30,
+        "details": "3 Set x 12 Repetisi • Beban: 30 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.518Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553519-86p11",
+        "activityName": "Plank",
+        "category": "core",
+        "icon": "🧘‍♂️",
+        "durationMinutes": 1,
+        "details": "1 menit",
+        "estimatedCaloriesBurned": 6,
+        "timestamp": "2026-09-04T08:29:13.519Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553521-t0wm4",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 25,
+        "details": "3 Set x 12 Repetisi • Beban: 25 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.521Z",
+        "status": "completed"
+      }
+    ],
+    "gymbuddy_activities_6281299990001_2026-09-04": [
+      {
+        "id": "act-1788510553499-m392j",
+        "activityName": "Treadmill",
+        "category": "cardio",
+        "icon": "🏃",
+        "durationMinutes": 30,
+        "intensity": "Kecepatan Sedang",
+        "details": "30 menit • Kecepatan Sedang",
+        "estimatedCaloriesBurned": 319,
+        "timestamp": "2026-09-04T08:29:13.499Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553504-4cgu",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 25,
+        "details": "3 Set x 12 Repetisi • Beban: 25 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.504Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553505-ievlx",
+        "activityName": "Treadmill",
+        "category": "cardio",
+        "icon": "🏃",
+        "durationMinutes": 30,
+        "details": "30 menit",
+        "estimatedCaloriesBurned": 319,
+        "timestamp": "2026-09-04T08:29:13.505Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553507-4jb5g",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 10,
+        "details": "3 Set x 10 Repetisi",
+        "estimatedCaloriesBurned": 75,
+        "timestamp": "2026-09-04T08:29:13.507Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553508-763yz",
+        "activityName": "Olahraga Tambahan",
+        "category": "general",
+        "icon": "🏋️",
+        "durationMinutes": 45,
+        "details": "45 menit",
+        "estimatedCaloriesBurned": 338,
+        "timestamp": "2026-09-04T08:29:13.508Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553512-zo0ac",
+        "activityName": "Elliptical Trainer",
+        "category": "cardio",
+        "icon": "🏃‍♀️",
+        "durationMinutes": 35,
+        "intensity": "Kecepatan Sedang",
+        "details": "35 menit • Kecepatan Sedang",
+        "estimatedCaloriesBurned": 328,
+        "timestamp": "2026-09-04T08:29:13.512Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553512-6lewo",
+        "activityName": "Push-Up",
+        "category": "calisthenics",
+        "icon": "💪",
+        "details": "",
+        "estimatedCaloriesBurned": 206,
+        "timestamp": "2026-09-04T08:29:13.512Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553513-nfz4j",
+        "activityName": "Sit-Up / Crunches",
+        "category": "core",
+        "icon": "🤸‍♂️",
+        "details": "",
+        "estimatedCaloriesBurned": 188,
+        "timestamp": "2026-09-04T08:29:13.513Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553517-07wov",
+        "activityName": "Stretching / Peregangan",
+        "category": "flexibility",
+        "icon": "🤸‍♀️",
+        "durationMinutes": 15,
+        "details": "15 menit",
+        "estimatedCaloriesBurned": 56,
+        "timestamp": "2026-09-04T08:29:13.517Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553518-7m5u",
+        "activityName": "Seated Cable Row Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 30,
+        "details": "3 Set x 12 Repetisi • Beban: 30 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.518Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553519-86p11",
+        "activityName": "Plank",
+        "category": "core",
+        "icon": "🧘‍♂️",
+        "durationMinutes": 1,
+        "details": "1 menit",
+        "estimatedCaloriesBurned": 6,
+        "timestamp": "2026-09-04T08:29:13.519Z",
+        "status": "completed"
+      },
+      {
+        "id": "act-1788510553521-t0wm4",
+        "activityName": "Lat Pulldown Machine",
+        "category": "strength",
+        "icon": "🏋️‍♂️",
+        "sets": 3,
+        "reps": 12,
+        "weightKg": 25,
+        "details": "3 Set x 12 Repetisi • Beban: 25 kg",
+        "estimatedCaloriesBurned": 90,
+        "timestamp": "2026-09-04T08:29:13.521Z",
+        "status": "completed"
+      }
+    ],
+    "gymbuddy_exercises_081299990001_2026-09-04": [
+      {
+        "id": "w-fri-1",
+        "name": "Dumbbell Bench Press",
+        "targetSets": 4,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "targetReps": "4 Set x 10 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "w-fri-2",
+        "name": "Cable Chest Fly",
+        "targetSets": 3,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false
+        ],
+        "targetReps": "3 Set x 12 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "w-fri-3",
+        "name": "Preacher Curl",
+        "targetSets": 3,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false
+        ],
+        "targetReps": "3 Set x 12 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "ex-1788510553504-9eot",
+        "name": "Lat Pulldown Machine",
+        "targetSets": 3,
+        "completedSets": 3,
+        "setsState": [
+          true,
+          true,
+          true
+        ],
+        "targetReps": "3 Set x 12 Reps (25 kg)",
+        "weightKg": 25,
+        "status": "completed"
+      },
+      {
+        "id": "ex-1788510553518-bgdm",
+        "name": "Seated Cable Row Machine",
+        "targetSets": 3,
+        "completedSets": 3,
+        "setsState": [
+          true,
+          true,
+          true
+        ],
+        "targetReps": "3 Set x 12 Reps (30 kg)",
+        "weightKg": 30,
+        "status": "completed"
+      }
+    ],
+    "gymbuddy_exercises_6281299990001_2026-09-04": [
+      {
+        "id": "w-fri-1",
+        "name": "Dumbbell Bench Press",
+        "targetSets": 4,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "targetReps": "4 Set x 10 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "w-fri-2",
+        "name": "Cable Chest Fly",
+        "targetSets": 3,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false
+        ],
+        "targetReps": "3 Set x 12 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "w-fri-3",
+        "name": "Preacher Curl",
+        "targetSets": 3,
+        "completedSets": 0,
+        "setsState": [
+          false,
+          false,
+          false
+        ],
+        "targetReps": "3 Set x 12 Reps",
+        "status": "not_started"
+      },
+      {
+        "id": "ex-1788510553504-9eot",
+        "name": "Lat Pulldown Machine",
+        "targetSets": 3,
+        "completedSets": 3,
+        "setsState": [
+          true,
+          true,
+          true
+        ],
+        "targetReps": "3 Set x 12 Reps (25 kg)",
+        "weightKg": 25,
+        "status": "completed"
+      },
+      {
+        "id": "ex-1788510553518-bgdm",
+        "name": "Seated Cable Row Machine",
+        "targetSets": 3,
+        "completedSets": 3,
+        "setsState": [
+          true,
+          true,
+          true
+        ],
+        "targetReps": "3 Set x 12 Reps (30 kg)",
+        "weightKg": 30,
+        "status": "completed"
+      }
+    ],
+    "gymbuddy_activities_081299990002_2026-09-04": [
+      {
+        "id": "act-1788510553511-lr2uy",
+        "activityName": "Plank",
+        "category": "core",
+        "icon": "🧘‍♂️",
+        "durationMinutes": 1,
+        "details": "1 menit",
+        "estimatedCaloriesBurned": 5,
+        "timestamp": "2026-09-04T08:29:13.511Z",
+        "status": "completed"
+      }
+    ],
+    "gymbuddy_activities_6281299990002_2026-09-04": [
+      {
+        "id": "act-1788510553511-lr2uy",
+        "activityName": "Plank",
+        "category": "core",
+        "icon": "🧘‍♂️",
+        "durationMinutes": 1,
+        "details": "1 menit",
+        "estimatedCaloriesBurned": 5,
+        "timestamp": "2026-09-04T08:29:13.511Z",
+        "status": "completed"
       }
     ]
   },
+  "weeklyProgress": {},
   "waterLogs": {}
 }

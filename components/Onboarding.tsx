@@ -28,8 +28,10 @@ import {
   Sliders,
   HelpCircle,
   Sparkles,
-  Lock
+  Lock,
+  RefreshCw
 } from "lucide-react";
+import { normalizePhoneToE164 } from "../services/phoneNormalizer";
 
 // WhatsApp Icon component
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -74,12 +76,18 @@ const OptionCard = ({
 interface OnboardingProps {
   language?: "EN" | "ID";
   onComplete?: () => void;
+  onOpenLogin?: (prefilledPhone?: string) => void;
 }
 
-export default function Onboarding({ language = "EN", onComplete }: OnboardingProps) {
+export default function Onboarding({ language = "EN", onComplete, onOpenLogin }: OnboardingProps) {
   const isEN = language === "EN";
   const [step, setStep] = useState(1);
   const totalSteps = 12;
+
+  // Existing Account & Phone Verification States
+  const [existingAccountDetected, setExistingAccountDetected] = useState(false);
+  const [isCheckingPhone, setIsCheckingPhone] = useState(false);
+  const [phoneCheckError, setPhoneCheckError] = useState<string | null>(null);
 
   // Form States
   const [name, setName] = useState("");
@@ -303,9 +311,78 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
     }
   }, [step, phone, name, goal, goalEvent, goalSecondary, emotionalVision, gender, weight, height, age, dob, healthStatus, healthConditions, otherCondition, activityLevel, experience, satisfaction, challenges, persona, selectedPlan, selectedFeature]);
 
+  const handlePhoneSubmit = async (phoneOverride?: string) => {
+    const rawToUse = (typeof phoneOverride === "string" ? phoneOverride : phone).trim();
+    const rawClean = rawToUse.replace(/\D/g, "");
+    if (!rawClean) return;
+
+    const canonicalPhone = normalizePhoneToE164(rawToUse);
+    if (!canonicalPhone) {
+      setPhoneCheckError(isEN ? "Invalid WhatsApp phone number format." : "Format nomor WhatsApp tidak valid.");
+      return;
+    }
+
+    setIsCheckingPhone(true);
+    setPhoneCheckError(null);
+
+    try {
+      const API_BASE_URL = getApiBaseUrl();
+      let res = await fetch("/api/auth/check-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: canonicalPhone })
+      }).catch(() => null);
+
+      if ((!res || !res.ok) && API_BASE_URL) {
+        res = await fetch(`${API_BASE_URL}/api/auth/check-phone`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: canonicalPhone })
+        }).catch(() => null);
+      }
+
+      if (!res || !res.ok) {
+        setPhoneCheckError(
+          isEN
+            ? "Could not verify account status with server. Please check your connection and try again."
+            : "Gagal memverifikasi status akun ke server. Periksa koneksi dan coba lagi."
+        );
+        setIsCheckingPhone(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (data && data.exists) {
+        // EXISTING ACCOUNT DETECTED:
+        // Do NOT start onboarding, do NOT overwrite existing profile, do NOT purge onboarding state.
+        // Abandon/isolate this onboarding attempt.
+        setExistingAccountDetected(true);
+        setIsCheckingPhone(false);
+        return;
+      }
+
+      // Safe to proceed for new user
+      setExistingAccountDetected(false);
+      setIsCheckingPhone(false);
+      setStep((p) => Math.min(p + 1, 14));
+    } catch (err: any) {
+      setPhoneCheckError(
+        isEN
+          ? "Verification failed. Please check your connection and try again."
+          : "Verifikasi gagal. Periksa koneksi dan coba lagi."
+      );
+      setIsCheckingPhone(false);
+    }
+  };
+
   const handleNext = () => {
     if (step === 6 && !dob.trim()) {
       setDobError(true);
+      return;
+    }
+    // When phone is submitted / phone verification is initiated:
+    if (step === 12) {
+      handlePhoneSubmit();
       return;
     }
     setStep((p) => Math.min(p + 1, 14));
@@ -2170,6 +2247,13 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           if (val.startsWith("62")) val = val.substring(2);
                           else if (val.startsWith("0")) val = val.substring(1);
                           setPhone(val);
+                          setPhoneCheckError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && phoneVal.isValid && !isCheckingPhone) {
+                            e.preventDefault();
+                            handlePhoneSubmit();
+                          }
                         }}
                         placeholder="81234567890"
                         autoFocus
@@ -2216,6 +2300,27 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                             {phoneVal.operator}
                           </span>
                         )}
+                      </motion.div>
+                    )}
+
+                    {/* Phone Check Error / Retry Banner */}
+                    {phoneCheckError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-bold flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-red-400 shrink-0" />
+                          <span>{phoneCheckError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handlePhoneSubmit()}
+                          className="text-[11px] underline text-white font-bold hover:text-red-300 shrink-0 cursor-pointer"
+                        >
+                          {isEN ? "Retry" : "Coba lagi"}
+                        </button>
                       </motion.div>
                     )}
                   </div>
@@ -2492,10 +2597,11 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => {
+                       onClick={async () => {
                         const cleaned = phone.replace(/\D/g, "");
                         const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : (cleaned.startsWith("8") ? "0" + cleaned : cleaned);
-                        
+                        const canonicalPhone = normalizePhoneToE164(phone) || (norm ? `+62${norm}` : phone);
+
                         const finalUserObj = {
                           name: name || "Member",
                           goal,
@@ -2508,8 +2614,12 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           startWeight: userW,
                           targetWeight: targetW,
                           aiRecommendedTargetWeight: recW,
-                          height: userH,
-                          age: userA,
+                          height: Number(height) || 170,
+                          age: calculatedAge || 25,
+                          dob: dob || "",
+                          healthStatus,
+                          healthConditions,
+                          otherCondition,
                           activityLevel,
                           experience,
                           satisfaction,
@@ -2521,7 +2631,8 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           persona,
                           selectedPlan,
                           selectedFeature,
-                          phone: norm || phone,
+                          phone: canonicalPhone,
+                          normalizedPhone: canonicalPhone,
                           targetCalories: targetCal,
                           dailyTargetCalories: targetCal,
                           proteinGrams: proteinGram,
@@ -2534,11 +2645,37 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           activeService: "both"
                         };
 
+                        // Server check & registration
+                        const API_BASE_URL = getApiBaseUrl();
                         try {
-                          // Purge old meal logs or exercise logs for this phone so fresh account starts clean
+                          let onboardRes = await fetch("/api/onboarding", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
+                          }).catch(() => null);
+
+                          if ((!onboardRes || !onboardRes.ok) && API_BASE_URL) {
+                            onboardRes = await fetch(`${API_BASE_URL}/api/onboarding`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
+                            }).catch(() => null);
+                          }
+
+                          if (onboardRes && onboardRes.status === 409) {
+                            // Account already exists: Abandon attempt, do NOT modify existing account or purge
+                            setExistingAccountDetected(true);
+                            setStep(12);
+                            return;
+                          }
+                        } catch (e) {}
+
+                        try {
+                          // Purge old meal logs or exercise logs for this phone only for brand new account
                           Object.keys(localStorage).forEach((key) => {
                             if (
                               key.startsWith(`gymbuddy_meals_${norm}`) ||
+                              key.startsWith(`gymbuddy_meals_${canonicalPhone}`) ||
                               key.startsWith(`gymbuddy_exercises_${norm}`) ||
                               key.startsWith(`gymbuddy_weight_history_${norm}`) ||
                               key.startsWith(`gymbuddy_water_${norm}`) ||
@@ -2549,25 +2686,9 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
                           });
 
                           localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(finalUserObj));
+                          localStorage.setItem(`gymbuddy_user_${canonicalPhone}`, JSON.stringify(finalUserObj));
                           localStorage.setItem("gymbuddy_last_user", JSON.stringify(finalUserObj));
                           localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
-                        } catch (e) {}
-
-                        // Sync to backend database immediately
-                        const API_BASE_URL = getApiBaseUrl();
-                        try {
-                          fetch("/api/onboarding", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ phone: norm, profile: finalUserObj })
-                          }).catch(() => {});
-                          if (API_BASE_URL) {
-                            fetch(`${API_BASE_URL}/api/onboarding`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ phone: norm, profile: finalUserObj })
-                            }).catch(() => {});
-                          }
                         } catch (e) {}
 
                         try {
@@ -2598,28 +2719,96 @@ export default function Onboarding({ language = "EN", onComplete }: OnboardingPr
           </AnimatePresence>
         </main>
 
+        {/* EXISTING ACCOUNT DETECTED MODAL */}
+        <AnimatePresence>
+          {existingAccountDetected && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="max-w-md w-full bg-[#0d1117] border border-white/[0.12] rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-white text-center"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+                  <AlertCircle size={32} />
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-xl sm:text-2xl font-['Archivo_Black'] tracking-tight">
+                    {isEN ? "Account already exists" : "Akun Sudah Terdaftar"}
+                  </h3>
+                  <p className="text-neutral-400 text-sm leading-relaxed">
+                    {isEN
+                      ? "An account is already registered with this WhatsApp number."
+                      : "Nomor WhatsApp ini sudah terdaftar di akun GymBuddy."}
+                  </p>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  {/* Primary Action: Log In */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingAccountDetected(false);
+                      if (onOpenLogin) {
+                        onOpenLogin(normalizePhoneToE164(phone) || phone);
+                      }
+                    }}
+                    className="w-full py-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                  >
+                    <span>{isEN ? "Log in" : "Masuk ke Akun"}</span>
+                    <ChevronRight size={18} className="stroke-[3]" />
+                  </button>
+
+                  {/* Secondary Action: Use another number */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingAccountDetected(false);
+                      setPhone("");
+                      setPhoneCheckError(null);
+                    }}
+                    className="w-full py-3.5 rounded-xl bg-[#161B22] hover:bg-neutral-800 border border-white/[0.1] text-neutral-300 hover:text-white font-bold text-sm transition-all cursor-pointer"
+                  >
+                    {isEN ? "Use another number" : "Gunakan nomor lain"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* FOOTER CTA BUTTON FOR PROGRESSION */}
         {step <= 12 && (
           <div className="absolute bottom-0 inset-x-0 p-4 sm:p-6 bg-gradient-to-t from-[#111111] via-[#111111]/95 to-transparent pb-6 sm:pb-8 z-30 pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
               <button
                 onClick={handleNext}
-                disabled={!canProceed()}
+                disabled={!canProceed() || isCheckingPhone}
                 className={`w-full py-4 rounded-xl font-extrabold text-base tracking-wide transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-                  canProceed()
+                  canProceed() && !isCheckingPhone
                     ? "bg-[#D4FF00] text-black hover:bg-[#c4f000]"
                     : "bg-[#111620] text-neutral-600 border border-neutral-800 cursor-not-allowed"
                 }`}
               >
-                <span>
-                  {step === 5 || step === 9
-                    ? (isEN ? "Continue to Next Stage →" : "Lanjut ke Tahap Berikutnya →")
-                    : step === 12
-                    ? (isEN ? "Generate My Nutrition Plan →" : "Buat Rencana Nutrisi Saya →")
-                    : (isEN ? "Continue" : "Lanjut")}
-                </span>
-                {canProceed() && step !== 5 && step !== 9 && (
-                  <ChevronRight size={18} className="stroke-[3]" />
+                {isCheckingPhone ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" />
+                    <span>{isEN ? "Verifying WhatsApp..." : "Memverifikasi WhatsApp..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {step === 5 || step === 9
+                        ? (isEN ? "Continue to Next Stage →" : "Lanjut ke Tahap Berikutnya →")
+                        : step === 12
+                        ? (isEN ? "Generate My Nutrition Plan →" : "Buat Rencana Nutrisi Saya →")
+                        : (isEN ? "Continue" : "Lanjut")}
+                    </span>
+                    {canProceed() && step !== 5 && step !== 9 && (
+                      <ChevronRight size={18} className="stroke-[3]" />
+                    )}
+                  </>
                 )}
               </button>
             </div>

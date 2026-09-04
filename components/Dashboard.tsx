@@ -1337,6 +1337,7 @@ export default function Dashboard({
   const [reviewEditSod, setReviewEditSod] = useState("");
   const [reviewEditTime, setReviewEditTime] = useState("");
   const [reviewEditType, setReviewEditType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
+  const [isSavingReviewMeal, setIsSavingReviewMeal] = useState(false);
 
   const [customDrinkName, setCustomDrinkName] = useState("Air Mineral");
   const [customDrinkMl, setCustomDrinkMl] = useState("250");
@@ -1541,51 +1542,75 @@ export default function Dashboard({
     setReviewMealState("review");
   };
 
-  const handleConfirmSaveReviewMeal = () => {
-    if (!reviewMealData) return;
-    const newMeal: MealItem = {
-      id: Date.now().toString(),
-      foodName: reviewMealData.foodName,
-      calories: reviewMealData.calories,
-      protein: reviewMealData.protein,
-      carbs: reviewMealData.carbs,
-      fat: reviewMealData.fat,
-      fiber: reviewMealData.fiber,
-      sugar: reviewMealData.sugar,
-      sodium: reviewMealData.sodium,
-      time: reviewMealData.mealTime,
-      timestamp: new Date().toISOString(),
-      mealType: reviewMealData.mealType,
-      items: reviewMealData.components && reviewMealData.components.length > 0
-        ? reviewMealData.components.map(c => ({ name: c, foodName: c }))
-        : undefined
-    };
+  const handleConfirmSaveReviewMeal = async () => {
+    if (!reviewMealData || isSavingReviewMeal) return;
+    setIsSavingReviewMeal(true);
+    try {
+      const clientMealId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const newMeal: MealItem = {
+        id: clientMealId,
+        foodName: reviewMealData.foodName,
+        calories: reviewMealData.calories,
+        protein: reviewMealData.protein,
+        carbs: reviewMealData.carbs,
+        fat: reviewMealData.fat,
+        fiber: reviewMealData.fiber,
+        sugar: reviewMealData.sugar,
+        sodium: reviewMealData.sodium,
+        time: reviewMealData.mealTime,
+        timestamp: new Date().toISOString(),
+        mealType: reviewMealData.mealType,
+        items: reviewMealData.components && reviewMealData.components.length > 0
+          ? reviewMealData.components.map(c => ({ name: c, foodName: c }))
+          : undefined
+      };
 
-    const updated = [newMeal, ...allLogs];
-    setAllLogs(updated);
-    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
-    if (normPhone) {
-      const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
-      try {
-        localStorage.setItem(localKey, JSON.stringify(updated));
-      } catch (e) {}
+      const updated = [newMeal, ...allLogs.filter(m => m.id !== clientMealId)];
+      setAllLogs(updated);
 
-      // Async server sync
-      fetch(`/api/user/${normPhone}/meals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newMeal, date: selectedDate })
-      }).catch(() => {});
+      const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+      if (normPhone) {
+        const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+        try {
+          localStorage.setItem(localKey, JSON.stringify(updated));
+        } catch (e) {}
+
+        const API_BASE_URL = getApiBaseUrl();
+        const payload = JSON.stringify({ ...newMeal, date: selectedDate });
+
+        // Primary sync with fallback (idempotent by clientMealId)
+        let synced = false;
+        try {
+          const res = await fetch(`/api/user/${normPhone}/meals`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload
+          });
+          if (res.ok) synced = true;
+        } catch (e) {}
+
+        if (!synced && API_BASE_URL) {
+          try {
+            await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: payload
+            });
+          } catch (e) {}
+        }
+      }
+
+      // Reset scan & close modal
+      setShowScanModal(false);
+      setScanImage(null);
+      setScanResult(null);
+      setReviewMealData(null);
+      setReviewMealState(null);
+      setReminderNotificationMsg(isEN ? "Meal saved to food journal! 🥗" : "Makanan berhasil dicatat ke jurnal! 🥗");
+      setTimeout(() => setReminderNotificationMsg(null), 3500);
+    } finally {
+      setIsSavingReviewMeal(false);
     }
-
-    // Reset scan & close modal
-    setShowScanModal(false);
-    setScanImage(null);
-    setScanResult(null);
-    setReviewMealData(null);
-    setReviewMealState(null);
-    setReminderNotificationMsg(isEN ? "Meal saved to food journal! 🥗" : "Makanan berhasil dicatat ke jurnal! 🥗");
-    setTimeout(() => setReminderNotificationMsg(null), 3500);
   };
 
   const handleDeleteScanPhoto = () => {
@@ -2401,7 +2426,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
       if (serverLogs !== null && Array.isArray(serverLogs)) {
         const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
-        const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
+        
+        // Preserve unindexed local meals by client meal id so background sync never wipes them
+        const mergedMap = new Map<string, MealItem>();
+        for (const m of cleanServerLogs) {
+          if (m && (m.id || m.foodName)) mergedMap.set(String(m.id || m.foodName), m);
+        }
+        const currentLocal = getLocalMeals(activeUser.phone, dateStr);
+        for (const m of currentLocal) {
+          const mKey = String(m.id || m.foodName);
+          if (m && !mergedMap.has(mKey)) {
+            mergedMap.set(mKey, m);
+          }
+        }
+        const mergedLogs = Array.from(mergedMap.values());
+        const sanitized = sanitizeAndSplitComboLogs(mergedLogs);
         setAllLogs(sanitized);
         try {
           localStorage.setItem(localKey, JSON.stringify(sanitized));
@@ -5875,11 +5914,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                         {/* PRIMARY: Save Meal */}
                         <button
                           type="button"
+                          disabled={isSavingReviewMeal}
                           onClick={handleConfirmSaveReviewMeal}
-                          className="w-full py-3.5 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-['Archivo_Black'] text-sm uppercase rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                          className={`w-full py-3.5 ${isSavingReviewMeal ? "opacity-60 cursor-wait" : "hover:bg-[#c4ec00] cursor-pointer"} bg-[#D4FF00] text-black font-['Archivo_Black'] text-sm uppercase rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98`}
                         >
-                          <Check size={18} strokeWidth={3} />
-                          <span>{isEN ? "Save Meal" : "Simpan Makanan"}</span>
+                          {isSavingReviewMeal ? (
+                            <>
+                              <RefreshCw size={18} className="animate-spin" />
+                              <span>{isEN ? "Saving..." : "Menyimpan..."}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check size={18} strokeWidth={3} />
+                              <span>{isEN ? "Save Meal" : "Simpan Makanan"}</span>
+                            </>
+                          )}
                         </button>
 
                         {/* SECONDARY: Correct / Edit */}

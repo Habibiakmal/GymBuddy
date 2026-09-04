@@ -66,13 +66,14 @@ export function getFirestore(): Firestore | null {
       return firestoreInstance;
     }
 
-    if (projectId) {
+    if (process.env.K_SERVICE && projectId) {
       firestoreInstance = new Firestore({ projectId, databaseId, ignoreUndefinedProperties: true });
-      console.log(`[Firestore] Initialized for Google Cloud Project: ${projectId} (DB: "${databaseId}") ✅`);
+      console.log(`[Firestore] Initialized for Google Cloud Run: ${projectId} (DB: "${databaseId}") ✅`);
       return firestoreInstance;
     }
 
-    firestoreInstance = new Firestore({ ignoreUndefinedProperties: true });
+    // Local environment without explicit service account JSON
+    return null;
     return firestoreInstance;
   } catch (err: any) {
     console.warn("[Firestore] Initialization warning:", err?.message || err);

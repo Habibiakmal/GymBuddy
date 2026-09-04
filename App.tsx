@@ -58,6 +58,7 @@ export default function App() {
   const [isPricingPage, setIsPricingPage] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [initialLoginPhone, setInitialLoginPhone] = useState<string>("");
 
   const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
@@ -527,6 +528,13 @@ export default function App() {
         {splashOverlay}
         <Onboarding
           language={language}
+          onOpenLogin={(prefilledPhone) => {
+            if (prefilledPhone) {
+              setInitialLoginPhone(prefilledPhone);
+            }
+            setIsAppOnboarding(false);
+            setIsLoginModalOpen(true);
+          }}
           onComplete={() => {
             setIsAppOnboarding(false);
             try {
@@ -2010,8 +2018,12 @@ export default function App() {
 
       <LoginModal
         isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+          setInitialLoginPhone("");
+        }}
         language={language}
+        initialPhone={initialLoginPhone}
         onStartOnboarding={() => setIsAppOnboarding(true)}
         onLoginSuccess={handleLoginSuccess}
         onResetData={handleResetAllData}

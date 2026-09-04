@@ -43,6 +43,7 @@ interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   language?: "EN" | "ID";
+  initialPhone?: string;
   onStartOnboarding: () => void;
   onLoginSuccess?: (profile: any) => void;
   onResetData?: () => void;
@@ -52,6 +53,7 @@ export default function LoginModal({
   isOpen,
   onClose,
   language = "EN",
+  initialPhone,
   onStartOnboarding,
   onLoginSuccess,
   onResetData
@@ -66,6 +68,17 @@ export default function LoginModal({
   const [progressData, setProgressData] = useState<any>(null);
   const [selectedPersona, setSelectedPersona] = useState<"max" | "mia">("max");
 
+  // Autofill and direct to phone auth if initialPhone provided
+  useEffect(() => {
+    if (initialPhone) {
+      let clean = initialPhone.replace(/\D/g, "");
+      if (clean.startsWith("62")) clean = clean.substring(2);
+      else if (clean.startsWith("0")) clean = clean.substring(1);
+      setPhone(clean);
+      setAuthMode("phone");
+    }
+  }, [initialPhone]);
+
   type VerificationStep = "credentials" | "waiting_whatsapp" | "otp_input" | "approved" | "rejected" | "expired";
 
   interface VerificationSession {
@@ -74,7 +87,6 @@ export default function LoginModal({
     location: string;
     timeStr: string;
     expiresAt: number;
-    otpCode?: string;
     profile: any;
     progress?: any;
   }
@@ -162,18 +174,30 @@ export default function LoginModal({
     if (!verificationSession?.sessionId) return;
     setResending(true);
     setResendSuccess(false);
+    const API_BASE_URL = getApiBaseUrl();
     try {
-      const res = await fetch("/api/auth/login-resend", {
+      let res = await fetch("/api/auth/login-resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: verificationSession.sessionId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setVerificationSession((prev) => (prev ? { ...prev, expiresAt: data.expiresAt, otpCode: data.otpCode } : null));
-        setRemainingTime(300);
-        setResendSuccess(true);
-        setTimeout(() => setResendSuccess(false), 4000);
+      }).catch(() => null);
+
+      if ((!res || !res.ok) && API_BASE_URL) {
+        res = await fetch(`${API_BASE_URL}/api/auth/login-resend`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: verificationSession.sessionId })
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setVerificationSession((prev) => (prev ? { ...prev, expiresAt: data.expiresAt } : null));
+          setRemainingTime(300);
+          setResendSuccess(true);
+          setTimeout(() => setResendSuccess(false), 4000);
+        }
       }
     } catch (e) {}
     setResending(false);
@@ -187,15 +211,38 @@ export default function LoginModal({
     }
     setLoading(true);
     setOtpError("");
+    const API_BASE_URL = getApiBaseUrl();
     try {
-      const res = await fetch("/api/auth/login-verify-otp", {
+      let res = await fetch("/api/auth/login-verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: verificationSession.sessionId,
           otpCode: otpInput.trim()
         })
-      });
+      }).catch(() => null);
+
+      if ((!res || !res.ok) && API_BASE_URL) {
+        res = await fetch(`${API_BASE_URL}/api/auth/login-verify-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: verificationSession.sessionId,
+            otpCode: otpInput.trim()
+          })
+        }).catch(() => null);
+      }
+
+      if (!res) {
+        setOtpError(
+          isEN
+            ? "Network error. Please check your connection and try again."
+            : "Koneksi jaringan bermasalah. Periksa koneksi dan coba lagi."
+        );
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
       if (data.success && data.status === "approved") {
         setVerificationStep("approved");
@@ -219,7 +266,7 @@ export default function LoginModal({
         setOtpError(data.message || (isEN ? "Invalid code. Please try again." : "Kode verifikasi salah. Silakan coba lagi."));
       }
     } catch (e: any) {
-      setOtpError(e.message || "Gagal memverifikasi kode.");
+      setOtpError(e?.message || (isEN ? "Verification failed. Please try again." : "Gagal memverifikasi kode. Silakan coba lagi."));
     }
     setLoading(false);
   };
@@ -438,7 +485,7 @@ export default function LoginModal({
         hour12: false
       }).format(new Date());
 
-      const res = await fetch("/api/auth/login-request", {
+      let res = await fetch("/api/auth/login-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -447,42 +494,50 @@ export default function LoginModal({
           location: detectedLocation,
           timeStr: nowFormatted
         })
-      });
+      }).catch(() => null);
 
-      const data = await res.json();
-      if (data.success && data.sessionId) {
-        setVerificationSession({
-          sessionId: data.sessionId,
-          device: data.device || detectedDevice,
-          location: data.location || detectedLocation,
-          timeStr: data.timeStr || nowFormatted,
-          expiresAt: data.expiresAt,
-          otpCode: data.otpCode,
-          profile: foundProfile,
-          progress: foundProgress
-        });
-        setRemainingTime(300);
-        setVerificationStep("waiting_whatsapp");
-        setLoading(false);
-        return;
+      if ((!res || !res.ok) && API_BASE_URL) {
+        res = await fetch(`${API_BASE_URL}/api/auth/login-request`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: normPhone,
+            device: detectedDevice,
+            location: detectedLocation,
+            timeStr: nowFormatted
+          })
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.success && data.sessionId) {
+          setVerificationSession({
+            sessionId: data.sessionId,
+            device: data.device || detectedDevice,
+            location: data.location || detectedLocation,
+            timeStr: data.timeStr || nowFormatted,
+            expiresAt: data.expiresAt,
+            profile: foundProfile,
+            progress: foundProgress
+          });
+          setRemainingTime(300);
+          setVerificationStep("waiting_whatsapp");
+          setLoading(false);
+          return;
+        }
       }
     } catch (err) {
       console.warn("Could not initiate WhatsApp confirmation:", err);
     }
 
-    // Fallback: If network failed to reach confirmation endpoint
-    try {
-      localStorage.setItem(`gymbuddy_user_${normPhone}`, JSON.stringify(foundProfile));
-      localStorage.setItem("gymbuddy_active_session", JSON.stringify(foundProfile));
-      localStorage.setItem("gymbuddy_last_user", JSON.stringify(foundProfile));
-    } catch (e) {}
-
-    setUserProfile(foundProfile);
-    if (foundProgress) setProgressData(foundProgress);
-    if (onLoginSuccess) {
-      onLoginSuccess(foundProfile);
-    }
-    onClose();
+    // REQUIREMENT 5: ZERO CLIENT-SIDE FALLBACK!
+    // Never bypass OTP or grant access when network/server fails.
+    setErrorMsg(
+      isEN
+        ? "Could not initiate WhatsApp verification. Please check your network connection and try again."
+        : "Gagal memulai verifikasi WhatsApp. Periksa koneksi internet Anda dan coba lagi."
+    );
     setLoading(false);
   };
 
@@ -973,11 +1028,6 @@ export default function LoginModal({
                         placeholder="••••••"
                         className="w-full py-3.5 px-4 bg-[#161B22] border border-white/[0.12] focus:border-[#D4FF00] rounded-2xl text-center text-2xl font-mono font-black tracking-widest text-white focus:outline-none"
                       />
-                      {verificationSession?.otpCode && (
-                        <p className="text-[11px] text-neutral-500 text-center mt-1 font-mono">
-                          {isEN ? "Demo Code:" : "Kode Demo:"} <span className="text-[#D4FF00] font-bold">{verificationSession.otpCode}</span>
-                        </p>
-                      )}
                     </div>
 
                     {otpError && (
