@@ -42,6 +42,7 @@ export const authRateLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req: Request) => req.path.includes("login-status") || req.path.includes("login-cancel"),
   message: {
     success: false,
     error: "Too many login attempts. Please wait a minute before trying again."

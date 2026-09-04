@@ -1449,11 +1449,55 @@ export interface PendingLoginSession {
 
 export const authPendingSessions = new Map<string, PendingLoginSession>();
 
-export function getPendingSession(sessionId: string): PendingLoginSession | null {
-  const sess = authPendingSessions.get(sessionId);
+export async function savePendingSession(session: PendingLoginSession): Promise<void> {
+  authPendingSessions.set(session.sessionId, session);
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("pendingLoginSessions").doc(session.sessionId).set({
+        ...session,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+  } catch (e) {
+    console.warn("[Firestore] savePendingSession warning (non-fatal):", (e as any)?.message || e);
+  }
+}
+
+export async function deletePendingSession(sessionId: string): Promise<void> {
+  authPendingSessions.delete(sessionId);
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("pendingLoginSessions").doc(sessionId).delete();
+    }
+  } catch (e) {}
+}
+
+export async function getPendingSession(sessionId: string): Promise<PendingLoginSession | null> {
+  let sess = authPendingSessions.get(sessionId) || null;
+
+  // Sync from Firestore if available
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      const doc = await firestore.collection("pendingLoginSessions").doc(sessionId).get();
+      if (doc.exists) {
+        const fData = doc.data() as PendingLoginSession;
+        if (fData) {
+          sess = { ...sess, ...fData };
+          authPendingSessions.set(sessionId, sess);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore] getPendingSession lookup warning (non-fatal):", (e as any)?.message || e);
+  }
+
   if (!sess) return null;
   if (sess.status === "pending" && Date.now() > sess.expiresAt) {
     sess.status = "expired";
+    savePendingSession(sess).catch(() => {});
   }
   return sess;
 }
@@ -1529,6 +1573,46 @@ export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText
     }
   }
 
+  // If not found in RAM, check Firestore across instances
+  if (!activeSession) {
+    try {
+      const firestore = getFirestore();
+      if (firestore) {
+        const queryPhones = [canonicalPhone, normPhone, altPhone].filter(Boolean);
+        for (const qp of queryPhones) {
+          const snap = await firestore.collection("pendingLoginSessions")
+            .where("canonicalPhone", "==", qp)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+          if (!snap.empty) {
+            const data = snap.docs[0].data() as PendingLoginSession;
+            if (Date.now() <= data.expiresAt) {
+              activeSession = data;
+              authPendingSessions.set(activeSession.sessionId, activeSession);
+              break;
+            }
+          }
+          const snapLocal = await firestore.collection("pendingLoginSessions")
+            .where("normPhone", "==", qp)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+          if (!snapLocal.empty) {
+            const data = snapLocal.docs[0].data() as PendingLoginSession;
+            if (Date.now() <= data.expiresAt) {
+              activeSession = data;
+              authPendingSessions.set(activeSession.sessionId, activeSession);
+              break;
+            }
+          }
+        }
+      }
+    } catch (fsErr) {
+      console.warn("[Firestore] handleWhatsAppLoginConfirmation query warning:", (fsErr as any)?.message || fsErr);
+    }
+  }
+
   // If no matching active pending session exists, do NOT approve anything
   if (!activeSession) return null;
 
@@ -1543,6 +1627,7 @@ export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText
 
   if (isApprove) {
     activeSession.status = "approved";
+    await savePendingSession(activeSession);
     return `✅ *Login Dikonfirmasi!*\n\nAkses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! ✨`;
   }
 
@@ -1554,6 +1639,7 @@ export async function handleWhatsAppLoginConfirmation(rawPhone: string, userText
 
   if (isReject) {
     activeSession.status = "rejected";
+    await savePendingSession(activeSession);
     return `🛡️ *Login Ditolak & Akun Diamankan*\n\nAkses Dashboard tersebut telah diblokir segera. Jika ini bukan aktivitas kamu, akun kamu tetap aman.`;
   }
 
@@ -4610,7 +4696,7 @@ async function startServer() {
         profile: user
       };
 
-      authPendingSessions.set(sessionId, session);
+      await savePendingSession(session);
 
       // Compose Production WhatsApp Confirmation Message (Strictly Zero OTP)
       const waMsg = [
@@ -4634,7 +4720,7 @@ async function startServer() {
       const delivered = await sendWhatsAppLoginMessage(normPhone, waMsg, sessionId);
 
       if (!delivered && process.env.NODE_ENV === "production") {
-        authPendingSessions.delete(sessionId);
+        await deletePendingSession(sessionId);
         return res.status(502).json({
           success: false,
           deliveryError: true,
@@ -4656,8 +4742,8 @@ async function startServer() {
     }
   });
 
-  app.get("/api/auth/login-status/:sessionId", (req, res) => {
-    const session = getPendingSession(req.params.sessionId);
+  app.get("/api/auth/login-status/:sessionId", async (req, res) => {
+    const session = await getPendingSession(req.params.sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
@@ -4668,6 +4754,7 @@ async function startServer() {
       if (!session.token) {
         const userId = session.profile?.userId || `usr_${session.normPhone}`;
         session.token = generateAuthToken({ userId, phone: session.normPhone });
+        await savePendingSession(session);
       }
       token = session.token;
 
@@ -4690,9 +4777,9 @@ async function startServer() {
 
   // Simulator endpoint strictly for local development testing (Disabled in production)
   if (process.env.NODE_ENV !== "production") {
-    app.post("/api/auth/login-action", express.json(), (req, res) => {
+    app.post("/api/auth/login-action", express.json(), async (req, res) => {
       const { sessionId, action } = req.body;
-      const session = getPendingSession(sessionId);
+      const session = await getPendingSession(sessionId);
       if (!session) {
         return res.status(404).json({ success: false, error: "session_not_found" });
       }
@@ -4700,9 +4787,11 @@ async function startServer() {
         session.status = "approved";
         const userId = session.profile?.userId || `usr_${session.normPhone}`;
         session.token = generateAuthToken({ userId, phone: session.normPhone });
+        await savePendingSession(session);
         return res.json({ success: true, status: "approved", token: session.token, profile: session.profile });
       } else if (action === "reject") {
         session.status = "rejected";
+        await savePendingSession(session);
         return res.json({ success: true, status: "rejected" });
       }
       return res.status(400).json({ success: false, error: "invalid_action" });
@@ -4711,13 +4800,14 @@ async function startServer() {
 
   app.post("/api/auth/login-resend", express.json(), async (req, res) => {
     const { sessionId } = req.body;
-    const session = getPendingSession(sessionId);
+    const session = await getPendingSession(sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1000;
     session.status = "pending";
+    await savePendingSession(session);
 
     const waMsg = [
       `🔐 *GymBuddy Login (Kirim Ulang)*`,
@@ -4755,11 +4845,12 @@ async function startServer() {
     });
   });
 
-  app.post("/api/auth/login-cancel", express.json(), (req, res) => {
+  app.post("/api/auth/login-cancel", express.json(), async (req, res) => {
     const { sessionId } = req.body;
-    const session = getPendingSession(sessionId);
+    const session = await getPendingSession(sessionId);
     if (session) {
       session.status = "cancelled";
+      await savePendingSession(session);
     }
     res.json({ success: true, status: "cancelled" });
   });

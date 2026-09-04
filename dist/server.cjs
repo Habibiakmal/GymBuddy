@@ -38,6 +38,7 @@ __export(server_exports, {
   classifyMealType: () => classifyMealType,
   classifyUserInput: () => classifyUserInput,
   dbData: () => dbData,
+  deletePendingSession: () => deletePendingSession,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
   extractHourMinute: () => extractHourMinute,
   extractMealComponents: () => extractMealComponents,
@@ -67,6 +68,7 @@ __export(server_exports, {
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
   saveDb: () => saveDb,
+  savePendingSession: () => savePendingSession,
   saveUserProfile: () => saveUserProfile,
   sendWhatsAppLoginMessage: () => sendWhatsAppLoginMessage,
   splitCompoundFoodItems: () => splitCompoundFoodItems,
@@ -47159,6 +47161,7 @@ var authRateLimiter = (0, import_express_rate_limit.default)({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.includes("login-status") || req.path.includes("login-cancel"),
   message: {
     success: false,
     error: "Too many login attempts. Please wait a minute before trying again."
@@ -48103,11 +48106,52 @@ function getWibTimeStr(d = /* @__PURE__ */ new Date()) {
   }
 }
 var authPendingSessions = /* @__PURE__ */ new Map();
-function getPendingSession(sessionId) {
-  const sess = authPendingSessions.get(sessionId);
+async function savePendingSession(session) {
+  authPendingSessions.set(session.sessionId, session);
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("pendingLoginSessions").doc(session.sessionId).set({
+        ...session,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }, { merge: true });
+    }
+  } catch (e) {
+    console.warn("[Firestore] savePendingSession warning (non-fatal):", e?.message || e);
+  }
+}
+async function deletePendingSession(sessionId) {
+  authPendingSessions.delete(sessionId);
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("pendingLoginSessions").doc(sessionId).delete();
+    }
+  } catch (e) {
+  }
+}
+async function getPendingSession(sessionId) {
+  let sess = authPendingSessions.get(sessionId) || null;
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      const doc = await firestore.collection("pendingLoginSessions").doc(sessionId).get();
+      if (doc.exists) {
+        const fData = doc.data();
+        if (fData) {
+          sess = { ...sess, ...fData };
+          authPendingSessions.set(sessionId, sess);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore] getPendingSession lookup warning (non-fatal):", e?.message || e);
+  }
   if (!sess) return null;
   if (sess.status === "pending" && Date.now() > sess.expiresAt) {
     sess.status = "expired";
+    savePendingSession(sess).catch(() => {
+    });
   }
   return sess;
 }
@@ -48155,11 +48199,42 @@ async function handleWhatsAppLoginConfirmation(rawPhone, userText) {
       break;
     }
   }
+  if (!activeSession) {
+    try {
+      const firestore = getFirestore();
+      if (firestore) {
+        const queryPhones = [canonicalPhone, normPhone, altPhone].filter(Boolean);
+        for (const qp of queryPhones) {
+          const snap2 = await firestore.collection("pendingLoginSessions").where("canonicalPhone", "==", qp).where("status", "==", "pending").limit(1).get();
+          if (!snap2.empty) {
+            const data = snap2.docs[0].data();
+            if (Date.now() <= data.expiresAt) {
+              activeSession = data;
+              authPendingSessions.set(activeSession.sessionId, activeSession);
+              break;
+            }
+          }
+          const snapLocal = await firestore.collection("pendingLoginSessions").where("normPhone", "==", qp).where("status", "==", "pending").limit(1).get();
+          if (!snapLocal.empty) {
+            const data = snapLocal.docs[0].data();
+            if (Date.now() <= data.expiresAt) {
+              activeSession = data;
+              authPendingSessions.set(activeSession.sessionId, activeSession);
+              break;
+            }
+          }
+        }
+      }
+    } catch (fsErr) {
+      console.warn("[Firestore] handleWhatsAppLoginConfirmation query warning:", fsErr?.message || fsErr);
+    }
+  }
   if (!activeSession) return null;
   const trimmed = userText.trim().toLowerCase();
   const isApprove = trimmed === "ya, ini saya" || trimmed === "ya ini saya" || trimmed.includes("auth_approve") || /^(?:ya(?:,\s*ini\s*saya|\s*ini\s*saya)?|yes|1|benar|setuju|it'?s\s*me)\b/i.test(trimmed);
   if (isApprove) {
     activeSession.status = "approved";
+    await savePendingSession(activeSession);
     return `\u2705 *Login Dikonfirmasi!*
 
 Akses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! \u2728`;
@@ -48167,6 +48242,7 @@ Akses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk 
   const isReject = trimmed === "bukan saya" || trimmed.includes("auth_reject") || /^(?:tidak|no|2|bukan(?:\s*saya)?|tolak|secure|amankan)\b/i.test(trimmed);
   if (isReject) {
     activeSession.status = "rejected";
+    await savePendingSession(activeSession);
     return `\u{1F6E1}\uFE0F *Login Ditolak & Akun Diamankan*
 
 Akses Dashboard tersebut telah diblokir segera. Jika ini bukan aktivitas kamu, akun kamu tetap aman.`;
@@ -50716,7 +50792,7 @@ async function startServer() {
         expiresAt: Date.now() + 5 * 60 * 1e3,
         profile: user
       };
-      authPendingSessions.set(sessionId, session);
+      await savePendingSession(session);
       const waMsg = [
         `\u{1F510} *GymBuddy Login*`,
         ``,
@@ -50736,7 +50812,7 @@ async function startServer() {
       ].join("\n");
       const delivered = await sendWhatsAppLoginMessage(normPhone, waMsg, sessionId);
       if (!delivered && process.env.NODE_ENV === "production") {
-        authPendingSessions.delete(sessionId);
+        await deletePendingSession(sessionId);
         return res.status(502).json({
           success: false,
           deliveryError: true,
@@ -50756,8 +50832,8 @@ async function startServer() {
       res.status(500).json({ success: false, error: e.message || "Gagal memproses permintaan login." });
     }
   });
-  app.get("/api/auth/login-status/:sessionId", (req, res) => {
-    const session = getPendingSession(req.params.sessionId);
+  app.get("/api/auth/login-status/:sessionId", async (req, res) => {
+    const session = await getPendingSession(req.params.sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
@@ -50767,6 +50843,7 @@ async function startServer() {
       if (!session.token) {
         const userId = session.profile?.userId || `usr_${session.normPhone}`;
         session.token = generateAuthToken({ userId, phone: session.normPhone });
+        await savePendingSession(session);
       }
       token = session.token;
       res.cookie("gymbuddy_token", token, {
@@ -50786,9 +50863,9 @@ async function startServer() {
     });
   });
   if (process.env.NODE_ENV !== "production") {
-    app.post("/api/auth/login-action", import_express.default.json(), (req, res) => {
+    app.post("/api/auth/login-action", import_express.default.json(), async (req, res) => {
       const { sessionId, action } = req.body;
-      const session = getPendingSession(sessionId);
+      const session = await getPendingSession(sessionId);
       if (!session) {
         return res.status(404).json({ success: false, error: "session_not_found" });
       }
@@ -50796,9 +50873,11 @@ async function startServer() {
         session.status = "approved";
         const userId = session.profile?.userId || `usr_${session.normPhone}`;
         session.token = generateAuthToken({ userId, phone: session.normPhone });
+        await savePendingSession(session);
         return res.json({ success: true, status: "approved", token: session.token, profile: session.profile });
       } else if (action === "reject") {
         session.status = "rejected";
+        await savePendingSession(session);
         return res.json({ success: true, status: "rejected" });
       }
       return res.status(400).json({ success: false, error: "invalid_action" });
@@ -50806,13 +50885,14 @@ async function startServer() {
   }
   app.post("/api/auth/login-resend", import_express.default.json(), async (req, res) => {
     const { sessionId } = req.body;
-    const session = getPendingSession(sessionId);
+    const session = await getPendingSession(sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1e3;
     session.status = "pending";
+    await savePendingSession(session);
     const waMsg = [
       `\u{1F510} *GymBuddy Login (Kirim Ulang)*`,
       ``,
@@ -50845,11 +50925,12 @@ async function startServer() {
       expiresAt: session.expiresAt
     });
   });
-  app.post("/api/auth/login-cancel", import_express.default.json(), (req, res) => {
+  app.post("/api/auth/login-cancel", import_express.default.json(), async (req, res) => {
     const { sessionId } = req.body;
-    const session = getPendingSession(sessionId);
+    const session = await getPendingSession(sessionId);
     if (session) {
       session.status = "cancelled";
+      await savePendingSession(session);
     }
     res.json({ success: true, status: "cancelled" });
   });
@@ -53883,6 +53964,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   classifyMealType,
   classifyUserInput,
   dbData,
+  deletePendingSession,
   detectMealCorrectionIntent,
   extractHourMinute,
   extractMealComponents,
@@ -53912,6 +53994,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,
   saveDb,
+  savePendingSession,
   saveUserProfile,
   sendWhatsAppLoginMessage,
   splitCompoundFoodItems,

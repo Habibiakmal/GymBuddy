@@ -126,13 +126,19 @@ export default function LoginModal({
       if (!isMounted || !verificationSession?.sessionId) return;
       try {
         const API_BASE_URL = getApiBaseUrl();
-        const url = API_BASE_URL
+        const primaryUrl = API_BASE_URL
           ? `${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`
           : `/api/auth/login-status/${verificationSession.sessionId}`;
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
-        if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) return;
-        const data = await res.json();
-        if (!isMounted) return;
+        let res = await fetch(primaryUrl, { headers: { Accept: "application/json" } }).catch(() => null);
+
+        // If primaryUrl returned non-200 or HTML error page, retry with the alternate URL
+        if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && primaryUrl !== `${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`) {
+          res = await fetch(`${API_BASE_URL}/api/auth/login-status/${verificationSession.sessionId}`, { headers: { Accept: "application/json" } }).catch(() => null);
+        }
+
+        if (!res || !res.ok || !res.headers.get("content-type")?.includes("application/json")) return;
+        const data = await res.json().catch(() => null);
+        if (!data || !isMounted) return;
 
         if (data.status === "approved") {
           clearInterval(interval);

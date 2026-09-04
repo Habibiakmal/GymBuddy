@@ -55,7 +55,7 @@ async function runTests() {
   };
   authPendingSessions.set(sessionId1, session1);
 
-  const retrieved1 = getPendingSession(sessionId1);
+  const retrieved1 = await getPendingSession(sessionId1);
   assert(retrieved1 !== null, "Session 1 is retrievable");
   assert(retrieved1?.status === "pending", "Session 1 is initially pending");
   assert(
@@ -196,7 +196,7 @@ async function runTests() {
 
   const ack6 = await handleWhatsAppLoginConfirmation(canonicalPhone, "YA");
   assert(ack6 === null, "Expired session confirmation returns null");
-  const retrieved6 = getPendingSession(sessionId6);
+  const retrieved6 = await getPendingSession(sessionId6);
   assert(retrieved6?.status === "expired", "Session 6 status is marked 'expired'");
 
   // -------------------------------------------------------------------------
