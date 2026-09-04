@@ -68,6 +68,7 @@ __export(server_exports, {
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
   saveDb: () => saveDb,
   saveUserProfile: () => saveUserProfile,
+  sendWhatsAppLoginMessage: () => sendWhatsAppLoginMessage,
   splitCompoundFoodItems: () => splitCompoundFoodItems,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
   updateExistingMealLog: () => updateExistingMealLog,
@@ -48016,6 +48017,76 @@ async function sendWhatsAppDirect(rawPhone, message) {
   }
   return sent;
 }
+async function sendWhatsAppLoginMessage(rawPhone, message, sessionId) {
+  const phone = normalizePhone(rawPhone);
+  if (!phone) return false;
+  let sent = false;
+  const token = process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_PHONE_NUMBER_ID;
+  if (token && phoneId) {
+    try {
+      const cleanText = sanitizeWhatsAppResponse(message);
+      const recipient = phone.replace(/^0/, "62");
+      try {
+        await import_axios.default.post(
+          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+          {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: recipient,
+            type: "interactive",
+            interactive: {
+              type: "button",
+              body: { text: cleanText },
+              action: {
+                buttons: [
+                  { type: "reply", reply: { id: `auth_approve_${sessionId || "sess"}`, title: "Ya, ini saya" } },
+                  { type: "reply", reply: { id: `auth_reject_${sessionId || "sess"}`, title: "Bukan saya" } }
+                ]
+              }
+            }
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log(`[WhatsApp Auth] Successfully delivered interactive message via Meta to: ${recipient}`);
+        sent = true;
+      } catch (interactiveErr) {
+        console.warn("[WhatsApp Auth] Meta interactive button failed, falling back to text:", interactiveErr?.response?.data || interactiveErr?.message);
+        await import_axios.default.post(
+          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: recipient,
+            text: { body: cleanText }
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log(`[WhatsApp Auth] Successfully delivered text message via Meta to: ${recipient}`);
+        sent = true;
+      }
+    } catch (metaErr) {
+      console.error(`[WhatsApp Auth] Meta delivery failed for ${phone}:`, metaErr?.response?.data || metaErr?.message || metaErr);
+    }
+  }
+  if (!sent && getTwilio()) {
+    try {
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
+      const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
+      const formattedDest = phone.startsWith("0") ? "62" + phone.substring(1) : phone;
+      const toNum = formattedDest.startsWith("whatsapp:") ? formattedDest : `whatsapp:${formattedDest}`;
+      await getTwilio().messages.create({
+        body: message,
+        from: fromNum,
+        to: toNum
+      });
+      console.log(`[WhatsApp Auth] Successfully delivered via Twilio to: ${toNum}`);
+      sent = true;
+    } catch (twilioErr) {
+      console.error(`[WhatsApp Auth] Twilio delivery failed for ${phone}:`, twilioErr?.message || twilioErr);
+    }
+  }
+  return sent;
+}
 function getWibTimeStr(d = /* @__PURE__ */ new Date()) {
   try {
     const options = { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false };
@@ -48086,24 +48157,19 @@ async function handleWhatsAppLoginConfirmation(rawPhone, userText) {
   }
   if (!activeSession) return null;
   const trimmed = userText.trim().toLowerCase();
-  if (/^(?:ya|yes|1|benar|setuju|it'?s\s*me)\b/i.test(trimmed)) {
+  const isApprove = trimmed === "ya, ini saya" || trimmed === "ya ini saya" || trimmed.includes("auth_approve") || /^(?:ya(?:,\s*ini\s*saya|\s*ini\s*saya)?|yes|1|benar|setuju|it'?s\s*me)\b/i.test(trimmed);
+  if (isApprove) {
     activeSession.status = "approved";
     return `\u2705 *Login Dikonfirmasi!*
 
 Akses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. Selamat beraktivitas! \u2728`;
   }
-  if (/^(?:tidak|no|2|bukan|tolak|secure|amankan)\b/i.test(trimmed)) {
+  const isReject = trimmed === "bukan saya" || trimmed.includes("auth_reject") || /^(?:tidak|no|2|bukan(?:\s*saya)?|tolak|secure|amankan)\b/i.test(trimmed);
+  if (isReject) {
     activeSession.status = "rejected";
     return `\u{1F6E1}\uFE0F *Login Ditolak & Akun Diamankan*
 
 Akses Dashboard tersebut telah diblokir segera. Jika ini bukan aktivitas kamu, akun kamu tetap aman.`;
-  }
-  const digits = trimmed.replace(/\D/g, "");
-  if (digits.length === 6 && digits === activeSession.otpCode) {
-    activeSession.status = "approved";
-    return `\u2705 *Kode Verifikasi Benar!*
-
-Akses Dashboard GymBuddy kamu telah disetujui. Browser kamu akan otomatis masuk sekarang. \u2728`;
   }
   return null;
 }
@@ -50625,7 +50691,6 @@ async function startServer() {
         });
       }
       const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const otpCode = Math.floor(1e5 + Math.random() * 9e5).toString();
       const device = clientDevice || (req.headers["user-agent"] ? "Chrome on Windows" : "Browser");
       const location = clientLocation || "Jakarta, Indonesia";
       const nowFormatted = clientTimeStr || new Intl.DateTimeFormat("en-GB", {
@@ -50647,34 +50712,38 @@ async function startServer() {
         location,
         timeStr: nowFormatted,
         status: "pending",
-        otpCode,
-        attempts: 0,
-        maxAttempts: 5,
         createdAt: Date.now(),
         expiresAt: Date.now() + 5 * 60 * 1e3,
         profile: user
       };
       authPendingSessions.set(sessionId, session);
       const waMsg = [
-        `\u{1F510} *GymBuddy Login Confirmation*`,
-        `-----------------------------`,
-        `Seseorang sedang mencoba mengakses Dashboard GymBuddy kamu.`,
+        `\u{1F510} *GymBuddy Login*`,
+        ``,
+        `Ada permintaan masuk ke akun GymBuddy kamu.`,
         ``,
         `\u{1F4F1} *Perangkat*: ${device}`,
-        `\u{1F4CD} *Perkiraan Lokasi*: ${location}`,
+        `\u{1F4CD} *Lokasi*: ${location}`,
         `\u23F1\uFE0F *Waktu*: ${nowFormatted}`,
         ``,
         `Apakah ini kamu?`,
         ``,
-        `Balas *YA* (atau *1*) jika ini kamu.`,
-        `Balas *TIDAK* (atau *2*) untuk menolak & mengamankan akun.`,
+        `[ Ya, ini saya ]`,
+        `[ Bukan saya ]`,
         ``,
-        `Kode verifikasi alternatif: *${otpCode}*`,
-        `(Berlaku selama 5 menit)`
+        `Balas *YA* untuk menyetujui.`,
+        `Balas *TIDAK* untuk menolak.`
       ].join("\n");
-      sendWhatsAppDirect(normPhone, waMsg).catch((err) => {
-        console.warn("[Auth WA] Delivery note:", err?.message || err);
-      });
+      const delivered = await sendWhatsAppLoginMessage(normPhone, waMsg, sessionId);
+      if (!delivered && process.env.NODE_ENV === "production") {
+        authPendingSessions.delete(sessionId);
+        return res.status(502).json({
+          success: false,
+          deliveryError: true,
+          error: "whatsapp_delivery_failed",
+          message: "Gagal mengirimkan pesan konfirmasi ke WhatsApp kamu. Pastikan nomor WhatsApp kamu aktif dan periksa koneksi WhatsApp gateway."
+        });
+      }
       res.json({
         success: true,
         sessionId,
@@ -50693,117 +50762,83 @@ async function startServer() {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
     const remainingSeconds = Math.max(0, Math.round((session.expiresAt - Date.now()) / 1e3));
+    let token = void 0;
+    if (session.status === "approved") {
+      if (!session.token) {
+        const userId = session.profile?.userId || `usr_${session.normPhone}`;
+        session.token = generateAuthToken({ userId, phone: session.normPhone });
+      }
+      token = session.token;
+      res.cookie("gymbuddy_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1e3
+        // 30 days
+      });
+    }
     res.json({
       success: true,
       status: session.status,
+      token,
       profile: session.status === "approved" ? session.profile : void 0,
       remainingSeconds
     });
   });
-  app.post("/api/auth/login-verify-otp", import_express.default.json(), (req, res) => {
-    const { sessionId, otpCode, phone } = req.body;
-    if (!sessionId) {
-      return res.status(400).json({ success: false, error: "session_required", message: "ID sesi verifikasi diperlukan." });
-    }
-    const session = getPendingSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ success: false, error: "session_not_found", message: "Sesi verifikasi tidak ditemukan." });
-    }
-    if (phone) {
-      const canonicalInput = normalizePhoneToE164(phone);
-      if (canonicalInput && session.canonicalPhone && canonicalInput !== session.canonicalPhone) {
-        return res.status(403).json({ success: false, error: "wrong_phone", message: "Nomor telepon tidak sesuai dengan sesi ini." });
+  if (process.env.NODE_ENV !== "production") {
+    app.post("/api/auth/login-action", import_express.default.json(), (req, res) => {
+      const { sessionId, action } = req.body;
+      const session = getPendingSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ success: false, error: "session_not_found" });
       }
-    }
-    if (session.status === "approved") {
-      return res.status(400).json({ success: false, error: "otp_already_used", message: "Kode verifikasi ini sudah pernah digunakan." });
-    }
-    if (session.status === "cancelled") {
-      return res.status(400).json({ success: false, error: "session_cancelled", message: "Sesi verifikasi ini telah dibatalkan." });
-    }
-    if (session.status === "rejected") {
-      return res.status(403).json({ success: false, error: "session_rejected", message: "Percobaan login ini telah ditolak." });
-    }
-    if (session.status === "expired" || Date.now() > session.expiresAt) {
-      session.status = "expired";
-      return res.status(410).json({ success: false, error: "session_expired", message: "Sesi verifikasi telah kedaluwarsa. Silakan minta kode baru." });
-    }
-    if (session.attempts >= session.maxAttempts) {
-      session.status = "expired";
-      return res.status(429).json({ success: false, error: "too_many_attempts", message: "Batas percobaan salah telah tercapai (maksimal 5 kali). Sesi dibatalkan demi keamanan." });
-    }
-    const cleanInputOtp = String(otpCode || "").trim();
-    if (cleanInputOtp.length !== 6 || cleanInputOtp !== session.otpCode) {
-      session.attempts += 1;
-      const remainingAttempts = Math.max(0, session.maxAttempts - session.attempts);
-      if (session.attempts >= session.maxAttempts) {
-        session.status = "expired";
-        return res.status(429).json({
-          success: false,
-          error: "too_many_attempts",
-          message: "Batas percobaan salah telah tercapai (5 kali). Sesi dibatalkan demi keamanan.",
-          remainingAttempts: 0
-        });
+      if (action === "approve") {
+        session.status = "approved";
+        const userId = session.profile?.userId || `usr_${session.normPhone}`;
+        session.token = generateAuthToken({ userId, phone: session.normPhone });
+        return res.json({ success: true, status: "approved", token: session.token, profile: session.profile });
+      } else if (action === "reject") {
+        session.status = "rejected";
+        return res.json({ success: true, status: "rejected" });
       }
-      return res.status(400).json({
-        success: false,
-        error: "invalid_otp",
-        message: `Kode verifikasi salah. Sisa percobaan: ${remainingAttempts} kali.`,
-        remainingAttempts
-      });
-    }
-    session.status = "approved";
-    return res.json({
-      success: true,
-      status: "approved",
-      profile: session.profile
+      return res.status(400).json({ success: false, error: "invalid_action" });
     });
-  });
-  app.post("/api/auth/login-action", import_express.default.json(), (req, res) => {
-    const { sessionId, action } = req.body;
-    const session = getPendingSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ success: false, error: "session_not_found" });
-    }
-    if (action === "approve") {
-      session.status = "approved";
-      return res.json({ success: true, status: "approved", profile: session.profile });
-    } else if (action === "reject") {
-      session.status = "rejected";
-      return res.json({ success: true, status: "rejected" });
-    }
-    return res.status(400).json({ success: false, error: "invalid_action" });
-  });
-  app.post("/api/auth/login-resend", import_express.default.json(), (req, res) => {
+  }
+  app.post("/api/auth/login-resend", import_express.default.json(), async (req, res) => {
     const { sessionId } = req.body;
     const session = getPendingSession(sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
-    session.otpCode = Math.floor(1e5 + Math.random() * 9e5).toString();
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1e3;
     session.status = "pending";
-    session.attempts = 0;
     const waMsg = [
-      `\u{1F510} *GymBuddy Login Confirmation (Kirim Ulang)*`,
-      `-----------------------------`,
-      `Seseorang sedang mencoba mengakses Dashboard GymBuddy kamu.`,
+      `\u{1F510} *GymBuddy Login (Kirim Ulang)*`,
+      ``,
+      `Ada permintaan masuk ke akun GymBuddy kamu.`,
       ``,
       `\u{1F4F1} *Perangkat*: ${session.device}`,
-      `\u{1F4CD} *Perkiraan Lokasi*: ${session.location}`,
+      `\u{1F4CD} *Lokasi*: ${session.location}`,
       `\u23F1\uFE0F *Waktu*: ${session.timeStr}`,
       ``,
       `Apakah ini kamu?`,
       ``,
-      `Balas *YA* (atau *1*) jika ini kamu.`,
-      `Balas *TIDAK* (atau *2*) untuk menolak & mengamankan akun.`,
+      `[ Ya, ini saya ]`,
+      `[ Bukan saya ]`,
       ``,
-      `Kode verifikasi alternatif: *${session.otpCode}*`,
-      `(Berlaku selama 5 menit)`
+      `Balas *YA* untuk menyetujui.`,
+      `Balas *TIDAK* untuk menolak.`
     ].join("\n");
-    sendWhatsAppDirect(session.normPhone, waMsg).catch(() => {
-    });
+    const delivered = await sendWhatsAppLoginMessage(session.normPhone, waMsg, session.sessionId);
+    if (!delivered && process.env.NODE_ENV === "production") {
+      return res.status(502).json({
+        success: false,
+        deliveryError: true,
+        error: "whatsapp_delivery_failed",
+        message: "Gagal mengirimkan pesan konfirmasi ke WhatsApp kamu. Pastikan nomor WhatsApp kamu aktif dan periksa koneksi WhatsApp gateway."
+      });
+    }
     res.json({
       success: true,
       sessionId: session.sessionId,
@@ -52327,7 +52362,16 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           let userText = "";
           let imagePart = null;
           if (message.type === "text") {
-            userText = message.text.body;
+            userText = message.text?.body || "";
+          } else if (message.type === "interactive") {
+            const interactive = message.interactive;
+            if (interactive?.type === "button_reply") {
+              userText = `${interactive.button_reply?.title || ""} ${interactive.button_reply?.id || ""}`.trim();
+            } else if (interactive?.type === "list_reply") {
+              userText = `${interactive.list_reply?.title || ""} ${interactive.list_reply?.id || ""}`.trim();
+            }
+          } else if (message.type === "button") {
+            userText = `${message.button?.text || ""} ${message.button?.payload || ""}`.trim();
           } else if (message.type === "image") {
             const imageId = message.image.id;
             userText = message.image.caption || "Analisis foto ini";
@@ -53869,6 +53913,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   sanitizeWhatsAppResponse,
   saveDb,
   saveUserProfile,
+  sendWhatsAppLoginMessage,
   splitCompoundFoodItems,
   splitWhatsAppMessage,
   updateExistingMealLog,

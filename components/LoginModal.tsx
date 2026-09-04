@@ -22,7 +22,6 @@ import {
   Clock,
   Smartphone,
   MapPin,
-  Key,
   ShieldAlert,
   Shield
 } from "lucide-react";
@@ -79,7 +78,7 @@ export default function LoginModal({
     }
   }, [initialPhone]);
 
-  type VerificationStep = "credentials" | "waiting_whatsapp" | "otp_input" | "approved" | "rejected" | "expired";
+  type VerificationStep = "credentials" | "waiting_whatsapp" | "approved" | "rejected" | "expired";
 
   interface VerificationSession {
     sessionId: string;
@@ -93,8 +92,6 @@ export default function LoginModal({
 
   const [verificationStep, setVerificationStep] = useState<VerificationStep>("credentials");
   const [verificationSession, setVerificationSession] = useState<VerificationSession | null>(null);
-  const [otpInput, setOtpInput] = useState("");
-  const [otpError, setOtpError] = useState("");
   const [remainingTime, setRemainingTime] = useState<number>(300);
   const [resending, setResending] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
@@ -148,6 +145,9 @@ export default function LoginModal({
             localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(prof));
             localStorage.setItem("gymbuddy_active_session", JSON.stringify(prof));
             localStorage.setItem("gymbuddy_last_user", JSON.stringify(prof));
+            if (data.token) {
+              localStorage.setItem("gymbuddy_token", data.token);
+            }
           } catch (e) {}
 
           setUserProfile(prof);
@@ -209,85 +209,6 @@ export default function LoginModal({
     setResending(false);
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verificationSession?.sessionId || otpInput.trim().length !== 6) {
-      setOtpError(isEN ? "Please enter a valid 6-digit code." : "Masukkan 6 digit kode yang valid.");
-      return;
-    }
-    setLoading(true);
-    setOtpError("");
-    const API_BASE_URL = getApiBaseUrl();
-    const url = API_BASE_URL ? `${API_BASE_URL}/api/auth/login-verify-otp` : "/api/auth/login-verify-otp";
-    try {
-      let res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          sessionId: verificationSession.sessionId,
-          otpCode: otpInput.trim()
-        })
-      }).catch(() => null);
-
-      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && url !== `${API_BASE_URL}/api/auth/login-verify-otp`) {
-        res = await fetch(`${API_BASE_URL}/api/auth/login-verify-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            sessionId: verificationSession.sessionId,
-            otpCode: otpInput.trim()
-          })
-        }).catch(() => null);
-      }
-
-      if (!res) {
-        setOtpError(
-          isEN
-            ? "Network error. Please check your connection and try again."
-            : "Koneksi jaringan bermasalah. Periksa koneksi dan coba lagi."
-        );
-        setLoading(false);
-        return;
-      }
-
-      if (!res.headers.get("content-type")?.includes("application/json")) {
-        setOtpError(
-          isEN
-            ? "Server communication error. Please try again."
-            : "Terjadi kesalahan respon server. Silakan coba lagi."
-        );
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (data.success && data.status === "approved") {
-        setVerificationStep("approved");
-        const prof = data.profile || verificationSession.profile;
-        try {
-          const p = prof.phone || phone;
-          const norm = p.replace(/\D/g, "");
-          localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(prof));
-          localStorage.setItem("gymbuddy_active_session", JSON.stringify(prof));
-          localStorage.setItem("gymbuddy_last_user", JSON.stringify(prof));
-        } catch (e) {}
-
-        setUserProfile(prof);
-        if (verificationSession.progress) setProgressData(verificationSession.progress);
-
-        setTimeout(() => {
-          if (onLoginSuccess) onLoginSuccess(prof);
-          onClose();
-        }, 1200);
-      } else {
-        setOtpError(data.message || (isEN ? "Invalid code. Please try again." : "Kode verifikasi salah. Silakan coba lagi."));
-      }
-    } catch (e: any) {
-      setOtpError(e?.message || (isEN ? "Verification failed. Please try again." : "Gagal memverifikasi kode. Silakan coba lagi."));
-    }
-    setLoading(false);
-  };
-
   const handleSimulateAction = async (action: "approve" | "reject") => {
     if (!verificationSession?.sessionId) return;
     const API_BASE_URL = getApiBaseUrl();
@@ -333,8 +254,6 @@ export default function LoginModal({
     }
     setVerificationStep("credentials");
     setVerificationSession(null);
-    setOtpInput("");
-    setOtpError("");
     setErrorMsg("");
   };
 
@@ -548,13 +467,20 @@ export default function LoginModal({
           setLoading(false);
           return;
         }
+      } else if (res && !res.ok) {
+        const errData = await res.json().catch(() => null);
+        if (errData && errData.message) {
+          setErrorMsg(errData.message);
+          setLoading(false);
+          return;
+        }
       }
     } catch (err) {
       console.warn("Could not initiate WhatsApp confirmation:", err);
     }
 
-    // REQUIREMENT 5: ZERO CLIENT-SIDE FALLBACK!
-    // Never bypass OTP or grant access when network/server fails.
+    // REQUIREMENT: ZERO CLIENT-SIDE FALLBACK!
+    // Never bypass verification or grant access when network/server fails.
     setErrorMsg(
       isEN
         ? "Could not initiate WhatsApp verification. Please check your network connection and try again."
@@ -877,12 +803,12 @@ export default function LoginModal({
                       <span>{isEN ? "WhatsApp 2-Step Verification" : "Verifikasi 2 Langkah WhatsApp"}</span>
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                      {isEN ? "Verify your login" : "Verifikasi Login Kamu"}
+                      {isEN ? "Verify your login" : "Verifikasi login kamu"}
                     </h2>
                     <p className="text-xs sm:text-sm text-neutral-400 font-medium leading-relaxed">
                       {isEN
-                        ? "We sent a login confirmation to your WhatsApp."
-                        : "Kami telah mengirimkan konfirmasi login ke WhatsApp kamu."}
+                        ? "We sent a confirmation request to your WhatsApp."
+                        : "Kami mengirim permintaan konfirmasi ke WhatsApp kamu."}
                     </p>
                   </div>
 
@@ -929,12 +855,12 @@ export default function LoginModal({
 
                     <div>
                       <h4 className="font-['Archivo_Black'] text-sm sm:text-base text-white">
-                        {isEN ? "Check your WhatsApp" : "Buka WhatsApp Kamu"}
+                        {isEN ? "Check your WhatsApp" : "Cek WhatsApp kamu"}
                       </h4>
                       <p className="text-xs text-neutral-300 font-medium mt-0.5">
                         {isEN
-                          ? "We're waiting for you to confirm this login."
-                          : "Kami sedang menunggu kamu mengonfirmasi login ini."}
+                          ? "Confirm that this login was made by you."
+                          : "Konfirmasi bahwa login ini memang dilakukan oleh kamu."}
                       </p>
                     </div>
 
@@ -969,103 +895,37 @@ export default function LoginModal({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setOtpError("");
-                        setVerificationStep("otp_input");
-                      }}
-                      className="w-full py-2.5 text-neutral-300 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Key size={13} className="text-[#D4FF00]" />
-                      <span>{isEN ? "Use another verification method" : "Gunakan metode verifikasi lain (Kode OTP)"}</span>
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={handleCancelLogin}
-                      className="w-full py-1.5 text-neutral-500 hover:text-red-400 font-medium text-xs transition-colors cursor-pointer"
+                      className="w-full py-2 text-neutral-500 hover:text-red-400 font-medium text-xs transition-colors cursor-pointer"
                     >
                       {isEN ? "Cancel login" : "Batalkan login"}
                     </button>
                   </div>
 
-                  {/* Simulator Controls (For testing & local environments) */}
-                  <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase text-neutral-500 block text-center">
-                      🛠️ Simulator Uji Coba WhatsApp
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateAction("approve")}
-                        className="py-2 px-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                      >
-                        ✓ Yes, it's me
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateAction("reject")}
-                        className="py-2 px-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                      >
-                        ✕ No, secure account
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ─── 3. ALTERNATIVE VERIFICATION METHOD: OTP INPUT ─── */}
-              {verificationStep === "otp_input" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4"
-                >
-                  <div className="space-y-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setVerificationStep("waiting_whatsapp")}
-                      className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer mb-2"
-                    >
-                      <ChevronRight size={14} className="rotate-180" />
-                      <span>{isEN ? "Back to WhatsApp confirmation" : "Kembali ke konfirmasi WhatsApp"}</span>
-                    </button>
-                    <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                      {isEN ? "Enter Verification Code" : "Masukkan Kode Verifikasi"}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-neutral-400 font-medium leading-relaxed">
-                      {isEN
-                        ? "Enter the 6-digit code sent to your WhatsApp."
-                        : "Masukkan 6 digit kode keamanan yang kami kirimkan ke WhatsApp kamu."}
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleVerifyOtp} className="space-y-4">
-                    <div>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        autoFocus
-                        value={otpInput}
-                        onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ""))}
-                        placeholder="••••••"
-                        className="w-full py-3.5 px-4 bg-[#161B22] border border-white/[0.12] focus:border-[#D4FF00] rounded-2xl text-center text-2xl font-mono font-black tracking-widest text-white focus:outline-none"
-                      />
-                    </div>
-
-                    {otpError && (
-                      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-bold text-center">
-                        {otpError}
+                  {/* Simulator Controls (Only in DEV mode, stripped from production build) */}
+                  {import.meta.env.DEV && (
+                    <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500 block text-center">
+                        🛠️ Simulator Uji Coba WhatsApp (Dev Only)
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSimulateAction("approve")}
+                          className="py-2 px-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                        >
+                          ✓ Yes, it's me
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSimulateAction("reject")}
+                          className="py-2 px-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                        >
+                          ✕ No, secure account
+                        </button>
                       </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={loading || otpInput.length !== 6}
-                      className="w-full py-4 bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold rounded-2xl text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-98"
-                    >
-                      {loading ? (isEN ? "Verifying..." : "Memverifikasi...") : (isEN ? "Verify Code" : "Verifikasi Kode")}
-                    </button>
-                  </form>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
