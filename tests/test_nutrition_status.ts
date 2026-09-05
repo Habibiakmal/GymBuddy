@@ -16,16 +16,16 @@ function assertEqual(testName: string, actual: any, expected: any) {
   }
 }
 
-// TEST 1: 100 / 200 -> 50% -> under_target (🟡 Belum Cukup)
+// TEST 1: 100 / 200 -> 50% -> under_target (🟡 Dalam Proses)
 const res1 = calculateNutrientStatus(100, 200, false);
 assertEqual("TEST 1: Status", res1.status, "under_target");
-assertEqual("TEST 1: StatusBadge", res1.statusBadge, "🟡 Belum Cukup");
+assertEqual("TEST 1: StatusBadge", res1.statusBadge, "Sisa target: 100");
 assertEqual("TEST 1: Percentage", res1.percentage, 50);
 
-// TEST 2: 199 / 200 -> 99.5% -> under_target (🟡 Belum Cukup, NEVER Tercapai)
+// TEST 2: 199 / 200 -> 99.5% -> under_target (Sisa target: 1, NEVER Tercapai)
 const res2 = calculateNutrientStatus(199, 200, false);
 assertEqual("TEST 2: Status", res2.status, "under_target");
-assertEqual("TEST 2: StatusBadge", res2.statusBadge, "🟡 Belum Cukup");
+assertEqual("TEST 2: StatusBadge", res2.statusBadge, "Sisa target: 1");
 assertEqual("TEST 2: IsUnder", res2.isUnder, true);
 assertEqual("TEST 2: IsReached", res2.isReached, false);
 
@@ -77,7 +77,7 @@ const calBar = makeProgressBar(2761, 1783);
 assertEqual("Progress Bar Calorie", calBar, "[██████████] 155% · 🔴 Melebihi Target");
 
 const protBar = makeProgressBar(100, 134);
-assertEqual("Progress Bar Protein", protBar, "[███████░░░] 75% · 🟡 Belum Cukup");
+assertEqual("Progress Bar Protein", protBar, "[███████░░░] 75% · Sisa target: 34");
 
 const carbBar = makeProgressBar(348, 201);
 assertEqual("Progress Bar Carbs", carbBar, "[██████████] 173% · 🔴 Melebihi Target");
@@ -95,7 +95,7 @@ const dailySummary = calculateDailyNutritionSummary(
 );
 
 assertEqual("Summary Calorie Status", dailySummary.calories.statusBadge, "🔴 Melebihi Target");
-assertEqual("Summary Protein Status", dailySummary.protein.statusBadge, "🟡 Belum Cukup");
+assertEqual("Summary Protein Status", dailySummary.protein.statusBadge, "Sisa target: 34");
 assertEqual("Summary Carbs Status", dailySummary.carbs.statusBadge, "🔴 Melebihi Target");
 assertEqual("Summary Fat Status", dailySummary.fat.statusBadge, "🔴 Melebihi Target");
 assertEqual("Summary Sodium Status", dailySummary.sodium.statusBadge, "🔴 Melebihi Batas");

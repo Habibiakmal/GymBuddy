@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { getApiBaseUrl } from "../utils/api";
+import { getApiBaseUrl, canonicalApiFetch, getWhatsAppDestinationUrl, openWhatsAppSafely } from "../utils/api";
 import {
   ArrowLeft,
   Dumbbell,
@@ -88,6 +88,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   const [existingAccountDetected, setExistingAccountDetected] = useState(false);
   const [isCheckingPhone, setIsCheckingPhone] = useState(false);
   const [phoneCheckError, setPhoneCheckError] = useState<string | null>(null);
+  const [isSubmittingFinalOnboarding, setIsSubmittingFinalOnboarding] = useState(false);
+  const [finalOnboardingError, setFinalOnboardingError] = useState<string | null>(null);
 
   // Form States
   const [name, setName] = useState("");
@@ -2643,34 +2645,50 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           fatGrams: fatGram,
                           dailyTargetFat: fatGram,
                           fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
-                          activeService: "both"
+                          activeService: "both",
+                          onboardingCompleted: true
                         };
 
-                        // Server check & registration
-                        const API_BASE_URL = getApiBaseUrl();
+                        if (isSubmittingFinalOnboarding) return;
+                        setIsSubmittingFinalOnboarding(true);
+                        setFinalOnboardingError(null);
+
+                        // Validate required biometrics & phone
+                        if (!canonicalPhone) {
+                          setFinalOnboardingError(
+                            isEN ? "Valid WhatsApp phone number is required." : "Nomor WhatsApp yang valid diperlukan."
+                          );
+                          setIsSubmittingFinalOnboarding(false);
+                          return;
+                        }
+
+                        // Persist onboarding and wait for canonical backend confirmation
                         try {
-                          const onboardUrl = API_BASE_URL ? `${API_BASE_URL}/api/onboarding` : "/api/onboarding";
-                          let onboardRes = await fetch(onboardUrl, {
+                          const onboardData = await canonicalApiFetch<{ success: boolean; profile?: any; error?: string }>("/api/onboarding", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json", Accept: "application/json" },
                             body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
-                          }).catch(() => null);
+                          });
 
-                          if ((!onboardRes || !onboardRes.ok || onboardRes.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && onboardUrl !== `${API_BASE_URL}/api/onboarding`) {
-                            onboardRes = await fetch(`${API_BASE_URL}/api/onboarding`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json", Accept: "application/json" },
-                              body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
-                            }).catch(() => null);
+                          if (!onboardData || !onboardData.success) {
+                            throw new Error(onboardData?.error || "Onboarding save failed");
                           }
-
-                          if (onboardRes && onboardRes.status === 409) {
-                            // Account already exists: Abandon attempt, do NOT modify existing account or purge
+                        } catch (err: any) {
+                          const errMsg = String(err?.message || err);
+                          if (errMsg.includes("already_exists") || err?.status === 409) {
                             setExistingAccountDetected(true);
                             setStep(12);
+                            setIsSubmittingFinalOnboarding(false);
                             return;
                           }
-                        } catch (e) {}
+                          console.error("[Onboarding] Error persisting profile to backend:", err);
+                          setFinalOnboardingError(
+                            isEN
+                              ? "Failed to save nutrition plan to server. Please check your internet connection."
+                              : "Gagal menyimpan rencana nutrisi ke server. Silakan periksa koneksi internet Anda."
+                          );
+                          setIsSubmittingFinalOnboarding(false);
+                          return;
+                        }
 
                         try {
                           // Purge old meal logs or exercise logs for this phone only for brand new account
@@ -2693,11 +2711,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
                         } catch (e) {}
 
+                        // Launch official GymBuddy WhatsApp bot (NEVER sandbox) safely across mobile & desktop
                         try {
-                          // Launch WhatsApp to Twilio Sandbox (+14155238886) with clean initial greeting
-                          const welcomeMsg = `Halo GymBuddy AI! Saya ${name || "Member"}, tolong kirimkan target harian dan rencana nutrisi saya.`;
-                          const waUrl = `https://wa.me/14155238886?text=${encodeURIComponent(welcomeMsg)}`;
-                          window.open(waUrl, "_blank", "noopener,noreferrer");
+                          const waUrl = getWhatsAppDestinationUrl("Halo GymBuddy 👋");
+                          openWhatsAppSafely(waUrl);
                         } catch (e) {
                           console.error("Failed to launch WhatsApp:", e);
                         }
@@ -2707,11 +2724,29 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           onComplete();
                         }
                       }}
-                      className="w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isSubmittingFinalOnboarding}
+                      className={`w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 ${
+                        isSubmittingFinalOnboarding ? "opacity-75 cursor-not-allowed" : "cursor-pointer"
+                      }`}
                     >
-                      <span>Lanjut</span>
-                      <ChevronRight size={22} className="stroke-[3]" />
+                      {isSubmittingFinalOnboarding ? (
+                        <>
+                          <RefreshCw size={22} className="animate-spin stroke-[3]" />
+                          <span>{isEN ? "Saving Plan..." : "Menyimpan Rencana..."}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{isEN ? "Continue" : "Lanjut"}</span>
+                          <ChevronRight size={22} className="stroke-[3]" />
+                        </>
+                      )}
                     </motion.button>
+                    {finalOnboardingError && (
+                      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs text-center flex items-center justify-center gap-2 mt-3">
+                        <AlertCircle size={16} />
+                        <span>{finalOnboardingError}</span>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               );

@@ -50,7 +50,7 @@ console.log("--- GENERATED WHATSAPP CARD (COACH MIA) ---\n" + cardMia + "\n-----
 
 // Check Section Headers
 const expectedHeaders = [
-  "🍽️ *NASI PUTIH & AYAM BAKAR*",
+  "*Nasi Putih & Ayam Bakar*",
   "📊 *REKAP NUTRISI*",
   "🍽️ *ESTIMASI PORSI*",
   "🤖 *COACH MIA*",

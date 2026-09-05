@@ -77,7 +77,7 @@ import {
   formatDashboardInteger,
   formatDashboardPercent
 } from "../services/nutritionEngine";
-import { getApiBaseUrl } from "../utils/api";
+import { getApiBaseUrl, canonicalApiFetch, getJakartaDateStr } from "../utils/api";
 import {
   classifyMealType,
   isSmartSnack,
@@ -99,6 +99,7 @@ function getMealTypeByHour(
 
 interface MealItem {
   id: string;
+  type?: "meal" | "hydration";
   foodName: string;
   calories: number;
   protein: number;
@@ -109,7 +110,9 @@ interface MealItem {
   timestamp?: string;
   time?: string;
   mealType?: "breakfast" | "lunch" | "dinner" | "snack";
+  mealCategory?: string;
   isHydration?: boolean;
+  amountMl?: number;
   volumeMl?: number;
 }
 
@@ -197,7 +200,9 @@ const isLiquidName = (name: string): boolean => {
     "cumi", "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
     "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
     "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
-    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak"
+    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak",
+    "chocolate", "cokelat", "coklat", "cashew", "kacang", "snack", "candy",
+    "permen", "wafer", "cookies", "kukis", "bites", "bar", "chips", "keripik", "crisp"
   ];
 
   if (solidExceptions.some((se) => lower.includes(se))) {
@@ -235,12 +240,12 @@ const isLiquidName = (name: string): boolean => {
 
 // Extract volume in ml from a food name string (e.g. "Air Mineral 600ml" → 600)
 const extractVolumeMlFromName = (name: string): number => {
-  if (!name) return 250;
+  if (!name) return 0;
   const mlMatch = name.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
   if (mlMatch) return parseFloat(mlMatch[1].replace(',', '.'));
   const lMatch = name.match(/(\d+(?:[.,]\d+)?)\s*(?:l|liter|litre)\b/i);
   if (lMatch) return parseFloat(lMatch[1].replace(',', '.')) * 1000;
-  return 250;
+  return 0;
 };
 
 // Plain Water vs Beverage / Liquid Helper (Prevents Coffee/Tea from polluting plain water tracker)
@@ -317,6 +322,8 @@ const splitAndCategorizeComboText = (
     const solidName = solidParts.join(" + ");
     foods.push({
       id: `m-food-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      type: "meal",
+      mealCategory: "MAKANAN",
       foodName: solidName,
       calories: totalCal > 0 && liquidParts.length > 0 ? Math.max(50, totalCal - (liquidParts.length * 20)) : (totalCal || 450),
       protein: totalProt > 0 ? totalProt : 25,
@@ -334,15 +341,18 @@ const splitAndCategorizeComboText = (
     const perDrinkFat = Math.round((totalFat || 0) / (liquidParts.length + (solidParts.length > 0 ? 3 : 1)));
 
     liquidParts.forEach((part, idx) => {
+      const vol = extractVolumeMlFromName(part) || 250;
       drinks.push({
         id: `m-drink-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        type: "hydration",
         foodName: part,
         calories: perDrinkCal,
         protein: perDrinkProt,
         carbs: perDrinkCarb,
         fat: perDrinkFat,
         isHydration: true,
-        volumeMl: extractVolumeMlFromName(part),
+        amountMl: vol,
+        volumeMl: vol,
         timestamp: nowIso
       });
     });
@@ -381,15 +391,33 @@ const sanitizeAndSplitComboLogs = (rawLogs: MealItem[]): MealItem[] => {
     if (seenIds.has(uniqueId)) continue;
     seenIds.add(uniqueId);
 
-    if (isLiquidName(item.foodName) || item.isHydration) {
+    // If record is explicitly marked as meal, it is NEVER converted to hydration
+    if (item.type === "meal") {
       result.push({
         ...item,
-        isHydration: true,
-        volumeMl: Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)
+        type: "meal",
+        isHydration: false
       });
-    } else {
-      result.push(item);
+      continue;
     }
+
+    // If record is explicitly hydration (e.g. water log or drink)
+    if (item.type === "hydration" || item.isHydration === true) {
+      result.push({
+        ...item,
+        type: "hydration",
+        isHydration: true,
+        volumeMl: Number(item.volumeMl) || Number((item as any).amountMl) || extractVolumeMlFromName(item.foodName) || 250
+      });
+      continue;
+    }
+
+    // Default to meal (never heuristically turn solid food with substring like 'milk' into hydration)
+    result.push({
+      ...item,
+      type: "meal",
+      isHydration: false
+    });
   }
 
   return result;
@@ -809,15 +837,12 @@ export default function Dashboard({
     } catch (e) {}
   };
 
-  // Date Key YYYY-MM-DD
+  // Date Key YYYY-MM-DD in Asia/Jakarta (WIB)
   const formatDateKey = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return getJakartaDateStr(d);
   };
 
-  const todayDateStr = formatDateKey(new Date());
+  const todayDateStr = getJakartaDateStr(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
   const [liveUser, setLiveUser] = useState<UserProfileData>(safeUser);
 
@@ -1546,59 +1571,70 @@ export default function Dashboard({
     if (!reviewMealData || isSavingReviewMeal) return;
     setIsSavingReviewMeal(true);
     try {
+      const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+      if (!normPhone) {
+        alert(isEN ? "WhatsApp phone number is required to save meals." : "Nomor WhatsApp diperlukan untuk menyimpan makanan.");
+        return;
+      }
+
       const clientMealId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const newMeal: MealItem = {
+      const mealPayload = {
         id: clientMealId,
+        type: "meal",
+        isHydration: false,
         foodName: reviewMealData.foodName,
-        calories: reviewMealData.calories,
-        protein: reviewMealData.protein,
-        carbs: reviewMealData.carbs,
-        fat: reviewMealData.fat,
-        fiber: reviewMealData.fiber,
-        sugar: reviewMealData.sugar,
-        sodium: reviewMealData.sodium,
+        calories: Number(reviewMealData.calories) || 0,
+        protein: Number(reviewMealData.protein) || 0,
+        carbs: Number(reviewMealData.carbs) || 0,
+        fat: Number(reviewMealData.fat) || 0,
+        fiber: Number(reviewMealData.fiber) || 0,
+        sugar: Number(reviewMealData.sugar) || 0,
+        sodium: Number(reviewMealData.sodium) || 0,
         time: reviewMealData.mealTime,
         timestamp: new Date().toISOString(),
         mealType: reviewMealData.mealType,
+        mealCategory: reviewMealData.mealType ? getMealTypeLabel(reviewMealData.mealType) : "MAKANAN",
+        date: selectedDate,
         items: reviewMealData.components && reviewMealData.components.length > 0
           ? reviewMealData.components.map(c => ({ name: c, foodName: c }))
           : undefined
       };
 
-      const updated = [newMeal, ...allLogs.filter(m => m.id !== clientMealId)];
-      setAllLogs(updated);
-
-      const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
-      if (normPhone) {
-        const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
-        try {
-          localStorage.setItem(localKey, JSON.stringify(updated));
-        } catch (e) {}
-
-        const API_BASE_URL = getApiBaseUrl();
-        const payload = JSON.stringify({ ...newMeal, date: selectedDate });
-
-        // Primary sync with fallback (idempotent by clientMealId)
-        let synced = false;
-        try {
-          const res = await fetch(`/api/user/${normPhone}/meals`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload
-          });
-          if (res.ok) synced = true;
-        } catch (e) {}
-
-        if (!synced && API_BASE_URL) {
-          try {
-            await fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: payload
-            });
-          } catch (e) {}
+      // 1. Send to single canonical backend endpoint
+      let serverLogs: MealItem[] | null = null;
+      let savedMeal: MealItem | null = null;
+      try {
+        const data = await canonicalApiFetch(`/api/user/${normPhone}/meals`, {
+          method: "POST",
+          body: JSON.stringify(mealPayload)
+        });
+        if (data && data.success) {
+          savedMeal = (data.meal as MealItem) || (mealPayload as MealItem);
+          if (Array.isArray(data.logs)) {
+            serverLogs = data.logs as MealItem[];
+          }
         }
+      } catch (err: any) {
+        console.error("[Dashboard] Failed to persist meal to backend:", err);
+        setReminderNotificationMsg(
+          isEN
+            ? "Failed to save meal to server. Please check your connection."
+            : "Gagal menyimpan makanan ke server. Silakan periksa koneksi internet Anda."
+        );
+        setTimeout(() => setReminderNotificationMsg(null), 5000);
+        return; // DO NOT update visible meal list or localStorage if backend save failed!
       }
+
+      // 2. Only after successful backend persistence: update visible list & local cache
+      const updated = serverLogs && serverLogs.length > 0
+        ? serverLogs.filter(m => !isLegacyMockMeal(m))
+        : [savedMeal || (mealPayload as MealItem), ...allLogs.filter(m => m.id !== clientMealId)];
+
+      setAllLogs(updated);
+      const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+      try {
+        localStorage.setItem(localKey, JSON.stringify(updated));
+      } catch (e) {}
 
       // Reset scan & close modal
       setShowScanModal(false);
@@ -1757,54 +1793,52 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setScanLoading(false);
   };
 
-  const handleSaveScannedMeal = () => {
+  const handleSaveScannedMeal = async () => {
     if (!scanResult) return;
+    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
+    if (!normPhone) return;
+
+    const clientMealId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newMeal: MealItem = {
-      id: Date.now().toString(),
+      id: clientMealId,
+      type: "meal",
+      isHydration: false,
+      mealCategory: scanMealType ? getMealTypeLabel(scanMealType) : "MAKANAN",
       foodName: scanResult.foodName,
-      calories: scanResult.calories,
-      protein: scanResult.protein,
-      carbs: scanResult.carbs,
-      fat: scanResult.fat,
+      calories: Number(scanResult.calories) || 0,
+      protein: Number(scanResult.protein) || 0,
+      carbs: Number(scanResult.carbs) || 0,
+      fat: Number(scanResult.fat) || 0,
       mealType: scanMealType,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
-    const updated = [newMeal, ...allLogs];
-    setAllLogs(updated);
-    const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
-    if (!normPhone) return; // Guard: don't save without a valid user phone
-    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
-      localStorage.setItem(localKey, JSON.stringify(updated));
-    } catch (e) {}
-
-    // Async server sync to both local and remote backends
-    const syncToServer = async () => {
-      const payload = JSON.stringify({ ...newMeal, date: selectedDate });
+      const data = await canonicalApiFetch(`/api/user/${normPhone}/meals`, {
+        method: "POST",
+        body: JSON.stringify({ ...newMeal, date: selectedDate })
+      });
+      const serverLogs: MealItem[] = data && data.success && Array.isArray(data.logs) ? data.logs : [newMeal, ...allLogs];
+      const updated = serverLogs.filter(m => !isLegacyMockMeal(m));
+      setAllLogs(updated);
       try {
-        await fetch(`/api/user/${normPhone}/meals`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload
-        });
+        localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
       } catch (e) {}
-      try {
-        const remoteUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-        if (remoteUrl) {
-          await fetch(`${remoteUrl}/api/user/${normPhone}/meals`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload
-          });
-        }
-      } catch (e) {}
-    };
-    syncToServer();
 
-    setShowScanModal(false);
-    setScanImage(null);
-    setScanResult(null);
+      setShowScanModal(false);
+      setScanImage(null);
+      setScanResult(null);
+      setReminderNotificationMsg(isEN ? "Meal saved! 🥗" : "Makanan berhasil dicatat! 🥗");
+      setTimeout(() => setReminderNotificationMsg(null), 3000);
+    } catch (err) {
+      console.error("[Dashboard] handleSaveScannedMeal error:", err);
+      setReminderNotificationMsg(
+        isEN
+          ? "Failed to save meal to server. Please check your connection."
+          : "Gagal menyimpan makanan ke server. Silakan periksa koneksi internet Anda."
+      );
+      setTimeout(() => setReminderNotificationMsg(null), 5000);
+    }
   };
 
   // Weekly Schedule (Multilingual by active user language)
@@ -2145,7 +2179,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     setEditMealSod(String((meal as any).sodium || 0));
   };
 
-  const handleSaveEditMeal = () => {
+  const handleSaveEditMeal = async () => {
     if (!editingMeal) return;
     const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     const cal = Math.max(0, Number(editMealCal) || 0);
@@ -2171,26 +2205,33 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     };
 
     const updated = allLogs.map((item) => (item.id === editingMeal.id ? updatedMeal : item));
-    setAllLogs(updated);
+
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
-    } catch (e) {}
+      await canonicalApiFetch(`/api/user/${normPhone}/meals?date=${selectedDate}`, {
+        method: "PUT",
+        body: JSON.stringify({ meals: updated, date: selectedDate })
+      });
+      setAllLogs(updated);
+      try {
+        localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      } catch (e) {}
 
-    // Sync to backend
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meals: updated, date: selectedDate })
-    }).catch(() => {});
+      if (selectedMealDetail && selectedMealDetail.id === editingMeal.id) {
+        setSelectedMealDetail(updatedMeal);
+      }
 
-    if (selectedMealDetail && selectedMealDetail.id === editingMeal.id) {
-      setSelectedMealDetail(updatedMeal);
+      setEditingMeal(null);
+      setReminderNotificationMsg(isEN ? "Meal updated successfully! 🥗" : "Makanan berhasil diperbarui! 🥗");
+      setTimeout(() => setReminderNotificationMsg(null), 3500);
+    } catch (err) {
+      console.error("[Dashboard] handleSaveEditMeal error:", err);
+      setReminderNotificationMsg(
+        isEN
+          ? "Failed to update meal on server. Please check your connection."
+          : "Gagal memperbarui makanan di server. Silakan periksa koneksi internet Anda."
+      );
+      setTimeout(() => setReminderNotificationMsg(null), 4000);
     }
-
-    setEditingMeal(null);
-    setReminderNotificationMsg(isEN ? "Meal updated successfully! 🥗" : "Makanan berhasil diperbarui! 🥗");
-    setTimeout(() => setReminderNotificationMsg(null), 3500);
   };
 
   useEffect(() => {
@@ -2323,12 +2364,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const isSelectedDateInRibbon = ribbonDates.some((d) => d.dateStr === selectedDate);
 
   // Categorization: Food & Beverages (All calorie meals) + Hydration Tracker (Water & Fluid Intake)
-  const plainWaterLogs = allLogs.filter((item) => isPlainWaterName(item.foodName) || item.isHydration);
-  const liquidBeverageLogs = allLogs.filter((item) => isLiquidName(item.foodName) && !isPlainWaterName(item.foodName));
-  const foodAndBeverageMeals = allLogs.filter((item) => !isPlainWaterName(item.foodName));
+  const plainWaterLogs = allLogs.filter((item) => (item.type === "hydration" || item.isHydration === true) && isPlainWaterName(item.foodName));
+  const liquidBeverageLogs = allLogs.filter((item) => (item.type === "hydration" || item.isHydration === true) && !isPlainWaterName(item.foodName));
+  const foodAndBeverageMeals = allLogs.filter((item) => item.type === "meal" || (!item.type && !item.isHydration && item.type !== "hydration"));
   const foodMeals = foodAndBeverageMeals;
-  // Hydration includes plain water plus all liquid beverages (tea, coffee, juice, etc.)
-  const hydrationLogs = allLogs.filter((item) => isPlainWaterName(item.foodName) || isLiquidName(item.foodName) || item.isHydration);
+  // Hydration strictly filters explicit hydration records
+  const hydrationLogs = allLogs.filter((item) => item.type === "hydration" || item.isHydration === true);
 
   // Totals
   const totalCaloriesConsumed = foodAndBeverageMeals.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
@@ -2338,7 +2379,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const totalSodiumConsumed = allLogs.reduce((sum, item) => sum + (Number((item as any).sodium) || ((item as any).sodiumMg ? Number((item as any).sodiumMg) : 0)), 0);
   const totalSugarConsumed = allLogs.reduce((sum, item) => sum + (Number((item as any).sugar) || 0), 0);
 
-  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || extractVolumeMlFromName(item.foodName)), 0);
+  const totalHydrationMl = hydrationLogs.reduce((sum, item) => sum + (Number(item.volumeMl) || Number((item as any).amountMl) || extractVolumeMlFromName(item.foodName)), 0);
   const totalWaterCups = Math.floor(totalHydrationMl / 250);
 
   // Sets Calculations
@@ -2390,74 +2431,45 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
-  // Fetch & Auto-Split Combo Logs with Stale-While-Revalidate & Server Priority
+  // Fetch & Auto-Split Combo Logs with Backend Single Source of Truth
   const fetchLogsForDate = async (dateStr: string, silent = false) => {
     const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     if (!normPhone) { if (!silent) setIsSyncing(false); return; } // Guard: no phone = no fetch
     const localKey = `gymbuddy_meals_${normPhone}_${dateStr}`;
 
-    // 1. Immediate Display from local cache (fast initial render, no flicker)
+    // 1. Optional fast initial render from local cache if allLogs is currently empty
     const localLogs = getLocalMeals(activeUser.phone, dateStr);
-    if (localLogs.length > 0) {
+    if (localLogs.length > 0 && allLogs.length === 0) {
       setAllLogs(localLogs);
     }
 
     if (!silent) setIsSyncing(true);
 
-    // 2. Query Server for latest WhatsApp logs & database entries
-    const tryFetchMeals = async (baseUrl: string) => {
-      try {
-        const res = await fetch(`${baseUrl}/api/user/${normPhone}/meals?date=${dateStr}`, {
-          headers: { "Cache-Control": "no-cache" }
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          if (data && data.success && Array.isArray(data.logs)) {
-            return data.logs as MealItem[];
-          }
-        }
-      } catch (e) {}
-      return null;
-    };
-
     try {
-      const primaryUrl = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-      const serverLogs = (await tryFetchMeals("")) || (await tryFetchMeals(primaryUrl));
+      // 2. Query Canonical Backend for authoritative meals list
+      let serverLogs: MealItem[] | null = null;
+      try {
+        const data = await canonicalApiFetch(`/api/user/${normPhone}/meals?date=${dateStr}`);
+        if (data && data.success && Array.isArray(data.logs)) {
+          serverLogs = data.logs as MealItem[];
+        }
+      } catch (e: any) {
+        console.warn("[Dashboard] Canonical meals fetch note:", e?.message || e);
+      }
 
+      // 3. Backend response wins unconditionally over local storage
       if (serverLogs !== null && Array.isArray(serverLogs)) {
         const cleanServerLogs = serverLogs.filter((m) => !isLegacyMockMeal(m));
-        
-        // Preserve unindexed local meals by client meal id so background sync never wipes them
-        const mergedMap = new Map<string, MealItem>();
-        for (const m of cleanServerLogs) {
-          if (m && (m.id || m.foodName)) mergedMap.set(String(m.id || m.foodName), m);
-        }
-        const currentLocal = getLocalMeals(activeUser.phone, dateStr);
-        for (const m of currentLocal) {
-          const mKey = String(m.id || m.foodName);
-          if (m && !mergedMap.has(mKey)) {
-            mergedMap.set(mKey, m);
-          }
-        }
-        const mergedLogs = Array.from(mergedMap.values());
-        const sanitized = sanitizeAndSplitComboLogs(mergedLogs);
+        const sanitized = sanitizeAndSplitComboLogs(cleanServerLogs);
         setAllLogs(sanitized);
         try {
           localStorage.setItem(localKey, JSON.stringify(sanitized));
         } catch (e) {}
       }
 
-
-      // Also refresh live user profile in background (for streaks, live target, & weight sync)
+      // Also refresh live user profile in background
       try {
-        const userRes = await fetch(`/api/user/${normPhone}`).catch(() => null);
-        let uData = userRes && userRes.ok ? await userRes.json().catch(() => null) : null;
-        if (!uData) {
-          const remUserRes = await fetch(`${primaryUrl}/api/user/${normPhone}`).catch(() => null);
-          if (remUserRes && remUserRes.ok) {
-            uData = await remUserRes.json().catch(() => null);
-          }
-        }
+        const uData = await canonicalApiFetch(`/api/user/${normPhone}`).catch(() => null);
         if (uData && (uData.name || uData.user || uData.profile)) {
           const p = uData.profile || uData.user || uData;
           setLiveUser((prev) => ({ ...prev, ...p, streak: uData.streak ?? prev.streak ?? 1 }));
@@ -2910,28 +2922,36 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       sodium: sod
     }));
 
-    // CRITICAL: Update localStorage IMMEDIATELY before the server call.
-    const updated = [...allLogs, ...newItems];
-    setAllLogs(updated);
-    const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
     try {
-      localStorage.setItem(localKey, JSON.stringify(updated));
-    } catch (e) {}
-
-    // Fire-and-forget server sync (non-critical, localStorage is authoritative)
-    const syncToServer = async (baseUrl: string) => {
+      let serverLogs: MealItem[] | null = null;
       for (const item of newItems) {
-        try {
-          await fetch(`${baseUrl}/api/user/${normPhone}/meals`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...item, date: selectedDate })
-          });
-        } catch (e) {}
+        const data = await canonicalApiFetch(`/api/user/${normPhone}/meals`, {
+          method: "POST",
+          body: JSON.stringify({ ...item, date: selectedDate })
+        });
+        if (data && data.success && Array.isArray(data.logs)) {
+          serverLogs = data.logs;
+        }
       }
-    };
-    syncToServer("");
-    syncToServer((import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app");
+      const updated = serverLogs && serverLogs.length > 0
+        ? serverLogs.filter(m => !isLegacyMockMeal(m))
+        : [...allLogs, ...newItems];
+
+      setAllLogs(updated);
+      const localKey = `gymbuddy_meals_${normPhone}_${selectedDate}`;
+      try {
+        localStorage.setItem(localKey, JSON.stringify(updated));
+      } catch (e) {}
+    } catch (err) {
+      console.error("[Dashboard] Failed to save food items to backend:", err);
+      setReminderNotificationMsg(
+        isEN
+          ? "Failed to save food log to server. Please check your connection."
+          : "Gagal mencatat makanan ke server. Silakan periksa koneksi internet Anda."
+      );
+      setTimeout(() => setReminderNotificationMsg(null), 5000);
+      return;
+    }
 
     // Reset all form state
     setItemNameInput("");
@@ -2996,44 +3016,46 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   // Legacy: kept for backward compatibility but now calls handleAnalyzeAndPreview
   const handleSaveLogItem = handleAnalyzeAndPreview;
 
-  const handleQuickAddWater = (ml: number) => {
+  const handleQuickAddWater = async (ml: number) => {
     const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     if (!normPhone) {
       console.warn("[Dashboard] handleQuickAddWater: No active user phone, cannot sync water log");
       return;
     }
     const newItem: MealItem = {
-      id: `m-drink-${Date.now()}`,
+      id: `m-drink-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      type: "hydration",
       foodName: `Air Putih ${ml} ml`,
       calories: 0,
       protein: 0,
       carbs: 0,
       fat: 0,
       isHydration: true,
+      amountMl: ml,
       volumeMl: ml,
       timestamp: new Date().toISOString()
     };
 
-    const updated = [...allLogs, newItem];
-    setAllLogs(updated);
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
-    } catch (e) {}
-
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    try {
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+      const data = await canonicalApiFetch(`/api/user/${normPhone}/meals`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newItem, date: selectedDate })
       });
-    } catch (e) {}
+      const serverLogs: MealItem[] = data && data.success && Array.isArray(data.logs) ? data.logs : [...allLogs, newItem];
+      const updated = serverLogs.filter(m => !isLegacyMockMeal(m));
+      setAllLogs(updated);
+      try {
+        localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      } catch (e) {}
+    } catch (e) {
+      console.error("[Dashboard] Error saving quick water:", e);
+    }
   };
 
-  const handleSaveCustomDrink = () => {
+  const handleSaveCustomDrink = async () => {
     const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     if (!normPhone) {
-      console.warn("[Dashboard] handleDeleteMeal: No active user phone, cannot sync delete");
+      console.warn("[Dashboard] handleSaveCustomDrink: No active user phone, cannot sync");
       return;
     }
     const vol = Math.max(50, Number(customDrinkMl) || 250);
@@ -3053,32 +3075,34 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     }
 
     const newItem: MealItem = {
-      id: `m-drink-${Date.now()}`,
+      id: `m-drink-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      type: "hydration",
       foodName: dName,
       calories: cal,
       protein: prot,
       carbs: carb,
       fat: fat,
       isHydration: true,
+      amountMl: vol,
       volumeMl: vol,
       mealType: getMealTypeByHour(),
       time: new Date().toLocaleTimeString(lang === "EN" ? "en-US" : "id-ID", { hour: "2-digit", minute: "2-digit" })
     };
 
-    const updated = [...allLogs, newItem];
-    setAllLogs(updated);
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
-    } catch (e) {}
-
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    try {
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals`, {
+      const data = await canonicalApiFetch(`/api/user/${normPhone}/meals`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newItem, date: selectedDate })
       });
-    } catch (e) {}
+      const serverLogs: MealItem[] = data && data.success && Array.isArray(data.logs) ? data.logs : [...allLogs, newItem];
+      const updated = serverLogs.filter(m => !isLegacyMockMeal(m));
+      setAllLogs(updated);
+      try {
+        localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      } catch (e) {}
+    } catch (e) {
+      console.error("[Dashboard] Error saving custom drink:", e);
+    }
 
     setShowAddDrinkModal(false);
     setReminderNotificationMsg(lang === "EN" ? `Logged ${dName} (${vol} ml)! 💧` : `Berhasil mencatat ${dName} (${vol} ml)! 💧`);
@@ -3089,48 +3113,37 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const rawPhone = activeUser.phone || activeUser.normalizedPhone || "";
     const normPhone = normalizePhone(rawPhone);
     if (!normPhone) return;
-    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
 
-    const updated = allLogs.filter((item) => String(item.id) !== String(id) && String(item.foodName) !== String(id));
-    setAllLogs(updated);
-
-    // Immediately persist deletion across all user localStorage keys
     try {
-      localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
-      localStorage.setItem(`gymbuddy_meals_${altPhone}_${selectedDate}`, JSON.stringify(updated));
-      if (rawPhone) {
-        localStorage.setItem(`gymbuddy_meals_${rawPhone}_${selectedDate}`, JSON.stringify(updated));
-      }
-    } catch (e) {}
+      // 1. Delete on canonical backend
+      const data = await canonicalApiFetch(
+        `/api/user/${normPhone}/meals/${encodeURIComponent(id)}?date=${selectedDate}`,
+        { method: "DELETE" }
+      );
 
-    // Sync deletion to local and backend API
-    const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-    try {
-      // 1. Delete specific meal by ID
-      fetch(`/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals/${id}?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
+      const serverLogs: MealItem[] = (data && data.success && Array.isArray(data.logs))
+        ? data.logs
+        : allLogs.filter((item) => String(item.id) !== String(id) && String(item.foodName) !== String(id));
 
-      // 2. Full synchronization PUT: overwrite day's meal list on server
-      fetch(`/api/user/${normPhone}/meals?date=${selectedDate}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meals: updated, date: selectedDate })
-      }).catch(() => {});
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meals: updated, date: selectedDate })
-      }).catch(() => {});
+      const updated = serverLogs.filter(m => !isLegacyMockMeal(m));
+      setAllLogs(updated);
 
-      // 3. If all items removed, bulk DELETE
-      if (updated.length === 0) {
-        fetch(`/api/user/${normPhone}/meals?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
-        fetch(`${API_BASE_URL}/api/user/${normPhone}/meals?date=${selectedDate}`, { method: "DELETE" }).catch(() => {});
-      }
-    } catch (e) {}
+      // Cache updated list locally
+      try {
+        localStorage.setItem(`gymbuddy_meals_${normPhone}_${selectedDate}`, JSON.stringify(updated));
+      } catch (e) {}
 
-    setReminderNotificationMsg(lang === "EN" ? "Meal deleted successfully! 🗑️" : "Catatan makanan berhasil dihapus! 🗑️");
-    setTimeout(() => setReminderNotificationMsg(null), 3000);
+      setReminderNotificationMsg(lang === "EN" ? "Meal deleted successfully! 🗑️" : "Catatan makanan berhasil dihapus! 🗑️");
+      setTimeout(() => setReminderNotificationMsg(null), 3000);
+    } catch (err) {
+      console.error("[Dashboard] Failed to delete meal from server:", err);
+      setReminderNotificationMsg(
+        lang === "EN"
+          ? "Failed to delete meal from server. Please check your connection."
+          : "Gagal menghapus makanan dari server. Silakan periksa koneksi internet Anda."
+      );
+      setTimeout(() => setReminderNotificationMsg(null), 4000);
+    }
   };
 
   const handleDeleteActivity = async (id: string) => {

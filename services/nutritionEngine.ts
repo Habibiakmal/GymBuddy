@@ -1837,8 +1837,8 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
       percentage: 0,
       percentageExact: 0,
       status: isUpperLimit ? "under_limit" : "under_target",
-      statusText: isUpperLimit ? "Dalam Batas" : "Belum Cukup",
-      statusBadge: isUpperLimit ? "🟢 Dalam Batas" : "🟡 Belum Cukup",
+      statusText: isUpperLimit ? "Dalam Batas" : "Sisa target: 0",
+      statusBadge: isUpperLimit ? "🟢 Dalam Batas" : "Sisa target: 0",
       remaining: 0,
       isOver: false,
       isReached: false,
@@ -1873,7 +1873,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
         percentageExact: 100,
         status: "at_limit",
         statusText: "Batas Maksimal",
-        statusBadge: "🟡 Batas Maksimal",
+        statusBadge: "🟠 Batas Maksimal",
         remaining: 0,
         isOver: false,
         isReached: true,
@@ -1888,7 +1888,7 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
         percentageExact,
         status: "near_limit",
         statusText: "Mendekati Batas",
-        statusBadge: "🟡 Mendekati Batas",
+        statusBadge: "🟠 Mendekati Batas",
         remaining,
         isOver: false,
         isReached: false,
@@ -1916,14 +1916,15 @@ export function calculateNutrientStatus(current: number, target: number, isUpper
   // Strict mutually exclusive comparison on raw numerical values
   if (c < t) {
     const percentage = Math.min(99, Math.round(percentageExact));
+    const remLabel = `Sisa target: ${remaining}`;
     return {
       current: c,
       target: t,
       percentage,
       percentageExact,
       status: "under_target",
-      statusText: "Belum Cukup",
-      statusBadge: "🟡 Belum Cukup",
+      statusText: remLabel,
+      statusBadge: remLabel,
       remaining,
       isOver: false,
       isReached: false,
@@ -2065,7 +2066,7 @@ export function formatDashboardPercent(value: number | string | undefined | null
  * Progress bar is visual only; status is derived strictly from numerical comparison.
  */
 export function makeProgressBar(current: number, target: number, length: number = 10): string {
-  if (!target || target <= 0) return `[░░░░░░░░░░] 0% · 🟡 Belum Cukup`;
+  if (!target || target <= 0) return `[░░░░░░░░░░] 0%`;
   const statusInfo = calculateNutrientStatus(current, target, false);
   let filledCount = 0;
   if (current < target) {

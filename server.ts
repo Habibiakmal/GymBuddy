@@ -124,13 +124,12 @@ export function sanitizeWhatsAppResponse(text: string): string {
   if (!text || typeof text !== "string") return "";
 
   let cleaned = text
-    // Merge broken single-character separator lines (e.g. isolated '━' characters on separate lines) into a single continuous separator
-    .replace(/(?:^[━─\-=]{1,3}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
-    .replace(/(?:━\s*[\r\n]+){2,}━/g, "━━━━━━━━━━━━━━")
+    // Collapse any sequence of lines containing only separator chars (even if separated by blank lines) into a single continuous separator
+    .replace(/(?:^[ \t]*[━─\-=]{1,20}[ \t]*(?:\r?\n|\r|$)(?:[ \t]*(?:\r?\n|\r|$))*)+/gm, "━━━━━━━━━━━━━━\n")
     // Replace 2 or more consecutive separator lines with a single clean separator
     .replace(/(?:^[━─\-=]{4,}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
     // Normalize isolated short separator lines to the canonical continuous separator line
-    .replace(/^[━─\-=]{1,5}$/gm, "━━━━━━━━━━━━━━")
+    .replace(/^[━─\-=]{1,13}$/gm, "━━━━━━━━━━━━━━")
     // Remove isolated empty bullets
     .replace(/^[•\-\*]\s*$/gm, "")
     // Normalize 3+ newlines to max 2 newlines
@@ -152,17 +151,31 @@ export function resolveCleanFoodNameAndMealType(
   detectedFoodName: string,
   hasImage: boolean,
   detectedMealType?: string,
-  detectedFoodsList?: string[]
+  detectedFoodsList?: string[],
+  timeOrDate?: string | Date,
+  calories?: number
 ): { foodName: string; mealType: string } {
   const cleanCaption = String(rawUserText || "").trim();
   const lowerCaption = cleanCaption.toLowerCase();
 
   // 1. Extract Meal Type using smart classifier (combines explicit user intent, smart snack composition, and 4 time windows)
-  const classifiedType = classifyMealType({
+  let classifiedType = classifyMealType({
     foodName: detectedFoodName,
     items: detectedFoodsList,
-    userText: cleanCaption
+    userText: cleanCaption,
+    timeOrDate,
+    calories
   });
+
+  // If not a smart snack and caption has no explicit intent, respect caller's valid detectedMealType
+  const isSnack = isSmartSnack(detectedFoodName, detectedFoodsList, calories);
+  if (!isSnack && detectedMealType && !/(?:sarapan|breakfast|makan\s+siang|lunch|makan\s+malam|dinner|snack|camilan)/i.test(lowerCaption)) {
+    const norm = detectedMealType.toLowerCase().trim();
+    if (norm === "breakfast" || norm === "lunch" || norm === "dinner" || norm === "snack") {
+      classifiedType = norm as any;
+    }
+  }
+
   let mealType = classifiedType.charAt(0).toUpperCase() + classifiedType.slice(1);
 
   // 2. Identify if userText is purely conversational / generic intent phrase
@@ -239,7 +252,9 @@ export function buildSingleSourceOfTruthMealRecord(
     parsed?.canonicalMealTitle || parsed?.foodName,
     hasImage,
     parsed?.mealType,
-    parsed?.detectedFoods
+    parsed?.detectedFoods,
+    parsed?.timeOrDate || parsed?.timestamp || parsed?.time,
+    parsed?.calories
   );
 
   let finalCal = Number(parsed?.calories) || 0;
@@ -361,8 +376,8 @@ export function splitWhatsAppMessage(text: string, maxSafeLength = 1400): string
     return [trimmed];
   }
 
-  // 1. Level 1: Split by visual section borders (━, ─, -, =) or multi-newlines
-  const sectionSplitRegex = /(?=(?:\r?\n)*(?:━{5,}|─{5,}|-{5,}|={5,}))|(?:\r?\n){2,}/;
+  // 1. Level 1: Split by visual section borders (blank lines)
+  const sectionSplitRegex = /(?:\r?\n){2,}/;
   let rawSections = trimmed.split(sectionSplitRegex).map(s => s.trim()).filter(Boolean);
   if (rawSections.length === 0 || (rawSections.length === 1 && rawSections[0] === trimmed)) {
     rawSections = trimmed.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
@@ -428,20 +443,21 @@ export function splitWhatsAppMessage(text: string, maxSafeLength = 1400): string
     const unitStr = unit.trim();
     if (!unitStr) continue;
 
-    // Hard fallback if single unit is longer than maxSafeLength (e.g. huge unbroken token)
+    // Hard fallback if single unit is longer than maxSafeLength (Unicode-safe splitting)
     if (unitStr.length > maxSafeLength) {
       if (currentChunk.trim()) {
         chunks.push(currentChunk.trim());
         currentChunk = "";
       }
-      for (let i = 0; i < unitStr.length; i += maxSafeLength) {
-        chunks.push(unitStr.slice(i, i + maxSafeLength).trim());
+      const codePoints = Array.from(unitStr);
+      for (let i = 0; i < codePoints.length; i += maxSafeLength) {
+        chunks.push(codePoints.slice(i, i + maxSafeLength).join("").trim());
       }
       continue;
     }
 
     const testJoin = currentChunk
-      ? (currentChunk.includes("\n") || unitStr.startsWith("━") || unitStr.startsWith("─") || unitStr.startsWith("•") || unitStr.startsWith("-") || unitStr.startsWith("*")
+      ? (currentChunk.includes("\n") || unitStr.startsWith("•") || unitStr.startsWith("-") || unitStr.startsWith("*")
           ? `${currentChunk}\n\n${unitStr}`
           : `${currentChunk}\n${unitStr}`)
       : unitStr;
@@ -460,7 +476,9 @@ export function splitWhatsAppMessage(text: string, maxSafeLength = 1400): string
     chunks.push(currentChunk.trim());
   }
 
-  return chunks.filter(c => c.length > 0);
+  return chunks
+    .map(c => sanitizeWhatsAppResponse(c))
+    .filter(c => c.length > 0 && !/^[━─\-=]+$/gm.test(c.trim()));
 }
 
 async function sendSingleTwilioMessage(to: string, body: string, customFrom?: string, mediaUrl?: string) {
@@ -522,7 +540,7 @@ async function sendWhatsAppAsync(to: string, body: string, customFrom?: string, 
 
     // Delay between chunks to guarantee strict in-order WhatsApp delivery
     if (i < chunks.length - 1) {
-      await new Promise(r => setTimeout(r, 450));
+      await new Promise(r => setTimeout(r, 600));
     }
   }
 
@@ -909,8 +927,10 @@ function validateAndNormalizeNutrition(parsed: any, isPhoto: boolean = false): a
 // Interfaces for Persistent Database
 interface MealLog {
   id?: string;
+  type?: "meal" | "hydration";
   foodName: string;
   mealTitle?: string;
+  mealCategory?: string;
   rawUserMessage?: string;
   mealType?: string;
   detectedFoods?: string[];
@@ -923,6 +943,7 @@ interface MealLog {
   sugar?: number;
   sodium?: number;
   isHydration?: boolean;
+  amountMl?: number;
   volumeMl?: number;
   aiConfidence?: number;
   timestamp: string;
@@ -2441,9 +2462,12 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
   // CRITICAL SINGLE SOURCE OF TRUTH:
   // The passed `meal` object is ALREADY validated with exact calories, protein, carbs, fat, fiber, sugar, sodium.
   // We MUST preserve and store `meal` directly as the single source of truth without overriding its values!
+  const isHydr = meal.type === "hydration" ? true : (meal.type === "meal" ? false : Boolean(meal.isHydration || isPlainWaterName(meal.foodName)));
   const finalMealToInsert: MealLog = {
     ...meal,
     id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    type: isHydr ? "hydration" : "meal",
+    mealCategory: meal.mealCategory || (meal.mealType ? getMealTypeLabel(meal.mealType) : "MAKANAN"),
     foodName: meal.foodName || "Makanan",
     calories: Number(meal.calories) || 0,
     protein: Number(meal.protein) || 0,
@@ -2453,8 +2477,9 @@ function addMealLog(rawPhone: string, meal: MealLog, targetDateStr?: string) {
     sugar: Number((meal as any).sugar) || 0,
     sodium: Number((meal as any).sodium) || 0,
     mealType: meal.mealType,
-    isHydration: Boolean(meal.isHydration || isPlainWaterName(meal.foodName)),
-    volumeMl: meal.volumeMl || (isLiquidName(meal.foodName) ? extractVolumeMlFromName(meal.foodName) : undefined),
+    isHydration: isHydr,
+    amountMl: isHydr ? (meal.amountMl || meal.volumeMl || (isLiquidName(meal.foodName) ? extractVolumeMlFromName(meal.foodName) : undefined)) : undefined,
+    volumeMl: isHydr ? (meal.volumeMl || meal.amountMl || (isLiquidName(meal.foodName) ? extractVolumeMlFromName(meal.foodName) : undefined)) : undefined,
     timestamp: meal.timestamp || new Date().toISOString()
   };
 
@@ -3170,6 +3195,29 @@ export function formatNutritionCard(
   const sodBar = makeSodiumProgressBar(totalTodaySodium, sodiumLimit);
   const sugBar = makeSugarProgressBar(totalTodaySugar, sugarLimit);
 
+  // Determine meal category & emoji
+  const rawMealType = String(parsedAi?.mealType || parsedAi?.mealRecord?.mealType || "").trim().toLowerCase();
+  let resolvedMealType: MealType;
+  if (rawMealType === "snack" || rawMealType.includes("snack") || rawMealType.includes("camilan") || rawMealType.includes("cemilan")) {
+    resolvedMealType = "snack";
+  } else if (rawMealType === "dinner" || rawMealType.includes("dinner") || rawMealType.includes("malam")) {
+    resolvedMealType = "dinner";
+  } else if (rawMealType === "lunch" || rawMealType.includes("lunch") || rawMealType.includes("siang")) {
+    resolvedMealType = "lunch";
+  } else if (rawMealType === "breakfast" || rawMealType.includes("breakfast") || rawMealType.includes("sarapan") || rawMealType.includes("pagi")) {
+    resolvedMealType = "breakfast";
+  } else {
+    resolvedMealType = classifyMealType({
+      foodName: cleanFoodName,
+      items: parsedAi?.detectedFoods,
+      calories,
+      timeOrDate: parsedAi?.timestamp || parsedAi?.time
+    });
+  }
+
+  const mealEmoji = resolvedMealType === "breakfast" ? "🌅" : resolvedMealType === "lunch" ? "☀️" : resolvedMealType === "dinner" ? "🍽️" : "🍪";
+  const mealLabel = getMealTypeLabel(resolvedMealType, "ID", parsedAi?.timestamp || parsedAi?.time);
+
   // Status-aware and persona-aligned Coach Message (Strict Age-based Addressing)
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
@@ -3182,27 +3230,51 @@ export function formatNutritionCard(
     if (nutritionSummary.sodium.isOver) {
       coachComment = isMax
         ? (isLansia
-            ? `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan pilih menu rendah garam untuk makan berikutnya ya. 💪`
-            : `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. 💪`)
+            ? (resolvedMealType === "dinner"
+                ? `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan cukup istirahat malam ini ya. 💪`
+                : `Asupan natrium Anda sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}. Mohon imbangi dengan minum air putih hangat dan pilih menu rendah garam untuk makan berikutnya ya. 💪`)
+            : (resolvedMealType === "dinner"
+                ? `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih sekarang dan maksimalkan istirahat malam ya. 💪`
+                : `Sodium kamu sudah tembus ${totalTodaySodium.toLocaleString("id-ID")} mg hari ini, ${validatedAddr}! Langsung imbangi dengan minum air putih 500ml-1L sekarang dan pilih menu rendah garam untuk makan berikutnya ya. 💪`))
         : (isLansia
-            ? `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya, ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`
-            : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`);
+            ? (resolvedMealType === "dinner"
+                ? `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg ya, ${validatedAddr} ✨ Yuk cukupi minum air putih hangat dan selamat beristirahat malam.`
+                : `Asupan natrium Anda hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya, ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`)
+            : (resolvedMealType === "dinner"
+                ? `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan istirahat optimal malam ini.`
+                : `Asupan natrium hari ini sudah mencapai ${totalTodaySodium.toLocaleString("id-ID")} mg (melewati batas 2.000 mg) ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih menu yang lebih segar rendah garam nanti.`));
     } else if (nutritionSummary.sugar.isOver) {
       coachComment = isMax
         ? (isLansia
-            ? `Asupan gula Anda sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g), ${validatedAddr}. Mohon imbangi dengan banyak minum air putih dan batasi asupan manis untuk sisa hari ini ya. 💪`
-            : `Gula harian kamu sudah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g), ${validatedAddr}! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! ⚡`)
+            ? (resolvedMealType === "dinner"
+                ? `Asupan gula Anda sudah mencapai ${totalTodaySugar}g hari ini, ${validatedAddr}. Mohon cukupi hidrasi air putih hangat dan istirahat yang baik ya. 💪`
+                : `Asupan gula Anda sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g), ${validatedAddr}. Mohon imbangi dengan banyak minum air putih dan batasi asupan manis untuk sisa hari ini ya. 💪`)
+            : (resolvedMealType === "dinner"
+                ? `Gula harian kamu sudah tembus ${totalTodaySugar}g hari ini, ${validatedAddr}! Yuk cukupi hidrasi air putih dan selamat istirahat malam! ⚡`
+                : `Gula harian kamu sudah tembus ${totalTodaySugar}g (lewat batas anjuran ${sugarLimit}g), ${validatedAddr}! Yuk langsung imbangi dengan banyak minum air putih dan kurangi camilan manis untuk sisa hari ini ya! ⚡`))
         : (isLansia
-            ? `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya, ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih minuman tanpa gula nanti.`
-            : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`);
+            ? (resolvedMealType === "dinner"
+                ? `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g ya, ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan selamat beristirahat malam.`
+                : `Asupan gula Anda hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya, ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih minuman tanpa gula nanti.`)
+            : (resolvedMealType === "dinner"
+                ? `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan istirahat optimal malam ini.`
+                : `Asupan gula hari ini sudah mencapai ${totalTodaySugar}g (melewati batas anjuran ${sugarLimit}g) ya ${validatedAddr} ✨ Yuk imbangi dengan minum air putih yang cukup dan pilih camilan atau minuman tanpa gula nanti.`));
     } else if (nutritionSummary.fat.isOver && nutritionSummary.protein.isUnder) {
       coachComment = isMax
         ? (isLansia
-            ? `Asupan lemak Anda sudah melampaui target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}. Untuk makan selanjutnya prioritaskan protein sehat tanpa banyak minyak ya. 💪`
-            : `Asupan lemak kamu sudah lewat target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}, sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! 🔥`)
+            ? (resolvedMealType === "dinner"
+                ? `Makan malam Anda sudah tercatat, ${validatedAddr}. Asupan lemak hari ini sudah mencapai target, besok kita prioritaskan protein sehat ya. 💪`
+                : `Asupan lemak Anda sudah melampaui target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}. Untuk makan selanjutnya prioritaskan protein sehat tanpa banyak minyak ya. 💪`)
+            : (resolvedMealType === "dinner"
+                ? `Makan malam lo sudah tercatat, ${validatedAddr}! Lemak hari ini sudah tembus target, besok gas fokus ke protein bersih ya! 🔥`
+                : `Asupan lemak kamu sudah lewat target hari ini (${totalTodayFat}/${targetFat}g), ${validatedAddr}, sementara protein masih perlu ditambah. Untuk makan selanjutnya prioritaskan protein bersih kayak dada ayam atau telur rebus ya! 🔥`))
         : (isLansia
-            ? `Lemak harian Anda sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya ✨`
-            : `Lemak harian kamu sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya ✨`);
+            ? (resolvedMealType === "dinner"
+                ? `Makan malam Anda sudah tercatat rapi ya, ${validatedAddr} ✨ Asupan lemak hari ini sudah cukup, besok kita prioritaskan protein sehat tanpa minyak berlebih.`
+                : `Lemak harian Anda sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya ✨`)
+            : (resolvedMealType === "dinner"
+                ? `Makan malam kamu sudah tercatat rapi ya, ${validatedAddr} ✨ Lemak hari ini sudah cukup, besok kita utamakan protein bersih ya.`
+                : `Lemak harian kamu sudah sedikit melebihi target ya, ${validatedAddr}. Untuk makan berikutnya, kita prioritaskan sumber protein bersih tanpa banyak minyak/gorengan ya ✨`));
     } else if (nutritionSummary.calories.isOver) {
       coachComment = isMax
         ? (isLansia
@@ -3226,54 +3298,95 @@ export function formatNutritionCard(
             : `Pilihan mantap, ${validatedAddr}! Makanan ini kasih suplai protein padat (${protein}g) yang bagus banget buat recovery otot kamu! 💪`)
         : `Pilihan makanan yang bagus, ${validatedAddr}! Mengandung ${protein}g protein yang sangat baik untuk mencukupi kebutuhan harianmu ✨`;
     } else {
-      coachComment = isMax
-        ? (isLansia
-            ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! 💪`
-            : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! 💪`)
-        : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! ✨`;
+      if (resolvedMealType === "dinner") {
+        coachComment = isMax
+          ? (isLansia
+              ? `Makan malam Anda sudah tercatat rapi, ${validatedAddr}. Cukupi kebutuhan air putih hangat dan selamat beristirahat malam. 💪`
+              : `Makan malam lo sudah tercatat rapi, ${validatedAddr}! Cukupi hidrasi air putih dan selamat beristirahat malam! 💪`)
+          : `Makan malam kamu sudah tercatat rapi ya, ${validatedAddr} ✨ Cukupi asupan air putih dan selamat beristirahat malam!`;
+      } else if (resolvedMealType === "snack") {
+        coachComment = isMax
+          ? (isLansia
+              ? `Catatan camilan Anda sudah tersimpan, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! 💪`
+              : `Camilan lo sudah tercatat, ${validatedAddr}! Mantap, terus jaga konsistensi nutrisi hari ini! 💪`)
+          : `Camilan kamu sudah tercatat rapi ya, ${validatedAddr} ✨ Semangat terus jaga pola makan seimbangmu!`;
+      } else {
+        coachComment = isMax
+          ? (isLansia
+              ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! 💪`
+              : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! 💪`)
+          : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! ✨`;
+      }
     }
   }
 
+  // If meal is dinner, sanitize any remaining "nanti malam" in coachComment
+  if (resolvedMealType === "dinner") {
+    coachComment = coachComment
+      .replace(/\b(?:nanti\s+malam|makan\s+malam\s+nanti|untuk\s+makan\s+malam|saat\s+makan\s+malam)\b[^.!?✨💪]*(?:[.!?✨💪]|$)/gi, "Cukupi asupan air putih dan selamat beristirahat malam ya ✨")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   // 7-Point Coach Note Validation & Sanitization
+  coachComment = coachComment
+    .replace(/\b(?:selamat\s+menikmati(?:\s+makanannya)?|selamat\s+makan)[^.!?✨💪]*(?:[.!?✨💪]|$)/gi, "")
+    .trim();
+
+  if (resolvedMealType === "dinner") {
+    coachComment = coachComment
+      .replace(/\b(?:nanti\s+malam|makan\s+malam\s+nanti|untuk\s+makan\s+malam|saat\s+makan\s+malam)\b[^.!?✨💪]*(?:[.!?✨💪]|$)/gi, "Untuk sisa hari ini, cukupi hidrasi air putih dan selamat beristirahat malam ya ✨")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   coachComment = validateAndFormatCoachNote(coachComment, userData);
 
-  // Construct sections cleanly without empty/consecutive separators
+  // Construct sections cleanly without decorative separators
   const sections: string[] = [];
 
-  // Header: Meal Title & Meta
-  sections.push(`🍽️ *${cleanFoodName.toUpperCase()}*\n\n🕒 ${dateStr}, ${timeStr} WIB · 🤖 AI: ${confidenceScore}%`);
+  // Header: Meal Name, Category & Meta
+  const emojiForHeader = resolvedMealType === "dinner" ? "🌙" : mealEmoji;
+  sections.push(
+    `🍽️ *${cleanFoodName}*\n\n` +
+    `${emojiForHeader} *${mealLabel}*\n` +
+    `🕒 ${dateStr}, ${timeStr} WIB · 🤖 GymBuddy AI: ${confidenceScore}%`
+  );
 
-  // Section 1: Rekap Nutrisi
-  let nutrContent = `🔥 *${calories} kcal*\n\n` +
-    `🍖 *Protein*: ${protein}g (${protPercent}%)\n` +
-    `🍚 *Karbo*: ${carbs}g (${carbPercent}%)\n` +
-    `🥓 *Lemak*: ${fat}g (${fatPercent}%)\n` +
-    `🥬 *Serat*: ${fiber}g\n` +
-    `🧂 *Natrium*: ${sodium} mg`;
+  // Section 1: Estimasi Nutrisi
+  let nutrContent = `📊 *Estimasi Nutrisi*\n\n` +
+    `🔥 ${calories} kcal\n` +
+    `🍖 Protein: ${protein}g\n` +
+    `🍚 Karbo: ${carbs}g\n` +
+    `🥓 Lemak: ${fat}g\n` +
+    `🥬 Serat: ${fiber}g\n` +
+    `🧂 Natrium: ${sodium} mg`;
   if (sugar > 0) {
-    nutrContent += `\n🍯 *Gula*: ${sugar}g`;
+    nutrContent += `\n🍯 Gula: ${sugar}g`;
   }
-  sections.push(`━━━━━━━━━━━━━━\n📊 *REKAP NUTRISI*\n━━━━━━━━━━━━━━\n${nutrContent}`);
+  sections.push(nutrContent);
 
   // Section 2: Estimasi Porsi (only if portion detail text exists)
   if (portionDetailText.trim()) {
-    sections.push(`━━━━━━━━━━━━━━\n🍽️ *ESTIMASI PORSI*\n━━━━━━━━━━━━━━\n${portionDetailText.trim()}`);
+    sections.push(`🍽️ *Estimasi Porsi*\n\n${portionDetailText.trim()}`);
   }
 
   // Section 3: Active Coach
-  sections.push(`━━━━━━━━━━━━━━\n🤖 *${coachHeader}*\n━━━━━━━━━━━━━━\n"${coachComment}"`);
+  const cleanCoachTitle = isMax ? "Coach Max" : "Coach Mia";
+  sections.push(`🤖 *${cleanCoachTitle}*\n\n"${coachComment}"`);
 
-  // Section 4: Status Hari Ini (Order: Kalori -> Protein -> Karbo -> Lemak -> Natrium -> Gula)
-  const statusContent = `🔥 *Kalori*: ${totalTodayCal}/${targetCal} kcal\n${calBar}\n\n` +
-    `🍖 *Protein*: ${totalTodayProt}/${targetProt}g\n${protBar}\n\n` +
-    `🍚 *Karbo*: ${totalTodayCarb}/${targetCarb}g\n${carbBar}\n\n` +
-    `🥓 *Lemak*: ${totalTodayFat}/${targetFat}g\n${fatBar}\n\n` +
-    `🧂 *Natrium*: ${totalTodaySodium.toLocaleString("id-ID")}/2,000 mg\n${sodBar}\n\n` +
-    `🍯 *Gula*: ${totalTodaySugar}/${sugarLimit}g\n${sugBar}`;
-  sections.push(`━━━━━━━━━━━━━━\n📈 *STATUS HARI INI*\n━━━━━━━━━━━━━━\n${statusContent}`);
+  // Section 4: Status Hari Ini (Neutral & Informative format)
+  const remainingCal = Math.max(0, targetCal - totalTodayCal);
+  const remainingProt = Math.max(0, Number((targetProt - totalTodayProt).toFixed(1)));
+  const statusContent = `📈 *Hari Ini*\n\n` +
+    `🔥 ${totalTodayCal} / ${targetCal.toLocaleString("id-ID")} kcal\n` +
+    `Sisa target: ${remainingCal > 0 ? remainingCal.toLocaleString("id-ID") + " kcal" : "Tercapai ✅"}\n` +
+    `🍖 ${totalTodayProt} / ${targetProt}g protein\n` +
+    `Sisa target: ${remainingProt > 0 ? remainingProt + "g" : "Tercapai ✅"}`;
+  sections.push(statusContent);
 
-  // Footer
-  sections.push(`━━━━━━━━━━━━━━\n⚙️ _Ketik "koreksi: [porsi]" untuk edit atau "hapus log terakhir"_`);
+  // Section 5: Correction Instruction
+  sections.push(`Ketik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`);
 
   return sections.join("\n\n");
 }
@@ -3689,19 +3802,19 @@ function generateMealRecommendations(
     ? `• Kalori: *${totals.calories}/${targetCalories} kcal* (${calStatus.percentage}% · 🔴 Melebihi Target)`
     : calStatus.isReached
       ? `• Kalori: *${totals.calories}/${targetCalories} kcal* (100% · ✅ Target Tercapai)`
-      : `• Sisa Kalori: *~${calStatus.remaining} kcal* (${totals.calories}/${targetCalories} kcal · 🟡 Belum Cukup)`;
+      : `• Sisa Kalori: *~${calStatus.remaining} kcal* (${totals.calories}/${targetCalories} kcal · ${calStatus.percentage >= 70 ? "🟡 On Track" : "🔴 Di Bawah Target"})`;
 
   const protDisplay = protStatus.isOver
     ? `• Protein: *${totals.protein}/${proteinGrams}g* (${protStatus.percentage}% · 🔴 Melebihi Target)`
     : protStatus.isReached
       ? `• Protein: *${totals.protein}/${proteinGrams}g* (100% · ✅ Target Tercapai)`
-      : `• Sisa Protein: *~${protStatus.remaining}g* (${totals.protein}/${proteinGrams}g · 🟡 Belum Cukup)`;
+      : `• Sisa Protein: *~${protStatus.remaining}g* (${totals.protein}/${proteinGrams}g · ${protStatus.percentage >= 70 ? "🟡 On Track" : "🔴 Di Bawah Target"})`;
 
   const fatDisplay = fatStatus.isOver
     ? `• Lemak: *${totals.fat}/${fatGrams}g* (${fatStatus.percentage}% · 🔴 Melebihi Target)`
     : fatStatus.isReached
       ? `• Lemak: *${totals.fat}/${fatGrams}g* (100% · ✅ Target Tercapai)`
-      : `• Sisa Lemak: *~${fatStatus.remaining}g* (${totals.fat}/${fatGrams}g · 🟡 Belum Cukup)`;
+      : `• Sisa Lemak: *~${fatStatus.remaining}g* (${totals.fat}/${fatGrams}g · ${fatStatus.percentage >= 70 ? "🟡 On Track" : "🔴 Di Bawah Target"})`;
 
   const sodDisplay = `• Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* (${sodStatus.statusBadge})`;
 
@@ -4711,20 +4824,21 @@ async function startServer() {
 
       await savePendingSession(session);
 
-      // Compose WhatsApp OTP verification message
+      // Compose WhatsApp 2FA confirmation message
       const waMsg = [
-        `🔐 *GymBuddy Login*`,
+        `🔐 *Konfirmasi Login GymBuddy*`,
         ``,
-        `Kode verifikasi (OTP) masuk ke akun GymBuddy kamu adalah:`,
-        `*${otpCode}*`,
+        `Apakah Anda mencoba login ke GymBuddy?`,
         ``,
         `📱 *Perangkat*: ${device}`,
         `📍 *Lokasi*: ${location}`,
         `⏱️ *Waktu*: ${nowFormatted}`,
         ``,
-        `Kode ini berlaku selama 5 menit. Masukkan kode ini pada website GymBuddy untuk masuk ke dashboard.`,
+        `Balas pesan ini untuk memproses:`,
+        `*YA* — untuk mengonfirmasi login`,
+        `*TIDAK* — untuk membatalkan`,
         ``,
-        `_Demi keamanan akun kamu, jangan berikan kode ini kepada siapapun._`
+        `_Pesan ini berlaku selama 5 menit. Jangan balas YA jika ini bukan Anda._`
       ].join("\n");
 
       const delivered = await sendWhatsAppLoginMessage(normPhone, waMsg, sessionId);
@@ -4749,89 +4863,6 @@ async function startServer() {
       });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message || "Gagal memproses permintaan login." });
-    }
-  });
-
-  // Verify 6-digit WhatsApp OTP endpoint (Synchronous & Instant)
-  app.post("/api/auth/login-verify-otp", express.json(), async (req, res) => {
-    try {
-      const { sessionId, otp } = req.body;
-      if (!sessionId || !otp) {
-        return res.status(400).json({ success: false, error: "missing_fields", message: "Session ID dan kode OTP wajib diisi." });
-      }
-
-      const session = await getPendingSession(sessionId);
-      if (!session) {
-        return res.status(404).json({ success: false, error: "session_not_found", message: "Sesi verifikasi tidak ditemukan atau telah kedaluwarsa. Silakan minta kode baru." });
-      }
-
-      if (session.status === "cancelled") {
-        return res.status(400).json({ success: false, error: "session_cancelled", message: "Sesi verifikasi telah dibatalkan. Silakan minta kode baru." });
-      }
-
-      if (session.status === "approved" && session.token) {
-        return res.json({
-          success: true,
-          status: "approved",
-          token: session.token,
-          profile: session.profile,
-          message: "Login berhasil terverifikasi."
-        });
-      }
-
-      if (Date.now() > session.expiresAt || session.status === "expired") {
-        session.status = "expired";
-        await savePendingSession(session);
-        return res.status(400).json({ success: false, error: "otp_expired", message: "Kode OTP telah kedaluwarsa (berlaku 5 menit). Silakan kirim ulang kode baru." });
-      }
-
-      const maxAttempts = session.maxAttempts || 5;
-      const currentAttempts = session.attempts || 0;
-      if (currentAttempts >= maxAttempts) {
-        session.status = "expired";
-        await savePendingSession(session);
-        return res.status(429).json({ success: false, error: "too_many_attempts", message: "Terlalu banyak percobaan kode yang salah. Silakan kirim ulang kode baru." });
-      }
-
-      const cleanOtp = String(otp).trim().replace(/\D/g, "");
-      if (session.otpCode !== cleanOtp) {
-        session.attempts = currentAttempts + 1;
-        if (session.attempts >= maxAttempts) {
-          session.status = "expired";
-        }
-        await savePendingSession(session);
-        const remaining = Math.max(0, maxAttempts - session.attempts);
-        return res.status(400).json({
-          success: false,
-          error: "invalid_otp",
-          message: remaining > 0 ? `Kode OTP salah. Sisa kesempatan: ${remaining} kali.` : "Kode OTP salah. Kesempatan habis, silakan kirim ulang kode baru.",
-          remainingAttempts: remaining
-        });
-      }
-
-      // OTP is valid! Mark as approved and issue token
-      session.status = "approved";
-      const userId = session.profile?.userId || `usr_${session.normPhone}`;
-      session.token = generateAuthToken({ userId, phone: session.normPhone });
-      await savePendingSession(session);
-
-      res.cookie("gymbuddy_token", session.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-      });
-
-      return res.json({
-        success: true,
-        status: "approved",
-        token: session.token,
-        profile: session.profile,
-        message: "Login berhasil terverifikasi."
-      });
-    } catch (e: any) {
-      console.error("[LoginVerifyOtp] Error:", e);
-      return res.status(500).json({ success: false, error: "server_error", message: e.message || "Gagal memverifikasi kode OTP." });
     }
   });
 
@@ -4868,54 +4899,31 @@ async function startServer() {
     });
   });
 
-  // Simulator endpoint strictly for local development testing (Disabled in production)
-  if (process.env.NODE_ENV !== "production") {
-    app.post("/api/auth/login-action", express.json(), async (req, res) => {
-      const { sessionId, action } = req.body;
-      const session = await getPendingSession(sessionId);
-      if (!session) {
-        return res.status(404).json({ success: false, error: "session_not_found" });
-      }
-      if (action === "approve") {
-        session.status = "approved";
-        const userId = session.profile?.userId || `usr_${session.normPhone}`;
-        session.token = generateAuthToken({ userId, phone: session.normPhone });
-        await savePendingSession(session);
-        return res.json({ success: true, status: "approved", token: session.token, profile: session.profile });
-      } else if (action === "reject") {
-        session.status = "rejected";
-        await savePendingSession(session);
-        return res.json({ success: true, status: "rejected" });
-      }
-      return res.status(400).json({ success: false, error: "invalid_action" });
-    });
-  }
-
   app.post("/api/auth/login-resend", express.json(), async (req, res) => {
     const { sessionId } = req.body;
     const session = await getPendingSession(sessionId);
     if (!session) {
       return res.status(404).json({ success: false, error: "session_not_found" });
     }
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
     session.createdAt = Date.now();
     session.expiresAt = Date.now() + 5 * 60 * 1000;
     session.status = "pending";
-    session.otpCode = newOtp;
-    session.attempts = 0;
     await savePendingSession(session);
 
     const waMsg = [
-      `🔐 *GymBuddy Login (Kirim Ulang)*`,
+      `🔐 *Konfirmasi Login GymBuddy (Kirim Ulang)*`,
       ``,
-      `Kode verifikasi (OTP) login GymBuddy kamu yang baru adalah:`,
-      `*${newOtp}*`,
+      `Apakah Anda mencoba login ke GymBuddy?`,
       ``,
       `📱 *Perangkat*: ${session.device}`,
       `📍 *Lokasi*: ${session.location}`,
       `⏱️ *Waktu*: ${session.timeStr}`,
       ``,
-      `Kode ini berlaku selama 5 menit. Masukkan kode ini pada website GymBuddy untuk masuk ke dashboard.`
+      `Balas pesan ini untuk memproses:`,
+      `*YA* — untuk mengonfirmasi login`,
+      `*TIDAK* — untuk membatalkan`,
+      ``,
+      `_Pesan ini berlaku selama 5 menit. Jangan balas YA jika ini bukan Anda._`
     ].join("\n");
 
     const delivered = await sendWhatsAppLoginMessage(session.normPhone, waMsg, session.sessionId);
@@ -5000,7 +5008,9 @@ async function startServer() {
         ...profile,
         normalizedPhone: canonicalPhone,
         phone: canonicalPhone,
-        userId: profile.userId || `usr_${localPhone}`
+        userId: profile.userId || `usr_${localPhone}`,
+        onboardingCompleted: true,
+        updatedAt: new Date().toISOString()
       };
 
       // Save under canonical and local keys
@@ -6013,25 +6023,31 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   app.get("/api/user/:phone/meals", async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
     const user = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
 
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
+    const canonicalKey = `${canonicalPhone}_${targetDate}`;
 
     // 1. In-memory cache is authoritative when loaded
     const hasMemKey = Array.isArray(dbData.dailyLogs[key]);
     const hasMemAltKey = Array.isArray(dbData.dailyLogs[altKey]);
+    const hasMemCanonicalKey = Array.isArray(dbData.dailyLogs[canonicalKey]);
 
     let logs: MealLog[] = [];
 
-    if (hasMemKey || hasMemAltKey) {
-      logs = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || []).filter(m => m && !isLegacyMockMeal(m));
+    if (hasMemKey || hasMemAltKey || hasMemCanonicalKey) {
+      logs = (dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || dbData.dailyLogs[canonicalKey] || []).filter(m => m && !isLegacyMockMeal(m));
     } else {
       // 2. Query persistent database layer on cold start
       try {
-        const dbLogs = await getFoodLogsForDate(phone, targetDate);
+        let dbLogs = await getFoodLogsForDate(phone, targetDate);
+        if ((!dbLogs || dbLogs.length === 0) && canonicalPhone && canonicalPhone !== phone) {
+          dbLogs = await getFoodLogsForDate(canonicalPhone, targetDate);
+        }
         if (dbLogs && dbLogs.length > 0) {
           logs = dbLogs.filter(m => m && !isLegacyMockMeal(m)) as unknown as MealLog[];
         }
@@ -6042,11 +6058,12 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
     logs = deduplicateMealLogs(logs);
 
-    // Persist cleaned deduplicated list back to server memory
+    // Persist cleaned deduplicated list back to server memory across all alias keys
     dbData.dailyLogs[key] = logs;
     dbData.dailyLogs[altKey] = logs;
+    if (canonicalKey) dbData.dailyLogs[canonicalKey] = logs;
 
-    res.json({ success: true, phone, date: targetDate, logs });
+    res.json({ success: true, phone, canonicalPhone, date: targetDate, logs });
   });
 
   // REST API: Add meal log for user (Idempotent by client-generated meal ID)
@@ -6061,6 +6078,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     }
     const mealObj: MealLog = {
       id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      type: meal.type || (meal.isHydration ? "hydration" : "meal"),
       foodName: meal.foodName,
       calories: Number(meal.calories) || 0,
       protein: Number(meal.protein) || 0,
@@ -6070,9 +6088,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       sugar: Number(meal.sugar) || 0,
       sodium: Number(meal.sodium) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
+      mealCategory: meal.mealCategory || (meal.mealType ? getMealTypeLabel(meal.mealType) : "MAKANAN"),
       timestamp: meal.timestamp || new Date().toISOString(),
-      isHydration: meal.isHydration === true || meal.isHydration === "true" ? true : (meal.isHydration === false || meal.isHydration === "false" ? false : undefined),
-      volumeMl: meal.volumeMl ? Number(meal.volumeMl) : undefined
+      isHydration: meal.type === "hydration" || meal.isHydration === true || meal.isHydration === "true" ? true : false,
+      amountMl: meal.amountMl ? Number(meal.amountMl) : (meal.volumeMl ? Number(meal.volumeMl) : undefined),
+      volumeMl: meal.volumeMl ? Number(meal.volumeMl) : (meal.amountMl ? Number(meal.amountMl) : undefined)
     };
 
     const key = `${phone}_${targetDate}`;
@@ -6126,23 +6146,29 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       console.warn("[Meals API] insertFoodLog note:", e?.message || e);
     }
 
-    res.json({ success: true, phone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
+    res.json({ success: true, phone, canonicalPhone, date: targetDate, meal: mealObj, logs: dbData.dailyLogs[key] });
   });
 
-  // REST API: Delete single meal log for user (cleans BOTH key and altKey and Firestore)
+  // REST API: Delete single meal log for user (cleans key, altKey, canonicalKey, and Firestore)
   app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
     const { mealId } = req.params;
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
+    const canonicalKey = `${canonicalPhone}_${targetDate}`;
 
     if (dbData.dailyLogs[key]) {
       dbData.dailyLogs[key] = dbData.dailyLogs[key].filter((m: any) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     if (dbData.dailyLogs[altKey]) {
       dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter((m: any) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
+    }
+    if (dbData.dailyLogs[canonicalKey]) {
+      dbData.dailyLogs[canonicalKey] = dbData.dailyLogs[canonicalKey].filter((m: any) => String(m.id) !== String(mealId) && String(m.foodName) !== String(mealId));
     }
     saveDb();
 
@@ -6151,29 +6177,39 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (altPhone !== phone) {
         await deleteFoodLog(mealId, altPhone, targetDate);
       }
+      if (canonicalPhone && canonicalPhone !== phone && canonicalPhone !== altPhone) {
+        await deleteFoodLog(mealId, canonicalPhone, targetDate);
+      }
     } catch (e: any) {
       console.warn("[Meals API] deleteFoodLog note:", e?.message || e);
     }
 
-    res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [] });
+    res.json({ success: true, phone, date: targetDate, logs: dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || dbData.dailyLogs[canonicalKey] || [] });
   });
 
   // REST API: Delete ALL meal logs for user on a date
   app.delete("/api/user/:phone/meals", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
+    const canonicalKey = `${canonicalPhone}_${targetDate}`;
 
     dbData.dailyLogs[key] = [];
     dbData.dailyLogs[altKey] = [];
+    dbData.dailyLogs[canonicalKey] = [];
     saveDb();
 
     try {
       await deleteAllFoodLogsForDate(phone, targetDate);
       if (altPhone !== phone) {
         await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
+      if (canonicalPhone && canonicalPhone !== phone && canonicalPhone !== altPhone) {
+        await deleteAllFoodLogsForDate(canonicalPhone, targetDate);
       }
     } catch (e: any) {
       console.warn("[Meals API] deleteAllFoodLogsForDate note:", e?.message || e);
@@ -6184,15 +6220,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
   // REST API: Full synchronization / replace of meal logs for user on a date
   app.put("/api/user/:phone/meals", express.json(), async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawPhone = req.params.phone;
+    const phone = normalizePhone(rawPhone);
+    const canonicalPhone = normalizePhoneToE164(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || req.body?.date || getLocalDateStr();
     const key = `${phone}_${targetDate}`;
     const altKey = `${altPhone}_${targetDate}`;
+    const canonicalKey = `${canonicalPhone}_${targetDate}`;
     const rawMeals = Array.isArray(req.body?.meals) ? req.body.meals : (Array.isArray(req.body) ? req.body : []);
 
     dbData.dailyLogs[key] = rawMeals;
     dbData.dailyLogs[altKey] = rawMeals;
+    dbData.dailyLogs[canonicalKey] = rawMeals;
     saveDb();
 
     // 1. Wipe previous Firestore logs for this date to prevent deleted items from resurrecting
@@ -6200,6 +6240,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       await deleteAllFoodLogsForDate(phone, targetDate);
       if (altPhone !== phone) {
         await deleteAllFoodLogsForDate(altPhone, targetDate);
+      }
+      if (canonicalPhone && canonicalPhone !== phone && canonicalPhone !== altPhone) {
+        await deleteAllFoodLogsForDate(canonicalPhone, targetDate);
       }
     } catch (e: any) {
       console.warn("[Meals API PUT] deleteAllFoodLogsForDate note:", e?.message || e);
@@ -7161,7 +7204,7 @@ Keluarkan output JSON valid:
     "Insight positif 1",
     "Insight positif 2"
   ],
-  "coachComment": "Komentar singkat khas persona coach"
+  "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
 Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
@@ -7925,7 +7968,7 @@ Keluarkan output JSON valid:
     "Sumber protein solid untuk pemulihan",
     "Porsi dan komposisi makro terkontrol"
   ],
-  "coachComment": "Komentar ramah khas persona coach"
+  "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
 Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
