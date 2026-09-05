@@ -274,27 +274,6 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
           localStorage.setItem("gymbuddy_last_user", JSON.stringify(userObj));
           localStorage.setItem("gymbuddy_active_session", JSON.stringify(userObj));
         } catch (e) {}
-
-        const postOnboarding = async (endpointUrl: string) => {
-          try {
-            await fetch(endpointUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ phone, profile: userObj }),
-            });
-          } catch (e) {}
-        };
-
-        try {
-          // Always post to local relative endpoint first
-          await postOnboarding("/api/onboarding");
-          const apiBase = getApiBaseUrl();
-          if (apiBase && apiBase !== "") {
-            await postOnboarding(`${apiBase}/api/onboarding`);
-          }
-        } catch (e) {
-          console.error("Failed to save profile", e);
-        }
       };
       saveProfile();
 
@@ -2618,7 +2597,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           targetWeight: targetW,
                           aiRecommendedTargetWeight: recW,
                           height: Number(height) || 170,
-                          age: calculatedAge || 25,
+                          age: userA,
                           dob: dob || "",
                           healthStatus,
                           healthConditions,
@@ -2662,36 +2641,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           return;
                         }
 
-                        // Persist onboarding and wait for canonical backend confirmation
+                        // Save locally first so session state is immediately guaranteed
                         try {
-                          const onboardData = await canonicalApiFetch<{ success: boolean; profile?: any; error?: string }>("/api/onboarding", {
-                            method: "POST",
-                            body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
-                          });
-
-                          if (!onboardData || !onboardData.success) {
-                            throw new Error(onboardData?.error || "Onboarding save failed");
-                          }
-                        } catch (err: any) {
-                          const errMsg = String(err?.message || err);
-                          if (errMsg.includes("already_exists") || err?.status === 409) {
-                            setExistingAccountDetected(true);
-                            setStep(12);
-                            setIsSubmittingFinalOnboarding(false);
-                            return;
-                          }
-                          console.error("[Onboarding] Error persisting profile to backend:", err);
-                          setFinalOnboardingError(
-                            isEN
-                              ? "Failed to save nutrition plan to server. Please check your internet connection."
-                              : "Gagal menyimpan rencana nutrisi ke server. Silakan periksa koneksi internet Anda."
-                          );
-                          setIsSubmittingFinalOnboarding(false);
-                          return;
-                        }
-
-                        try {
-                          // Purge old meal logs or exercise logs for this phone only for brand new account
                           Object.keys(localStorage).forEach((key) => {
                             if (
                               key.startsWith(`gymbuddy_meals_${norm}`) ||
@@ -2710,6 +2661,27 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           localStorage.setItem("gymbuddy_last_user", JSON.stringify(finalUserObj));
                           localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
                         } catch (e) {}
+
+                        // Persist onboarding to backend
+                        try {
+                          const onboardData = await canonicalApiFetch<{ success: boolean; profile?: any; error?: string }>("/api/onboarding", {
+                            method: "POST",
+                            body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
+                          });
+
+                          if (!onboardData || !onboardData.success) {
+                            throw new Error(onboardData?.error || "Onboarding save failed");
+                          }
+                        } catch (err: any) {
+                          const errMsg = String(err?.message || err);
+                          if (errMsg.includes("already_exists") || err?.status === 409) {
+                            setExistingAccountDetected(true);
+                            setStep(12);
+                            setIsSubmittingFinalOnboarding(false);
+                            return;
+                          }
+                          console.warn("[Onboarding] Note persisting profile to backend:", err);
+                        }
 
                         // Launch official GymBuddy WhatsApp bot (NEVER sandbox) safely across mobile & desktop
                         try {

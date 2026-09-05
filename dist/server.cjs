@@ -50993,11 +50993,14 @@ async function startServer() {
     try {
       const alreadyExists = await isExistingUserPhone(canonicalPhone);
       if (alreadyExists) {
-        return res.status(409).json({
-          success: false,
-          error: "account_already_exists",
-          message: "Akun dengan nomor WhatsApp ini sudah terdaftar. Silakan login."
-        });
+        const existingProfile = await findUserByPhoneOrId(canonicalPhone) || getUserProfile(canonicalPhone);
+        if (existingProfile && existingProfile.passwordHash) {
+          return res.status(409).json({
+            success: false,
+            error: "account_already_exists",
+            message: "Akun dengan nomor WhatsApp ini sudah terdaftar. Silakan login."
+          });
+        }
       }
       const localPhone = normalizePhoneToLocal(canonicalPhone);
       const finalProfile = {
