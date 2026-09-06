@@ -2336,8 +2336,9 @@ export function getDailyTotals(rawPhone: string, targetDateStr?: string) {
     fiber += Number(log.fiber) || 0;
     sugar += Number((log as any).sugar) || 0;
     sodium += Number((log as any).sodium) || 0;
-    if (log.isHydration || isPlainWaterName(log.foodName) || isLiquidName(log.foodName)) {
-      waterMl += Number(log.volumeMl) || extractVolumeMlFromName(log.foodName) || 250;
+    // Strictly count hydration ONLY when explicitly logged as hydration or plain water (never meals/food)
+    if (log.isHydration === true || log.type === "hydration" || (isPlainWaterName(log.foodName) && log.type !== "meal")) {
+      waterMl += Number(log.volumeMl) || Number((log as any).amountMl) || extractVolumeMlFromName(log.foodName) || 250;
     }
   }
 
@@ -2368,7 +2369,10 @@ function isLiquidName(name: string): boolean {
     "cumi", "pancong", "roti", "martabak", "cake", "kue", "pancake", "waffle",
     "biskuit", "sereal", "cereal", "ice cream", "es krim", "keju", "pudding",
     "puding", "bubur", "bolu", "donat", "pie", "tart", "saus", "sauce",
-    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak"
+    "selai", "topping", "crepe", "churros", "pisang", "salad", "steak",
+    "chocolate", "cokelat", "coklat", "silverqueen", "silver queen", "cadbury",
+    "candy", "permen", "wafer", "cookies", "kukis", "bites", "bar", "chips",
+    "keripik", "crisp", "snack"
   ];
 
   if (solidExceptions.some((se) => lower.includes(se))) {
@@ -5889,10 +5893,17 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
       const userInputFoodName = cleanText;
 
       if (!getAi()) {
+        const isPureWater = Boolean(deterministicResult.isHydration);
         return res.json({
           success: true,
           ...deterministicResult,
           foodName: userInputFoodName, // Override with original user input
+          originalInput: userInputFoodName,
+          resolvedFoodName: deterministicResult.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: deterministicResult.mealType === "snack" ? "SNACK" : (isPureWater ? "AIR" : "MAKANAN"),
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(deterministicResult.volumeMl) : 0,
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -5910,6 +5921,8 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
             success: true,
             isFood: false,
             foodName: userInputFoodName,
+            originalInput: userInputFoodName,
+            resolvedFoodName: userInputFoodName,
             message: "Objek ini bukan makanan atau minuman. Silakan masukkan nama makanan yang ingin dicatat.",
             calories: 0,
             protein: 0,
@@ -5933,12 +5946,17 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
 
         const genericCheck = isGenericMealInput(cleanText);
         const isLowConfidence = genericCheck.isGeneric || calculatedNutrition.overallConfidence === "low" || calculatedNutrition.needsClarification;
+        const isPureWater = Boolean(calculatedNutrition.isHydration);
 
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
+          originalInput: userInputFoodName,
+          resolvedFoodName: calculatedNutrition.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: calculatedNutrition.mealType === "snack" ? "SNACK" : (isPureWater ? "AIR" : "MAKANAN"),
           calories: isLowConfidence ? undefined : calculatedNutrition.calories,
           protein: isLowConfidence ? undefined : calculatedNutrition.protein,
           carbs: isLowConfidence ? undefined : calculatedNutrition.carbs,
@@ -5946,13 +5964,15 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
           fiber: isLowConfidence ? undefined : calculatedNutrition.fiber,
           sugar: isLowConfidence ? undefined : calculatedNutrition.sugar,
           sodium: isLowConfidence ? undefined : calculatedNutrition.sodium,
-          isHydration: Boolean(calculatedNutrition.isHydration),
-          volumeMl: Number(calculatedNutrition.volumeMl) || 0,
-          mealType: parsed.mealType || calculatedNutrition.mealType,
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(calculatedNutrition.volumeMl) : 0,
+          mealType: calculatedNutrition.mealType || parsed.mealType,
           portionNote: calculatedNutrition.portionNote,
           items: calculatedNutrition.components.map((c: any) => ({
             food_name: c.foodName,
             normalized_food_name: c.normalizedName,
+            original_input: c.originalInput || userInputFoodName,
+            resolved_food_name: c.resolvedFoodName || c.normalizedName,
             database_id: c.databaseId,
             data_source: c.source,
             estimated_quantity: 1,
@@ -5980,10 +6000,17 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
         });
       } catch (aiErr) {
         console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
+        const isPureWater = Boolean(deterministicResult.isHydration);
         res.json({
           success: true,
           ...deterministicResult,
           foodName: userInputFoodName, // Override with original user input
+          originalInput: userInputFoodName,
+          resolvedFoodName: deterministicResult.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: deterministicResult.mealType === "snack" ? "SNACK" : (isPureWater ? "AIR" : "MAKANAN"),
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(deterministicResult.volumeMl) : 0,
           note: "Estimated using USDA & TKPI verified database"
         });
       }

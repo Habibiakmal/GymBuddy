@@ -342,17 +342,19 @@ const splitAndCategorizeComboText = (
 
     liquidParts.forEach((part, idx) => {
       const vol = extractVolumeMlFromName(part) || 250;
+      const isPlainWater = isPlainWaterName(part);
       drinks.push({
         id: `m-drink-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
-        type: "hydration",
+        type: isPlainWater ? "hydration" : "meal",
+        mealCategory: isPlainWater ? "AIR" : "MINUMAN",
         foodName: part,
         calories: perDrinkCal,
         protein: perDrinkProt,
         carbs: perDrinkCarb,
         fat: perDrinkFat,
-        isHydration: true,
-        amountMl: vol,
-        volumeMl: vol,
+        isHydration: isPlainWater,
+        amountMl: isPlainWater ? vol : undefined,
+        volumeMl: isPlainWater ? vol : undefined,
         timestamp: nowIso
       });
     });
@@ -2784,9 +2786,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             resultItems = bData.items;
             portionNote = bData.portionNote || (resultItems.length === 1 ? "1 meal detected" : `${resultItems.length} food items detected`);
           }
-          resultFoodName = bData.foodName || baseEstimation.foodName;
-          isHydration = Boolean(bData.isHydration || baseEstimation.isHydration);
-          volumeMl = Number(bData.volumeMl) || baseEstimation.volumeMl || 0;
+          resultFoodName = bData.resolvedFoodName || bData.foodName || baseEstimation.foodName;
+          isHydration = Boolean(bData.isHydration);
+          volumeMl = isHydration ? (Number(bData.volumeMl) || baseEstimation.volumeMl || 0) : 0;
+          confidence = bData.confidence || baseEstimation.confidence || "medium";
 
           if (bData.needsClarification || bData.confidence === "low") {
             needsClarification = true;
@@ -2830,6 +2833,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
     const validatedResult: MealNutritionResult & any = {
       foodName: originalUserInput,
+      originalInput: originalUserInput,
+      resolvedFoodName: resultFoodName,
       calories: needsClarification ? undefined : calories,
       protein: needsClarification ? undefined : protein,
       carbs: needsClarification ? undefined : carbs,
@@ -2841,9 +2846,10 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       portionNote: portionNote || (resultItems.length === 1 ? "1 meal detected" : `${resultItems.length} food items detected`),
       isHydration,
       volumeMl,
-      mealType: "lunch",
+      mealType: baseEstimation.mealType || "lunch",
       calculatedFromItems: true,
       confidence,
+      requiresReview: confidence !== "high",
       needsClarification,
       clarificationQuestion,
       suggestedOptions,
@@ -7480,6 +7486,16 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </span>
                         </div>
 
+                        {/* Prominent Uncertainty Warning Banner for Medium/Low Confidence */}
+                        {((aiPreview as any).confidence === "medium" || (aiPreview as any).confidence === "low" || (aiPreview as any).requiresReview) && (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-left">
+                            <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+                            <span className="text-xs font-semibold text-amber-200 leading-relaxed">
+                              ⚠️ Periksa hasil AI: AI belum yakin dengan makanan yang terdeteksi. Pastikan nama dan porsinya sudah benar sebelum menyimpan.
+                            </span>
+                          </div>
+                        )}
+
                         {/* Per-item breakdown list */}
                         {aiPreview.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 0 && (
                           <div className="p-2.5 bg-[#181818]/90 rounded-xl border border-white/[0.08]/80 space-y-2">
@@ -7503,7 +7519,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           <span className="text-neutral-100 font-bold text-xs leading-tight">
-                                            • {it.normalized_food_name || it.food_name}
+                                            • {it.resolved_food_name || it.normalized_food_name || it.food_name}
                                           </span>
                                         </div>
                                         <span className="text-[10px] text-neutral-400 font-medium block mt-0.5">

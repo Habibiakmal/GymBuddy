@@ -43706,13 +43706,13 @@ var NUTRITION_DATABASE = [
   // ── DAIRY, NUTS, FATS & TOPPINGS ──────────────────────────────
   {
     id: "usda_milk_uht",
-    keywords: ["susu", "milk", "susu uht", "fresh milk"],
+    keywords: ["susu sapi uht", "susu sapi", "susu uht", "fresh milk", "susu murni", "cow milk", "susu", "milk"],
     normalizedName: "Susu Sapi / UHT (1 Gelas)",
     category: "dairy",
     defaultServingGrams: 250,
     servingUnit: "1 gelas (250ml)",
     per100g: { calories: 60, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 4.8, sodium: 43 },
-    isHydration: true,
+    isHydration: false,
     defaultVolumeMl: 250,
     source: "USDA"
   },
@@ -43767,7 +43767,143 @@ var NUTRITION_DATABASE = [
     per100g: { calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9, sodium: 450 },
     source: "USDA"
   },
+  // ── SNACKS, CONFECTIONERY & SWEETS ────────────────────────────
+  {
+    id: "usda_silverqueen_bites",
+    keywords: ["silverqueen bites milk chocolate", "silverqueen bites", "silver queen bites", "silverqueen milk chocolate", "silverqueen", "silver queen"],
+    normalizedName: "SilverQueen Bites Milk Chocolate",
+    category: "snack",
+    defaultServingGrams: 30,
+    perPieceGrams: 30,
+    servingUnit: "1 bungkus (30g)",
+    per100g: { calories: 535, protein: 7.6, carbs: 59.4, fat: 29.7, fiber: 3.4, sugar: 51.5, sodium: 79 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_milk_chocolate",
+    keywords: ["milk chocolate", "coklat susu", "cokelat susu", "cadbury dairy milk", "cadbury", "chocolate bar", "cokelat batang", "coklat batang"],
+    normalizedName: "Milk Chocolate / Cokelat Batang",
+    category: "snack",
+    defaultServingGrams: 30,
+    perPieceGrams: 30,
+    servingUnit: "1 bar (30g)",
+    per100g: { calories: 535, protein: 7.6, carbs: 59.4, fat: 29.7, fiber: 3.4, sugar: 51.5, sodium: 79 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_dark_chocolate",
+    keywords: ["dark chocolate", "coklat hitam", "cokelat hitam", "dark chocolate bar"],
+    normalizedName: "Dark Chocolate (70-85% Cacao)",
+    category: "snack",
+    defaultServingGrams: 30,
+    perPieceGrams: 30,
+    servingUnit: "1 bar (30g)",
+    per100g: { calories: 598, protein: 7.8, carbs: 45.9, fat: 42.6, fiber: 10.9, sugar: 24, sodium: 20 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_chocolate_general",
+    keywords: ["chocolate", "coklat", "cokelat", "permen cokelat", "permen coklat"],
+    normalizedName: "Cokelat / Chocolate",
+    category: "snack",
+    defaultServingGrams: 30,
+    perPieceGrams: 30,
+    servingUnit: "1 porsi (30g)",
+    per100g: { calories: 535, protein: 7.6, carbs: 59.4, fat: 29.7, fiber: 3.4, sugar: 51.5, sodium: 79 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_potato_chips",
+    keywords: ["chitato sapi panggang", "chitato", "keripik kentang", "potato chips", "lays", "potabee", "pringles", "keripik"],
+    normalizedName: "Keripik Kentang (Potato Chips)",
+    category: "snack",
+    defaultServingGrams: 35,
+    servingUnit: "1 bungkus kecil (35g)",
+    per100g: { calories: 536, protein: 7, carbs: 53, fat: 34, fiber: 4.8, sugar: 0.5, sodium: 520 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_cookies",
+    keywords: ["cookies", "kukis", "oreo", "biskuit", "cookie", "good time"],
+    normalizedName: "Cookies / Biskuit (3-4 pcs)",
+    category: "snack",
+    defaultServingGrams: 35,
+    perPieceGrams: 10,
+    servingUnit: "1 porsi (35g)",
+    per100g: { calories: 480, protein: 5.5, carbs: 68, fat: 21, fiber: 2.5, sugar: 35, sodium: 380 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "usda_wafer",
+    keywords: ["wafer", "tango", "beng beng", "beng-beng", "kitkat", "kit kat", "wafer cokelat"],
+    normalizedName: "Wafer Cokelat",
+    category: "snack",
+    defaultServingGrams: 30,
+    servingUnit: "1 bungkus (30g)",
+    per100g: { calories: 510, protein: 6, carbs: 64, fat: 26, fiber: 2, sugar: 38, sodium: 180 },
+    isHydration: false,
+    source: "USDA"
+  },
+  {
+    id: "tkpi_gyukatsu",
+    keywords: ["gyukatsu", "beef katsu", "gyu katsu", "beef katsu goreng"],
+    normalizedName: "Gyukatsu (Beef Katsu Goreng)",
+    category: "protein",
+    defaultServingGrams: 150,
+    perPieceGrams: 150,
+    servingUnit: "1 porsi (~150g)",
+    per100g: { calories: 280, protein: 22, carbs: 12, fat: 16, fiber: 0.8, sugar: 0.5, sodium: 420 },
+    isHydration: false,
+    source: "USDA"
+  },
   // ── BEVERAGES ──────────────────────────────────────────────────
+  {
+    id: "usda_chocolate_milk",
+    keywords: ["susu cokelat", "chocolate milk", "susu coklat", "milo siap minum", "susu rasa cokelat"],
+    normalizedName: "Susu Cokelat (1 Gelas / Kotak)",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "1 kotak / gelas (250ml)",
+    per100g: { calories: 83, protein: 3.2, carbs: 12, fat: 2.5, fiber: 0.8, sugar: 11.5, sodium: 60 },
+    isHydration: false,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    id: "usda_kopi_susu_gula_aren",
+    keywords: ["kopi susu gula aren", "es kopi susu gula aren", "kopi gula aren", "kopi kenangan mantan", "es kopi susu"],
+    normalizedName: "Kopi Susu Gula Aren",
+    category: "beverage",
+    defaultServingGrams: 250,
+    servingUnit: "1 cup (250ml)",
+    per100g: { calories: 85, protein: 1.8, carbs: 14.5, fat: 2.2, fiber: 0, sugar: 12, sodium: 35 },
+    isHydration: false,
+    defaultVolumeMl: 250,
+    source: "USDA"
+  },
+  {
+    id: "tkpi_jus_alpukat",
+    keywords: ["jus alpukat", "avocado juice", "es jus alpukat"],
+    normalizedName: "Jus Alpukat",
+    category: "beverage",
+    defaultServingGrams: 300,
+    servingUnit: "1 gelas (300ml)",
+    per100g: { calories: 75, protein: 1.2, carbs: 9.5, fat: 4.5, fiber: 3, sugar: 5.5, sodium: 4 },
+    cookingVariants: {
+      "tanpa gula": { calories: 52, protein: 1.2, carbs: 4.5, fat: 4.5, fiber: 3, sugar: 1, sodium: 4 },
+      "no sugar": { calories: 52, protein: 1.2, carbs: 4.5, fat: 4.5, fiber: 3, sugar: 1, sodium: 4 },
+      "less sugar": { calories: 62, protein: 1.2, carbs: 7, fat: 4.5, fiber: 3, sugar: 3, sodium: 4 }
+    },
+    isHydration: false,
+    defaultVolumeMl: 300,
+    source: "TKPI"
+  },
   {
     id: "usda_water_mineral",
     keywords: ["mineral water 500ml", "mineral water", "air putih", "air mineral", "plain water", "aqua", "le minerale", "vit", "cleo", "air"],
@@ -43949,16 +44085,69 @@ function splitFoodItems(rawInput) {
   }
   return finalItems.length > 0 ? finalItems : [cleaned];
 }
+function validateSemanticCompatibility(userInput, candidateRef) {
+  const lower = userInput.toLowerCase();
+  const refCategory = candidateRef.category;
+  const refId = candidateRef.id || "";
+  const refNormalized = candidateRef.normalizedName.toLowerCase();
+  const hasConfectioneryNoun = /(?:chocolate|cokelat|coklat|silverqueen|cadbury|candy|permen|wafer|cookies|kukis|biskuit|bites|chips|keripik|snack\s*bar)/i.test(lower);
+  const isExplicitDrinkPhrase = /(?:susu\s*(?:cokelat|coklat|murni|sapi|kedelai|almond|oat)|chocolate\s*milk|minuman\s*cokelat|milkshake|es\s*cokelat|ice\s*chocolate)/i.test(lower);
+  if (hasConfectioneryNoun && !isExplicitDrinkPhrase) {
+    if (refCategory === "dairy" && (refId.includes("milk") || refNormalized.includes("susu"))) {
+      return false;
+    }
+    if (refCategory === "beverage") {
+      return false;
+    }
+  }
+  const hasChipsNoun = /(?:chips|keripik|chitato|lays|snack|kripik)/i.test(lower);
+  if (hasChipsNoun) {
+    if (refCategory === "protein" || refCategory === "fat") {
+      return false;
+    }
+  }
+  const hasCoffeeOrTeaNoun = /(?:kopi|coffee|espresso|americano|latte|cappuccino|teh|tea|matcha|boba)/i.test(lower);
+  if (hasCoffeeOrTeaNoun && !lower.includes("susu murni") && !lower.includes("susu sapi")) {
+    if (refId === "usda_milk_uht" || refCategory === "dairy" && refNormalized.includes("susu sapi")) {
+      return false;
+    }
+  }
+  if (lower.includes("gyukatsu") || lower.includes("beef") && !lower.includes("chicken") && !lower.includes("ayam")) {
+    if (refNormalized.includes("chicken") || refNormalized.includes("ayam")) {
+      return false;
+    }
+  }
+  return true;
+}
 function calculateSingleItemNutrition(rawItemText) {
   const { quantity, explicitGrams, explicitVolumeMl, multiplier, cookingMethod, cleanedText } = parseQuantityAndUnit(rawItemText);
   const lower = cleanedText.toLowerCase();
   let matchedRef = null;
   let bestScore = 0;
   for (const ref of NUTRITION_DATABASE) {
+    if (!validateSemanticCompatibility(cleanedText, ref)) {
+      continue;
+    }
     for (const kw of ref.keywords) {
-      if (lower.includes(kw)) {
-        let score = kw.length;
+      const kwLower = kw.toLowerCase();
+      if ((kwLower === "milk" || kwLower === "susu") && /(?:chocolate|cokelat|coklat|silverqueen|cadbury|candy|permen|cookies|biskuit|wafer|cake|kue|shake|ice\s*cream)/i.test(lower) && !/(?:susu\s*(?:cokelat|coklat)|chocolate\s*milk)/i.test(lower)) {
+        continue;
+      }
+      if ((kwLower === "sapi" || kwLower === "beef") && /(?:chitato|keripik|chips|crisp|snack)/i.test(lower)) {
+        continue;
+      }
+      if ((kwLower === "kopi" || kwLower === "coffee") && /(?:cake|kue|permen|candy|dessert|tiramisu)/i.test(lower) && !/(?:minum|es\s*kopi|kopi\s*susu|kopi\s*hitam)/i.test(lower)) {
+        continue;
+      }
+      const escaped = kwLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(^|\\b|\\s)${escaped}(\\b|\\s|$)`, "i");
+      if (regex.test(lower)) {
+        let score = kwLower.length;
+        if (lower === kwLower) score += 60;
         if (ref.source === "TKPI") score += 2;
+        if (kwLower.includes("silverqueen") || kwLower.includes("chitato") || kwLower.includes("gyukatsu") || kwLower.includes("gula aren")) {
+          score += 30;
+        }
         if (score > bestScore) {
           bestScore = score;
           matchedRef = ref;
@@ -43968,8 +44157,9 @@ function calculateSingleItemNutrition(rawItemText) {
   }
   if (matchedRef) {
     const isBeverage = matchedRef.category === "beverage";
-    const isWater = isBeverage && matchedRef.keywords.some((k) => k.includes("air") || k.includes("water") || k.includes("mineral"));
+    const isWater = isBeverage && matchedRef.keywords.some((k) => k.includes("air") || k.includes("water") || k.includes("mineral")) && !matchedRef.keywords.some((k) => k.includes("susu") || k.includes("kopi") || k.includes("teh") || k.includes("jus"));
     const itemType2 = isWater ? "water" : isBeverage ? "beverage" : "food";
+    const semanticCategory2 = matchedRef.category === "snack" ? "snack" : isBeverage ? "beverage" : "meal";
     let targetGrams2 = 0;
     let targetVolumeMl2 = void 0;
     let portionType2 = "estimated";
@@ -44012,7 +44202,14 @@ function calculateSingleItemNutrition(rawItemText) {
       }
     }
     let per100g = matchedRef.per100g;
-    if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
+    const isNoSugar = /(?:tanpa gula|no sugar|less sugar|tawar|unsweetened)/i.test(rawItemText);
+    if (isNoSugar && matchedRef.cookingVariants) {
+      if (/(?:tanpa gula|no sugar|tawar|unsweetened)/i.test(rawItemText) && matchedRef.cookingVariants["tanpa gula"]) {
+        per100g = matchedRef.cookingVariants["tanpa gula"];
+      } else if (/less sugar/i.test(rawItemText) && matchedRef.cookingVariants["less sugar"]) {
+        per100g = matchedRef.cookingVariants["less sugar"];
+      }
+    } else if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
       per100g = matchedRef.cookingVariants[cookingMethod];
     } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
       per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
@@ -44020,21 +44217,29 @@ function calculateSingleItemNutrition(rawItemText) {
     const factor = targetGrams2 / 100;
     const protein = Math.round(per100g.protein * factor * 10) / 10;
     const carbs = Math.round(per100g.carbs * factor * 10) / 10;
-    const fat2 = Math.round(per100g.fat * factor * 10) / 10;
+    const fat = Math.round(per100g.fat * factor * 10) / 10;
     const fiber = Math.round(per100g.fiber * factor * 10) / 10;
     const sugar = Math.round(per100g.sugar * factor * 10) / 10;
     const baseSodium = per100g.sodium !== void 0 ? per100g.sodium : matchedRef.category === "condiment" ? 400 : 50;
     const sodium = Math.round(baseSodium * factor);
-    const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat2 * 9);
+    const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
     const rawCal = Math.round(per100g.calories * factor);
     const calories = atwaterCal > 0 ? atwaterCal : rawCal;
+    const isExactOrVeryHigh = bestScore >= 20 || lower === matchedRef.normalizedName.toLowerCase();
     const portionConf = portionType2 === "user_provided" ? 95 : 75;
     const dbConf = bestScore > 5 ? 95 : 85;
+    const overallConfidence = isExactOrVeryHigh ? "high" : "medium";
+    const confidenceScore = isExactOrVeryHigh ? 0.95 : 0.75;
+    const requiresReview = overallConfidence !== "high";
     return {
       foodName: rawItemText.trim(),
       normalizedName: matchedRef.normalizedName,
       food_name: rawItemText.trim(),
       normalized_food_name: matchedRef.normalizedName,
+      originalInput: rawItemText.trim(),
+      original_input: rawItemText.trim(),
+      resolvedFoodName: matchedRef.normalizedName,
+      resolved_food_name: matchedRef.normalizedName,
       databaseId: matchedRef.id || `db_${matchedRef.source.toLowerCase()}_${matchedRef.normalizedName.replace(/\s+/g, "_").toLowerCase()}`,
       source: matchedRef.source,
       data_source: matchedRef.source,
@@ -44050,21 +44255,25 @@ function calculateSingleItemNutrition(rawItemText) {
       display_unit: displayUnit2,
       item_type: itemType2,
       portion_type: portionType2,
+      semanticCategory: semanticCategory2,
       calories,
       protein,
       carbs,
-      fat: fat2,
+      fat,
       fiber,
       sugar,
       sodium,
       isHydration: isWater,
       is_hydration: isWater,
-      volumeMl: targetVolumeMl2,
-      volume_ml: targetVolumeMl2,
+      volumeMl: isWater ? targetVolumeMl2 : void 0,
+      volume_ml: isWater ? targetVolumeMl2 : void 0,
       recognitionConfidence: 95,
       databaseMatchConfidence: dbConf,
       portionConfidence: portionConf,
-      confidence: portionType2 === "user_provided" ? "high" : "medium",
+      confidence: overallConfidence,
+      confidenceScore,
+      confidenceLevel: overallConfidence,
+      requiresReview,
       notes: `${displayUnit2} (${matchedRef.source})`
     };
   }
@@ -44075,6 +44284,10 @@ function calculateSingleItemNutrition(rawItemText) {
       normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
       food_name: rawItemText.trim(),
       normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      originalInput: rawItemText.trim(),
+      original_input: rawItemText.trim(),
+      resolvedFoodName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      resolved_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
       databaseId: "non_food",
       source: "verified_nutrition_database",
       data_source: "verified_nutrition_database",
@@ -44090,6 +44303,7 @@ function calculateSingleItemNutrition(rawItemText) {
       display_unit: "-",
       item_type: "food",
       portion_type: "estimated",
+      semanticCategory: "meal",
       calories: 0,
       protein: 0,
       carbs: 0,
@@ -44105,32 +44319,70 @@ function calculateSingleItemNutrition(rawItemText) {
       databaseMatchConfidence: 99,
       portionConfidence: 99,
       confidence: "high",
+      confidenceScore: 0.99,
+      confidenceLevel: "high",
+      requiresReview: false,
       notes: "Objek ini bukan makanan atau minuman"
     };
   }
-  const isBeverageGuess = /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
-  const isWaterGuess = /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
+  const isSnackGuess = /(?:chocolate|coklat|cokelat|silverqueen|cadbury|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack|bar)/i.test(cleanedText);
+  const isBeverageGuess = !isSnackGuess && /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
+  const isWaterGuess = !isSnackGuess && /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
   const itemType = isWaterGuess ? "water" : isBeverageGuess ? "beverage" : "food";
-  const targetGrams = explicitGrams || explicitVolumeMl || Math.round((isBeverageGuess ? 250 : 100) * multiplier * quantity);
-  const targetVolumeMl = isBeverageGuess ? targetGrams : void 0;
+  const semanticCategory = isSnackGuess ? "snack" : isBeverageGuess ? "beverage" : "meal";
+  let targetGrams = 0;
+  let targetVolumeMl = void 0;
+  let displayUnit = "";
+  let cal = 0, prot = 0, carb = 0, fatVal = 0, fibVal = 0, sugVal = 0, sodVal = 50;
+  if (isSnackGuess) {
+    targetGrams = explicitGrams || 30;
+    displayUnit = `${targetGrams}g`;
+    prot = Math.round(7.6 * (targetGrams / 100) * 10) / 10;
+    carb = Math.round(59.4 * (targetGrams / 100) * 10) / 10;
+    fatVal = Math.round(29.7 * (targetGrams / 100) * 10) / 10;
+    fibVal = Math.round(3.4 * (targetGrams / 100) * 10) / 10;
+    sugVal = Math.round(45 * (targetGrams / 100) * 10) / 10;
+    sodVal = Math.round(80 * (targetGrams / 100));
+    cal = Math.round(prot * 4 + carb * 4 + fatVal * 9);
+  } else if (isBeverageGuess || isWaterGuess) {
+    targetGrams = explicitGrams || explicitVolumeMl || Math.round(250 * multiplier * quantity);
+    targetVolumeMl = targetGrams;
+    displayUnit = `${targetGrams} ml`;
+    prot = isWaterGuess ? 0 : Math.round(1 * (targetGrams / 100) * 10) / 10;
+    carb = isWaterGuess ? 0 : Math.round(8 * (targetGrams / 100) * 10) / 10;
+    fatVal = isWaterGuess ? 0 : Math.round(1 * (targetGrams / 100) * 10) / 10;
+    fibVal = 0;
+    sugVal = isWaterGuess ? 0 : Math.round(6 * (targetGrams / 100) * 10) / 10;
+    sodVal = isWaterGuess ? 5 : 20;
+    cal = Math.round(prot * 4 + carb * 4 + fatVal * 9);
+  } else {
+    targetGrams = explicitGrams || Math.round(100 * multiplier * quantity);
+    displayUnit = `${targetGrams}g`;
+    prot = Math.round(4 * (targetGrams / 100) * 10) / 10;
+    carb = Math.round(15 * (targetGrams / 100) * 10) / 10;
+    fatVal = Math.round(3 * (targetGrams / 100) * 10) / 10;
+    fibVal = 1;
+    sugVal = 1;
+    sodVal = 150;
+    cal = Math.round(prot * 4 + carb * 4 + fatVal * 9);
+  }
   const portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
-  const displayUnit = isBeverageGuess ? `${targetGrams} ml` : `${targetGrams}g`;
-  const prot = Math.round((isBeverageGuess ? 0 : 4) * (targetGrams / 100) * 10) / 10;
-  const carb = Math.round((isBeverageGuess ? 5 : 15) * (targetGrams / 100) * 10) / 10;
-  const fat = Math.round((isBeverageGuess ? 0 : 3) * (targetGrams / 100) * 10) / 10;
-  const cal = Math.round(prot * 4 + carb * 4 + fat * 9);
   return {
     foodName: rawItemText.trim(),
     normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
     food_name: rawItemText.trim(),
     normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    originalInput: rawItemText.trim(),
+    original_input: rawItemText.trim(),
+    resolvedFoodName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    resolved_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
     databaseId: "ai_estimate_fallback",
     source: "ai_estimation",
     data_source: "ai_estimation",
     referenceAmount: 100,
     referenceUnit: "g",
     actualAmount: targetGrams,
-    actualUnit: isBeverageGuess ? "ml" : "g",
+    actualUnit: isBeverageGuess || isWaterGuess ? "ml" : "g",
     cookingMethod,
     cooking_method: cookingMethod,
     estimated_quantity: quantity,
@@ -44139,22 +44391,27 @@ function calculateSingleItemNutrition(rawItemText) {
     display_unit: displayUnit,
     item_type: itemType,
     portion_type: portionType,
+    semanticCategory,
     calories: cal,
     protein: prot,
     carbs: carb,
-    fat,
-    fiber: 0,
-    sugar: isBeverageGuess ? 4 : 1,
-    sodium: isBeverageGuess ? 10 : 150,
+    fat: fatVal,
+    fiber: fibVal,
+    sugar: sugVal,
+    sodium: sodVal,
     isHydration: isWaterGuess,
     is_hydration: isWaterGuess,
-    volumeMl: targetVolumeMl,
-    volume_ml: targetVolumeMl,
-    recognitionConfidence: 60,
-    databaseMatchConfidence: 50,
+    volumeMl: isWaterGuess ? targetVolumeMl : void 0,
+    volume_ml: isWaterGuess ? targetVolumeMl : void 0,
+    recognitionConfidence: isSnackGuess ? 70 : 60,
+    databaseMatchConfidence: isSnackGuess ? 65 : 50,
     portionConfidence: portionType === "user_provided" ? 90 : 50,
-    confidence: "low",
-    notes: "Estimasi generik"
+    confidence: isSnackGuess ? "medium" : "low",
+    confidenceScore: isSnackGuess ? 0.65 : 0.4,
+    confidenceLevel: isSnackGuess ? "medium" : "low",
+    requiresReview: true,
+    clarificationPrompt: "Periksa hasil estimasi makanan ini dan sesuaikan porsinya jika perlu.",
+    notes: isSnackGuess ? "Estimasi camilan / snack" : isBeverageGuess ? "Estimasi minuman" : "Estimasi generik"
   };
 }
 function validateNutrientSanity(data) {
@@ -44372,6 +44629,12 @@ function calculateCompositeNutrition(components) {
     minRecogConf = Math.min(minRecogConf, item.recognitionConfidence);
     traceability.push(`\u2022 [${item.source}] ${item.normalizedName} (${item.actualAmount}${item.actualUnit}) -> ${item.calories} kcal | P:${item.protein}g C:${item.carbs}g F:${item.fat}g Sug:${item.sugar}g Na:${item.sodium}mg`);
   }
+  const allPureWaterHydration = componentResults.length > 0 && componentResults.every((c) => c.isHydration);
+  const finalIsHydration = allPureWaterHydration;
+  const finalVolumeMl = allPureWaterHydration ? totalVolumeMl : 0;
+  const allSnacks = componentResults.length > 0 && componentResults.every((c) => c.semanticCategory === "snack");
+  const derivedMealType = allSnacks ? "snack" : "lunch";
+  const semanticCategory = allSnacks ? "snack" : componentResults.every((c) => c.semanticCategory === "beverage") ? "beverage" : "meal";
   const validatedProtein = Math.round(sumProtein * 10) / 10;
   const validatedCarbs = Math.round(sumCarbs * 10) / 10;
   const validatedFat = Math.round(sumFat * 10) / 10;
@@ -44388,11 +44651,13 @@ function calculateCompositeNutrition(components) {
     sugar: validatedSugar,
     sodium: validatedSodium
   });
-  const overallConf = minPortionConf >= 85 && minDbConf >= 85 ? "high" : minPortionConf >= 65 ? "medium" : "low";
+  const overallConf = componentResults.some((c) => c.confidenceLevel === "low") ? "low" : componentResults.some((c) => c.confidenceLevel === "medium" || c.requiresReview) ? "medium" : minPortionConf >= 85 && minDbConf >= 85 ? "high" : "medium";
+  const requiresReview = componentResults.some((c) => c.requiresReview);
   const title = componentResults.length === 1 ? componentResults[0].normalizedName : componentResults.map((c) => c.normalizedName.split("(")[0].trim()).join(" + ");
   const portionNote = componentResults.length === 1 ? "1 item detected" : `${componentResults.length} components detected`;
   return {
     foodName: title,
+    resolvedFoodName: title,
     calories: validatedCalories,
     protein: validatedProtein,
     carbs: validatedCarbs,
@@ -44400,9 +44665,10 @@ function calculateCompositeNutrition(components) {
     fiber: validatedFiber,
     sugar: validatedSugar,
     sodium: validatedSodium,
-    isHydration,
-    volumeMl: totalVolumeMl,
-    mealType: "lunch",
+    isHydration: finalIsHydration,
+    volumeMl: finalVolumeMl,
+    mealType: derivedMealType,
+    semanticCategory,
     portionNote,
     components: componentResults,
     calculatedFromComponents: true,
@@ -44410,6 +44676,8 @@ function calculateCompositeNutrition(components) {
     databaseMatchConfidence: minDbConf,
     portionConfidence: minPortionConf,
     overallConfidence: overallConf,
+    confidenceLevel: overallConf,
+    requiresReview,
     traceabilityLog: traceability,
     sanityValid: sanity.isValid,
     sanityErrors: sanity.errors
@@ -44420,9 +44688,16 @@ function calculateFoodNutrition(input, explicitComponents) {
   const itemsToCalc = explicitComponents && explicitComponents.length > 0 ? explicitComponents : splitFoodItems(input);
   const compositeRes = calculateCompositeNutrition(itemsToCalc);
   const displayTitle = input.trim() || compositeRes.foodName;
+  const isInputSnack = /(?:chocolate|cokelat|coklat|silverqueen|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack)/i.test(input);
+  const finalMealType = isInputSnack || compositeRes.mealType === "snack" ? "snack" : compositeRes.mealType;
+  const finalRequiresReview = Boolean(genericCheck.isGeneric || compositeRes.requiresReview);
   return {
     ...compositeRes,
     foodName: displayTitle,
+    originalInput: input.trim(),
+    resolvedFoodName: compositeRes.foodName,
+    mealType: finalMealType,
+    requiresReview: finalRequiresReview,
     needsClarification: genericCheck.isGeneric,
     clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : void 0,
     suggestedOptions: genericCheck.suggestedOptions,
@@ -48822,8 +49097,8 @@ function getDailyTotals(rawPhone, targetDateStr) {
     fiber += Number(log.fiber) || 0;
     sugar += Number(log.sugar) || 0;
     sodium += Number(log.sodium) || 0;
-    if (log.isHydration || isPlainWaterName(log.foodName) || isLiquidName(log.foodName)) {
-      waterMl += Number(log.volumeMl) || extractVolumeMlFromName(log.foodName) || 250;
+    if (log.isHydration === true || log.type === "hydration" || isPlainWaterName(log.foodName) && log.type !== "meal") {
+      waterMl += Number(log.volumeMl) || Number(log.amountMl) || extractVolumeMlFromName(log.foodName) || 250;
     }
   }
   return {
@@ -48900,7 +49175,24 @@ function isLiquidName(name) {
     "churros",
     "pisang",
     "salad",
-    "steak"
+    "steak",
+    "chocolate",
+    "cokelat",
+    "coklat",
+    "silverqueen",
+    "silver queen",
+    "cadbury",
+    "candy",
+    "permen",
+    "wafer",
+    "cookies",
+    "kukis",
+    "bites",
+    "bar",
+    "chips",
+    "keripik",
+    "crisp",
+    "snack"
   ];
   if (solidExceptions.some((se) => lower.includes(se))) {
     return false;
@@ -51724,11 +52016,18 @@ ${cleanedAdvice}` : buildFallbackAdvice();
       console.log(`[analyze-food] Deterministic base: ${deterministicResult.calories} kcal (P:${deterministicResult.protein}g, C:${deterministicResult.carbs}g, F:${deterministicResult.fat}g, Fib:${deterministicResult.fiber}g, Sug:${deterministicResult.sugar}g) [${deterministicResult.items.length} items]`);
       const userInputFoodName = cleanText;
       if (!getAi()) {
+        const isPureWater = Boolean(deterministicResult.isHydration);
         return res.json({
           success: true,
           ...deterministicResult,
           foodName: userInputFoodName,
           // Override with original user input
+          originalInput: userInputFoodName,
+          resolvedFoodName: deterministicResult.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: deterministicResult.mealType === "snack" ? "SNACK" : isPureWater ? "AIR" : "MAKANAN",
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(deterministicResult.volumeMl) : 0,
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -51743,6 +52042,8 @@ ${cleanedAdvice}` : buildFallbackAdvice();
             success: true,
             isFood: false,
             foodName: userInputFoodName,
+            originalInput: userInputFoodName,
+            resolvedFoodName: userInputFoodName,
             message: "Objek ini bukan makanan atau minuman. Silakan masukkan nama makanan yang ingin dicatat.",
             calories: 0,
             protein: 0,
@@ -51758,11 +52059,16 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const calculatedNutrition = calculateFoodNutrition(cleanText, rawCompNames);
         const genericCheck = isGenericMealInput(cleanText);
         const isLowConfidence = genericCheck.isGeneric || calculatedNutrition.overallConfidence === "low" || calculatedNutrition.needsClarification;
+        const isPureWater = Boolean(calculatedNutrition.isHydration);
         res.json({
           success: true,
           isFood: true,
           // CRITICAL: Always use original user input as foodName — never AI/catalog name
           foodName: userInputFoodName,
+          originalInput: userInputFoodName,
+          resolvedFoodName: calculatedNutrition.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: calculatedNutrition.mealType === "snack" ? "SNACK" : isPureWater ? "AIR" : "MAKANAN",
           calories: isLowConfidence ? void 0 : calculatedNutrition.calories,
           protein: isLowConfidence ? void 0 : calculatedNutrition.protein,
           carbs: isLowConfidence ? void 0 : calculatedNutrition.carbs,
@@ -51770,13 +52076,15 @@ ${cleanedAdvice}` : buildFallbackAdvice();
           fiber: isLowConfidence ? void 0 : calculatedNutrition.fiber,
           sugar: isLowConfidence ? void 0 : calculatedNutrition.sugar,
           sodium: isLowConfidence ? void 0 : calculatedNutrition.sodium,
-          isHydration: Boolean(calculatedNutrition.isHydration),
-          volumeMl: Number(calculatedNutrition.volumeMl) || 0,
-          mealType: parsed.mealType || calculatedNutrition.mealType,
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(calculatedNutrition.volumeMl) : 0,
+          mealType: calculatedNutrition.mealType || parsed.mealType,
           portionNote: calculatedNutrition.portionNote,
           items: calculatedNutrition.components.map((c) => ({
             food_name: c.foodName,
             normalized_food_name: c.normalizedName,
+            original_input: c.originalInput || userInputFoodName,
+            resolved_food_name: c.resolvedFoodName || c.normalizedName,
             database_id: c.databaseId,
             data_source: c.source,
             estimated_quantity: 1,
@@ -51804,11 +52112,18 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         });
       } catch (aiErr) {
         console.warn("Gemini AI analyze-food error, using verified database engine:", aiErr);
+        const isPureWater = Boolean(deterministicResult.isHydration);
         res.json({
           success: true,
           ...deterministicResult,
           foodName: userInputFoodName,
           // Override with original user input
+          originalInput: userInputFoodName,
+          resolvedFoodName: deterministicResult.foodName,
+          type: isPureWater ? "hydration" : "meal",
+          mealCategory: deterministicResult.mealType === "snack" ? "SNACK" : isPureWater ? "AIR" : "MAKANAN",
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(deterministicResult.volumeMl) : 0,
           note: "Estimated using USDA & TKPI verified database"
         });
       }
