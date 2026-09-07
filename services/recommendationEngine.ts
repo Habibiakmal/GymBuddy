@@ -1626,18 +1626,32 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
   else if (targetDayIdx === 3 || targetDayIdx === 6) targetArea = "core";
   else targetArea = "full_body";
 
+  // Format current date nicely in WIB (UTC+7)
+  const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000 + targetDayOffset * 24 * 60 * 60 * 1000);
+  const [wibDatePart] = wibNow.toISOString().split("T");
+  const [wYear, wMonth, wDay] = wibDatePart.split("-");
+  const monthFullNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const fullDateLabel = `${targetDayName}, ${parseInt(wDay, 10)} ${monthFullNames[parseInt(wMonth, 10) - 1]} ${wYear}`;
+  const addressing = profile.name && profile.name !== "Member" ? profile.name : "kamu";
+
   // If Sunday: Rest & Recovery
   if (targetDayIdx === 0) {
     const recoveryClosing = profile.persona === "max"
-      ? "Istirahat adalah bagian penting dari progres fisik lo bro. Tetap jaga pola makan bergizi dan jangan begadang! Gas! 🔥"
-      : "Istirahat adalah bagian penting dari kemajuan fisikmu. Cukupi tidur dan tetap jaga pola makan bergizi ya ✨";
+      ? `Hari ini jadwal rest day lo, ${addressing}! 🔥 Cukupi istirahat lo biar sesi berikutnya makin gahar.`
+      : `Hari ini jadwal rest day kamu ya, ${addressing}! ✨ Istirahat yang cukup agar tubuhmu siap untuk sesi latihan berikutnya.`;
     return (
-      `📅 *JADWAL LATIHAN ${dayLabel} (${targetDayName.toUpperCase()})*\n` +
-      `--------------------------------------------------\n` +
+      `🏋️‍♂️ *JADWAL OLAHRAGA ${dayLabel}*\n` +
+      `--------------------------------------------------\n\n` +
+      `📅 *${fullDateLabel}*\n\n` +
       `🌴 *FOKUS: REST & AKTIF RECOVERY*\n\n` +
       `Hari ini adalah waktu untuk pemulihan otot dan relaksasi persendian. ` +
       `Cukupi air putih minimal 2.5 liter dan tidur nyenyak agar sesi latihan berikutnya maksimal! 🌿✨\n\n` +
-      `💬 *${coachName}*:\n"${recoveryClosing}"`
+      `--------------------------------------------------\n\n` +
+      `💬 *${coachName}*\n\n` +
+      `"${recoveryClosing}"`
     );
   }
 
@@ -1665,18 +1679,20 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
     : `🛡️ *Kondisi Fisik*: Latihan disesuaikan dengan tingkat aktivitas dan tujuan kebugaranmu.`;
 
   const workoutPersonaClosing = profile.persona === "max"
-    ? `Fokus ke eksekusi form yang bersih dan kontrol napas lo bro. Latihan ini gue pilih sesuai data profil dan target lo. Kalau ada sendi yang mulai gak enak, jangan dipaksa ya! Gas! 💪`
-    : `Fokus ke teknik gerakan yang tepat dan dengarkan sinyal tubuhmu ya. Latihan ini dipilih dengan mempertimbangkan data profil dan tujuan kebugaranmu. Kalau ada yang terasa kurang nyaman, segera kurangi beban atau istirahat ya ✨`;
+    ? `Ini jadwal latihan lo hari ini, ${addressing}! 🔥\nKalau lo udah selesai latihan dan mau catat hasilnya, baru bilang kalau lo udah selesai latihan.`
+    : `Ini jadwal latihan kamu hari ini ya, ${addressing}! ✨\nKalau kamu sudah selesai latihan dan ingin mencatatnya, baru bilang bahwa kamu sudah selesai latihan.`;
 
   return (
-    `📅 *LATIHAN ${dayLabel} (${targetDayName.toUpperCase()})*\n` +
-    `--------------------------------------------------\n` +
+    `🏋️‍♂️ *JADWAL OLAHRAGA ${dayLabel}*\n` +
+    `--------------------------------------------------\n\n` +
+    `📅 *${fullDateLabel}*\n\n` +
     `🎯 *Fokus*: ${targetArea.replace("_", " ").toUpperCase()} (${profile.goalTitle})\n` +
     `${injuryNote}\n\n` +
     `📌 *Daftar Gerakan Terpilih*:\n\n` +
     `${exerciseLines}\n\n` +
-    `--------------------------------------------------\n` +
-    `💬 *${coachName}*:\n"${workoutPersonaClosing}"`
+    `--------------------------------------------------\n\n` +
+    `💬 *${coachName}*\n\n` +
+    `"${workoutPersonaClosing}"`
   );
 }
 

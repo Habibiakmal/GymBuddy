@@ -138,19 +138,22 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 export function sanitizeWhatsAppResponse(text: string): string {
   if (!text || typeof text !== "string") return "";
 
+  const STANDARD_SEP = "--------------------------------------------------";
   let cleaned = text
-    // Collapse any sequence of lines containing only separator chars (even if separated by blank lines) into a single continuous separator
-    .replace(/(?:^[ \t]*[━─\-=]{1,20}[ \t]*(?:\r?\n|\r|$)(?:[ \t]*(?:\r?\n|\r|$))*)+/gm, "━━━━━━━━━━━━━━\n")
+    // Purge any unicode box-drawing characters
+    .replace(/[━─═]/g, "-")
+    // Collapse any sequence of lines containing only separator chars into a single continuous separator
+    .replace(/(?:^[ \t]*[-=]{1,50}[ \t]*(?:\r?\n|\r|$)(?:[ \t]*(?:\r?\n|\r|$))*)+/gm, `${STANDARD_SEP}\n`)
     // Replace 2 or more consecutive separator lines with a single clean separator
-    .replace(/(?:^[━─\-=]{4,}\s*[\r\n]+){2,}/gm, "━━━━━━━━━━━━━━\n")
-    // Normalize isolated short separator lines to the canonical continuous separator line
-    .replace(/^[━─\-=]{1,13}$/gm, "━━━━━━━━━━━━━━")
+    .replace(/(?:^[-=]{4,}\s*[\r\n]+){2,}/gm, `${STANDARD_SEP}\n`)
+    // Normalize isolated separator lines to canonical continuous separator line
+    .replace(/^[-=]{4,50}$/gm, STANDARD_SEP)
     // Remove isolated empty bullets
     .replace(/^[•\-\*]\s*$/gm, "")
     // Normalize 3+ newlines to max 2 newlines
     .replace(/\n{3,}/g, "\n\n")
     // Strip trailing empty separators at end of message
-    .replace(/[\r\n]+[━─\-=]{4,}\s*$/g, "")
+    .replace(/[\r\n]+[-=]{4,}\s*$/g, "")
     .trim();
 
   return cleaned;
@@ -3417,53 +3420,102 @@ export function formatNutritionCard(
 
   coachComment = validateAndFormatCoachNote(coachComment, userData);
 
-  // Construct sections cleanly without decorative separators
-  const sections: string[] = [];
+  // Helper for consistent progress bar and status calculation
+  const getStatusBar = (current: number, target: number, isUpperLimit: boolean = false, isProtein: boolean = false) => {
+    const c = Math.max(0, Number(current) || 0);
+    const t = Math.max(1, Number(target) || (isUpperLimit ? 2000 : 100));
+    const ratio = c / t;
+    const percent = Math.round(ratio * 100);
+    const length = 10;
+    const filledCount = Math.min(length, Math.floor(Math.min(1, ratio) * length));
+    const emptyCount = Math.max(0, length - filledCount);
+    const bar = "█".repeat(filledCount) + "░".repeat(emptyCount);
 
-  // Header: Meal Name, Category & Meta
+    let statusBadge = "";
+    if (isUpperLimit) {
+      if (c > t) {
+        statusBadge = "🔴 Melebihi Batas";
+      } else if (c === t) {
+        statusBadge = "🟠 Batas Maksimal";
+      } else {
+        statusBadge = "🟢 Dalam Batas";
+      }
+    } else if (isProtein) {
+      if (c < t) {
+        statusBadge = "🟡 Belum Cukup";
+      } else {
+        statusBadge = "✅ Tercapai";
+      }
+    } else {
+      if (c < t) {
+        statusBadge = "🟡 Belum Cukup";
+      } else if (c === t) {
+        statusBadge = "✅ Tercapai";
+      } else {
+        statusBadge = "🔴 Melebihi Target";
+      }
+    }
+
+    return { bar, percent, statusBadge };
+  };
+
+  const calBarInfo = getStatusBar(totalTodayCal, targetCal, false, false);
+  const protBarInfo = getStatusBar(totalTodayProt, targetProt, false, true);
+  const carbBarInfo = getStatusBar(totalTodayCarb, targetCarb, false, false);
+  const fatBarInfo = getStatusBar(totalTodayFat, targetFat, false, false);
+  const sodBarInfo = getStatusBar(totalTodaySodium, sodiumLimit, true, false);
+  const sugBarInfo = getStatusBar(totalTodaySugar, sugarLimit, true, false);
+
+  // Construct sections cleanly under Single Formatter Ownership
+  const majorSections: string[] = [];
+
+  // 1. Meal Header Section
   const emojiForHeader = resolvedMealType === "dinner" ? "🌙" : mealEmoji;
-  sections.push(
+  majorSections.push(
     `🍽️ *${cleanFoodName}*\n\n` +
-    `${emojiForHeader} *${mealLabel}*\n` +
+    `${emojiForHeader} *${mealLabel.toUpperCase()}*\n` +
     `🕒 ${dateStr}, ${timeStr} WIB · 🤖 GymBuddy AI: ${confidenceScore}%`
   );
 
-  // Section 1: Estimasi Nutrisi
-  let nutrContent = `📊 *Estimasi Nutrisi*\n\n` +
+  // 2. Estimasi Nutrisi Section
+  let nutrContent = `📊 *ESTIMASI NUTRISI*\n\n` +
     `🔥 ${calories} kcal\n` +
     `🍖 Protein: ${protein}g\n` +
     `🍚 Karbo: ${carbs}g\n` +
     `🥓 Lemak: ${fat}g\n` +
     `🥬 Serat: ${fiber}g\n` +
-    `🧂 Natrium: ${sodium} mg`;
-  if (sugar > 0) {
-    nutrContent += `\n🍯 Gula: ${sugar}g`;
-  }
-  sections.push(nutrContent);
+    `🧂 Natrium: ${sodium} mg\n` +
+    `🍯 Gula: ${sugar}g`;
+  majorSections.push(nutrContent);
 
-  // Section 2: Estimasi Porsi (only if portion detail text exists)
+  // 3. Estimasi Porsi Section (only if portion detail text exists)
   if (portionDetailText.trim()) {
-    sections.push(`🍽️ *Estimasi Porsi*\n\n${portionDetailText.trim()}`);
+    majorSections.push(`🍽️ *ESTIMASI PORSI*\n\n${portionDetailText.trim()}`);
   }
 
-  // Section 3: Active Coach
+  // 4. Status Hari Ini Section (Complete 6 Metrics)
+  const dailyStatusContent = `📈 *STATUS HARI INI*\n\n` +
+    `🔥 Kalori: ${totalTodayCal}/${targetCal} kcal\n` +
+    `[${calBarInfo.bar}] ${calBarInfo.percent}% · ${calBarInfo.statusBadge}\n\n` +
+    `🍖 Protein: ${totalTodayProt}/${targetProt}g\n` +
+    `[${protBarInfo.bar}] ${protBarInfo.percent}% · ${protBarInfo.statusBadge}\n\n` +
+    `🍚 Karbo: ${totalTodayCarb}/${targetCarb}g\n` +
+    `[${carbBarInfo.bar}] ${carbBarInfo.percent}% · ${carbBarInfo.statusBadge}\n\n` +
+    `🥓 Lemak: ${totalTodayFat}/${targetFat}g\n` +
+    `[${fatBarInfo.bar}] ${fatBarInfo.percent}% · ${fatBarInfo.statusBadge}\n\n` +
+    `🧂 Natrium: ${totalTodaySodium.toLocaleString("id-ID")}/${sodiumLimit.toLocaleString("id-ID")} mg\n` +
+    `[${sodBarInfo.bar}] ${sodBarInfo.percent}% · ${sodBarInfo.statusBadge}\n\n` +
+    `🍯 Gula: ${totalTodaySugar}/${sugarLimit}g\n` +
+    `[${sugBarInfo.bar}] ${sugBarInfo.percent}% · ${sugBarInfo.statusBadge}`;
+  majorSections.push(dailyStatusContent);
+
+  // 5. Active Coach Section
   const cleanCoachTitle = isMax ? "Coach Max" : "Coach Mia";
-  sections.push(`🤖 *${cleanCoachTitle}*\n\n"${coachComment}"`);
+  majorSections.push(`🤖 *${cleanCoachTitle.toUpperCase()}*\n\n"${coachComment}"`);
 
-  // Section 4: Status Hari Ini (Neutral & Informative format)
-  const remainingCal = Math.max(0, targetCal - totalTodayCal);
-  const remainingProt = Math.max(0, Number((targetProt - totalTodayProt).toFixed(1)));
-  const statusContent = `📈 *Hari Ini*\n\n` +
-    `🔥 ${totalTodayCal} / ${targetCal.toLocaleString("id-ID")} kcal\n` +
-    `Sisa target: ${remainingCal > 0 ? remainingCal.toLocaleString("id-ID") + " kcal" : "Tercapai ✅"}\n` +
-    `🍖 ${totalTodayProt} / ${targetProt}g protein\n` +
-    `Sisa target: ${remainingProt > 0 ? remainingProt + "g" : "Tercapai ✅"}`;
-  sections.push(statusContent);
-
-  // Section 5: Correction Instruction
-  sections.push(`Ketik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`);
-
-  return sections.join("\n\n");
+  // Single Formatter Ownership: Join all major sections with standard separator
+  const separator = "--------------------------------------------------";
+  return majorSections.join(`\n\n${separator}\n\n`) + `\n\n${separator}\n\nKetik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`;
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
@@ -3993,17 +4045,22 @@ export function handleAdditionalActivityLogging(
     return null;
   }
 
-  // Guard 2: Explicit schedule inquiry
-  if (
-    lower.includes("jadwal latihanku apa") ||
-    lower.includes("jadwal latihan hari ini") ||
-    lower.includes("workout apa hari ini") ||
-    lower.includes("latihan apa hari ini") ||
-    lower.includes("jadwal gym hari ini") ||
-    lower.includes("jadwal workout hari ini") ||
-    lower.includes("olahraga hari ini apa") ||
-    lower.includes("hari ini jadwal latihanku apa")
-  ) {
+  // Guard 2: Explicit schedule inquiry (must never log workout)
+  const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
+  const hasScheduleInquiry = Boolean(lower.match(/\bjadwal\b/i)) ||
+    Boolean(lower.match(/\bschedule\b/i)) ||
+    lower.includes("latihan hari ini") ||
+    lower.includes("workout hari ini") ||
+    lower.includes("olahraga hari ini") ||
+    lower.includes("latihan apa") ||
+    lower.includes("workout apa") ||
+    lower.includes("olahraga apa") ||
+    lower.includes("menu latihan") ||
+    lower.includes("program latihan") ||
+    lower.includes("rekomendasi latihan") ||
+    lower.includes("rekomendasi workout");
+
+  if (hasScheduleInquiry && !hasCompletionSignal) {
     return null;
   }
 
@@ -4036,7 +4093,7 @@ export function handleAdditionalActivityLogging(
         dbData.dailyLogs[altActKey] = existingActivities;
         saveDb();
         return [
-          `🗑️ *AKTIVITAS TAMBAHAN DIHAPUS*\n-----------------------------\n` +
+          `🗑️ *AKTIVITAS TAMBAHAN DIHAPUS*\n--------------------------------------------------\n` +
           `✅ Catatan *${matchedToDelete.name}* ${matchedToDelete.icon} telah dihapus dari riwayat latihan ${dateInfo.label}.\n\n` +
           `Dashboard web sudah otomatis diperbarui. ✨`
         ];
@@ -4062,6 +4119,11 @@ export function handleAdditionalActivityLogging(
   }
 
   if (!matchedAct) return null;
+
+  // For generic activities ("olahraga", "gym", "workout"), require an explicit completion signal OR specific duration/distance/sets
+  if (matchedAct.category === "general" && !hasCompletionSignal && !params.durationMinutes && !params.durationSeconds && !params.distanceKm && !isStrengthStructured) {
+    return null;
+  }
 
   // Extract duration, distance, intensity
   const duration = params.durationMinutes || (matchedAct.name.includes("Gym") || matchedAct.name.includes("Olahraga Tambahan") ? 45 : undefined);
@@ -4190,21 +4252,25 @@ export function handleWorkoutProgressLogging(
     return null;
   }
 
-  // Guard 2: Explicit schedule inquiry
-  if (
-    lower.includes("jadwal latihanku apa") ||
-    lower.includes("jadwal latihan hari ini") ||
-    lower.includes("workout apa hari ini") ||
-    lower.includes("latihan apa hari ini") ||
-    lower.includes("jadwal gym hari ini") ||
-    lower.includes("jadwal workout hari ini") ||
-    lower.includes("olahraga hari ini apa") ||
-    lower.includes("hari ini jadwal latihanku apa") ||
-    lower.includes("jadwal hari ini apa") ||
+  // Guard 2: Explicit schedule inquiry (must never log workout)
+  const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
+  const hasScheduleInquiry = Boolean(lower.match(/\bjadwal\b/i)) ||
+    Boolean(lower.match(/\bschedule\b/i)) ||
+    lower.includes("latihan hari ini") ||
+    lower.includes("workout hari ini") ||
+    lower.includes("olahraga hari ini") ||
+    lower.includes("latihan apa") ||
+    lower.includes("workout apa") ||
+    lower.includes("olahraga apa") ||
+    lower.includes("menu latihan") ||
+    lower.includes("program latihan") ||
+    lower.includes("rekomendasi latihan") ||
+    lower.includes("rekomendasi workout") ||
     lower.includes("jadwal latihan besok") ||
-    lower.includes("workout besok apa")
-  ) {
-    return null; // Delegate to isWorkoutScheduleQuery
+    lower.includes("workout besok apa");
+
+  if (hasScheduleInquiry && !hasCompletionSignal) {
+    return null; // Delegate to isWorkoutScheduleQuery / isWeeklyScheduleQuery
   }
 
   // Guard 3: Future intent (e.g. "aku mau latihan lat pulldown nanti", "besok mau workout")
@@ -7137,25 +7203,37 @@ const mediaUrl = mediaRes.data.url;
             lowerText.includes("jadwal gym minggu ini") ||
             lowerText.includes("jadwal workout minggu ini") ||
             lowerText.includes("jadwal seminggu") ||
-            lowerText.includes("program minggu ini")
+            lowerText.includes("jadwal latihan mingguan") ||
+            lowerText.includes("jadwal olahraga mingguan") ||
+            lowerText.includes("program minggu ini") ||
+            Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i))
           );
 
-          const isWorkoutReqMessage = !isWeeklyScheduleQuery && (
-            lowerText.includes("latihan apa") ||
-            lowerText.includes("workout apa") ||
+          const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
+
+          const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (
+            lowerText.includes("jadwal olahraga") ||
             lowerText.includes("jadwal latihan") ||
             lowerText.includes("jadwal workout") ||
             lowerText.includes("jadwal gym") ||
             lowerText.includes("jadwal hari ini") ||
+            lowerText.includes("latihan hari ini") ||
+            lowerText.includes("workout hari ini") ||
+            lowerText.includes("olahraga hari ini") ||
+            lowerText.includes("latihan apa") ||
+            lowerText.includes("workout apa") ||
+            lowerText.includes("olahraga apa") ||
             lowerText.includes("menu latihan") ||
             lowerText.includes("program latihan") ||
             lowerText.includes("rekomendasi workout") ||
             lowerText.includes("rekomendasi latihan") ||
-            lowerText.includes("olahraga hari ini apa") ||
-            lowerText.includes("mau latihan apa") ||
             lowerText.includes("workout besok") ||
             lowerText.includes("latihan besok") ||
-            Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) ||
+            lowerText.includes("schedule workout") ||
+            lowerText.includes("workout schedule") ||
+            Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) ||
+            Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) ||
+            Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) ||
             Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) ||
             Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i))
           );
@@ -7254,24 +7332,6 @@ const mediaUrl = mediaRes.data.url;
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
-            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
-              if (!planCapabilities.canWorkout) {
-                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
-              } else {
-                responseMessages = handleWorkoutProgressLogging(from, userText, userData)!;
-              }
-            } else if (weightMatch) {
-              const newW = parseFloat(weightMatch[1].replace(',', '.'));
-              if (!isNaN(newW) && newW > 30 && newW < 300) {
-                const resProg = addWeeklyProgress(from, newW, "Update via WhatsApp");
-                if (resProg) {
-                  responseMessages = [formatWeeklyProgressCard(resProg)];
-                } else {
-                  responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
-                }
-              }
-            } else if (isProgressHistoryMessage) {
-              responseMessages = [formatProgressHistoryCard(from)];
             } else if (isWeeklyMealPlanQuery) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -7291,6 +7351,24 @@ const mediaUrl = mediaRes.data.url;
                 const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
                 responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
               }
+            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
+              if (!planCapabilities.canWorkout) {
+                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
+              } else {
+                responseMessages = handleWorkoutProgressLogging(from, userText, userData)!;
+              }
+            } else if (weightMatch) {
+              const newW = parseFloat(weightMatch[1].replace(',', '.'));
+              if (!isNaN(newW) && newW > 30 && newW < 300) {
+                const resProg = addWeeklyProgress(from, newW, "Update via WhatsApp");
+                if (resProg) {
+                  responseMessages = [formatWeeklyProgressCard(resProg)];
+                } else {
+                  responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
+                }
+              }
+            } else if (isProgressHistoryMessage) {
+              responseMessages = [formatProgressHistoryCard(from)];
             } else if (isRecommendationMessage) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -7661,9 +7739,11 @@ function escapeXml(unsafe: string): string {
       if (!isWelcomeMessage) {
         const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
         const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
-        sendWhatsAppAsync(rawFrom, ackText, req.body?.To).catch((err) => {
+        try {
+          await sendWhatsAppAsync(rawFrom, ackText, req.body?.To);
+        } catch (err: any) {
           console.warn("[Twilio WA] Acknowledgment send warning (non-fatal):", err?.message || err);
-        });
+        }
       }
 
       let imagePart: any = null;
@@ -7770,25 +7850,37 @@ function escapeXml(unsafe: string): string {
         lowerText.includes("jadwal gym minggu ini") ||
         lowerText.includes("jadwal workout minggu ini") ||
         lowerText.includes("jadwal seminggu") ||
-        lowerText.includes("program minggu ini")
+        lowerText.includes("jadwal latihan mingguan") ||
+        lowerText.includes("jadwal olahraga mingguan") ||
+        lowerText.includes("program minggu ini") ||
+        Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i))
       );
 
-      const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && (
-        lowerText.includes("latihan apa") ||
-        lowerText.includes("workout apa") ||
+      const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
+
+      const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (
+        lowerText.includes("jadwal olahraga") ||
         lowerText.includes("jadwal latihan") ||
         lowerText.includes("jadwal workout") ||
         lowerText.includes("jadwal gym") ||
         lowerText.includes("jadwal hari ini") ||
+        lowerText.includes("latihan hari ini") ||
+        lowerText.includes("workout hari ini") ||
+        lowerText.includes("olahraga hari ini") ||
+        lowerText.includes("latihan apa") ||
+        lowerText.includes("workout apa") ||
+        lowerText.includes("olahraga apa") ||
         lowerText.includes("menu latihan") ||
         lowerText.includes("program latihan") ||
         lowerText.includes("rekomendasi workout") ||
         lowerText.includes("rekomendasi latihan") ||
-        lowerText.includes("olahraga hari ini apa") ||
-        lowerText.includes("mau latihan apa") ||
         lowerText.includes("workout besok") ||
         lowerText.includes("latihan besok") ||
-        Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) ||
+        lowerText.includes("schedule workout") ||
+        lowerText.includes("workout schedule") ||
+        Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) ||
+        Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) ||
+        Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) ||
         Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) ||
         Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i))
       );
@@ -7897,7 +7989,7 @@ function escapeXml(unsafe: string): string {
           const updatedTotals = getDailyTotals(normFrom, todayStr);
           const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
           responseMessages = [
-            `🗑️ *LOG MAKANAN DIHAPUS*\n━━━━━━━━━━━━━━\n` +
+            `🗑️ *LOG MAKANAN DIHAPUS*\n--------------------------------------------------\n` +
             `Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari log hari ini.\n\n` +
             `📊 *Status Kalori Hari Ini*: ${updatedTotals.calories}/${userData.targetCalories} kcal\n\n` +
             `💬 *${coachName}*:\n"Sip, catatannya sudah aku hapus ya! Kalau ada makanan lain yang mau dicatat, kirim saja langsung."`
