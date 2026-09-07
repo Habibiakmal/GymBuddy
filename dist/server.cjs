@@ -73,6 +73,7 @@ __export(server_exports, {
   isValidIndonesianMobile: () => isValidIndonesianMobile,
   normalizePhoneToE164: () => normalizePhoneToE164,
   normalizePhoneToLocal: () => normalizePhoneToLocal,
+  pendingWorkoutClarifications: () => pendingWorkoutClarifications,
   processMealCorrection: () => processMealCorrection,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
@@ -52734,6 +52735,7 @@ function generateWorkoutRecommendations(userData, targetDayOffset = 0) {
 function generateWeeklyMealSchedule(userData) {
   return generatePersonalizedWeeklyMealPlan(userData);
 }
+var pendingWorkoutClarifications = /* @__PURE__ */ new Map();
 function extractWorkoutParameters(userText) {
   const lower = userText.toLowerCase().trim();
   let sets = void 0;
@@ -52789,6 +52791,7 @@ var ADDITIONAL_ACTIVITY_MAP = [
   { keywords: ["sepeda", "bersepeda", "cycling", "gowes", "spinning", "spin bike", "stationary bike"], name: "Bersepeda (Cycling)", icon: "\u{1F6B4}\u200D\u2642\uFE0F", category: "cardio", met: 7.5 },
   { keywords: ["elliptical", "elip", "eliptical", "crosstrainer", "cross trainer"], name: "Elliptical Trainer", icon: "\u{1F3C3}\u200D\u2640\uFE0F", category: "cardio", met: 7.5 },
   { keywords: ["treadmill"], name: "Treadmill", icon: "\u{1F3C3}", category: "cardio", met: 8.5 },
+  { keywords: ["hiit", "interval training", "tabata"], name: "HIIT", icon: "\u26A1", category: "cardio", met: 8.5 },
   { keywords: ["plank", "plank hold", "forearm plank", "tahan plank"], name: "Plank", icon: "\u{1F9D8}\u200D\u2642\uFE0F", category: "core", met: 4.5 },
   { keywords: ["push up", "push-up", "pushup"], name: "Push-Up", icon: "\u{1F4AA}", category: "calisthenics", met: 5.5 },
   { keywords: ["sit up", "sit-up", "situp", "crunch", "crunches"], name: "Sit-Up / Crunches", icon: "\u{1F938}\u200D\u2642\uFE0F", category: "core", met: 5 },
@@ -52805,8 +52808,7 @@ var ADDITIONAL_ACTIVITY_MAP = [
   { keywords: ["boxing", "tinju", "muay thai"], name: "Boxing / Muay Thai", icon: "\u{1F94A}", category: "martial_arts", met: 9 },
   { keywords: ["hiking", "naik gunung"], name: "Hiking", icon: "\u{1F9D7}", category: "outdoor", met: 6.5 },
   { keywords: ["cardio", "kardio"], name: "Kardio", icon: "\u2764\uFE0F\u200D\u{1F525}", category: "cardio", met: 7 },
-  { keywords: ["strength training", "angkat beban", "latihan beban", "weight training"], name: "Latihan Beban", icon: "\u{1F3CB}\uFE0F\u200D\u2642\uFE0F", category: "strength", met: 6 },
-  { keywords: ["workout", "olahraga", "latihan tambahan", "home workout", "gym"], name: "Olahraga Tambahan", icon: "\u{1F3CB}\uFE0F", category: "general", met: 6 }
+  { keywords: ["gym", "fitness", "fitnes", "angkat beban", "latihan beban", "weight training", "strength training"], name: "Latihan Beban (Gym)", icon: "\u{1F3CB}\uFE0F\u200D\u2642\uFE0F", category: "strength", met: 6 }
 ];
 function handleAdditionalActivityLogging(rawPhone, userText, userData) {
   const phone = normalizePhone(rawPhone);
@@ -52856,7 +52858,7 @@ Dashboard web sudah otomatis diperbarui. \u2728`
   let matchedAct = null;
   for (const act of ADDITIONAL_ACTIVITY_MAP) {
     if (act.keywords.some((k) => lower.includes(k))) {
-      if (act.category === "general" && isStrengthStructured) {
+      if (act.keywords.includes("gym") && isStrengthStructured) {
         continue;
       }
       matchedAct = act;
@@ -52867,14 +52869,14 @@ Dashboard web sudah otomatis diperbarui. \u2728`
   if (matchedAct.category === "general" && !hasCompletionSignal && !params.durationMinutes && !params.durationSeconds && !params.distanceKm && !isStrengthStructured) {
     return null;
   }
-  const duration = params.durationMinutes || (matchedAct.name.includes("Gym") || matchedAct.name.includes("Olahraga Tambahan") ? 45 : void 0);
+  const duration = params.durationMinutes;
   const distance = params.distanceKm;
   const intensity = params.intensity;
-  const durText = params.durationSeconds && params.durationSeconds < 60 ? `${params.durationSeconds} detik` : `${duration || 1} menit`;
+  const durText = params.durationSeconds && params.durationSeconds < 60 ? `${params.durationSeconds} detik` : duration ? `${duration} menit` : "";
   const isEdit = lower.match(/(?:sebenarnya|sebetulnya|koreksi|ganti|edit)\s*.*(\d+)\s*(?:menit|mins|min|jam|hours)/i);
   const weight = userData.weight || 70;
-  const durHours = duration ? duration / 60 : distance ? distance / 10 : 0.5;
-  const calBurn = Math.max(5, Math.round(matchedAct.met * weight * durHours));
+  const durHours = duration ? duration / 60 : distance ? distance / 10 : params.durationSeconds ? params.durationSeconds / 3600 : void 0;
+  const calBurn = durHours !== void 0 ? Math.max(5, Math.round(matchedAct.met * weight * durHours)) : void 0;
   const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
@@ -52884,14 +52886,15 @@ Dashboard web sudah otomatis diperbarui. \u2728`
       if (duration) existingActivities[existingIndex].durationMinutes = duration;
       if (distance) existingActivities[existingIndex].distanceKm = distance;
       if (intensity) existingActivities[existingIndex].intensity = intensity;
-      existingActivities[existingIndex].estimatedCaloriesBurned = calBurn;
+      if (calBurn !== void 0) existingActivities[existingIndex].estimatedCaloriesBurned = calBurn;
       dbData.dailyLogs[actKey] = existingActivities;
       dbData.dailyLogs[altActKey] = existingActivities;
       saveDb();
+      const editCalStr = calBurn !== void 0 ? ` (~${calBurn} kcal estimasi)` : "";
       return [
         `\u270F\uFE0F *AKTIVITAS TAMBAHAN DIPERBARUI*
------------------------------
-\u2705 Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${intensity ? ` (${intensity})` : ""}${distance ? ` (${distance} km)` : ""} (~${calBurn} kcal estimasi).
+--------------------------------------------------
+\u2705 Catatan *${matchedAct.name}* ${matchedAct.icon} telah diperbarui menjadi: *${duration || existingActivities[existingIndex].durationMinutes} menit*${intensity ? ` (${intensity})` : ""}${distance ? ` (${distance} km)` : ""}${editCalStr}.
 
 Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
       ];
@@ -52907,7 +52910,7 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
     distanceKm: distance,
     intensity,
     details: [
-      duration || params.durationSeconds ? durText : null,
+      durText ? durText : null,
       intensity ? intensity : null,
       distance ? `${distance} km` : null
     ].filter(Boolean).join(" \u2022 "),
@@ -52931,7 +52934,7 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   if (duration || params.durationSeconds) details.push(`\u23F1\uFE0F Durasi: *${durText}*`);
   if (intensity) details.push(`\u26A1 Intensitas: *${intensity}*`);
   if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
-  details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
+  if (calBurn !== void 0) details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
   const isVagueGym = matchedAct.keywords.includes("gym") && !params.durationMinutes && !distance;
   let coachCommentText = "";
   if (matchedAct.keywords.includes("plank")) {
@@ -52946,7 +52949,7 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   const comment = validateAndFormatCoachNote(coachCommentText, userData);
   return [
     `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
------------------------------
+--------------------------------------------------
 \u2705 *${matchedAct.name}* ${matchedAct.icon}
 ${details.join(" \u2022 ")}
 
@@ -52973,8 +52976,81 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
     return null;
   }
   const params = extractWorkoutParameters(userText);
+  const pending = pendingWorkoutClarifications.get(phone) || pendingWorkoutClarifications.get(altPhone);
+  const isPendingActive = Boolean(pending && Date.now() - pending.timestamp < 30 * 60 * 1e3);
+  if (isPendingActive && pending) {
+    let matchedPendingAct = null;
+    for (const act of ADDITIONAL_ACTIVITY_MAP) {
+      if (act.keywords.some((k) => lower.includes(k))) {
+        matchedPendingAct = act;
+        break;
+      }
+    }
+    if (matchedPendingAct) {
+      const duration = params.durationMinutes || pending.durationMinutes;
+      const distance = params.distanceKm || pending.distanceKm;
+      const intensity = params.intensity || pending.intensity;
+      const durSeconds = params.durationSeconds || pending.durationSeconds;
+      const durText = durSeconds && durSeconds < 60 ? `${durSeconds} detik` : duration ? `${duration} menit` : "";
+      const weight = userData.weight || 70;
+      const durHours = duration ? duration / 60 : distance ? distance / 10 : durSeconds ? durSeconds / 3600 : void 0;
+      const calBurn = durHours !== void 0 ? Math.max(5, Math.round(matchedPendingAct.met * weight * durHours)) : void 0;
+      const actTargetDate = pending.targetDate || getLocalDateStr();
+      const pActKey = `gymbuddy_activities_${phone}_${actTargetDate}`;
+      const pAltActKey = `gymbuddy_activities_${altPhone}_${actTargetDate}`;
+      let pExistingActivities = dbData.dailyLogs[pActKey] || dbData.dailyLogs[pAltActKey] || [];
+      if (!Array.isArray(pExistingActivities)) pExistingActivities = [];
+      const actId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const newAct = {
+        id: actId,
+        activityName: matchedPendingAct.name,
+        category: matchedPendingAct.category,
+        icon: matchedPendingAct.icon,
+        durationMinutes: duration,
+        distanceKm: distance,
+        intensity,
+        details: [
+          durText ? durText : null,
+          intensity ? intensity : null,
+          distance ? `${distance} km` : null
+        ].filter(Boolean).join(" \u2022 "),
+        estimatedCaloriesBurned: calBurn,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        status: "completed"
+      };
+      pExistingActivities.push(newAct);
+      dbData.dailyLogs[pActKey] = pExistingActivities;
+      dbData.dailyLogs[pAltActKey] = pExistingActivities;
+      saveDb();
+      pendingWorkoutClarifications.delete(phone);
+      pendingWorkoutClarifications.delete(altPhone);
+      const coachName2 = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+      const addressing2 = getValidatedUserAddressing(userData);
+      const validatedAddr2 = addressing2.validatedAddress;
+      const details = [];
+      if (duration || durSeconds) details.push(`\u23F1\uFE0F Durasi: *${durText}*`);
+      if (intensity) details.push(`\u26A1 Intensitas: *${intensity}*`);
+      if (distance) details.push(`\u{1F4CD} Jarak: *${distance} km*`);
+      if (calBurn !== void 0) details.push(`\u{1F525} Estimasi Bakar: *~${calBurn} kcal*`);
+      const coachCommentText = userData.persona === "max" ? `Bagus, ${validatedAddr2}! Aktivitas ${matchedPendingAct.name} sudah tercatat rapi. Tetap jaga hidrasi & makan bergizi! \u{1F525}` : `Bagus banget, ${validatedAddr2}! Aktivitas ${matchedPendingAct.name} sudah tercatat. Tetap aktif bergerak dan jangan lupa istirahat ya \u2728`;
+      const comment = validateAndFormatCoachNote(coachCommentText, userData);
+      return [
+        `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
+--------------------------------------------------
+\u2705 *${matchedPendingAct.name}* ${matchedPendingAct.icon}
+${details.join(" \u2022 ")}
+
+\u{1F4A1} *Status Program*: Latihan tercatat rapi di riwayat aktivitas harian kamu.
+
+\u{1F4AC} *${coachName2}*:
+"${comment}"`
+      ];
+    }
+  }
   const additionalActResp = handleAdditionalActivityLogging(rawPhone, userText, userData);
   if (additionalActResp) {
+    pendingWorkoutClarifications.delete(phone);
+    pendingWorkoutClarifications.delete(altPhone);
     return additionalActResp;
   }
   const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|aku melakukan|aku olahraga|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku|tadi)/i);
@@ -52994,13 +53070,46 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   const altKey = `gymbuddy_exercises_${altPhone}_${targetDate}`;
   const actKey = `gymbuddy_activities_${phone}_${targetDate}`;
   const altActKey = `gymbuddy_activities_${altPhone}_${targetDate}`;
+  let matchedScheduledEx = null;
+  const dbEx = findExerciseOrEquipment(userText);
+  const isFullWorkout = Boolean(lower.match(/(?:selesai|beres|done)\s+semua\s+(?:jadwal|menu|program|latihan|workout)(?:\s+hari\s*ini)?/i)) || Boolean(lower.match(/^(?:semua\s+)?(?:jadwal|menu|program)\s+(?:workout|latihan)?\s*(?:hari\s*ini\s*)?(?:sudah\s*)?(?:selesai|beres|done)$/i));
+  const isGenericWorkoutSignal = Boolean(lower.match(/\b(?:olahraga|workout|latihan|olahraga tambahan|latihan fisik)\b/i));
+  if (isGenericWorkoutSignal && !dbEx && !hasStructure && !isFullWorkout) {
+    pendingWorkoutClarifications.set(phone, {
+      phone,
+      durationMinutes: params.durationMinutes,
+      durationSeconds: params.durationSeconds,
+      distanceKm: params.distanceKm,
+      intensity: params.intensity,
+      targetDate,
+      timestamp: Date.now()
+    });
+    if (altPhone !== phone) {
+      pendingWorkoutClarifications.set(altPhone, {
+        phone: altPhone,
+        durationMinutes: params.durationMinutes,
+        durationSeconds: params.durationSeconds,
+        distanceKm: params.distanceKm,
+        intensity: params.intensity,
+        targetDate,
+        timestamp: Date.now()
+      });
+    }
+    const durText = params.durationMinutes ? `${params.durationMinutes} menit` : params.durationSeconds ? `${params.durationSeconds} detik` : "";
+    let clarificationMsg = "";
+    if (durText) {
+      clarificationMsg = userData.persona === "max" ? `Siap, durasi ${durText}-nya udah gue catat. Lo tadi olahraga apa? Misalnya jalan kaki, lari, gym, atau HIIT, biar estimasi kalorinya akurat! \u{1F525}` : `Siap, aku bisa bantu catat ${durText}-nya. Kamu tadi olahraga apa? Misalnya jalan kaki, lari, gym, atau HIIT, supaya aku bisa bantu catat dengan lebih tepat ya \u2728`;
+    } else {
+      clarificationMsg = userData.persona === "max" ? `Siap! Lo tadi olahraga apa dan berapa lama? Misalnya jalan kaki 30 menit, lari, gym, atau HIIT, biar bisa langsung gue catat! \u{1F525}` : `Siap, aku bisa bantu catat olahragamu! Kamu tadi olahraga apa dan berapa lama durasinya? Misalnya jalan kaki 30 menit, lari, gym, atau HIIT, supaya aku bisa bantu catat dengan lebih tepat ya \u2728`;
+    }
+    return [clarificationMsg];
+  }
   let existingExercises = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
   if (!Array.isArray(existingExercises) || existingExercises.length === 0 || !existingExercises[0]?.targetSets) {
     existingExercises = JSON.parse(JSON.stringify(todayRoutine.exercises || []));
   }
   let existingActivities = dbData.dailyLogs[actKey] || dbData.dailyLogs[altActKey] || [];
   if (!Array.isArray(existingActivities)) existingActivities = [];
-  const isFullWorkout = lower.match(/(?:sudah\s*)?(?:selesai|beres|done)\s*(?:semua\s*)?(?:latihan|workout|olahraga)|(?:latihan|workout|olahraga)\s*(?:hari\s*ini\s*)?(?:sudah\s*)?(?:selesai|beres|done)/i);
   if (isFullWorkout && existingExercises.length > 0) {
     existingExercises.forEach((e) => {
       e.completedSets = e.targetSets;
@@ -53016,8 +53125,6 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
 Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u2728`
     ];
   }
-  let matchedScheduledEx = null;
-  const dbEx = findExerciseOrEquipment(userText);
   if (dbEx) {
     for (const ex of existingExercises) {
       const exName = String(ex.name || "").toLowerCase();
@@ -53086,7 +53193,7 @@ Jangan lupa istirahat yang cukup & cukupi konsumsi protein kamu ya! \u2728`
         const nextReps = formatRepsCompact(nextEx.targetReps, nextEx.targetSets);
         return [
           `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
------------------------------
+--------------------------------------------------
 \u2705 *${matchedScheduledEx.name}*
 ${detailsStr}
 
@@ -53098,7 +53205,7 @@ ${detailsStr}
       } else {
         return [
           `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
------------------------------
+--------------------------------------------------
 \u2705 *${matchedScheduledEx.name}*
 ${detailsStr}
 
@@ -53112,7 +53219,7 @@ ${detailsStr}
       const remaining = matchedScheduledEx.targetSets - finalSets;
       return [
         `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
------------------------------
+--------------------------------------------------
 \u2705 *${matchedScheduledEx.name}*
 ${detailsStr}
 
@@ -53171,7 +53278,7 @@ ${detailsStr}
     ].filter(Boolean).join(" \u2022 ");
     return [
       `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *LATIHAN BERHASIL DICATAT*
------------------------------
+--------------------------------------------------
 \u2705 *${exerciseName}*
 ${detailsStr}
 
@@ -56976,6 +57083,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   isValidIndonesianMobile,
   normalizePhoneToE164,
   normalizePhoneToLocal,
+  pendingWorkoutClarifications,
   processMealCorrection,
   resolveCleanFoodNameAndMealType,
   sanitizeWhatsAppResponse,

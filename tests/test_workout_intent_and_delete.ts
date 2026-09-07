@@ -134,7 +134,7 @@ const vagueText = vagueResp ? vagueResp.join("\n") : "";
 assert(!vagueText.toLowerCase().includes("barbell bench press"), "Does NOT invent specific exercises for vague input");
 assert(!vagueText.toLowerCase().includes("goblet squat"), "Does NOT invent fake Goblet Squats for vague input");
 assert(vagueText.toLowerCase().includes("sesi") || vagueText.toLowerCase().includes("gym") || vagueText.toLowerCase().includes("olahraga"), "Acknowledges gym workout session");
-assert(vagueText.includes("45 menit") || vagueText.includes("Estimasi Bakar"), "Provides general session time / calorie estimate");
+assert(!vagueText.includes("352 kcal"), "Does NOT invent arbitrary default calories when duration is omitted");
 
 // ── GROUP 5: EXERCISE NAME AMBIGUITY HANDLING ────────────────────────────────
 console.log("\n▶ GROUP 5: Generic Exercise Ambiguity Handling");

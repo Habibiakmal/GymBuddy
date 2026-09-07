@@ -81,8 +81,8 @@ console.log("\n▶ TEST 2: Legitimate Workout Reporting Works Accurately");
 const actualWorkoutLogs = [
   "aku sudah latihan bench press 3 set 10 reps 50kg",
   "tadi aku berenang 45 menit",
-  "aku sudah olahraga",
-  "catat olahraga aku lari 5 km 30 menit"
+  "catat olahraga aku lari 5 km 30 menit",
+  "aku sudah jalan kaki 30 menit"
 ];
 
 for (const logText of actualWorkoutLogs) {
@@ -94,6 +94,11 @@ for (const logText of actualWorkoutLogs) {
   );
   console.log(`  ✅ [PASS] "${logText}" successfully logged`);
 }
+
+const genericResult = handleWorkoutProgressLogging(normPhone, "aku sudah olahraga", userData);
+assert.ok(genericResult !== null && genericResult.length > 0, `Generic log "aku sudah olahraga" should produce clarification response`);
+assert.ok(genericResult[0].toLowerCase().includes("olahraga apa"), `Generic log must ask for activity clarification`);
+console.log(`  ✅ [PASS] "aku sudah olahraga" accurately requests activity clarification`);
 
 // ----------------------------------------------------------------------------
 // TEST 3: formatNutritionCard Completeness & WhatsApp Formatter Single Ownership
