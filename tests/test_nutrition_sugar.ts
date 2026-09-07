@@ -76,9 +76,9 @@ assertEqual("TEST S7: Carbs Consistency", calcA.carbs, calcB.carbs);
 // TEST S8: "Roti isi sosis topping keju" individual component decomposition
 const rotiCombo = calculateFoodNutrition("roti isi sosis topping keju");
 assertEqual("TEST S8: Multi-component item count", rotiCombo.components.length, 3);
-assertEqual("TEST S8: Component 1 is Bread", rotiCombo.components[0].normalizedName, "Roti Tawar");
-assertEqual("TEST S8: Component 2 is Sausage", rotiCombo.components[1].normalizedName, "Sosis (Cooked)");
-assertEqual("TEST S8: Component 3 is Cheese", rotiCombo.components[2].normalizedName, "Keju (1 Slice)");
+assertEqual("TEST S8: Component 1 is Bread", rotiCombo.components[0].normalizedName, "Roti");
+assertEqual("TEST S8: Component 2 is Sausage", rotiCombo.components[1].normalizedName, "Sosis");
+assertEqual("TEST S8: Component 3 is Cheese", rotiCombo.components[2].normalizedName, "Keju");
 assertEqual("TEST S8: Sugar is <= Carbs", rotiCombo.sugar <= rotiCombo.carbs, true);
 assertEqual("TEST S8: Sanity check passes", rotiCombo.sanityValid, true);
 

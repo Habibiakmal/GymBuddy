@@ -30,6 +30,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var server_exports = {};
 __export(server_exports, {
   activeRegistrationLocks: () => activeRegistrationLocks,
+  addMealLog: () => addMealLog,
   applyDeterministicCorrection: () => applyDeterministicCorrection,
   applyTargetedMealCorrection: () => applyTargetedMealCorrection,
   authPendingSessions: () => authPendingSessions,
@@ -37,6 +38,8 @@ __export(server_exports, {
   calculateUserData: () => calculateUserData,
   classifyMealType: () => classifyMealType,
   classifyUserInput: () => classifyUserInput,
+  clearSentWhatsAppMessages: () => clearSentWhatsAppMessages,
+  createExpressApp: () => createExpressApp,
   dbData: () => dbData,
   deletePendingSession: () => deletePendingSession,
   detectMealCorrectionIntent: () => detectMealCorrectionIntent,
@@ -47,13 +50,19 @@ __export(server_exports, {
   formatDashboardMacro: () => formatDashboardMacro,
   formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
+  generateMealRecommendations: () => generateMealRecommendations,
+  generateWeeklyMealSchedule: () => generateWeeklyMealSchedule,
+  generateWeeklyWorkoutSchedule: () => generateWeeklyWorkoutSchedule,
+  generateWorkoutRecommendations: () => generateWorkoutRecommendations,
   getDailyTotals: () => getDailyTotals,
   getLastFoodMeal: () => getLastFoodMeal,
+  getLastSentWhatsAppMessage: () => getLastSentWhatsAppMessage,
   getLegacyPhoneVariations: () => getLegacyPhoneVariations,
   getMealTypeByHour: () => getMealTypeByHour,
   getMealTypeFromTimeWindow: () => getMealTypeFromTimeWindow,
   getMealTypeLabel: () => getMealTypeLabel,
   getPendingSession: () => getPendingSession,
+  getSentWhatsAppMessagesFor: () => getSentWhatsAppMessagesFor,
   getUserPlanCapabilities: () => getUserPlanCapabilities,
   getUserProfile: () => getUserProfile,
   handleAdditionalActivityLogging: () => handleAdditionalActivityLogging,
@@ -71,8 +80,10 @@ __export(server_exports, {
   savePendingSession: () => savePendingSession,
   saveUserProfile: () => saveUserProfile,
   sendWhatsAppLoginMessage: () => sendWhatsAppLoginMessage,
+  sentWhatsAppMessages: () => sentWhatsAppMessages,
   splitCompoundFoodItems: () => splitCompoundFoodItems,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
+  startServer: () => startServer,
   updateExistingMealLog: () => updateExistingMealLog,
   validatePlanContext: () => validatePlanContext
 });
@@ -43034,6 +43045,2142 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
   }
 }
 
+// services/recommendationEngine.ts
+function logRecommendationAudit(entry) {
+  const safeLog = {
+    time: entry.timestamp || (/* @__PURE__ */ new Date()).toISOString(),
+    uid: entry.userId,
+    type: entry.recommendationType,
+    constraints: entry.constraintsDetected,
+    candidate: entry.candidateRecommendation,
+    status: entry.validationResult,
+    reason: entry.rejectionReason || null,
+    fallback: entry.fallbackUsed || null
+  };
+  console.log(`[RecommendationAudit] ${JSON.stringify(safeLog)}`);
+}
+function resolveCanonicalProfile(rawProfile, calculatedUserData) {
+  const p = rawProfile || {};
+  const c = calculatedUserData || {};
+  const phone = String(p.phone || p.normalizedPhone || c.phone || "").trim();
+  const userId = String(p.userId || c.userId || `usr_${phone || "anon"}`).trim();
+  const name = String(p.name || c.name || "Member").trim();
+  const nickname = String(p.nickname || c.nickname || name.split(/\s+/)[0] || "Member").trim();
+  let gender = "unknown";
+  const rawGender = String(p.gender || c.gender || "").toLowerCase();
+  if (rawGender.includes("wanita") || rawGender.includes("female")) {
+    gender = "wanita";
+  } else if (rawGender.includes("pria") || rawGender.includes("male")) {
+    gender = "pria";
+  }
+  let age = "unknown";
+  const rawAge = Number(p.age || c.age);
+  if (!isNaN(rawAge) && rawAge > 0 && rawAge < 120) {
+    age = rawAge;
+  }
+  let height = "unknown";
+  const rawHeight = Number(p.height || c.height);
+  if (!isNaN(rawHeight) && rawHeight > 50 && rawHeight < 260) {
+    height = rawHeight;
+  }
+  let weight = "unknown";
+  const rawWeight = Number(p.weight || c.weight);
+  if (!isNaN(rawWeight) && rawWeight > 20 && rawWeight < 350) {
+    weight = rawWeight;
+  }
+  let fitnessGoal = "unknown";
+  const rawGoal = String(p.goal || c.goal || "").toLowerCase();
+  if (rawGoal.includes("lose") || rawGoal.includes("turun")) fitnessGoal = "lose";
+  else if (rawGoal.includes("gain") || rawGoal.includes("naik")) fitnessGoal = "gain";
+  else if (rawGoal.includes("health") || rawGoal.includes("sehat") || rawGoal.includes("maintain")) fitnessGoal = "health";
+  const goalTitle = String(p.goalTitle || c.goalTitle || (fitnessGoal === "lose" ? "Menurunkan Berat Badan" : fitnessGoal === "gain" ? "Menaikkan Massa Otot" : fitnessGoal === "health" ? "Gaya Hidup Sehat & Fit" : "Program Kebugaran"));
+  const rawPersona = String(p.persona || c.persona || "").toLowerCase();
+  const persona = rawPersona.includes("mia") || rawPersona.includes("nikita") ? "mia" : "max";
+  const calorieTarget = Number(p.targetCalories || c.targetCalories || p.dailyTargetCalories || 2e3);
+  const macroTargets = {
+    protein: Number(p.proteinGrams || c.proteinGrams || p.dailyTargetProtein || 150),
+    carbs: Number(p.carbGrams || c.carbGrams || p.dailyTargetCarbs || 200),
+    fat: Number(p.fatGrams || c.fatGrams || p.dailyTargetFat || 60),
+    fiber: Number(p.fiberGrams || c.fiberGrams || p.dailyTargetFiber || 28)
+  };
+  let allergies = [];
+  let allergiesStatus = "unknown";
+  const rawAllergies = p.allergies || c.allergies;
+  if (rawAllergies !== void 0 && rawAllergies !== null) {
+    const list = Array.isArray(rawAllergies) ? rawAllergies : [String(rawAllergies)];
+    const cleanList = list.map((a) => String(a).trim().toLowerCase()).filter(Boolean);
+    if (cleanList.length === 0) {
+      allergiesStatus = "unknown";
+    } else if (cleanList.length === 1 && (cleanList[0] === "none" || cleanList[0] === "tidak ada")) {
+      allergies = ["none"];
+      allergiesStatus = "none_reported";
+    } else {
+      allergies = cleanList.filter((a) => a !== "none" && a !== "tidak ada");
+      allergiesStatus = allergies.length > 0 ? "reported" : "none_reported";
+    }
+  }
+  let medicalConditions = [];
+  let medicalConditionsStatus = p.medicalConditionsStatus || "unknown";
+  const rawHp = p.healthProfile || c.healthProfile || {};
+  const rawConditions = p.medicalConditions || p.conditions || rawHp.conditions || rawHp.medicalConditions || c.conditions || c.medicalConditions;
+  const rawHasCond = p.healthStatus || rawHp.hasCondition;
+  if (rawConditions !== void 0 || rawHasCond !== void 0) {
+    if (rawHasCond === "no_condition") {
+      medicalConditionsStatus = "none_reported";
+    } else if (rawHasCond === "prefer_not_to_say") {
+      medicalConditionsStatus = "unknown";
+    } else if (Array.isArray(rawConditions)) {
+      medicalConditions = rawConditions.map((cd) => String(cd).trim().toLowerCase()).filter(Boolean);
+      medicalConditionsStatus = p.medicalConditionsStatus || (medicalConditions.length > 0 ? "reported" : "none_reported");
+    }
+  }
+  const otherCondition = p.otherCondition || rawHp.otherCondition;
+  if (otherCondition && typeof otherCondition === "string" && otherCondition.trim()) {
+    medicalConditions.push(otherCondition.trim().toLowerCase());
+    medicalConditionsStatus = "reported";
+  }
+  let sodiumTarget = 2e3;
+  if (medicalConditions.some((c2) => c2.includes("hypertens") || c2.includes("darah tinggi") || c2.includes("tekanan darah"))) {
+    sodiumTarget = 1500;
+  }
+  let sugarTarget = 50;
+  if (medicalConditions.some((c2) => c2.includes("diabet") || c2.includes("gula darah"))) {
+    sugarTarget = 25;
+  }
+  let injuries = [];
+  let injuriesStatus = "unknown";
+  const rawInjuries = p.injuries || c.injuries;
+  if (rawInjuries !== void 0 && rawInjuries !== null) {
+    const list = Array.isArray(rawInjuries) ? rawInjuries : [String(rawInjuries)];
+    const cleanList = list.map((i) => String(i).trim().toLowerCase()).filter(Boolean);
+    if (cleanList.length === 0) {
+      injuriesStatus = "unknown";
+    } else if (cleanList.length === 1 && (cleanList[0] === "none" || cleanList[0] === "tidak ada")) {
+      injuries = ["none"];
+      injuriesStatus = "none_reported";
+    } else {
+      injuries = cleanList.filter((i) => i !== "none" && i !== "tidak ada");
+      injuriesStatus = injuries.length > 0 ? "reported" : "none_reported";
+    }
+  }
+  let dislikedFoods = [];
+  const rawDislikes = p.dislikedFoods || p.dislikes || p.pantangan;
+  if (Array.isArray(rawDislikes)) {
+    dislikedFoods = rawDislikes.map((d) => String(d).trim().toLowerCase()).filter(Boolean);
+  } else if (typeof rawDislikes === "string" && rawDislikes.trim()) {
+    dislikedFoods = rawDislikes.split(/[,;\n]/).map((d) => d.trim().toLowerCase()).filter(Boolean);
+  }
+  let equipment = "unknown";
+  const rawEq = String(p.equipment || c.equipment || "").toLowerCase();
+  if (rawEq.includes("bodyweight") || rawEq.includes("badan")) equipment = "bodyweight";
+  else if (rawEq.includes("dumbbell")) equipment = "dumbbells";
+  else if (rawEq.includes("gym") || rawEq.includes("lengkap") || rawEq.includes("fitness")) equipment = "full_gym";
+  else if (rawEq) equipment = "full_gym";
+  return {
+    userId,
+    phone,
+    name,
+    nickname,
+    gender,
+    age,
+    height,
+    weight,
+    targetWeight: p.targetWeight || c.targetWeight,
+    fitnessGoal,
+    goalTitle,
+    persona,
+    calorieTarget,
+    macroTargets,
+    sodiumTarget,
+    sugarTarget,
+    allergies,
+    allergiesStatus,
+    medicalConditions,
+    medicalConditionsStatus,
+    injuries,
+    injuriesStatus,
+    customInjury: p.customInjury || c.customInjury,
+    dislikedFoods,
+    equipment,
+    workoutSchedule: p.workoutSchedule || c.workoutSchedule,
+    updatedAt: p.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+var ALLERGEN_REGISTRY = {
+  peanuts: {
+    id: "peanuts",
+    aliases: ["peanut", "peanuts", "kacang", "kacang tanah", "kacang-kacangan"],
+    prohibitedIngredients: [
+      "kacang",
+      "kacang tanah",
+      "peanut",
+      "peanuts",
+      "peanut butter",
+      "selai kacang",
+      "bumbu kacang",
+      "saus kacang",
+      "minyak kacang"
+    ],
+    hiddenSources: [
+      "gado-gado",
+      "gado gado",
+      "pecel",
+      "ketoprak",
+      "bumbu pecel",
+      "sate ayam bumbu kacang",
+      "sate bumbu kacang",
+      "rempeyek kacang",
+      "batagor",
+      "siomay bumbu kacang",
+      "kuah kacang"
+    ]
+  },
+  seafood: {
+    id: "seafood",
+    aliases: ["seafood", "shellfish", "udang", "kepiting", "cumi", "lobster", "kerang", "ikan laut"],
+    prohibitedIngredients: [
+      "udang",
+      "shrimp",
+      "prawn",
+      "kepiting",
+      "crab",
+      "lobster",
+      "cumi",
+      "cumi-cumi",
+      "squid",
+      "kerang",
+      "clam",
+      "mussel",
+      "oyster",
+      "shellfish",
+      "seafood",
+      "terasi",
+      "belacan",
+      "petis",
+      "ebi",
+      "saus tiram",
+      "oyster sauce",
+      "minyak ikan",
+      "fish sauce",
+      "kecap ikan",
+      "dashi",
+      "katsuobushi"
+    ],
+    hiddenSources: [
+      "sambal terasi",
+      "nasi goreng terasi",
+      "tumis kangkung terasi",
+      "petis tahu",
+      "rujak petis",
+      "pempek ebi",
+      "capcay saus tiram",
+      "kangkung saus tiram",
+      "cumi goreng tepung",
+      "bakwan udang",
+      "tekwan"
+    ]
+  },
+  dairy: {
+    id: "dairy",
+    aliases: ["dairy", "susu", "laktosa", "milk", "lactose", "cheese", "keju"],
+    prohibitedIngredients: [
+      "susu",
+      "milk",
+      "susu sapi",
+      "cow milk",
+      "keju",
+      "cheese",
+      "mentega",
+      "butter",
+      "yogurt",
+      "yoghurt",
+      "whey",
+      "whey protein",
+      "krimer",
+      "creamer",
+      "cream",
+      "krim",
+      "sour cream",
+      "laktosa",
+      "buttermilk"
+    ],
+    hiddenSources: [
+      "sop krim",
+      "cream soup",
+      "pasta carbonara",
+      "roti bakar keju",
+      "martabak manis mentega",
+      "kopi susu",
+      "milk tea",
+      "smoothie susu",
+      "puding susu",
+      "saus bechamel"
+    ]
+  },
+  eggs: {
+    id: "eggs",
+    aliases: ["egg", "eggs", "telur", "telor"],
+    prohibitedIngredients: [
+      "telur",
+      "telor",
+      "egg",
+      "eggs",
+      "putih telur",
+      "kuning telur",
+      "egg white",
+      "egg yolk",
+      "mayones",
+      "mayonnaise",
+      "mayo"
+    ],
+    hiddenSources: [
+      "telur ceplok",
+      "telur dadar",
+      "omelet",
+      "orak-arik telur",
+      "nasi goreng telur",
+      "martabak telur",
+      "egg tart",
+      "kue bolu",
+      "salad dressing mayo"
+    ]
+  },
+  gluten: {
+    id: "gluten",
+    aliases: ["gluten", "gandum", "wheat", "terigu"],
+    prohibitedIngredients: [
+      "gandum",
+      "wheat",
+      "tepung terigu",
+      "terigu",
+      "roti",
+      "bread",
+      "mie",
+      "bakmi",
+      "noodle",
+      "pasta",
+      "spaghetti",
+      "macaroni",
+      "biskuit",
+      "pastry"
+    ],
+    hiddenSources: [
+      "mie ayam",
+      "indomie",
+      "gorengan tepung",
+      "ayam tepung krispi",
+      "cumi goreng tepung",
+      "roti tawar",
+      "roti gandum",
+      "shoyu"
+    ]
+  },
+  soy: {
+    id: "soy",
+    aliases: ["soy", "kedelai", "soya", "tofu", "tahu"],
+    prohibitedIngredients: [
+      "kedelai",
+      "soy",
+      "soybean",
+      "tahu",
+      "tofu",
+      "tempe",
+      "tempeh",
+      "kecap",
+      "kecap manis",
+      "kecap asin",
+      "tauco",
+      "susu kedelai",
+      "edamame"
+    ],
+    hiddenSources: [
+      "ayam kecap",
+      "tumis tahu tempe",
+      "tahu goreng",
+      "tempe bacem",
+      "orek tempe",
+      "semur ayam kecap"
+    ]
+  }
+};
+var EXERCISE_REGISTRY = [
+  // LOWER BODY
+  {
+    id: "leg-press",
+    name: "Leg Press Machine",
+    indonesianName: "Mesin Leg Press (Paha & Bokong)",
+    targetMuscles: ["Quadriceps", "Gluteus"],
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    impactLevel: "none",
+    jointLoad: { knee: "moderate", shoulder: "low", spine: "low" },
+    equipmentRequired: "machine",
+    contraindications: [],
+    targetSets: 4,
+    targetReps: "4 Set x 10-12 Reps",
+    tips: "Punggung menempel rata, jangan kunci mati sendi lutut di atas."
+  },
+  {
+    id: "glute-bridge",
+    name: "Glute Bridge & Hip Thrust",
+    indonesianName: "Glute Bridge (Bokong & Hamstrings)",
+    targetMuscles: ["Gluteus Maximus", "Hamstrings"],
+    bodyArea: "lower_body",
+    movementPattern: "hinge",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "bodyweight",
+    contraindications: [],
+    targetSets: 3,
+    targetReps: "3 Set x 15 Reps",
+    tips: "Sangat aman untuk lutut dan punggung bawah, fokus dorong pakai tumit."
+  },
+  {
+    id: "bodyweight-squat",
+    name: "Bodyweight Squat",
+    indonesianName: "Squat Beban Tubuh",
+    targetMuscles: ["Quadriceps", "Gluteus"],
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    impactLevel: "low",
+    jointLoad: { knee: "high", shoulder: "low", spine: "moderate" },
+    equipmentRequired: "bodyweight",
+    contraindications: ["knee"],
+    targetSets: 3,
+    targetReps: "3 Set x 12-15 Reps",
+    tips: "Hindari jika ada cedera lutut akut."
+  },
+  {
+    id: "jump-squat",
+    name: "Jump Squat",
+    indonesianName: "Squat Lompat",
+    targetMuscles: ["Quadriceps", "Gluteus", "Calves"],
+    bodyArea: "lower_body",
+    movementPattern: "jumping",
+    impactLevel: "high",
+    jointLoad: { knee: "high", shoulder: "low", spine: "high" },
+    equipmentRequired: "bodyweight",
+    contraindications: ["knee", "lower_back"],
+    targetSets: 3,
+    targetReps: "3 Set x 10 Reps",
+    tips: "Impact tinggi pada sendi lutut dan tulang belakang."
+  },
+  {
+    id: "jumping-rope",
+    name: "Jumping Rope",
+    indonesianName: "Lompat Tali",
+    targetMuscles: ["Calves", "Cardio"],
+    bodyArea: "lower_body",
+    movementPattern: "jumping",
+    impactLevel: "high",
+    jointLoad: { knee: "high", shoulder: "moderate", spine: "moderate" },
+    equipmentRequired: "bodyweight",
+    contraindications: ["knee", "lower_back", "hypertension", "vertigo"],
+    targetSets: 4,
+    targetReps: "4 Ronde x 1 Menit",
+    tips: "Dilarang untuk cedera lutut atau masalah persendian kaki."
+  },
+  {
+    id: "burpee",
+    name: "Burpee",
+    indonesianName: "Burpee (Full Body HIIT)",
+    targetMuscles: ["Full Body", "Cardio"],
+    bodyArea: "full_body",
+    movementPattern: "jumping",
+    impactLevel: "high",
+    jointLoad: { knee: "high", shoulder: "high", spine: "high" },
+    equipmentRequired: "bodyweight",
+    contraindications: ["knee", "shoulder", "lower_back", "hypertension", "vertigo"],
+    targetSets: 3,
+    targetReps: "3 Set x 10 Reps",
+    tips: "Gerakan compound eksplosif, hindari jika memiliki cedera lutut, bahu, atau punggung."
+  },
+  {
+    id: "barbell-back-squat",
+    name: "Barbell Back Squat",
+    indonesianName: "Squat Barbell",
+    targetMuscles: ["Quadriceps", "Gluteus", "Erector Spinae"],
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    impactLevel: "low",
+    jointLoad: { knee: "high", shoulder: "moderate", spine: "high" },
+    equipmentRequired: "barbell",
+    contraindications: ["knee", "lower_back"],
+    targetSets: 4,
+    targetReps: "4 Set x 8-10 Reps",
+    tips: "Beban aksial menekan tulang belakang dan lutut."
+  },
+  {
+    id: "dumbbell-goblet-squat",
+    name: "Dumbbell Goblet Squat",
+    indonesianName: "Goblet Squat Dumbbell",
+    targetMuscles: ["Quadriceps", "Gluteus"],
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    impactLevel: "low",
+    jointLoad: { knee: "high", shoulder: "low", spine: "moderate" },
+    equipmentRequired: "dumbbells",
+    contraindications: ["knee"],
+    targetSets: 3,
+    targetReps: "3 Set x 12 Reps",
+    tips: "Pegang dumbbell di dada, jaga postur tegak."
+  },
+  {
+    id: "dumbbell-romanian-deadlift",
+    name: "Dumbbell Romanian Deadlift",
+    indonesianName: "Romanian Deadlift Dumbbell",
+    targetMuscles: ["Hamstrings", "Gluteus"],
+    bodyArea: "lower_body",
+    movementPattern: "hinge",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "moderate" },
+    equipmentRequired: "dumbbells",
+    contraindications: ["lower_back"],
+    targetSets: 3,
+    targetReps: "3 Set x 12 Reps",
+    tips: "Aman untuk lutut karena lutut semi-fixed, namun perlu kontrol punggung bawah."
+  },
+  // UPPER BODY
+  {
+    id: "push-up",
+    name: "Push-Up (Regular / Knee)",
+    indonesianName: "Push-Up",
+    targetMuscles: ["Pectoralis Major", "Triceps", "Anterior Deltoids"],
+    bodyArea: "upper_body",
+    movementPattern: "horizontal_press",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "moderate", spine: "low" },
+    equipmentRequired: "bodyweight",
+    contraindications: [],
+    targetSets: 3,
+    targetReps: "3 Set x 12 Reps",
+    tips: "Jaga siku 45 derajat dari badan, tubuh lurus dari kepala ke tumit."
+  },
+  {
+    id: "dumbbell-bench-press",
+    name: "Dumbbell Bench Press",
+    indonesianName: "Bench Press Dumbbell",
+    targetMuscles: ["Dada", "Triceps"],
+    bodyArea: "upper_body",
+    movementPattern: "horizontal_press",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "moderate", spine: "low" },
+    equipmentRequired: "dumbbells",
+    contraindications: [],
+    targetSets: 4,
+    targetReps: "4 Set x 10-12 Reps",
+    tips: "Jaga stabilitas bahu, dorong kuat ke atas tanpa membenturkan dumbbell."
+  },
+  {
+    id: "overhead-dumbbell-press",
+    name: "Overhead Dumbbell Shoulder Press",
+    indonesianName: "Shoulder Press Dumbbell",
+    targetMuscles: ["Bahu Depan & Samping", "Triceps"],
+    bodyArea: "upper_body",
+    movementPattern: "overhead_press",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "high", spine: "moderate" },
+    equipmentRequired: "dumbbells",
+    contraindications: ["shoulder"],
+    targetSets: 3,
+    targetReps: "3 Set x 10-12 Reps",
+    tips: "DILARANG jika mengalami cedera bahu atau impingement rotator cuff."
+  },
+  {
+    id: "chest-supported-row",
+    name: "Chest-Supported Dumbbell Row",
+    indonesianName: "Row Dumbbell dengan Sandaran Dada",
+    targetMuscles: ["Upper Back", "Rhomboids", "Lats"],
+    bodyArea: "upper_body",
+    movementPattern: "horizontal_pull",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "dumbbells",
+    contraindications: [],
+    targetSets: 4,
+    targetReps: "4 Set x 12 Reps",
+    tips: "Sangat aman untuk punggung bawah dan lutut karena dada disangga bangku miring."
+  },
+  {
+    id: "barbell-bent-over-row",
+    name: "Barbell Bent-Over Row",
+    indonesianName: "Bent-Over Row Barbell",
+    targetMuscles: ["Lats", "Rhomboids", "Erector Spinae"],
+    bodyArea: "upper_body",
+    movementPattern: "horizontal_pull",
+    impactLevel: "none",
+    jointLoad: { knee: "moderate", shoulder: "moderate", spine: "high" },
+    equipmentRequired: "barbell",
+    contraindications: ["lower_back"],
+    targetSets: 4,
+    targetReps: "4 Set x 8-10 Reps",
+    tips: "Beban torsi tinggi pada punggung bawah, dilarang jika ada cedera lumbar."
+  },
+  {
+    id: "lat-pulldown",
+    name: "Wide-Grip Lat Pulldown Machine",
+    indonesianName: "Mesin Lat Pulldown",
+    targetMuscles: ["Latissimus Dorsi", "Biceps"],
+    bodyArea: "upper_body",
+    movementPattern: "vertical_pull",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "machine",
+    contraindications: [],
+    targetSets: 4,
+    targetReps: "4 Set x 10-12 Reps",
+    tips: "Tarik ke dada atas, jangan ke belakang leher."
+  },
+  {
+    id: "seated-cable-row",
+    name: "Seated Cable Row",
+    indonesianName: "Dayung Kabel Duduk",
+    targetMuscles: ["Middle Back", "Lats"],
+    bodyArea: "upper_body",
+    movementPattern: "horizontal_pull",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "cable",
+    contraindications: [],
+    targetSets: 3,
+    targetReps: "3 Set x 12 Reps",
+    tips: "Jaga dada tegak, squeeze belikat di akhir tarikan."
+  },
+  {
+    id: "lateral-raise",
+    name: "Dumbbell Side Lateral Raise",
+    indonesianName: "Lateral Raise Dumbbell",
+    targetMuscles: ["Side Deltoids"],
+    bodyArea: "upper_body",
+    movementPattern: "isolation",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "moderate", spine: "low" },
+    equipmentRequired: "dumbbells",
+    contraindications: ["shoulder"],
+    targetSets: 3,
+    targetReps: "3 Set x 15 Reps",
+    tips: "Gunakan beban ringan untuk isolasi bahu samping."
+  },
+  // CORE & RECOVERY
+  {
+    id: "plank-hold",
+    name: "Plank Hold",
+    indonesianName: "Plank Statis",
+    targetMuscles: ["Core", "Transverse Abdominis"],
+    bodyArea: "core",
+    movementPattern: "core",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "bodyweight",
+    contraindications: [],
+    targetSets: 3,
+    targetReps: "3 Set x 45 Detik",
+    tips: "Tahan perut tetap kencang, pinggul sejajar tidak melorot."
+  },
+  {
+    id: "incline-treadmill-walk",
+    name: "Incline Treadmill Walk",
+    indonesianName: "Jalan Menanjak Treadmill",
+    targetMuscles: ["Cardio", "Glutes", "Calves"],
+    bodyArea: "lower_body",
+    movementPattern: "cardio",
+    impactLevel: "low",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "machine",
+    contraindications: [],
+    targetSets: 1,
+    targetReps: "25-30 Menit",
+    tips: "Kardio pembakar lemak rendah impact, sangat ramah sendi lutut."
+  },
+  {
+    id: "stationary-bike",
+    name: "Stationary Bike",
+    indonesianName: "Sepeda Statis",
+    targetMuscles: ["Cardio", "Quadriceps"],
+    bodyArea: "lower_body",
+    movementPattern: "cardio",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "machine",
+    contraindications: [],
+    targetSets: 1,
+    targetReps: "20-30 Menit",
+    tips: "Tanpa impact benturan ke lantai, aman untuk lutut."
+  },
+  {
+    id: "active-mobility-stretch",
+    name: "Dynamic Mobility & Stretching",
+    indonesianName: "Peregangan Mobilitas Dinamis",
+    targetMuscles: ["Full Body Mobility"],
+    bodyArea: "full_body",
+    movementPattern: "isolation",
+    impactLevel: "none",
+    jointLoad: { knee: "low", shoulder: "low", spine: "low" },
+    equipmentRequired: "bodyweight",
+    contraindications: [],
+    targetSets: 1,
+    targetReps: "15 Menit Mobilitas",
+    tips: "Meningkatkan sirkulasi darah dan pemulihan sendi tanpa beban."
+  }
+];
+function validateFoodSafety(rawMeal, rawProfile) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const meal = {
+    name: rawMeal.name || "",
+    category: rawMeal.category || "siang",
+    calories: Number(rawMeal.calories) || 0,
+    protein: Number(rawMeal.protein) || 0,
+    carbs: Number(rawMeal.carbs) || 0,
+    fat: Number(rawMeal.fat) || 0,
+    fiber: Number(rawMeal.fiber) || 0,
+    sodium: Number(rawMeal.sodium ?? rawMeal.sodiumMg ?? 0),
+    sugar: Number(rawMeal.sugar ?? rawMeal.sugarG ?? 0),
+    ingredients: Array.isArray(rawMeal.ingredients) ? rawMeal.ingredients : [],
+    prepMethod: rawMeal.prepMethod || ""
+  };
+  const violations = [];
+  const reasons = [];
+  const rejectedItems = [];
+  const mealText = `${meal.name} ${(meal.ingredients || []).join(" ")} ${meal.prepMethod || ""}`.toLowerCase();
+  if (profile.allergiesStatus === "reported" && profile.allergies.length > 0) {
+    for (const allergyId of profile.allergies) {
+      const cleanAllergy = allergyId.trim().toLowerCase();
+      if (cleanAllergy === "none" || cleanAllergy === "tidak ada") continue;
+      let matchedRule = ALLERGEN_REGISTRY[cleanAllergy];
+      if (!matchedRule) {
+        for (const rule of Object.values(ALLERGEN_REGISTRY)) {
+          if (rule.aliases.some((alias) => cleanAllergy.includes(alias) || alias.includes(cleanAllergy))) {
+            matchedRule = rule;
+            break;
+          }
+        }
+      }
+      if (matchedRule) {
+        for (const item of matchedRule.prohibitedIngredients) {
+          if (mealText.includes(item)) {
+            violations.push(`allergen_conflict:${matchedRule.id}`);
+            reasons.push(`Mengandung bahan alergen '${item}' yang bertentangan dengan alergi ${matchedRule.id}`);
+            rejectedItems.push(item);
+          }
+        }
+        for (const source of matchedRule.hiddenSources) {
+          if (mealText.includes(source)) {
+            violations.push(`hidden_allergen:${matchedRule.id}`);
+            reasons.push(`Mengandung olahan '${source}' yang berpotensi memiliki turunan ${matchedRule.id}`);
+            rejectedItems.push(source);
+          }
+        }
+      } else {
+        if (mealText.includes(cleanAllergy)) {
+          violations.push(`allergen_conflict:${cleanAllergy}`);
+          reasons.push(`Mengandung bahan yang memicu alergi spesifik: '${cleanAllergy}'`);
+          rejectedItems.push(cleanAllergy);
+        }
+      }
+    }
+  }
+  if (profile.medicalConditionsStatus === "reported" && profile.medicalConditions.length > 0) {
+    const hasHypertension = profile.medicalConditions.some((c) => c.includes("hypertens") || c.includes("darah tinggi") || c.includes("tekanan darah"));
+    const hasDiabetes = profile.medicalConditions.some((c) => c.includes("diabet") || c.includes("gula"));
+    const hasCholesterol = profile.medicalConditions.some((c) => c.includes("cholesterol") || c.includes("kolesterol"));
+    const hasHeart = profile.medicalConditions.some((c) => c.includes("heart") || c.includes("jantung"));
+    if (hasHypertension) {
+      if (meal.sodium > 600) {
+        violations.push("medical_sodium_exceeded");
+        reasons.push(`Sodium menu (${meal.sodium}mg) melebihi batas aman untuk kondisi hipertensi (<600mg per meal)`);
+      }
+      const saltyKeywords = ["ikan asin", "keripik asin", "kuah instan", "sosis asin", "kornet", "kecap asin pekat"];
+      for (const kw of saltyKeywords) {
+        if (mealText.includes(kw)) {
+          violations.push(`medical_hypertension_ingredient:${kw}`);
+          reasons.push(`Makanan '${kw}' tinggi garam tidak dianjurkan untuk riwayat hipertensi`);
+        }
+      }
+    }
+    if (hasDiabetes) {
+      if (meal.sugar > 8) {
+        violations.push("medical_sugar_exceeded");
+        reasons.push(`Kandungan gula (${meal.sugar}g) melebihi batas anjuran diabetes (<8g per meal)`);
+      }
+      const sugaryKeywords = ["es teh manis", "sirup", "kue manis", "boba", "madu pekat", "soda", "kolak"];
+      for (const kw of sugaryKeywords) {
+        if (mealText.includes(kw)) {
+          violations.push(`medical_diabetes_ingredient:${kw}`);
+          reasons.push(`Makanan/minuman '${kw}' tinggi gula bebas tidak dianjurkan untuk riwayat diabetes`);
+        }
+      }
+    }
+    if (hasCholesterol) {
+      if (meal.fat > 18) {
+        violations.push("medical_fat_exceeded");
+        reasons.push(`Lemak menu (${meal.fat}g) melebihi batas anjuran kolesterol tinggi (<18g per meal)`);
+      }
+      const fattyKeywords = ["gorengan", "santan kental", "gulai otak", "jeroan", "kulit ayam krispi", "lemak sapi"];
+      for (const kw of fattyKeywords) {
+        if (mealText.includes(kw)) {
+          violations.push(`medical_cholesterol_ingredient:${kw}`);
+          reasons.push(`Makanan '${kw}' tinggi lemak jenuh/kolesterol tidak dianjurkan`);
+        }
+      }
+    }
+    if (hasHeart) {
+      if (meal.calories > 850) {
+        violations.push("medical_heart_heavy_meal");
+        reasons.push(`Porsi kalori terlalu berat (${meal.calories} kcal) untuk kondisi jantung; utamakan porsi moderat`);
+      }
+    }
+  }
+  if (profile.dislikedFoods && profile.dislikedFoods.length > 0) {
+    for (const dislike of profile.dislikedFoods) {
+      if (mealText.includes(dislike)) {
+        violations.push(`disliked_food:${dislike}`);
+        reasons.push(`Mengandung bahan yang tidak disukai pengguna: '${dislike}'`);
+      }
+    }
+  }
+  const pass = violations.length === 0;
+  return {
+    pass,
+    isSafe: pass,
+    violations,
+    reasons,
+    reason: reasons[0] || "",
+    rejectedItems,
+    matchedAllergens: rejectedItems
+  };
+}
+function validateWorkoutSafety(rawExercise, rawProfile) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  let exercise;
+  const found = EXERCISE_REGISTRY.find(
+    (e) => e.id.toLowerCase() === String(rawExercise.id || "").toLowerCase() || e.name.toLowerCase() === String(rawExercise.name || "").toLowerCase() || e.indonesianName && e.indonesianName.toLowerCase() === String(rawExercise.name || "").toLowerCase() || String(rawExercise.name || "").toLowerCase().includes(e.name.toLowerCase())
+  );
+  if (found) {
+    exercise = { ...found, ...rawExercise };
+  } else {
+    const rawName = String(rawExercise.name || "").toLowerCase();
+    const isJumping = rawName.includes("jump") || rawName.includes("lompat") || rawName.includes("burpee") || rawName.includes("rope");
+    const isOverhead = rawName.includes("overhead") || rawName.includes("shoulder press") || rawName.includes("military press");
+    const isDeadlift = rawName.includes("deadlift") || rawName.includes("bent-over row");
+    const isSquat = rawName.includes("squat");
+    const isHIIT = rawName.includes("hiit") || rawName.includes("sprint") || rawName.includes("extreme");
+    exercise = {
+      id: rawExercise.id || "custom-ex",
+      name: rawExercise.name || "Custom Exercise",
+      targetMuscles: rawExercise.targetMuscles || ["General"],
+      bodyArea: rawExercise.bodyArea || (isOverhead ? "upper_body" : isSquat || isDeadlift ? "lower_body" : "full_body"),
+      movementPattern: rawExercise.movementPattern || (isJumping ? "jumping" : isOverhead ? "overhead_press" : isDeadlift ? "hinge" : isSquat ? "squat" : "isolation"),
+      impactLevel: rawExercise.impactLevel || rawExercise.impact || (isJumping || isHIIT ? "high" : "none"),
+      jointLoad: rawExercise.jointLoad || {
+        knee: isSquat || isJumping ? "high" : "low",
+        shoulder: isOverhead ? "high" : "low",
+        spine: isDeadlift || isSquat ? "high" : "low"
+      },
+      equipmentRequired: rawExercise.equipmentRequired || "bodyweight",
+      contraindications: rawExercise.contraindications || [
+        ...isSquat || isJumping ? ["knee"] : [],
+        ...isOverhead ? ["shoulder"] : [],
+        ...isDeadlift ? ["lower_back"] : [],
+        ...isHIIT || isJumping ? ["hypertension", "vertigo"] : []
+      ],
+      targetSets: rawExercise.targetSets || 3,
+      targetReps: rawExercise.targetReps || "10 Reps"
+    };
+  }
+  const violations = [];
+  const reasons = [];
+  if (profile.injuriesStatus === "reported" && profile.injuries.length > 0) {
+    for (const injury of profile.injuries) {
+      const cleanInjury = injury.trim().toLowerCase();
+      if (cleanInjury === "none" || cleanInjury === "tidak ada") continue;
+      if (cleanInjury.includes("knee") || cleanInjury.includes("lutut")) {
+        if (exercise.jointLoad?.knee === "high" || exercise.contraindications?.includes("knee")) {
+          violations.push("injury_contraindication:knee");
+          reasons.push(`Latihan '${exercise.name}' memiliki beban sendi lutut tinggi (contraindicated for knee injury)`);
+        }
+        if (exercise.impactLevel === "high" || exercise.movementPattern === "jumping") {
+          violations.push("injury_impact_contraindication:knee");
+          reasons.push(`Latihan lompat/high impact '${exercise.name}' dilarang untuk cedera lutut`);
+        }
+      }
+      if (cleanInjury.includes("shoulder") || cleanInjury.includes("bahu")) {
+        if (exercise.jointLoad?.shoulder === "high" || exercise.contraindications?.includes("shoulder")) {
+          violations.push("injury_contraindication:shoulder");
+          reasons.push(`Latihan '${exercise.name}' membebani sendi bahu secara berlebihan (contraindicated for shoulder injury)`);
+        }
+        if (exercise.movementPattern === "overhead_press") {
+          violations.push("injury_overhead_contraindication:shoulder");
+          reasons.push(`Gerakan overhead press '${exercise.name}' berisiko memicu impingement bahu`);
+        }
+      }
+      if (cleanInjury.includes("lower_back") || cleanInjury.includes("back") || cleanInjury.includes("punggung") || cleanInjury.includes("pinggang")) {
+        if (exercise.jointLoad?.spine === "high" || exercise.contraindications?.includes("lower_back")) {
+          violations.push("injury_contraindication:lower_back");
+          reasons.push(`Latihan '${exercise.name}' memberi beban aksial tinggi pada tulang belakang (contraindicated for lower back)`);
+        }
+      }
+      if (cleanInjury.includes("hypertens") || cleanInjury.includes("vertigo") || cleanInjury.includes("darah tinggi")) {
+        if (exercise.contraindications?.includes("hypertension") || exercise.contraindications?.includes("vertigo")) {
+          violations.push("injury_contraindication:vertigo_hypertension");
+          reasons.push(`Latihan eksplosif / posisi kepala berganti cepat '${exercise.name}' dilarang untuk riwayat vertigo/tekanan darah`);
+        }
+      }
+    }
+  }
+  if (profile.medicalConditionsStatus === "reported" && profile.medicalConditions.length > 0) {
+    const hasHeart = profile.medicalConditions.some((c) => c.includes("heart") || c.includes("jantung"));
+    const hasHyper = profile.medicalConditions.some((c) => c.includes("hypertens") || c.includes("darah tinggi"));
+    if (hasHeart && (exercise.impactLevel === "high" || exercise.movementPattern === "jumping" || exercise.name.toLowerCase().includes("hiit") || exercise.name.toLowerCase().includes("sprint"))) {
+      violations.push("medical_condition:heart");
+      reasons.push(`Latihan intensitas tinggi/ekstrem '${exercise.name}' dilarang untuk riwayat penyakit jantung`);
+    }
+    if (hasHyper && (exercise.contraindications?.includes("hypertension") || exercise.movementPattern === "jumping")) {
+      violations.push("medical_condition:hypertension");
+      reasons.push(`Latihan eksplosif '${exercise.name}' dilarang untuk kondisi hipertensi`);
+    }
+  }
+  if (profile.equipment === "bodyweight") {
+    if (exercise.equipmentRequired !== "bodyweight") {
+      violations.push(`equipment_mismatch:${exercise.equipmentRequired}`);
+      reasons.push(`Latihan '${exercise.name}' memerlukan alat (${exercise.equipmentRequired}), profil hanya memiliki bodyweight`);
+    }
+  } else if (profile.equipment === "dumbbells") {
+    if (exercise.equipmentRequired !== "bodyweight" && exercise.equipmentRequired !== "dumbbells") {
+      violations.push(`equipment_mismatch:${exercise.equipmentRequired}`);
+      reasons.push(`Latihan '${exercise.name}' memerlukan alat gym/mesin, profil hanya memiliki dumbbell`);
+    }
+  }
+  const pass = violations.length === 0;
+  return {
+    pass,
+    isSafe: pass,
+    violations,
+    reasons,
+    reason: reasons[0] || ""
+  };
+}
+var BASE_MEAL_POOL = [
+  // BREAKFAST
+  {
+    name: "2 Telur Rebus + Oatmeal Buah Segar",
+    category: "sarapan",
+    calories: 320,
+    protein: 18,
+    carbs: 42,
+    fat: 9,
+    fiber: 5,
+    sodium: 140,
+    sugar: 8,
+    ingredients: ["telur rebus", "oatmeal", "potongan pisang", "air panas"],
+    prepMethod: "rebus",
+    rationale: "Karbohidrat kompleks lambat serap dan protein telur untuk energi pagi stabil."
+  },
+  {
+    name: "Oatmeal Apel Kayu Manis + Biji Chia Nabati",
+    category: "sarapan",
+    calories: 280,
+    protein: 8,
+    carbs: 52,
+    fat: 5,
+    fiber: 9,
+    sodium: 40,
+    sugar: 7,
+    ingredients: ["oatmeal", "apel segar", "biji chia", "kayu manis bubuk", "air hangat"],
+    prepMethod: "seduh",
+    rationale: "Formula nabati bersih kaya serat larut dan mikronutrien."
+  },
+  {
+    name: "Pepes Ikan Nila Bening + 1 Centong Nasi Merah + Timun",
+    category: "sarapan",
+    calories: 350,
+    protein: 28,
+    carbs: 45,
+    fat: 6,
+    fiber: 4,
+    sodium: 260,
+    sugar: 2,
+    ingredients: ["ikan nila", "bumbu kuning kunyit jahe", "nasi merah", "timun segar"],
+    prepMethod: "kukus",
+    rationale: "Sarapan tinggi protein ikan segar dengan rempah antiinflamasi alami."
+  },
+  {
+    name: "Tahu Kukus Kemangi + Ubi Rebus + Selada",
+    category: "sarapan",
+    calories: 260,
+    protein: 14,
+    carbs: 40,
+    fat: 5,
+    fiber: 6,
+    sodium: 120,
+    sugar: 4,
+    ingredients: ["tahu putih", "daun kemangi", "ubi kuning kukus", "selada"],
+    prepMethod: "kukus",
+    rationale: "Pilihan nabati murni rendah garam dan ramah eliminasi."
+  },
+  // LUNCH
+  {
+    name: "Dada Ayam Panggang Herbal + Nasi Merah + Tumis Buncis Jagung",
+    category: "siang",
+    calories: 460,
+    protein: 36,
+    carbs: 52,
+    fat: 8,
+    fiber: 6,
+    sodium: 320,
+    sugar: 3,
+    ingredients: ["dada ayam tanpa kulit", "bawang putih", "lada hitam", "nasi merah", "buncis", "jagung manis"],
+    prepMethod: "panggang",
+    rationale: "Padat protein murni dengan bumbu herbal segar, ramah tekanan darah."
+  },
+  {
+    name: "Pepes Ikan Mas Daun Kemangi + Sayur Bening Bayam + Kentang Rebus",
+    category: "siang",
+    calories: 410,
+    protein: 32,
+    carbs: 48,
+    fat: 9,
+    fiber: 5,
+    sodium: 280,
+    sugar: 2,
+    ingredients: ["ikan mas", "daun kemangi", "bayam segar", "jagung", "kentang rebus"],
+    prepMethod: "kukus bening",
+    rationale: "Rendah natrium dan lemak jenuh, sangat aman untuk hipertensi dan kolesterol."
+  },
+  {
+    name: "Daging Sapi Has Dalam Lada Hitam (Sedikit Minyak) + Nasi Putih + Brokoli Kukus",
+    category: "siang",
+    calories: 480,
+    protein: 34,
+    carbs: 55,
+    fat: 11,
+    fiber: 5,
+    sodium: 380,
+    sugar: 3,
+    ingredients: ["daging sapi has dalam lean", "lada hitam", "bawang bombay", "nasi putih", "brokoli kukus"],
+    prepMethod: "tumis sedikit minyak zaitun",
+    rationale: "Sumber zat besi dan zinc tinggi dengan pemotongan lemak berlebih."
+  },
+  {
+    name: "Tumis Tempe Buncis Bawang Putih + Kentang Rebus + Sup Wortel",
+    category: "siang",
+    calories: 380,
+    protein: 20,
+    carbs: 54,
+    fat: 9,
+    fiber: 8,
+    sodium: 210,
+    sugar: 3,
+    ingredients: ["tempe kedelai segar", "buncis", "kentang rebus", "wortel bening"],
+    prepMethod: "tumis air",
+    rationale: "Pilihan nabati berserat tinggi yang menjaga profil lipid tetap sehat."
+  },
+  // DINNER
+  {
+    name: "Sup Ayam Bening Wortel & Jamur + 1/2 Centong Nasi + Lalapan Timun",
+    category: "malam",
+    calories: 360,
+    protein: 30,
+    carbs: 38,
+    fat: 7,
+    fiber: 4,
+    sodium: 340,
+    sugar: 2,
+    ingredients: ["dada ayam cincang", "wortel", "jamur tiram", "bawang putih kaldu bening", "nasi putih", "timun"],
+    prepMethod: "rebus sup",
+    rationale: "Hangat, mudah dicerna sebelum tidur, dan mendukung pemulihan otot malam hari."
+  },
+  {
+    name: "Pepes Tahu Jamur + Sayur Bening Bayam + 1 Centong Nasi Jagung",
+    category: "malam",
+    calories: 310,
+    protein: 18,
+    carbs: 44,
+    fat: 6,
+    fiber: 6,
+    sodium: 190,
+    sugar: 2,
+    ingredients: ["tahu putih", "jamur kuping", "daun salam", "bayam", "nasi jagung"],
+    prepMethod: "kukus",
+    rationale: "Bebas kolesterol jenuh dan natrium sangat minimal, mendukung tidur nyenyak."
+  },
+  {
+    name: "Ikan Kembung Bakar Kunyit (Tanpa Sambal Terasi) + Lalapan Daun Selada + Ubi Rebus",
+    category: "malam",
+    calories: 390,
+    protein: 29,
+    carbs: 42,
+    fat: 10,
+    fiber: 5,
+    sodium: 230,
+    sugar: 3,
+    ingredients: ["ikan kembung", "kunyit jahe", "selada segar", "ubi rebus"],
+    prepMethod: "bakar teflon",
+    rationale: "Kaya asam lemak Omega-3 alami untuk kesehatan pembuluh darah dan sendi."
+  },
+  // SNACK
+  {
+    name: "1 Buah Apel Segar + 15g Biji Bunga Matahari",
+    category: "snack",
+    calories: 140,
+    protein: 4,
+    carbs: 21,
+    fat: 5,
+    fiber: 4,
+    sodium: 10,
+    sugar: 14,
+    ingredients: ["apel fuji", "biji bunga matahari tanpa garam"],
+    prepMethod: "segar",
+    rationale: "Camilan segar kaya mikronutrien antioksidan tanpa sodium dan tanpa lemak jenuh."
+  },
+  {
+    name: "1 Buah Pir Segar / Jambu Biji Merah Potong",
+    category: "snack",
+    calories: 80,
+    protein: 1,
+    carbs: 19,
+    fat: 0,
+    fiber: 5,
+    sodium: 5,
+    sugar: 12,
+    ingredients: ["buah pir segar"],
+    prepMethod: "segar",
+    rationale: "Bebas alergen total, hidrasi alami dan ramah diabetes karena indeks glikemik rendah."
+  },
+  {
+    name: "Edamame Rebus Tanpa Garam (100g)",
+    category: "snack",
+    calories: 120,
+    protein: 11,
+    carbs: 9,
+    fat: 5,
+    fiber: 5,
+    sodium: 15,
+    sugar: 2,
+    ingredients: ["edamame segar", "air rebusan"],
+    prepMethod: "rebus",
+    rationale: "Tinggi protein nabati dan serat, sangat mengenyangkan di sela jam makan."
+  }
+];
+function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const totals = {
+    calories: Number(rawTotals?.calories) || 0,
+    protein: Number(rawTotals?.protein) || 0,
+    carbs: Number(rawTotals?.carbs) || 0,
+    fat: Number(rawTotals?.fat) || 0,
+    sodium: Number(rawTotals?.sodium) || 0,
+    sugar: Number(rawTotals?.sugar) || 0
+  };
+  const remainingCal = Math.max(0, profile.calorieTarget - totals.calories);
+  const remainingProt = Math.max(0, profile.macroTargets.protein - totals.protein);
+  const remainingSodium = Math.max(0, profile.sodiumTarget - (totals.sodium || 0));
+  const lower = (userText || "").toLowerCase();
+  const isNight = lower.includes("malam") || lower.includes("dinner");
+  const isLunch = lower.includes("siang") || lower.includes("lunch");
+  const isBreakfast = lower.includes("pagi") || lower.includes("sarapan") || lower.includes("breakfast");
+  const isSnack = lower.includes("snack") || lower.includes("camilan") || lower.includes("cemilan");
+  let targetCategory = "siang";
+  if (isNight) targetCategory = "malam";
+  else if (isBreakfast) targetCategory = "sarapan";
+  else if (isSnack) targetCategory = "snack";
+  else if (isLunch) targetCategory = "siang";
+  else {
+    let hour = 12;
+    try {
+      hour = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }).format(/* @__PURE__ */ new Date()), 10);
+    } catch {
+      hour = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
+    }
+    if (hour < 10) targetCategory = "sarapan";
+    else if (hour < 15) targetCategory = "siang";
+    else if (hour < 18) targetCategory = "snack";
+    else targetCategory = "malam";
+  }
+  let candidates = BASE_MEAL_POOL.filter((m) => m.category === targetCategory);
+  if (candidates.length === 0) candidates = BASE_MEAL_POOL;
+  const hasHypertension = profile.medicalConditions.some((c) => c.includes("hypertens") || c.includes("darah tinggi") || c.includes("tekanan darah"));
+  const hasDiabetes = profile.medicalConditions.some((c) => c.includes("diabet") || c.includes("gula"));
+  candidates = [...candidates].sort((a, b) => {
+    let scoreA = 0;
+    let scoreB = 0;
+    if (remainingProt > 25) {
+      scoreA += a.protein * 2.5;
+      scoreB += b.protein * 2.5;
+    }
+    if (remainingCal > 0 && remainingCal < 400) {
+      scoreA -= Math.abs(a.calories - remainingCal);
+      scoreB -= Math.abs(b.calories - remainingCal);
+    }
+    if (hasHypertension) {
+      scoreA -= a.sodium || 0;
+      scoreB -= b.sodium || 0;
+    }
+    if (hasDiabetes) {
+      scoreA -= (a.sugar || 0) * 15;
+      scoreB -= (b.sugar || 0) * 15;
+      scoreA += (a.fiber || 0) * 10;
+      scoreB += (b.fiber || 0) * 10;
+    }
+    return scoreB - scoreA;
+  });
+  let chosenMeal = null;
+  let validationResult = null;
+  for (const candidate of candidates) {
+    const check = validateFoodSafety(candidate, profile);
+    if (check.pass) {
+      chosenMeal = candidate;
+      validationResult = check;
+      logRecommendationAudit({
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        userId: profile.userId,
+        recommendationType: "meal_single",
+        constraintsDetected: {
+          allergies: profile.allergies,
+          medicalConditions: profile.medicalConditions,
+          injuries: profile.injuries,
+          dislikedFoods: profile.dislikedFoods,
+          equipment: profile.equipment
+        },
+        candidateRecommendation: candidate.name,
+        validationResult: "PASS"
+      });
+      break;
+    } else {
+      logRecommendationAudit({
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        userId: profile.userId,
+        recommendationType: "meal_single",
+        constraintsDetected: {
+          allergies: profile.allergies,
+          medicalConditions: profile.medicalConditions,
+          injuries: profile.injuries,
+          dislikedFoods: profile.dislikedFoods,
+          equipment: profile.equipment
+        },
+        candidateRecommendation: candidate.name,
+        validationResult: "REJECTED",
+        rejectionReason: check.reasons.join("; ")
+      });
+    }
+  }
+  if (!chosenMeal) {
+    const universalSafe = {
+      name: "Sup Bening Dada Ayam Suwir & Wortel Kukus + Nasi Merah Bersih",
+      category: targetCategory,
+      calories: 340,
+      protein: 28,
+      carbs: 42,
+      fat: 4,
+      fiber: 4,
+      sodium: 180,
+      sugar: 2,
+      ingredients: ["dada ayam rebus tawar", "wortel kukus", "nasi merah kukus", "daun bawang"],
+      prepMethod: "rebus tawar",
+      rationale: "Menu netral ramah eliminasi dengan protein bersih dan tinggi serat."
+    };
+    const emergencyCheck = validateFoodSafety(universalSafe, profile);
+    if (emergencyCheck.pass) {
+      chosenMeal = universalSafe;
+      validationResult = emergencyCheck;
+    } else {
+      const veganSafe = {
+        name: "Kentang Kukus Bening + Brokoli & Wortel Rebus Tanpa Garam",
+        category: targetCategory,
+        calories: 220,
+        protein: 6,
+        carbs: 48,
+        fat: 1,
+        fiber: 6,
+        sodium: 60,
+        sugar: 3,
+        ingredients: ["kentang kukus", "brokoli kukus", "wortel kukus"],
+        prepMethod: "kukus",
+        rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
+      };
+      chosenMeal = veganSafe;
+      validationResult = validateFoodSafety(veganSafe, profile);
+    }
+  }
+  const progressNotes = [];
+  if (totals.calories > profile.calorieTarget) {
+    progressNotes.push(`\u26A0\uFE0F *Kalori Harian Melebihi Target*: Total asupan (${totals.calories}/${profile.calorieTarget} kcal) telah melebihi target. Utamakan hidrasi air putih, hindari camilan manis/berlemak, dan fokus pada pemulihan tubuh.`);
+  } else {
+    progressNotes.push(`\u{1F4CA} *Sisa Anggaran Kalori Hari Ini*: ~${remainingCal} kcal lagi (Target: ${profile.calorieTarget} kcal)`);
+  }
+  const hasKidney = profile.medicalConditions.some((c) => c.includes("kidney") || c.includes("ginjal"));
+  if (hasKidney) {
+    progressNotes.push(`\u2695\uFE0F *Catatan Medis Ginjal*: Asupan protein dan cairan harus selalu dikonsultasikan dengan dokter spesialis atau dokter pendampingmu ya.`);
+  } else if (remainingProt > 20) {
+    progressNotes.push(`\u{1F356} *Prioritas Protein*: Masih memerlukan ~${remainingProt}g protein hari ini.`);
+  }
+  if (hasHypertension) {
+    progressNotes.push(`\u{1F9C2} *Perhatian Natrium (Hipertensi)*: Menjaga asupan garam ketat (<1.500 mg/hari). Menu ini dipilih rendah garam untuk kesehatan tekanan darahmu.`);
+  } else if (totals.sodium && totals.sodium > profile.sodiumTarget) {
+    progressNotes.push(`\u{1F9C2} *Perhatian Sodium*: Natrium hari ini (${totals.sodium} mg) sudah mendekati batas anjuran. Menu ini dipilih rendah garam.`);
+  }
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const personaNote = profile.persona === "max" ? `Menu ini gue pilihkan berdasarkan data profil dan sisa target harian lo bro. Tetap konsisten jaga pola makan bergizi dan jangan lupa hidrasi! Gas! \u{1F525}` : `Menu ini dipilih berdasarkan data profil dan kebutuhan nutrisimu hari ini ya. Tetap jaga pola makan seimbang dan cukupi hidrasi agar tubuh selalu bugar \u2728`;
+  return `\u{1F37D}\uFE0F *REKOMENDASI MENU ${targetCategory.toUpperCase()} PERSONAL*
+--------------------------------------------------
+\u{1F464} *Profil*: ${profile.name} | Goal: ${profile.goalTitle}
+\u{1F6E1}\uFE0F *Status Rekomendasi*: Direkomendasikan berdasarkan data profil dan targetmu
+
+\u{1F371} *Menu Pilihan*: *${chosenMeal.name}*
+\u{1F525} Kalori: ~${chosenMeal.calories} kcal
+\u{1F356} Protein: ~${chosenMeal.protein}g | \u{1F35A} Karbo: ~${chosenMeal.carbs}g | \u{1F953} Lemak: ~${chosenMeal.fat}g
+\u{1F9C2} Sodium: ~${chosenMeal.sodium} mg | \u{1F96C} Serat: ~${chosenMeal.fiber}g
+
+\u{1F4A1} *Alasan Pemilihan*: ${chosenMeal.rationale}
+
+\u{1F4C8} *Analisis Progress Nutrisi*: 
+` + progressNotes.map((n) => `\u2022 ${n}`).join("\n") + `
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"${personaNote}"`;
+}
+function generatePersonalizedWeeklyMealPlan(rawProfile) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const safeLunchPool = BASE_MEAL_POOL.filter((m) => m.category === "siang" && validateFoodSafety(m, profile).pass);
+  const safeDinnerPool = BASE_MEAL_POOL.filter((m) => m.category === "malam" && validateFoodSafety(m, profile).pass);
+  const certifiedFallbackLunch = {
+    name: "Sup Bening Dada Ayam Suwir + Nasi Merah + Wortel Rebus",
+    category: "siang",
+    calories: 360,
+    protein: 30,
+    carbs: 45,
+    fat: 5,
+    fiber: 5,
+    sodium: 200,
+    sugar: 2,
+    ingredients: ["dada ayam tanpa kulit", "wortel kukus", "nasi merah", "daun bawang"],
+    prepMethod: "rebus",
+    rationale: "Menu netral dengan protein bersih dan bumbu alami ramah eliminasi."
+  };
+  const certifiedFallbackDinner = {
+    name: "Pepes Ikan Mas Kunyit Jahe + Kentang Kukus + Sayur Bening",
+    category: "malam",
+    calories: 330,
+    protein: 28,
+    carbs: 40,
+    fat: 6,
+    fiber: 5,
+    sodium: 180,
+    sugar: 2,
+    ingredients: ["ikan mas", "kunyit", "jahe", "kentang kukus", "bayam"],
+    prepMethod: "kukus",
+    rationale: "Kaya protein segar dan rempah antiinflamasi alami untuk pemulihan malam."
+  };
+  const certifiedVeganFallback = {
+    name: "Kentang Kukus Bening + Brokoli & Wortel Rebus Tanpa Garam",
+    category: "siang",
+    calories: 220,
+    protein: 6,
+    carbs: 48,
+    fat: 1,
+    fiber: 6,
+    sodium: 60,
+    sugar: 3,
+    ingredients: ["kentang kukus", "brokoli kukus", "wortel kukus"],
+    prepMethod: "kukus",
+    rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
+  };
+  const dailyPlans = days.map((day, idx) => {
+    let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[idx % safeLunchPool.length] : validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
+    let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[(idx + 1) % safeDinnerPool.length] : validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
+    const lunchCheck = validateFoodSafety(chosenLunch, profile);
+    if (!lunchCheck.pass) {
+      chosenLunch = safeLunchPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    const dinnerCheck = validateFoodSafety(chosenDinner, profile);
+    if (!dinnerCheck.pass) {
+      chosenDinner = safeDinnerPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    const dayRationale = idx === 0 ? "Fokus awal pekan: optimalisasi protein bersih." : idx === 1 ? "Pilihan rendah natrium untuk menjaga tekanan darah stabil." : idx === 2 ? "Karbohidrat kompleks untuk energi aktivitas tengah pekan." : idx === 3 ? "Serat tinggi dan antioksidan untuk pencernaan sehat." : idx === 4 ? "Recovery gizi seimbang menjelang akhir pekan." : idx === 5 ? "Menu praktis bernutrisi padat untuk mobilitas weekend." : "Pemulihan pencernaan & persiapan pekan berikutnya.";
+    return `*${day}*
+\u2600\uFE0F *Siang*: ${chosenLunch.name} (~${chosenLunch.calories} kcal, P:${chosenLunch.protein}g)
+\u{1F319} *Malam*: ${chosenDinner.name} (~${chosenDinner.calories} kcal, P:${chosenDinner.protein}g)
+\u{1F4A1} _${dayRationale}_`;
+  }).join("\n\n");
+  const constraintSummary = [];
+  if (profile.allergiesStatus === "reported" && profile.allergies.length > 0) {
+    constraintSummary.push(`Eliminasi Alergen Personal Terverifikasi`);
+  }
+  if (profile.medicalConditionsStatus === "reported" && profile.medicalConditions.length > 0) {
+    constraintSummary.push(`Adaptasi Kondisi Medis Aktif`);
+  }
+  const constraintText = constraintSummary.length > 0 ? `\u{1F6E1}\uFE0F *Proteksi Profil*: ${constraintSummary.join(" | ")}
+` : `\u{1F6E1}\uFE0F *Proteksi Profil*: Nutrisi Seimbang Sesuai Targetmu
+`;
+  const weeklyMealPersonaClosing = profile.persona === "max" ? `Jadwal makan seminggu ini gue susun sesuai data profil dan target harian lo bro. Mau tukar atau ada menu yang kurang pas? Langsung bilang ke gue ya! \u{1F525}` : `Jadwal ini disusun berdasarkan data profil dan kebutuhan tubuhmu ya. Mau ganti salah satu menu? Cukup beri tahu aku kapan saja \u2728`;
+  return `\u{1F4C5} *JADWAL MAKAN MINGGUAN PERSONAL*
+--------------------------------------------------
+\u{1F464} *Nama*: ${profile.name} | *Target Kalori*: ~${profile.calorieTarget} kcal/hari
+` + constraintText + `--------------------------------------------------
+
+${dailyPlans}
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"${weeklyMealPersonaClosing}"`;
+}
+function generatePersonalizedWorkoutRecommendation(rawProfile, targetDayOffset = 0) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const targetDayIdx = ((/* @__PURE__ */ new Date()).getDay() + targetDayOffset + 7) % 7;
+  const targetDayName = dayNames[targetDayIdx];
+  const dayLabel = targetDayOffset === 1 ? "BESOK" : "HARI INI";
+  const safeExercises = EXERCISE_REGISTRY.filter((ex) => validateWorkoutSafety(ex, profile).pass);
+  let targetArea = "upper_body";
+  if (targetDayIdx === 1 || targetDayIdx === 4) targetArea = "upper_body";
+  else if (targetDayIdx === 2 || targetDayIdx === 5) targetArea = "lower_body";
+  else if (targetDayIdx === 3 || targetDayIdx === 6) targetArea = "core";
+  else targetArea = "full_body";
+  if (targetDayIdx === 0) {
+    const recoveryClosing = profile.persona === "max" ? "Istirahat adalah bagian penting dari progres fisik lo bro. Tetap jaga pola makan bergizi dan jangan begadang! Gas! \u{1F525}" : "Istirahat adalah bagian penting dari kemajuan fisikmu. Cukupi tidur dan tetap jaga pola makan bergizi ya \u2728";
+    return `\u{1F4C5} *JADWAL LATIHAN ${dayLabel} (${targetDayName.toUpperCase()})*
+--------------------------------------------------
+\u{1F334} *FOKUS: REST & AKTIF RECOVERY*
+
+Hari ini adalah waktu untuk pemulihan otot dan relaksasi persendian. Cukupi air putih minimal 2.5 liter dan tidur nyenyak agar sesi latihan berikutnya maksimal! \u{1F33F}\u2728
+
+\u{1F4AC} *${coachName}*:
+"${recoveryClosing}"`;
+  }
+  let selected = safeExercises.filter((e) => e.bodyArea === targetArea);
+  if (selected.length < 3) {
+    selected = [...selected, ...safeExercises.filter((e) => e.bodyArea !== targetArea)].slice(0, 3);
+  } else {
+    selected = selected.slice(0, 3);
+  }
+  selected = selected.map((ex) => {
+    if (validateWorkoutSafety(ex, profile).pass) return ex;
+    return safeExercises.find((alt) => validateWorkoutSafety(alt, profile).pass) || ex;
+  });
+  const exerciseLines = selected.map(
+    (ex, idx) => `${idx + 1}. *${ex.indonesianName || ex.name}*
+   \u{1F522} ${ex.targetSets} Set x ${ex.targetReps}
+   \u{1F4A1} Tips: ${ex.tips || "Jaga postur netral dan atur pernafasan."}`
+  ).join("\n\n");
+  const injuryNote = profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil.` : `\u{1F6E1}\uFE0F *Kondisi Fisik*: Latihan disesuaikan dengan tingkat aktivitas dan tujuan kebugaranmu.`;
+  const workoutPersonaClosing = profile.persona === "max" ? `Fokus ke eksekusi form yang bersih dan kontrol napas lo bro. Latihan ini gue pilih sesuai data profil dan target lo. Kalau ada sendi yang mulai gak enak, jangan dipaksa ya! Gas! \u{1F4AA}` : `Fokus ke teknik gerakan yang tepat dan dengarkan sinyal tubuhmu ya. Latihan ini dipilih dengan mempertimbangkan data profil dan tujuan kebugaranmu. Kalau ada yang terasa kurang nyaman, segera kurangi beban atau istirahat ya \u2728`;
+  return `\u{1F4C5} *LATIHAN ${dayLabel} (${targetDayName.toUpperCase()})*
+--------------------------------------------------
+\u{1F3AF} *Fokus*: ${targetArea.replace("_", " ").toUpperCase()} (${profile.goalTitle})
+${injuryNote}
+
+\u{1F4CC} *Daftar Gerakan Terpilih*:
+
+${exerciseLines}
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"${workoutPersonaClosing}"`;
+}
+function generatePersonalizedWeeklyWorkoutPlan(rawProfile) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const todayDayName = dayNames[(/* @__PURE__ */ new Date()).getDay()];
+  const safePool = EXERCISE_REGISTRY.filter((ex) => validateWorkoutSafety(ex, profile).pass);
+  if (safePool.length === 0) {
+    const defaultSafe = EXERCISE_REGISTRY.find((e) => e.id === "incline-treadmill-walk" || e.id === "active-mobility-stretch") || EXERCISE_REGISTRY[0];
+    safePool.push(defaultSafe);
+  }
+  const upperExercises = safePool.filter((e) => e.bodyArea === "upper_body");
+  const lowerExercises = safePool.filter((e) => e.bodyArea === "lower_body");
+  const coreExercises = safePool.filter((e) => e.bodyArea === "core" || e.movementPattern === "cardio");
+  const scheduleBlocks = dayOrder.map((day) => {
+    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
+    const todayMarker = isToday ? " \u2190 _Hari ini_" : "";
+    if (day === "Minggu") {
+      return `*Minggu*${todayMarker}
+\u{1F334} Pemulihan Total & Istirahat (Rest Day)`;
+    } else if (day === "Rabu") {
+      const mobilityEx = safePool.find((e) => e.id.includes("mobility") || e.id.includes("stretch")) || coreExercises[0] || safePool[0];
+      return `*Rabu*${todayMarker}
+\u{1F9D8} Mobilitas Aktif & Peregangan
+\u2022 ${mobilityEx?.indonesianName || "Dynamic Stretching"} \u2014 15 Menit`;
+    } else if (day === "Senin" || day === "Kamis") {
+      const ex1 = upperExercises[0] || safePool[0];
+      const ex2 = upperExercises[1] || safePool[1] || ex1;
+      return `*${day}*${todayMarker}
+\u{1F4AA} Upper Body Focus
+\u2022 ${ex1?.indonesianName || ex1?.name} \u2014 ${ex1?.targetReps}
+\u2022 ${ex2?.indonesianName || ex2?.name} \u2014 ${ex2?.targetReps}`;
+    } else {
+      const ex1 = lowerExercises[0] || safePool[0];
+      const ex2 = coreExercises[0] || lowerExercises[1] || safePool[1] || ex1;
+      return `*${day}*${todayMarker}
+\u{1F9B5} Lower Body & Core Focus
+\u2022 ${ex1?.indonesianName || ex1?.name} \u2014 ${ex1?.targetReps}
+\u2022 ${ex2?.indonesianName || ex2?.name} \u2014 ${ex2?.targetReps}`;
+    }
+  }).join("\n\n");
+  const injurySummary = profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Jadwal disusun dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} dari profilmu.
+` : `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Jadwal latihan terstruktur sesuai target kebugaranmu.
+`;
+  const weeklyPersonaClosing = profile.persona === "max" ? `Jadwal latihan ini gue rancang dengan mempertimbangkan data profil dan batasan fisik lo bro. Kalau ada gerakan yang terasa gak nyaman di sendi, kabari gue dan langsung switch ke opsi lebih aman! Gas! \u{1F4AA}` : `Jadwal latihan ini disusun dengan mempertimbangkan data profil dan batasan fisikmu ya. Dengarkan sinyal tubuhmu, dan kalau ada gerakan yang terasa kurang nyaman, segera kabari aku \u2728`;
+  return `\u{1F4C5} *JADWAL OLAHRAGA MINGGUAN PERSONAL*
+--------------------------------------------------
+\u{1F464} *Nama*: ${profile.name} | *Goal*: ${profile.goalTitle}
+\u{1F3CB}\uFE0F *Alat*: ${profile.equipment.toUpperCase()}
+` + injurySummary + `--------------------------------------------------
+
+${scheduleBlocks}
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"${weeklyPersonaClosing}"`;
+}
+
+// services/foodIdentityEngine.ts
+var INDONESIAN_FOOD_ONTOLOGY = [
+  // Ayam Gulai / Gulai Ayam (Chicken Curry with rich spiced coconut gravy)
+  {
+    patterns: [/\b(?:ayam\s+gulai|gulai\s+ayam)\b/i],
+    canonicalName: "Ayam Gulai",
+    concept: "Indonesian chicken gulai / curry in spiced coconut gravy",
+    protein: "chicken",
+    cookingMethod: "gulai",
+    category: "meal",
+    defaultServingGrams: 150,
+    servingUnit: "1 potong ayam gulai",
+    fallbackNutrientPer100g: {
+      calories: 185,
+      protein: 16.5,
+      carbs: 3.2,
+      fat: 11.8,
+      fiber: 0.8,
+      sugar: 1,
+      sodium: 380
+    }
+  },
+  // Otak Sapi / Gulai Otak (Cow Brain / organ meat)
+  {
+    patterns: [/\b(?:otak\s+sapi|gulai\s+otak)\b/i],
+    canonicalName: "Otak Sapi",
+    concept: "Beef brain / organ meat",
+    protein: "beef brain",
+    cookingMethod: "standard",
+    category: "meal",
+    defaultServingGrams: 100,
+    servingUnit: "1 porsi otak sapi (~100g)",
+    fallbackNutrientPer100g: {
+      calories: 143,
+      protein: 10.5,
+      carbs: 1,
+      fat: 10.3,
+      fiber: 0,
+      sugar: 0,
+      sodium: 180
+    }
+  },
+  // Rendang (Beef Rendang slow-cooked in coconut milk and spices)
+  {
+    patterns: [/\b(?:rendang\s+daging|daging\s+rendang|rendang\s+sapi)\b/i, /^(?:rendang)$/i],
+    canonicalName: "Rendang Daging Sapi",
+    concept: "Slow-cooked beef caramelized in rich spices and coconut milk",
+    protein: "beef",
+    cookingMethod: "rendang",
+    category: "meal",
+    defaultServingGrams: 100,
+    servingUnit: "1 potong (~100g)",
+    fallbackNutrientPer100g: {
+      calories: 195,
+      protein: 22,
+      carbs: 4.5,
+      fat: 10,
+      fiber: 1.2,
+      sugar: 1.5,
+      sodium: 360
+    }
+  },
+  // Nasi Padang (Indonesian mixed rice meal with rich curries)
+  {
+    patterns: [/\b(?:nasi\s+padang(?:\s+rendang)?)\b/i],
+    canonicalName: "Nasi Padang Rendang",
+    concept: "Indonesian Padang style mixed rice platter with beef rendang and side dishes",
+    protein: "beef",
+    cookingMethod: "standard",
+    category: "meal",
+    defaultServingGrams: 350,
+    servingUnit: "1 porsi nasi padang komplit",
+    fallbackNutrientPer100g: {
+      calories: 188,
+      protein: 7.2,
+      carbs: 23.5,
+      fat: 7.4,
+      fiber: 1.5,
+      sugar: 1.2,
+      sodium: 320
+    }
+  },
+  // Cumi Goreng Tepung (Crispy Battered Fried Squid)
+  {
+    patterns: [/\b(?:cumi(?:\s+goreng)?\s+tepung|fried\s+(?:calamari|squid))\b/i],
+    canonicalName: "Cumi Goreng Tepung",
+    concept: "Crispy battered fried squid rings",
+    protein: "squid",
+    cookingMethod: "fried",
+    category: "meal",
+    defaultServingGrams: 120,
+    servingUnit: "1 porsi cumi goreng tepung (~120g)",
+    fallbackNutrientPer100g: {
+      calories: 210,
+      protein: 15,
+      carbs: 14.5,
+      fat: 10.2,
+      fiber: 0.6,
+      sugar: 0.4,
+      sodium: 340
+    }
+  },
+  // Kerang Rebus (Boiled Shellfish / Clams with dipping sauce)
+  {
+    patterns: [/\b(?:kerang\s+rebus|boiled\s+(?:clams|shellfish))\b/i],
+    canonicalName: "Kerang Rebus",
+    concept: "Boiled shellfish / clams",
+    protein: "shellfish",
+    cookingMethod: "boiled",
+    category: "meal",
+    defaultServingGrams: 100,
+    servingUnit: "1 porsi daging kerang (~100g)",
+    fallbackNutrientPer100g: {
+      calories: 74,
+      protein: 12.8,
+      carbs: 2.6,
+      fat: 1,
+      fiber: 0,
+      sugar: 0,
+      sodium: 220
+    }
+  },
+  // Tumis Kangkung (Stir-fried Water Spinach)
+  {
+    patterns: [/\b(?:tumis\s+kangkung|cah\s+kangkung|oseng\s+kangkung)\b/i],
+    canonicalName: "Tumis Kangkung",
+    concept: "Stir-fried water spinach with garlic and chili",
+    cookingMethod: "tumis",
+    category: "meal",
+    defaultServingGrams: 100,
+    servingUnit: "1 porsi sedang (~100g)",
+    fallbackNutrientPer100g: {
+      calories: 58,
+      protein: 2.2,
+      carbs: 4.8,
+      fat: 3.5,
+      fiber: 2.1,
+      sugar: 1,
+      sodium: 280
+    }
+  },
+  // Roti Panggang Mentega (Butter Toast)
+  {
+    patterns: [/\b(?:roti\s+panggang\s+mentega|butter\s+toast|roti\s+bakar\s+mentega)\b/i],
+    canonicalName: "Roti Panggang Mentega",
+    concept: "Toasted white bread brushed with butter",
+    cookingMethod: "panggang",
+    category: "snack",
+    defaultServingGrams: 60,
+    servingUnit: "2 lembar roti panggang",
+    fallbackNutrientPer100g: {
+      calories: 340,
+      protein: 8,
+      carbs: 46,
+      fat: 14,
+      fiber: 2.5,
+      sugar: 5.5,
+      sodium: 520
+    }
+  },
+  // Soto Ayam (Indonesian aromatic chicken soup with shredded chicken)
+  {
+    patterns: [/\b(?:soto\s+ayam)\b/i],
+    canonicalName: "Soto Ayam",
+    concept: "Indonesian spiced aromatic chicken soup",
+    protein: "chicken",
+    cookingMethod: "boiled",
+    category: "meal",
+    defaultServingGrams: 300,
+    servingUnit: "1 mangkok soto ayam (~300g)",
+    fallbackNutrientPer100g: {
+      calories: 85,
+      protein: 6.8,
+      carbs: 5.2,
+      fat: 4,
+      fiber: 0.6,
+      sugar: 0.5,
+      sodium: 390
+    }
+  },
+  // Bakso / Bakso Sapi (Indonesian beef meatball soup)
+  {
+    patterns: [/\b(?:bakso(?:\s+sapi)?|mie\s+bakso)\b/i],
+    canonicalName: "Bakso Sapi",
+    concept: "Indonesian beef meatballs served in clear beef broth",
+    protein: "beef",
+    cookingMethod: "boiled",
+    category: "meal",
+    defaultServingGrams: 250,
+    servingUnit: "1 mangkok bakso (5 butir)",
+    fallbackNutrientPer100g: {
+      calories: 125,
+      protein: 8.5,
+      carbs: 9,
+      fat: 5.8,
+      fiber: 0.5,
+      sugar: 0.8,
+      sodium: 480
+    }
+  },
+  // Rawon (Javanese black beef soup with kluwek)
+  {
+    patterns: [/\b(?:rawon(?:\s+daging)?)\b/i],
+    canonicalName: "Rawon Daging Sapi",
+    concept: "East Javanese aromatic black beef soup flavored with black kluwek nut",
+    protein: "beef",
+    cookingMethod: "boiled",
+    category: "meal",
+    defaultServingGrams: 280,
+    servingUnit: "1 mangkok rawon (~280g)",
+    fallbackNutrientPer100g: {
+      calories: 110,
+      protein: 9.8,
+      carbs: 3.5,
+      fat: 6.2,
+      fiber: 0.8,
+      sugar: 0.5,
+      sodium: 420
+    }
+  },
+  // Nasi Goreng (Indonesian Fried Rice)
+  {
+    patterns: [/\b(?:nasi\s+goreng|nasgor)\b/i],
+    canonicalName: "Nasi Goreng",
+    concept: "Indonesian wok-fried seasoned rice",
+    cookingMethod: "fried",
+    category: "meal",
+    defaultServingGrams: 250,
+    servingUnit: "1 piring nasi goreng (~250g)",
+    fallbackNutrientPer100g: {
+      calories: 172,
+      protein: 4.5,
+      carbs: 26,
+      fat: 5.8,
+      fiber: 1.2,
+      sugar: 1.5,
+      sodium: 360
+    }
+  }
+];
+var BRAND_PRODUCT_REGISTRY = [
+  // SilverQueen (Chocolate confectionery)
+  {
+    brand: "SilverQueen",
+    patterns: [/\bsilverqueen\b/i, /\bsilver\s*queen\b/i],
+    canonicalDisplayName: "SilverQueen Bites Milk Chocolate",
+    category: "snack",
+    productType: "chocolate",
+    defaultServingGrams: 45,
+    // Standard bites / bar
+    servingUnit: "1 bungkus / bar (45g)",
+    nutrientPer100g: {
+      calories: 540,
+      protein: 9,
+      carbs: 56,
+      fat: 31,
+      fiber: 3.5,
+      sugar: 48,
+      sodium: 85
+    }
+  },
+  // Oreo (Sandwich cookie)
+  {
+    brand: "Oreo",
+    patterns: [/\boreo\b/i],
+    canonicalDisplayName: "Oreo Cookies",
+    category: "snack",
+    productType: "biscuit",
+    defaultServingGrams: 28,
+    // 3 cookies
+    servingUnit: "3 keping (28g)",
+    nutrientPer100g: {
+      calories: 480,
+      protein: 4.8,
+      carbs: 71,
+      fat: 20,
+      fiber: 2.8,
+      sugar: 38,
+      sodium: 380
+    }
+  },
+  // Chitato (Potato chips snack)
+  {
+    brand: "Chitato",
+    patterns: [/\bchitato\b/i],
+    canonicalDisplayName: "Chitato Potato Chips",
+    category: "snack",
+    productType: "chips",
+    defaultServingGrams: 68,
+    servingUnit: "1 bungkus regular (68g)",
+    nutrientPer100g: {
+      calories: 520,
+      protein: 6.5,
+      carbs: 55,
+      fat: 30,
+      fiber: 3.2,
+      sugar: 2.5,
+      sodium: 480
+    }
+  },
+  // Chiki (Savory puffed snack)
+  {
+    brand: "Chiki",
+    patterns: [/\bchiki(?:\s*balls)?\b/i, /\biki\s*balls\b/i],
+    canonicalDisplayName: "Chiki Balls",
+    category: "snack",
+    productType: "chips",
+    defaultServingGrams: 40,
+    servingUnit: "1 bungkus chiki (40g)",
+    nutrientPer100g: {
+      calories: 490,
+      protein: 6,
+      carbs: 62,
+      fat: 24,
+      fiber: 2,
+      sugar: 4,
+      sodium: 520
+    }
+  },
+  // Indomie (Instant noodles)
+  {
+    brand: "Indomie",
+    patterns: [/\bindomie(?:\s*goreng|\s*kuah|\s*rebus)?\b/i, /\bmie\s*indomie\b/i],
+    canonicalDisplayName: "Indomie Goreng",
+    category: "meal",
+    productType: "instant_noodles",
+    defaultServingGrams: 85,
+    servingUnit: "1 bungkus (85g)",
+    nutrientPer100g: {
+      calories: 447,
+      // ~380 kcal per 85g
+      protein: 9.4,
+      carbs: 63.5,
+      fat: 17.6,
+      fiber: 2.4,
+      sugar: 4.7,
+      sodium: 1040
+    }
+  },
+  // Tango (Wafer)
+  {
+    brand: "Tango",
+    patterns: [/\btango(?:\s*wafer)?\b/i, /\bwafer\s*tango\b/i],
+    canonicalDisplayName: "Tango Wafer",
+    category: "snack",
+    productType: "biscuit",
+    defaultServingGrams: 35,
+    servingUnit: "1 bungkus wafer tango (35g)",
+    nutrientPer100g: {
+      calories: 505,
+      protein: 5.5,
+      carbs: 65,
+      fat: 25,
+      fiber: 1.8,
+      sugar: 32,
+      sodium: 160
+    }
+  },
+  // Ultra Milk (Packaged dairy milk - drink, NOT pure water hydration)
+  {
+    brand: "Ultra Milk",
+    patterns: [/\bultra\s*milk\b/i, /\bsusu\s*ultra\b/i],
+    canonicalDisplayName: "Ultra Milk UHT",
+    category: "beverage",
+    productType: "dairy_drink",
+    defaultServingGrams: 250,
+    servingUnit: "1 kotak (250 ml)",
+    nutrientPer100g: {
+      calories: 62,
+      protein: 3.2,
+      carbs: 4.8,
+      fat: 3.3,
+      fiber: 0,
+      sugar: 4.8,
+      sodium: 45
+    }
+  },
+  // Teh Botol Sosro (Sweet bottled tea - drink, NOT pure water hydration)
+  {
+    brand: "Teh Botol Sosro",
+    patterns: [/\bteh\s*botol(?:\s*sosro)?\b/i, /\bsosro\b/i],
+    canonicalDisplayName: "Teh Botol Sosro",
+    category: "beverage",
+    productType: "tea_drink",
+    defaultServingGrams: 250,
+    servingUnit: "1 botol / kotak (250 ml)",
+    nutrientPer100g: {
+      calories: 36,
+      // ~90 kcal per 250ml
+      protein: 0,
+      carbs: 9,
+      fat: 0,
+      fiber: 0,
+      sugar: 8.8,
+      sodium: 15
+    }
+  },
+  // Yakult (Probiotic fermented milk - drink, NOT pure water hydration)
+  {
+    brand: "Yakult",
+    patterns: [/\byakult\b/i],
+    canonicalDisplayName: "Yakult Probiotik",
+    category: "beverage",
+    productType: "probiotic_drink",
+    defaultServingGrams: 65,
+    servingUnit: "1 botol yakult (65 ml)",
+    nutrientPer100g: {
+      calories: 77,
+      // ~50 kcal per 65ml
+      protein: 1.2,
+      carbs: 17.5,
+      fat: 0.1,
+      fiber: 0,
+      sugar: 15,
+      sodium: 25
+    }
+  }
+];
+function resolveCanonicalFoodIdentity(rawText) {
+  const clean2 = (rawText || "").trim();
+  const lower = clean2.toLowerCase();
+  const cleanWaterText = lower.replace(/(?:\d+(?:[.,]\d+)?\s*(?:ml|liter|litre|l\b|gelas|cup|cups|botol)|\b(?:gelas|cup|cups|botol)\b)/gi, "").replace(/\s+/g, " ").trim();
+  const isPureWater = /^(?:air\s*putih|air\s*mineral|air\s*aqua|air\s*biasa|plain\s*water|mineral\s*water|water|air)$/i.test(cleanWaterText) && !/(?:kopi|coffee|teh|tea|susu|milk|jus|juice|boba|cola|soda|sirup|syrup|lemon|jeruk|buah|manis)/i.test(lower);
+  let explicitGrams;
+  let explicitMl;
+  const gMatch = clean2.match(/(\d+(?:[.,]\d+)?)\s*(?:gram|gr|g)\b/i);
+  if (gMatch) {
+    explicitGrams = parseFloat(gMatch[1].replace(",", "."));
+  }
+  const mlMatch = clean2.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l)\b/i);
+  if (mlMatch) {
+    let val = parseFloat(mlMatch[1].replace(",", "."));
+    if (/liter|l\b/i.test(clean2) && val < 10) val *= 1e3;
+    explicitMl = val;
+  }
+  for (const entry of BRAND_PRODUCT_REGISTRY) {
+    for (const pat of entry.patterns) {
+      if (pat.test(lower)) {
+        let resolvedName = entry.canonicalDisplayName;
+        if (clean2.length > entry.brand.length) {
+          const cleanUser = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+          if (entry.canonicalDisplayName.toLowerCase().includes("chips") && !cleanUser.toLowerCase().includes("chips")) {
+            resolvedName = `${cleanUser} (Chips)`;
+          } else {
+            resolvedName = cleanUser;
+          }
+        }
+        const targetGrams2 = explicitGrams || entry.defaultServingGrams;
+        return {
+          originalInput: clean2,
+          resolvedFoodName: resolvedName,
+          canonicalConcept: entry.canonicalDisplayName,
+          semanticCategory: entry.category,
+          recordType: "meal",
+          // Branded foods/drinks are NEVER hydration!
+          isPureWater: false,
+          brandName: entry.brand,
+          identityScore: 0.98,
+          portionGrams: targetGrams2,
+          portionVolumeMl: entry.category === "beverage" ? explicitMl || targetGrams2 : void 0,
+          portionType: explicitGrams || explicitMl ? "explicit" : "estimated",
+          portionUnit: explicitGrams ? "g" : explicitMl ? "ml" : entry.servingUnit,
+          displayServing: explicitGrams ? `${explicitGrams}g` : entry.servingUnit,
+          notes: `Recognized product from ${entry.brand}`
+        };
+      }
+    }
+  }
+  for (const entry of INDONESIAN_FOOD_ONTOLOGY) {
+    for (const pat of entry.patterns) {
+      if (pat.test(lower)) {
+        let resolvedName = entry.canonicalName;
+        if (clean2.length > 3) {
+          resolvedName = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+        }
+        const targetGrams2 = explicitGrams || entry.defaultServingGrams;
+        return {
+          originalInput: clean2,
+          resolvedFoodName: resolvedName,
+          canonicalConcept: entry.canonicalName,
+          semanticCategory: entry.category,
+          recordType: "meal",
+          isPureWater: false,
+          mainProtein: entry.protein,
+          cookingMethod: entry.cookingMethod,
+          identityScore: 0.95,
+          portionGrams: targetGrams2,
+          portionType: explicitGrams ? "explicit" : "estimated",
+          portionUnit: explicitGrams ? "g" : entry.servingUnit,
+          displayServing: explicitGrams ? `${explicitGrams}g` : entry.servingUnit,
+          notes: `Indonesian Culinary Concept: ${entry.concept}`
+        };
+      }
+    }
+  }
+  const isBeverageCategory = /\b(?:susu|milk|latte|cappuccino|smoothie|shake|jus|juice|kopi|coffee|teh|tea|boba|soda|cola|drink|minuman)\b/i.test(lower);
+  const isSnackCategory = !isBeverageCategory && /\b(?:chocolate|cokelat|coklat|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack|crackers|krekers|popcorn|kacang|nuts|almond|yogurt|buah|fruit|pisang|apel)\b/i.test(lower);
+  const cleanDisplay = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/^(?:aku|saya|gue|gw)\s+(?:makan|santap|ngemil|minum|catat)?\s*/i, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim() || "Estimasi Makanan";
+  const semanticCategory = isSnackCategory ? "snack" : isBeverageCategory ? "beverage" : isPureWater ? "beverage" : "meal";
+  const recordType = isPureWater ? "hydration" : "meal";
+  const defaultGrams = isSnackCategory ? 40 : isBeverageCategory ? 250 : 150;
+  const targetGrams = explicitGrams || (isBeverageCategory && explicitMl ? explicitMl : defaultGrams);
+  const targetMl = isPureWater || isBeverageCategory ? explicitMl || targetGrams : void 0;
+  let canonicalName = cleanDisplay;
+  if (lower === "ayam" || lower === "daging ayam") {
+    canonicalName = "Ayam";
+  } else if (lower === "daging sapi" || lower === "sapi") {
+    canonicalName = "Daging Sapi";
+  } else if (lower === "nasi" || lower === "nasi putih") {
+    canonicalName = "Nasi Putih";
+  } else if (lower === "telur" || lower === "telor") {
+    canonicalName = "Telur";
+  }
+  return {
+    originalInput: clean2,
+    resolvedFoodName: canonicalName,
+    canonicalConcept: canonicalName,
+    semanticCategory,
+    recordType,
+    isPureWater,
+    identityScore: 0.85,
+    portionGrams: targetGrams,
+    portionVolumeMl: targetMl,
+    portionType: explicitGrams || explicitMl ? "explicit" : "estimated",
+    portionUnit: isPureWater || isBeverageCategory ? "ml" : "g",
+    displayServing: explicitGrams ? `${explicitGrams}g` : explicitMl ? `${explicitMl} ml` : `1 Porsi (~${targetGrams}g)`,
+    notes: isPureWater ? "Pure water hydration" : "Standard food item"
+  };
+}
+function isPureWaterInput(rawText) {
+  if (!rawText) return false;
+  return resolveCanonicalFoodIdentity(rawText).isPureWater;
+}
+function evaluateSemanticDatabaseMatch(identity, candidateCategory, candidateKeywords, candidateNormalizedName) {
+  const userLower = identity.resolvedFoodName.toLowerCase();
+  const candNormLower = candidateNormalizedName.toLowerCase();
+  const candCat = (candidateCategory || "").toLowerCase();
+  const isSolidChocolateOrSnack = identity.semanticCategory === "snack" || /(?:chocolate|cokelat|coklat|silverqueen|cadbury|candy|permen|wafer|cookies|kukis|biskuit|bites|chips|keripik|snack\s*bar)/i.test(userLower);
+  const isLiquidDairyOrBeverageCandidate = candCat === "beverage" || candCat === "dairy" && (candNormLower.includes("susu sapi") || candNormLower.includes("uht") || candNormLower.includes("milk"));
+  if (isSolidChocolateOrSnack && isLiquidDairyOrBeverageCandidate) {
+    return {
+      referenceId: "semantic_mismatch_dairy",
+      referenceSource: "verified_nutrition_database",
+      referenceName: candidateNormalizedName,
+      matchType: "no_match",
+      nutritionScore: 0.1,
+      criticalMismatch: true,
+      mismatchReason: "Solid confectionery snack must not be matched to liquid dairy milk."
+    };
+  }
+  const isOrganMeat = /(?:otak\s+sapi|organ|hati|paru|babat|usus|ginjal)\b/i.test(userLower);
+  const isMuscleMeatCandidate = (candNormLower.includes("rendang") || candNormLower.includes("steak") || candNormLower.includes("sirloin") || candNormLower.includes("dada ayam")) && !candNormLower.includes("otak");
+  if (isOrganMeat && isMuscleMeatCandidate) {
+    return {
+      referenceId: "semantic_mismatch_organ_muscle",
+      referenceSource: "verified_nutrition_database",
+      referenceName: candidateNormalizedName,
+      matchType: "no_match",
+      nutritionScore: 0.15,
+      criticalMismatch: true,
+      mismatchReason: "Organ meat must not be replaced by muscle meat / steak / rendang."
+    };
+  }
+  const isChips = /(?:chips|keripik|chitato|lays|snack\s*balls|chiki)/i.test(userLower);
+  if (isChips && (candCat === "protein" || candNormLower.includes("steak") || candNormLower.includes("rendang"))) {
+    return {
+      referenceId: "semantic_mismatch_chips_meat",
+      referenceSource: "verified_nutrition_database",
+      referenceName: candidateNormalizedName,
+      matchType: "no_match",
+      nutritionScore: 0.1,
+      criticalMismatch: true,
+      mismatchReason: "Flavored snack chips must not be matched to actual meat protein."
+    };
+  }
+  if (userLower.includes("ayam") && (candNormLower.includes("beef") || candNormLower.includes("sapi"))) {
+    return {
+      referenceId: "semantic_mismatch_protein_type",
+      referenceSource: "verified_nutrition_database",
+      referenceName: candidateNormalizedName,
+      matchType: "no_match",
+      nutritionScore: 0.2,
+      criticalMismatch: true,
+      mismatchReason: "Chicken dish must not match beef reference."
+    };
+  }
+  const isCaloricDrink = /(?:kopi|coffee|latte|teh|tea|jus|juice|boba|susu|milk)/i.test(userLower);
+  if (isCaloricDrink && (candNormLower.includes("air putih") || candNormLower.includes("mineral water") || candNormLower.includes("plain water"))) {
+    return {
+      referenceId: "semantic_mismatch_drink_water",
+      referenceSource: "verified_nutrition_database",
+      referenceName: candidateNormalizedName,
+      matchType: "no_match",
+      nutritionScore: 0.1,
+      criticalMismatch: true,
+      mismatchReason: "Caloric drink must not match plain water hydration."
+    };
+  }
+  let matchType = "approximate";
+  if (candNormLower === userLower || candidateKeywords.some((k) => k.toLowerCase() === userLower)) {
+    matchType = "exact";
+  } else if (candidateKeywords.some((k) => userLower.includes(k.toLowerCase()) && k.length > 3)) {
+    matchType = "strong_semantic";
+  }
+  const score = matchType === "exact" ? 0.98 : matchType === "strong_semantic" ? 0.88 : 0.72;
+  return {
+    referenceId: candidateNormalizedName.toLowerCase().replace(/\s+/g, "_"),
+    referenceSource: "verified_nutrition_database",
+    referenceName: candidateNormalizedName,
+    matchType,
+    nutritionScore: score,
+    criticalMismatch: false
+  };
+}
+function calculateDualConfidence(identity, dbMatch) {
+  const identityScore = identity.identityScore;
+  const nutritionScore = dbMatch ? dbMatch.nutritionScore : 0.65;
+  const criticalMismatch = Boolean(dbMatch?.criticalMismatch);
+  const overallScore = criticalMismatch ? Math.min(identityScore, 0.4) : Math.round((identityScore * 0.6 + nutritionScore * 0.4) * 100) / 100;
+  let level = "high";
+  if (criticalMismatch || overallScore < 0.7 || identityScore < 0.7) {
+    level = "low";
+  } else if (overallScore < 0.85 || nutritionScore < 0.8) {
+    level = "medium";
+  }
+  const requiresReview = level !== "high";
+  let warningMessage = void 0;
+  if (criticalMismatch) {
+    warningMessage = "\u26A0\uFE0F Periksa hasil AI: AI mendeteksi ketidaksesuaian kategori makanan. Pastikan nama makanan dan porsinya sudah benar sebelum menyimpan.";
+  } else if (requiresReview) {
+    warningMessage = "\u26A0\uFE0F Periksa hasil AI: AI belum yakin sepenuhnya dengan porsi atau estimasi nutrisi. Pastikan data sudah sesuai sebelum menyimpan.";
+  }
+  return {
+    identityScore,
+    nutritionScore,
+    overallScore,
+    level,
+    criticalMismatch,
+    requiresReview,
+    warningMessage
+  };
+}
+
 // services/nutritionEngine.ts
 var NUTRITION_DATABASE = [
   // ── GRAINS & STARCHES ──────────────────────────────────────────
@@ -43237,6 +45384,17 @@ var NUTRITION_DATABASE = [
   },
   // ── PROTEINS & MEATS ──────────────────────────────────────────
   {
+    id: "tkpi_ayam_gulai",
+    keywords: ["ayam gulai", "gulai ayam"],
+    normalizedName: "Ayam Gulai",
+    category: "protein",
+    defaultServingGrams: 150,
+    perPieceGrams: 150,
+    servingUnit: "1 potong ayam gulai (~150g)",
+    per100g: { calories: 185, protein: 16.5, carbs: 3.2, fat: 11.8, fiber: 0.8, sugar: 1, sodium: 380 },
+    source: "TKPI"
+  },
+  {
     id: "usda_chicken_meal",
     keywords: ["chicken meal", "chicken", "ayam", "olahan ayam", "daging ayam"],
     normalizedName: "Chicken Meal (Dada/Paha)",
@@ -43387,7 +45545,7 @@ var NUTRITION_DATABASE = [
   },
   {
     id: "tkpi_cumi_cooked",
-    keywords: ["cumi", "squid", "calamari", "cumi goreng"],
+    keywords: ["cumi", "squid", "calamari", "cumi rebus"],
     normalizedName: "Cumi-Cumi (Cooked)",
     category: "protein",
     defaultServingGrams: 80,
@@ -43396,14 +45554,55 @@ var NUTRITION_DATABASE = [
     source: "TKPI"
   },
   {
-    id: "tkpi_beef_rendang",
-    keywords: ["daging sapi", "beef", "sapi", "rendang", "steak"],
-    normalizedName: "Daging Sapi / Rendang",
+    id: "tkpi_cumi_goreng_tepung",
+    keywords: ["cumi goreng tepung", "cumi tepung", "calamari goreng", "cumi crispy"],
+    normalizedName: "Cumi Goreng Tepung",
     category: "protein",
-    defaultServingGrams: 80,
-    perPieceGrams: 80,
-    servingUnit: "1 potong sedang",
-    per100g: { calories: 250, protein: 26, carbs: 2, fat: 15, fiber: 0, sugar: 0.5, sodium: 320 },
+    defaultServingGrams: 120,
+    servingUnit: "1 porsi (~120g)",
+    per100g: { calories: 210, protein: 15, carbs: 14.5, fat: 10.2, fiber: 0.6, sugar: 0.4, sodium: 340 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_kerang_rebus",
+    keywords: ["kerang rebus", "kerang", "kerang dara rebus", "shellfish", "clams"],
+    normalizedName: "Kerang Rebus",
+    category: "protein",
+    defaultServingGrams: 100,
+    servingUnit: "1 porsi daging kerang (~100g)",
+    per100g: { calories: 74, protein: 12.8, carbs: 2.6, fat: 1, fiber: 0, sugar: 0, sodium: 220 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_otak_sapi",
+    keywords: ["otak sapi", "gulai otak", "otak"],
+    normalizedName: "Otak Sapi",
+    category: "protein",
+    defaultServingGrams: 100,
+    servingUnit: "1 porsi otak sapi (~100g)",
+    per100g: { calories: 143, protein: 10.5, carbs: 1, fat: 10.3, fiber: 0, sugar: 0, sodium: 180 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_rendang",
+    keywords: ["rendang", "rendang sapi", "rendang daging", "daging rendang"],
+    normalizedName: "Rendang Daging Sapi",
+    category: "protein",
+    defaultServingGrams: 100,
+    perPieceGrams: 100,
+    servingUnit: "1 potong rendang (~100g)",
+    per100g: { calories: 195, protein: 22, carbs: 4.5, fat: 10, fiber: 1.2, sugar: 1.5, sodium: 360 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_beef_cooked",
+    keywords: ["daging sapi", "beef", "sapi", "steak", "beef steak"],
+    normalizedName: "Daging Sapi",
+    category: "protein",
+    defaultServingGrams: 100,
+    perPieceGrams: 100,
+    servingUnit: "1 potong sedang (~100g)",
+    per100g: { calories: 250, protein: 26, carbs: 0, fat: 15, fiber: 0, sugar: 0, sodium: 70 },
     source: "TKPI"
   },
   {
@@ -44120,174 +46319,20 @@ function validateSemanticCompatibility(userInput, candidateRef) {
   return true;
 }
 function calculateSingleItemNutrition(rawItemText) {
+  const identity = resolveCanonicalFoodIdentity(rawItemText);
   const { quantity, explicitGrams, explicitVolumeMl, multiplier, cookingMethod, cleanedText } = parseQuantityAndUnit(rawItemText);
   const lower = cleanedText.toLowerCase();
-  let matchedRef = null;
-  let bestScore = 0;
-  for (const ref of NUTRITION_DATABASE) {
-    if (!validateSemanticCompatibility(cleanedText, ref)) {
-      continue;
-    }
-    for (const kw of ref.keywords) {
-      const kwLower = kw.toLowerCase();
-      if ((kwLower === "milk" || kwLower === "susu") && /(?:chocolate|cokelat|coklat|silverqueen|cadbury|candy|permen|cookies|biskuit|wafer|cake|kue|shake|ice\s*cream)/i.test(lower) && !/(?:susu\s*(?:cokelat|coklat)|chocolate\s*milk)/i.test(lower)) {
-        continue;
-      }
-      if ((kwLower === "sapi" || kwLower === "beef") && /(?:chitato|keripik|chips|crisp|snack)/i.test(lower)) {
-        continue;
-      }
-      if ((kwLower === "kopi" || kwLower === "coffee") && /(?:cake|kue|permen|candy|dessert|tiramisu)/i.test(lower) && !/(?:minum|es\s*kopi|kopi\s*susu|kopi\s*hitam)/i.test(lower)) {
-        continue;
-      }
-      const escaped = kwLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex = new RegExp(`(^|\\b|\\s)${escaped}(\\b|\\s|$)`, "i");
-      if (regex.test(lower)) {
-        let score = kwLower.length;
-        if (lower === kwLower) score += 60;
-        if (ref.source === "TKPI") score += 2;
-        if (kwLower.includes("silverqueen") || kwLower.includes("chitato") || kwLower.includes("gyukatsu") || kwLower.includes("gula aren")) {
-          score += 30;
-        }
-        if (score > bestScore) {
-          bestScore = score;
-          matchedRef = ref;
-        }
-      }
-    }
-  }
-  if (matchedRef) {
-    const isBeverage = matchedRef.category === "beverage";
-    const isWater = isBeverage && matchedRef.keywords.some((k) => k.includes("air") || k.includes("water") || k.includes("mineral")) && !matchedRef.keywords.some((k) => k.includes("susu") || k.includes("kopi") || k.includes("teh") || k.includes("jus"));
-    const itemType2 = isWater ? "water" : isBeverage ? "beverage" : "food";
-    const semanticCategory2 = matchedRef.category === "snack" ? "snack" : isBeverage ? "beverage" : "meal";
-    let targetGrams2 = 0;
-    let targetVolumeMl2 = void 0;
-    let portionType2 = "estimated";
-    let displayUnit2 = "";
-    if (isBeverage || isWater) {
-      if (explicitVolumeMl !== void 0 && explicitVolumeMl > 0) {
-        targetVolumeMl2 = explicitVolumeMl;
-        targetGrams2 = explicitVolumeMl;
-        portionType2 = "user_provided";
-        displayUnit2 = `${explicitVolumeMl} ml`;
-      } else if (explicitGrams !== void 0 && explicitGrams > 0) {
-        targetVolumeMl2 = explicitGrams;
-        targetGrams2 = explicitGrams;
-        portionType2 = "user_provided";
-        displayUnit2 = `${explicitGrams}g`;
-      } else if (quantity > 1 || multiplier !== 1) {
-        targetVolumeMl2 = Math.round((matchedRef.defaultVolumeMl || 250) * quantity * multiplier);
-        targetGrams2 = targetVolumeMl2;
-        portionType2 = quantity > 1 ? "user_provided" : "estimated";
-        displayUnit2 = `${targetVolumeMl2} ml`;
-      } else {
-        targetVolumeMl2 = matchedRef.defaultVolumeMl || 250;
-        targetGrams2 = matchedRef.defaultServingGrams || 250;
-        portionType2 = "estimated";
-        displayUnit2 = `${targetVolumeMl2} ml`;
-      }
-    } else {
-      if (explicitGrams !== void 0 && explicitGrams > 0) {
-        targetGrams2 = explicitGrams;
-        portionType2 = "user_provided";
-        displayUnit2 = `${explicitGrams}g`;
-      } else if (matchedRef.perPieceGrams && quantity > 1) {
-        targetGrams2 = matchedRef.perPieceGrams * quantity * multiplier;
-        portionType2 = "user_provided";
-        displayUnit2 = `${Math.round(targetGrams2)}g`;
-      } else {
-        targetGrams2 = matchedRef.defaultServingGrams * (matchedRef.perPieceGrams ? 1 : quantity) * multiplier;
-        portionType2 = quantity > 1 || explicitGrams !== void 0 ? "user_provided" : "estimated";
-        displayUnit2 = `${Math.round(targetGrams2)}g`;
-      }
-    }
-    let per100g = matchedRef.per100g;
-    const isNoSugar = /(?:tanpa gula|no sugar|less sugar|tawar|unsweetened)/i.test(rawItemText);
-    if (isNoSugar && matchedRef.cookingVariants) {
-      if (/(?:tanpa gula|no sugar|tawar|unsweetened)/i.test(rawItemText) && matchedRef.cookingVariants["tanpa gula"]) {
-        per100g = matchedRef.cookingVariants["tanpa gula"];
-      } else if (/less sugar/i.test(rawItemText) && matchedRef.cookingVariants["less sugar"]) {
-        per100g = matchedRef.cookingVariants["less sugar"];
-      }
-    } else if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
-      per100g = matchedRef.cookingVariants[cookingMethod];
-    } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
-      per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
-    }
-    const factor = targetGrams2 / 100;
-    const protein = Math.round(per100g.protein * factor * 10) / 10;
-    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
-    const fat = Math.round(per100g.fat * factor * 10) / 10;
-    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
-    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
-    const baseSodium = per100g.sodium !== void 0 ? per100g.sodium : matchedRef.category === "condiment" ? 400 : 50;
-    const sodium = Math.round(baseSodium * factor);
-    const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
-    const rawCal = Math.round(per100g.calories * factor);
-    const calories = atwaterCal > 0 ? atwaterCal : rawCal;
-    const isExactOrVeryHigh = bestScore >= 20 || lower === matchedRef.normalizedName.toLowerCase();
-    const portionConf = portionType2 === "user_provided" ? 95 : 75;
-    const dbConf = bestScore > 5 ? 95 : 85;
-    const overallConfidence = isExactOrVeryHigh ? "high" : "medium";
-    const confidenceScore = isExactOrVeryHigh ? 0.95 : 0.75;
-    const requiresReview = overallConfidence !== "high";
-    return {
-      foodName: rawItemText.trim(),
-      normalizedName: matchedRef.normalizedName,
-      food_name: rawItemText.trim(),
-      normalized_food_name: matchedRef.normalizedName,
-      originalInput: rawItemText.trim(),
-      original_input: rawItemText.trim(),
-      resolvedFoodName: matchedRef.normalizedName,
-      resolved_food_name: matchedRef.normalizedName,
-      databaseId: matchedRef.id || `db_${matchedRef.source.toLowerCase()}_${matchedRef.normalizedName.replace(/\s+/g, "_").toLowerCase()}`,
-      source: matchedRef.source,
-      data_source: matchedRef.source,
-      referenceAmount: 100,
-      referenceUnit: "g",
-      actualAmount: Math.round(targetGrams2),
-      actualUnit: isBeverage || isWater ? "ml" : "g",
-      cookingMethod,
-      cooking_method: cookingMethod,
-      estimated_quantity: quantity,
-      estimated_weight_grams: Math.round(targetGrams2),
-      serving_unit: displayUnit2,
-      display_unit: displayUnit2,
-      item_type: itemType2,
-      portion_type: portionType2,
-      semanticCategory: semanticCategory2,
-      calories,
-      protein,
-      carbs,
-      fat,
-      fiber,
-      sugar,
-      sodium,
-      isHydration: isWater,
-      is_hydration: isWater,
-      volumeMl: isWater ? targetVolumeMl2 : void 0,
-      volume_ml: isWater ? targetVolumeMl2 : void 0,
-      recognitionConfidence: 95,
-      databaseMatchConfidence: dbConf,
-      portionConfidence: portionConf,
-      confidence: overallConfidence,
-      confidenceScore,
-      confidenceLevel: overallConfidence,
-      requiresReview,
-      notes: `${displayUnit2} (${matchedRef.source})`
-    };
-  }
   const nonFoodPattern = /\b(?:laptop|notebook|macbook|komputer|computer|pc|mouse|keyboard|monitor|cpu|printer|gadget|hp|handphone|smartphone|iphone|android|samsung|xiaomi|oppo|vivo|ipad|tablet|charger|kabel|headphone|earphone|headset|powerbank|baterai|batre|tws|airpods|speaker|tv|televisi|kamera|camera|tripod|flashdisk|harddisk|ssd|ram|flashdrive|modem|router|meja|kursi|lemari|pintu|jendela|kasur|bantal|guling|selimut|karpet|lantai|tembok|dinding|atap|genteng|lampu|kipas|ac|kulkas|mesin\s*cuci|setrika|sapu|pel|ember|gayung|sikat|odol|pasta\s*gigi|sabun|shampoo|sampo|parfum|handuk|sisir|cermin|kaca|baju|kaos|kemeja|celana|rok|jaket|hoodie|sweater|jas|gamis|jilbab|hijab|topi|helm|sepatu|sandal|kaos\s*kaki|tas|ransel|dompet|koper|ikat\s*pinggang|sabuk|jam\s*tangan|gelang|kalung|cincin|anting|kacamata|mobil|motor|sepeda|skuter|truk|bus|angkot|becak|helm|kunci|gembok|buku|novel|komik|majalah|koran|pulpen|bolpoin|pensil|penghapus|penggaris|gunting|cutter|kertas|karton|kardus|plastik|besi|baja|kayu|batu|pasir|semen|tanah|kucing|anjing|kelinci|hamster|burung|ikan\s*cupang|hewan|binatang|manusia|orang|teman|pacar|anak|gedung|rumah|kantor|toko|jalan|jembatan|uang|duit|koin|kartu|atm|ktp|sim|paspor|rokok|vape|pod|liquid|korek)\b/i;
   if (nonFoodPattern.test(cleanedText)) {
     return {
       foodName: rawItemText.trim(),
-      normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      normalizedName: identity.resolvedFoodName,
       food_name: rawItemText.trim(),
-      normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      normalized_food_name: identity.resolvedFoodName,
       originalInput: rawItemText.trim(),
       original_input: rawItemText.trim(),
-      resolvedFoodName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
-      resolved_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+      resolvedFoodName: identity.resolvedFoodName,
+      resolved_food_name: identity.resolvedFoodName,
       databaseId: "non_food",
       source: "verified_nutrition_database",
       data_source: "verified_nutrition_database",
@@ -44325,11 +46370,232 @@ function calculateSingleItemNutrition(rawItemText) {
       notes: "Objek ini bukan makanan atau minuman"
     };
   }
-  const isSnackGuess = /(?:chocolate|coklat|cokelat|silverqueen|cadbury|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack|bar)/i.test(cleanedText);
-  const isBeverageGuess = !isSnackGuess && /(?:kopi|coffee|tea|teh|jus|juice|susu|milk|drink|water|air|cola|soda|boba|latte)/i.test(cleanedText);
-  const isWaterGuess = !isSnackGuess && /(?:air putih|air mineral|mineral water|plain water|aqua)/i.test(cleanedText);
+  let matchedRef = null;
+  let bestScore = 0;
+  for (const ref of NUTRITION_DATABASE) {
+    if (!validateSemanticCompatibility(cleanedText, ref)) {
+      continue;
+    }
+    const semanticEval = evaluateSemanticDatabaseMatch(identity, ref.category, ref.keywords, ref.normalizedName);
+    if (semanticEval.criticalMismatch) {
+      continue;
+    }
+    for (const kw of ref.keywords) {
+      const kwLower = kw.toLowerCase();
+      if ((kwLower === "milk" || kwLower === "susu") && /(?:chocolate|cokelat|coklat|silverqueen|cadbury|candy|permen|cookies|biskuit|wafer|cake|kue|shake|ice\s*cream)/i.test(lower) && !/(?:susu\s*(?:cokelat|coklat)|chocolate\s*milk)/i.test(lower)) {
+        continue;
+      }
+      if ((kwLower === "sapi" || kwLower === "beef") && /(?:chitato|keripik|chips|crisp|snack|otak)/i.test(lower)) {
+        continue;
+      }
+      if ((kwLower === "kopi" || kwLower === "coffee") && /(?:cake|kue|permen|candy|dessert|tiramisu)/i.test(lower) && !/(?:minum|es\s*kopi|kopi\s*susu|kopi\s*hitam)/i.test(lower)) {
+        continue;
+      }
+      const escaped = kwLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(^|\\b|\\s)${escaped}(\\b|\\s|$)`, "i");
+      if (regex.test(lower)) {
+        let score = kwLower.length;
+        if (lower === kwLower) score += 60;
+        if (ref.source === "TKPI") score += 2;
+        if (kwLower === lower) score += 40;
+        if (kwLower.includes("silverqueen") || kwLower.includes("chitato") || kwLower.includes("gyukatsu") || kwLower.includes("gula aren") || kwLower.includes("otak sapi") || kwLower.includes("ayam gulai")) {
+          score += 30;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          matchedRef = ref;
+        }
+      }
+    }
+  }
+  if (matchedRef) {
+    const isBeverage = matchedRef.category === "beverage";
+    const isWater = identity.isPureWater;
+    const itemType2 = isWater ? "water" : isBeverage ? "beverage" : "food";
+    const semanticCategory2 = identity.semanticCategory;
+    let targetGrams2 = 0;
+    let targetVolumeMl2 = void 0;
+    let portionType2 = "estimated";
+    let displayUnit2 = "";
+    if (isBeverage || isWater) {
+      if (explicitVolumeMl !== void 0 && explicitVolumeMl > 0) {
+        targetVolumeMl2 = explicitVolumeMl;
+        targetGrams2 = explicitVolumeMl;
+        portionType2 = "user_provided";
+        displayUnit2 = `${explicitVolumeMl} ml`;
+      } else if (explicitGrams !== void 0 && explicitGrams > 0) {
+        targetVolumeMl2 = explicitGrams;
+        targetGrams2 = explicitGrams;
+        portionType2 = "user_provided";
+        displayUnit2 = `${explicitGrams}g`;
+      } else if (quantity > 1 || multiplier !== 1) {
+        targetVolumeMl2 = Math.round((matchedRef.defaultVolumeMl || 250) * quantity * multiplier);
+        targetGrams2 = targetVolumeMl2;
+        portionType2 = quantity > 1 ? "user_provided" : "estimated";
+        displayUnit2 = `${targetVolumeMl2} ml`;
+      } else {
+        targetVolumeMl2 = matchedRef.defaultVolumeMl || 250;
+        targetGrams2 = matchedRef.defaultServingGrams || 250;
+        portionType2 = "estimated";
+        displayUnit2 = `${targetVolumeMl2} ml`;
+      }
+    } else {
+      if (explicitGrams !== void 0 && explicitGrams > 0) {
+        targetGrams2 = explicitGrams;
+        portionType2 = "user_provided";
+        displayUnit2 = `${explicitGrams}g`;
+      } else if (matchedRef.perPieceGrams) {
+        targetGrams2 = matchedRef.perPieceGrams * quantity * multiplier;
+        portionType2 = quantity > 1 ? "user_provided" : "estimated";
+        displayUnit2 = `${Math.round(targetGrams2)}g`;
+      } else {
+        const baseServing = matchedRef.defaultServingGrams || identity.portionGrams || 150;
+        targetGrams2 = baseServing * quantity * multiplier;
+        portionType2 = quantity > 1 || explicitGrams !== void 0 ? "user_provided" : "estimated";
+        displayUnit2 = `${Math.round(targetGrams2)}g`;
+      }
+    }
+    let per100g = matchedRef.per100g;
+    const isNoSugar = /(?:tanpa gula|no sugar|less sugar|tawar|unsweetened)/i.test(rawItemText);
+    if (isNoSugar && matchedRef.cookingVariants) {
+      if (/(?:tanpa gula|no sugar|tawar|unsweetened)/i.test(rawItemText) && matchedRef.cookingVariants["tanpa gula"]) {
+        per100g = matchedRef.cookingVariants["tanpa gula"];
+      } else if (/less sugar/i.test(rawItemText) && matchedRef.cookingVariants["less sugar"]) {
+        per100g = matchedRef.cookingVariants["less sugar"];
+      }
+    } else if (cookingMethod && matchedRef.cookingVariants && matchedRef.cookingVariants[cookingMethod]) {
+      per100g = matchedRef.cookingVariants[cookingMethod];
+    } else if (cookingMethod === "fried" && matchedRef.category === "protein" && !per100g.fat) {
+      per100g = { ...per100g, fat: per100g.fat + 8, calories: per100g.calories + 72 };
+    }
+    const factor = targetGrams2 / 100;
+    const protein = Math.round(per100g.protein * factor * 10) / 10;
+    const carbs = Math.round(per100g.carbs * factor * 10) / 10;
+    const fat = Math.round(per100g.fat * factor * 10) / 10;
+    const fiber = Math.round(per100g.fiber * factor * 10) / 10;
+    const sugar = Math.round(per100g.sugar * factor * 10) / 10;
+    const baseSodium = per100g.sodium !== void 0 ? per100g.sodium : matchedRef.category === "condiment" ? 400 : 50;
+    const sodium = Math.round(baseSodium * factor);
+    const atwaterCal = Math.round(protein * 4 + carbs * 4 + fat * 9);
+    const rawCal = Math.round(per100g.calories * factor);
+    const calories = atwaterCal > 0 ? atwaterCal : rawCal;
+    const dbEval = evaluateSemanticDatabaseMatch(identity, matchedRef.category, matchedRef.keywords, matchedRef.normalizedName);
+    const dualConf = calculateDualConfidence(identity, dbEval);
+    const resolvedName = identity.resolvedFoodName;
+    return {
+      foodName: rawItemText.trim(),
+      normalizedName: resolvedName,
+      food_name: rawItemText.trim(),
+      normalized_food_name: resolvedName,
+      originalInput: rawItemText.trim(),
+      original_input: rawItemText.trim(),
+      resolvedFoodName: resolvedName,
+      resolved_food_name: resolvedName,
+      databaseId: matchedRef.id || `db_${matchedRef.source.toLowerCase()}_${matchedRef.normalizedName.replace(/\s+/g, "_").toLowerCase()}`,
+      source: matchedRef.source,
+      data_source: matchedRef.source,
+      referenceAmount: 100,
+      referenceUnit: "g",
+      actualAmount: Math.round(targetGrams2),
+      actualUnit: isBeverage || isWater ? "ml" : "g",
+      cookingMethod,
+      cooking_method: cookingMethod,
+      estimated_quantity: quantity,
+      estimated_weight_grams: Math.round(targetGrams2),
+      serving_unit: displayUnit2,
+      display_unit: displayUnit2,
+      item_type: itemType2,
+      portion_type: portionType2,
+      semanticCategory: semanticCategory2,
+      calories,
+      protein,
+      carbs,
+      fat,
+      fiber,
+      sugar,
+      sodium,
+      isHydration: isWater,
+      is_hydration: isWater,
+      volumeMl: isWater ? targetVolumeMl2 : void 0,
+      volume_ml: isWater ? targetVolumeMl2 : void 0,
+      recognitionConfidence: Math.round(dualConf.identityScore * 100),
+      databaseMatchConfidence: Math.round(dualConf.nutritionScore * 100),
+      portionConfidence: portionType2 === "user_provided" ? 95 : 75,
+      confidence: dualConf.level,
+      confidenceScore: dualConf.overallScore,
+      confidenceLevel: dualConf.level,
+      requiresReview: dualConf.requiresReview,
+      clarificationPrompt: dualConf.warningMessage,
+      notes: `${displayUnit2} (Reference: ${matchedRef.source} ${matchedRef.normalizedName})`
+    };
+  }
+  const ontologyEntry = INDONESIAN_FOOD_ONTOLOGY.find((e) => e.patterns.some((p) => p.test(lower)));
+  const brandEntry = BRAND_PRODUCT_REGISTRY.find((e) => e.patterns.some((p) => p.test(lower)));
+  if (ontologyEntry || brandEntry) {
+    const entryNutr = ontologyEntry ? ontologyEntry.fallbackNutrientPer100g : brandEntry.nutrientPer100g;
+    const defaultServing = ontologyEntry ? ontologyEntry.defaultServingGrams : brandEntry.defaultServingGrams;
+    const servingUnit = ontologyEntry ? ontologyEntry.servingUnit : brandEntry.servingUnit;
+    const targetGrams2 = explicitGrams || defaultServing;
+    const factor = targetGrams2 / 100;
+    const prot2 = Math.round(entryNutr.protein * factor * 10) / 10;
+    const carb2 = Math.round(entryNutr.carbs * factor * 10) / 10;
+    const fatVal2 = Math.round(entryNutr.fat * factor * 10) / 10;
+    const fibVal2 = Math.round(entryNutr.fiber * factor * 10) / 10;
+    const sugVal2 = Math.round(entryNutr.sugar * factor * 10) / 10;
+    const sodVal2 = Math.round(entryNutr.sodium * factor);
+    const cal2 = Math.round(prot2 * 4 + carb2 * 4 + fatVal2 * 9);
+    const isBeverage = ontologyEntry?.category === "beverage" || brandEntry?.category === "beverage";
+    return {
+      foodName: rawItemText.trim(),
+      normalizedName: identity.resolvedFoodName,
+      food_name: rawItemText.trim(),
+      normalized_food_name: identity.resolvedFoodName,
+      originalInput: rawItemText.trim(),
+      original_input: rawItemText.trim(),
+      resolvedFoodName: identity.resolvedFoodName,
+      resolved_food_name: identity.resolvedFoodName,
+      databaseId: ontologyEntry ? `ontology_${ontologyEntry.canonicalName.toLowerCase().replace(/\s+/g, "_")}` : `brand_${brandEntry.brand.toLowerCase()}`,
+      source: "TKPI",
+      data_source: "TKPI",
+      referenceAmount: 100,
+      referenceUnit: "g",
+      actualAmount: Math.round(targetGrams2),
+      actualUnit: isBeverage ? "ml" : "g",
+      cookingMethod,
+      cooking_method: cookingMethod,
+      estimated_quantity: quantity,
+      estimated_weight_grams: Math.round(targetGrams2),
+      serving_unit: servingUnit,
+      display_unit: `${Math.round(targetGrams2)}g`,
+      item_type: isBeverage ? "beverage" : "food",
+      portion_type: explicitGrams ? "user_provided" : "estimated",
+      semanticCategory: identity.semanticCategory,
+      calories: cal2,
+      protein: prot2,
+      carbs: carb2,
+      fat: fatVal2,
+      fiber: fibVal2,
+      sugar: sugVal2,
+      sodium: sodVal2,
+      isHydration: identity.isPureWater,
+      is_hydration: identity.isPureWater,
+      volumeMl: identity.isPureWater ? explicitVolumeMl || targetGrams2 : void 0,
+      volume_ml: identity.isPureWater ? explicitVolumeMl || targetGrams2 : void 0,
+      recognitionConfidence: 96,
+      databaseMatchConfidence: 92,
+      portionConfidence: explicitGrams ? 95 : 85,
+      confidence: "high",
+      confidenceScore: 0.94,
+      confidenceLevel: "high",
+      requiresReview: false,
+      notes: `${servingUnit} (Indonesian Culinary & Brand Registry)`
+    };
+  }
+  const isSnackGuess = identity.semanticCategory === "snack";
+  const isBeverageGuess = identity.semanticCategory === "beverage";
+  const isWaterGuess = identity.isPureWater;
   const itemType = isWaterGuess ? "water" : isBeverageGuess ? "beverage" : "food";
-  const semanticCategory = isSnackGuess ? "snack" : isBeverageGuess ? "beverage" : "meal";
+  const semanticCategory = identity.semanticCategory;
   let targetGrams = 0;
   let targetVolumeMl = void 0;
   let displayUnit = "";
@@ -44369,13 +46635,13 @@ function calculateSingleItemNutrition(rawItemText) {
   const portionType = explicitGrams || explicitVolumeMl ? "user_provided" : "estimated";
   return {
     foodName: rawItemText.trim(),
-    normalizedName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    normalizedName: identity.resolvedFoodName,
     food_name: rawItemText.trim(),
-    normalized_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    normalized_food_name: identity.resolvedFoodName,
     originalInput: rawItemText.trim(),
     original_input: rawItemText.trim(),
-    resolvedFoodName: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
-    resolved_food_name: rawItemText.trim().charAt(0).toUpperCase() + rawItemText.trim().slice(1),
+    resolvedFoodName: identity.resolvedFoodName,
+    resolved_food_name: identity.resolvedFoodName,
     databaseId: "ai_estimate_fallback",
     source: "ai_estimation",
     data_source: "ai_estimation",
@@ -44403,15 +46669,15 @@ function calculateSingleItemNutrition(rawItemText) {
     is_hydration: isWaterGuess,
     volumeMl: isWaterGuess ? targetVolumeMl : void 0,
     volume_ml: isWaterGuess ? targetVolumeMl : void 0,
-    recognitionConfidence: isSnackGuess ? 70 : 60,
-    databaseMatchConfidence: isSnackGuess ? 65 : 50,
+    recognitionConfidence: 65,
+    databaseMatchConfidence: 50,
     portionConfidence: portionType === "user_provided" ? 90 : 50,
-    confidence: isSnackGuess ? "medium" : "low",
-    confidenceScore: isSnackGuess ? 0.65 : 0.4,
-    confidenceLevel: isSnackGuess ? "medium" : "low",
+    confidence: "low",
+    confidenceScore: 0.5,
+    confidenceLevel: "low",
     requiresReview: true,
-    clarificationPrompt: "Periksa hasil estimasi makanan ini dan sesuaikan porsinya jika perlu.",
-    notes: isSnackGuess ? "Estimasi camilan / snack" : isBeverageGuess ? "Estimasi minuman" : "Estimasi generik"
+    clarificationPrompt: "\u26A0\uFE0F Periksa hasil AI: AI belum yakin dengan makanan yang terdeteksi. Pastikan nama makanan dan porsinya sudah benar sebelum menyimpan.",
+    notes: "Estimasi AI - Belum ada di database resmi"
   };
 }
 function validateNutrientSanity(data) {
@@ -44609,7 +46875,7 @@ function calculateCompositeNutrition(components) {
     if (typeof comp === "string") {
       compText = comp;
     } else {
-      const qStr = comp.grams ? `${comp.grams}g` : comp.quantity ? `${comp.quantity} ` : "";
+      const qStr = comp.grams ? `${comp.grams}g ` : comp.quantity ? `${comp.quantity} ` : "";
       compText = `${qStr}${comp.name} ${comp.cookingMethod || ""}`.trim();
     }
     const item = calculateSingleItemNutrition(compText);
@@ -44653,7 +46919,7 @@ function calculateCompositeNutrition(components) {
   });
   const overallConf = componentResults.some((c) => c.confidenceLevel === "low") ? "low" : componentResults.some((c) => c.confidenceLevel === "medium" || c.requiresReview) ? "medium" : minPortionConf >= 85 && minDbConf >= 85 ? "high" : "medium";
   const requiresReview = componentResults.some((c) => c.requiresReview);
-  const title = componentResults.length === 1 ? componentResults[0].normalizedName : componentResults.map((c) => c.normalizedName.split("(")[0].trim()).join(" + ");
+  const title = componentResults.length === 1 ? componentResults[0].resolvedFoodName || componentResults[0].normalizedName : componentResults.map((c) => (c.resolvedFoodName || c.normalizedName).split("(")[0].trim()).join(" + ");
   const portionNote = componentResults.length === 1 ? "1 item detected" : `${componentResults.length} components detected`;
   return {
     foodName: title,
@@ -44687,16 +46953,18 @@ function calculateFoodNutrition(input, explicitComponents) {
   const genericCheck = isGenericMealInput(input);
   const itemsToCalc = explicitComponents && explicitComponents.length > 0 ? explicitComponents : splitFoodItems(input);
   const compositeRes = calculateCompositeNutrition(itemsToCalc);
-  const displayTitle = input.trim() || compositeRes.foodName;
-  const isInputSnack = /(?:chocolate|cokelat|coklat|silverqueen|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack)/i.test(input);
-  const finalMealType = isInputSnack || compositeRes.mealType === "snack" ? "snack" : compositeRes.mealType;
+  const identity = resolveCanonicalFoodIdentity(input);
+  const displayTitle = compositeRes.components.length === 1 ? identity.resolvedFoodName || compositeRes.foodName : compositeRes.foodName;
+  const isInputSnack = identity.semanticCategory === "snack" || compositeRes.mealType === "snack";
+  const finalMealType = isInputSnack ? "snack" : compositeRes.mealType;
   const finalRequiresReview = Boolean(genericCheck.isGeneric || compositeRes.requiresReview);
   return {
     ...compositeRes,
-    foodName: displayTitle,
+    foodName: input.trim(),
     originalInput: input.trim(),
-    resolvedFoodName: compositeRes.foodName,
+    resolvedFoodName: displayTitle,
     mealType: finalMealType,
+    semanticCategory: identity.semanticCategory,
     requiresReview: finalRequiresReview,
     needsClarification: genericCheck.isGeneric,
     clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : void 0,
@@ -47722,8 +49990,34 @@ async function sendSingleTwilioMessage(to, body, customFrom, mediaUrl) {
   }
   return await client2.messages.create(payload);
 }
+var sentWhatsAppMessages = [];
+function clearSentWhatsAppMessages() {
+  sentWhatsAppMessages.length = 0;
+}
+function getLastSentWhatsAppMessage(to) {
+  if (!to) return sentWhatsAppMessages[sentWhatsAppMessages.length - 1];
+  const norm = normalizePhone(to.replace("whatsapp:", ""));
+  for (let i = sentWhatsAppMessages.length - 1; i >= 0; i--) {
+    const msg = sentWhatsAppMessages[i];
+    if (normalizePhone(msg.to.replace("whatsapp:", "")) === norm) {
+      return msg;
+    }
+  }
+  return void 0;
+}
+function getSentWhatsAppMessagesFor(to) {
+  const norm = normalizePhone(to.replace("whatsapp:", ""));
+  return sentWhatsAppMessages.filter((msg) => normalizePhone(msg.to.replace("whatsapp:", "")) === norm);
+}
 async function sendWhatsAppAsync(to, body, customFrom, mediaUrl) {
   if (!body && !mediaUrl) return null;
+  sentWhatsAppMessages.push({
+    to,
+    body: body || "",
+    customFrom,
+    mediaUrl,
+    timestamp: Date.now()
+  });
   const chunks = splitWhatsAppMessage(body || "", 1400);
   if (chunks.length === 0 && mediaUrl) {
     chunks.push("");
@@ -48789,6 +51083,15 @@ function saveUserProfile(rawPhone, profile) {
     customSchedule: updated.workoutSchedule || updated.customSchedule,
     customGoals: updated.customGoals,
     reminderTime: updated.reminderTime,
+    medicalConditions: updated.medicalConditions || updated.conditions,
+    conditions: updated.conditions || updated.medicalConditions,
+    allergies: updated.allergies,
+    injuries: updated.injuries,
+    healthProfile: updated.healthProfile,
+    otherCondition: updated.otherCondition,
+    customInjury: updated.customInjury,
+    dislikedFoods: updated.dislikedFoods,
+    equipment: updated.equipment,
     updatedAt: /* @__PURE__ */ new Date()
   }).catch((e) => console.warn("[Firestore] saveUserDocument note:", e?.message || e));
   if (!dbData.weeklyProgress[phone] || dbData.weeklyProgress[phone].length === 0) {
@@ -48906,9 +51209,10 @@ function calculateUserData(profile) {
   const rawAge = Number(profile?.age) || Number(profile?.healthProfile?.age) || 25;
   const { age, ageGroup, ageGroupKey } = calculateAgeFromDob(dob, rawAge);
   const rawHp = profile?.healthProfile || {};
-  const hasCondition = rawHp.hasCondition || (rawHp.conditions && rawHp.conditions.length > 0 ? "has_condition" : rawHp.isCompleted ? "no_condition" : "unanswered");
-  const conditions = Array.isArray(rawHp.conditions) ? rawHp.conditions : [];
-  const otherCondition = rawHp.otherCondition || "";
+  const rawConds = profile?.medicalConditions || profile?.conditions || rawHp.conditions || rawHp.medicalConditions || [];
+  const conditions = Array.isArray(rawConds) ? rawConds : rawConds ? [String(rawConds)] : [];
+  const otherCondition = profile?.otherCondition || rawHp.otherCondition || "";
+  const hasCondition = profile?.healthStatus || rawHp.hasCondition || (conditions.length > 0 ? "has_condition" : rawHp.isCompleted ? "no_condition" : "unanswered");
   const isHealthProfileCompleted = Boolean(rawHp.isCompleted);
   const activeConditionsList = [...conditions];
   if (otherCondition && otherCondition.trim()) {
@@ -49045,10 +51349,15 @@ function calculateUserData(profile) {
     carbGrams,
     fatGrams,
     fiberGrams,
-    injuries: profile?.injuries || ["none"],
+    conditions,
+    medicalConditions: conditions,
+    injuries: profile?.injuries !== void 0 ? Array.isArray(profile.injuries) ? profile.injuries : [profile.injuries] : ["unknown"],
     customInjury: profile?.customInjury || "",
-    allergies: profile?.allergies || ["none"],
-    equipment: profile?.equipment || "full_gym",
+    allergies: profile?.allergies !== void 0 ? Array.isArray(profile.allergies) ? profile.allergies : [profile.allergies] : ["unknown"],
+    dislikedFoods: profile?.dislikedFoods || profile?.dislikes || [],
+    equipment: profile?.equipment || "unknown",
+    phone: profile?.phone || profile?.normalizedPhone || "",
+    userId: profile?.userId || (profile?.phone ? `usr_${normalizePhone(profile.phone)}` : ""),
     activeService,
     hasReceivedWelcome,
     workoutSchedule,
@@ -49736,6 +52045,12 @@ ${rowsStr}
 \u{1F4A1} *Tips*: Ketik *"update bb 75"* untuk mencatat berat badan terbarumu minggu ini!`;
 }
 async function sendMetaWhatsappMessage(to, bodyText) {
+  sentWhatsAppMessages.push({
+    to,
+    body: bodyText || "",
+    timestamp: Date.now()
+  });
+  if (process.env.NODE_ENV === "test") return;
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
   try {
     const cleanText = sanitizeWhatsAppResponse(bodyText);
@@ -49931,7 +52246,7 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
       if (resolvedMealType === "dinner") {
         coachComment = isMax ? isLansia2 ? `Makan malam Anda sudah tercatat rapi, ${validatedAddr}. Cukupi kebutuhan air putih hangat dan selamat beristirahat malam. \u{1F4AA}` : `Makan malam lo sudah tercatat rapi, ${validatedAddr}! Cukupi hidrasi air putih dan selamat beristirahat malam! \u{1F4AA}` : `Makan malam kamu sudah tercatat rapi ya, ${validatedAddr} \u2728 Cukupi asupan air putih dan selamat beristirahat malam!`;
       } else if (resolvedMealType === "snack") {
-        coachComment = isMax ? isLansia2 ? `Catatan camilan Anda sudah tersimpan, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Camilan lo sudah tercatat, ${validatedAddr}! Mantap, terus jaga konsistensi nutrisi hari ini! \u{1F4AA}` : `Camilan kamu sudah tercatat rapi ya, ${validatedAddr} \u2728 Semangat terus jaga pola makan seimbangmu!`;
+        coachComment = isMax ? isLansia2 ? `Catatan camilan Anda sudah tersimpan, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Camilan lo sudah tercatat, ${validatedAddr}! Mantap, terus jaga konsistensi nutrisi hari ini! \u{1F4AA}` : `Snack ini cukup ringan dan praktis ya, ${validatedAddr} \u2728 Pas untuk ganjal lapar, tetap perhatikan hidrasi harianmu ya!`;
       } else {
         coachComment = isMax ? isLansia2 ? `Catatan makanan Anda sudah tersimpan rapi, ${validatedAddr}. Terus jaga konsistensi kebugaran Anda hari ini! \u{1F4AA}` : `Mantap, ${validatedAddr}! Makanan kamu sudah tercatat, jaga terus konsistensi nutrisi kamu hari ini! \u{1F4AA}` : `Catatan makananmu sudah tersimpan rapi ya, ${validatedAddr}. Semangat terus jaga pola makan seimbangmu! \u2728`;
       }
@@ -50256,110 +52571,9 @@ ${mealListStr}
 "${quote}"`;
 }
 function generateMealRecommendations(userData, rawPhone, userText) {
-  const { name, targetCalories, proteinGrams, carbGrams, fatGrams, goalTitle, persona } = userData;
-  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const todayStr = getTodayDateStr();
   const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
-  const currentSodium = totals.sodium || 0;
-  const nutritionSummary = calculateDailyNutritionSummary(
-    { calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fat: totals.fat, fiber: totals.fiber, sodium: currentSodium },
-    { targetCalories, proteinGrams, carbGrams, fatGrams, sodiumLimit: 2e3 }
-  );
-  const calStatus = nutritionSummary.calories;
-  const protStatus = nutritionSummary.protein;
-  const carbStatus = nutritionSummary.carbs;
-  const fatStatus = nutritionSummary.fat;
-  const sodStatus = nutritionSummary.sodium;
-  const lower = (userText || "").toLowerCase();
-  const isNight = lower.includes("malam") || lower.includes("dinner");
-  const isLunch = lower.includes("siang") || lower.includes("lunch");
-  const isBreakfast = lower.includes("pagi") || lower.includes("sarapan") || lower.includes("breakfast");
-  const isSnack = lower.includes("snack") || lower.includes("camilan") || lower.includes("cemilan");
-  let mealContextLabel = "Hari Ini";
-  if (isNight) mealContextLabel = "Makan Malam (Dinner)";
-  else if (isLunch) mealContextLabel = "Makan Siang (Lunch)";
-  else if (isBreakfast) mealContextLabel = "Sarapan (Breakfast)";
-  else if (isSnack) mealContextLabel = "Camilan Sehat (Snack)";
-  const macroGuidance = [];
-  if (sodStatus.isOver) {
-    macroGuidance.push(`\u26A0\uFE0F *Sodium Melebihi Batas (${currentSodium.toLocaleString("id-ID")}/2,000 mg)*: Hindari kuah asin, kecap, dan makanan olahan. Cukupi asupan air putih.`);
-  }
-  if (calStatus.isOver) {
-    macroGuidance.push(`\u26A0\uFE0F *Kalori Melebihi Target (${totals.calories}/${targetCalories} kcal)*: Utamakan menu ringan dan hindari tambahan minyak atau karbohidrat tinggi.`);
-  }
-  if (protStatus.isUnder && protStatus.remaining > 15) {
-    macroGuidance.push(`\u{1F356} *Protein Masih Kurang (${protStatus.remaining}g)*: Prioritaskan sumber protein bersih rendah lemak.`);
-  }
-  if (fatStatus.isOver) {
-    macroGuidance.push(`\u{1F953} *Lemak Melebihi Target (${totals.fat}/${fatGrams}g)*: Hindari gorengan dan pilih olahan kukus/rebus.`);
-  }
-  let recommendedMenu = "";
-  if (calStatus.isOver) {
-    if (protStatus.isUnder) {
-      recommendedMenu = `\u{1F319} *Menu Ringan Tinggi Protein (Fokus Defisit Protein)*:
-\u2022 \u{1F357} 100g Dada Ayam Rebus / Kukus (~135 kcal, P:26g, F:2g)
-\u2022 \u{1F95A} 2 Putih Telur Rebus (~34 kcal, P:7g)
-\u2022 \u{1F957} Lalapan Selada / Timun Segar (~15 kcal)
-\u2022 \u{1F4A7} Air Putih Dingin 1-2 Gelas`;
-    } else {
-      recommendedMenu = `\u{1F319} *Rekomendasi Pemulihan & Hidrasi*:
-\u2022 \u{1F4A7} Air Putih 500ml - 1 Liter
-\u2022 \u{1F375} Teh Hijau / Chamomile Hangat Tanpa Gula (~0 kcal)
-\u2022 \u{1F634} Istirahat dan tidur optimal untuk recovery`;
-    }
-  } else if (isNight || calStatus.remaining > 0 && calStatus.remaining <= 650 && totals.calories > 0) {
-    const mealCal = Math.min(calStatus.remaining, 500) || 450;
-    recommendedMenu = `\u{1F319} *Menu Makan Malam Rekomendasi (~${mealCal} kcal)*:
-\u2022 \u{1F357} 150g Dada Ayam Panggang / Pepes Ikan Bening (~165 kcal, P:31g)
-\u2022 \u{1F35A} 1 centong Nasi Putih / 150g Kentang Rebus (~130 kcal, C:28g)
-\u2022 \u{1F966} 1 Mangkok Sayur Bening Bayam & Jagung Manis (~60 kcal)
-\u2022 \u{1F4A7} Air Putih 1-2 Gelas Besar`;
-  } else if (isLunch) {
-    const mealCal = Math.min(calStatus.remaining, 650) || 550;
-    recommendedMenu = `\u2600\uFE0F *Menu Makan Siang Rekomendasi (~${mealCal} kcal)*:
-\u2022 \u{1F969} 120g Daging Sapi Lada Hitam Low Fat / Ayam Bakar Dada (~220 kcal, P:28g)
-\u2022 \u{1F35A} 1.5 centong Nasi Merah / Nasi Putih (~180 kcal, C:38g)
-\u2022 \u{1F957} Tumis Buncis & Wortel Sedikit Minyak (~70 kcal)`;
-  } else if (isBreakfast) {
-    recommendedMenu = `\u{1F305} *Menu Sarapan Rekomendasi (~380 kcal)*:
-\u2022 \u{1F373} 2 Telur Rebus + 1 Putih Telur (~170 kcal, P:18g)
-\u2022 \u{1F35E} 2 Tangkup Roti Gandum Utuh (~150 kcal, C:26g)
-\u2022 \u2615 Kopi / Teh Tanpa Gula`;
-  } else {
-    recommendedMenu = `\u{1F305} *Pagi (~${Math.round(targetCalories * 0.25)} kcal)*: 2 Telur Rebus + Roti Gandum / Oatmeal
-\u2600\uFE0F *Siang (~${Math.round(targetCalories * 0.35)} kcal)*: 150g Dada Ayam / Ikan + Nasi + Sayur Segar
-\u{1F319} *Malam (~${Math.round(targetCalories * 0.3)} kcal)*: Pepes Ikan / Ayam Kukus + Kentang / Sayur Bening
-\u{1F34E} *Snack (~${Math.round(targetCalories * 0.1)} kcal)*: 1 Buah Apel / Greek Yogurt`;
-  }
-  let adviceQuote = "";
-  if (calStatus.isOver) {
-    adviceQuote = persona === "max" ? "Kalori lo udah tembus target hari ini bro! Kunci disiplin lo, cukupi air putih dan kalau masih butuh asupan pilih yang murni protein tanpa minyak! \u{1F525}" : "Kalori kamu sudah melewati target harian hari ini. Yuk cukupi hidrasi dengan air putih dan pilih opsi sangat ringan ya \u2728";
-  } else if (calStatus.remaining < 300) {
-    adviceQuote = persona === "max" ? "Kalori lo udah mepet hari ini bro! Kunci disiplin lo, pilih yang tinggi protein dan minim minyak! \u{1F525}" : "Kalori hari ini sudah hampir terpenuhi dengan baik. Cukup pilih opsi ringan dan jangan lupa minum air ya! \u2728";
-  } else {
-    adviceQuote = persona === "max" ? "Jaga porsi dan makro lo. Konsistensi kecil tiap hari yang bikin badan lo jadi! \u{1F4AA}" : "Semangat ya! Pastikan tubuhmu mendapat asupan nutrisi seimbang untuk energi optimal hari ini \u{1F331}\u2728";
-  }
-  const calDisplay = calStatus.isOver ? `\u2022 Kalori: *${totals.calories}/${targetCalories} kcal* (${calStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : calStatus.isReached ? `\u2022 Kalori: *${totals.calories}/${targetCalories} kcal* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Kalori: *~${calStatus.remaining} kcal* (${totals.calories}/${targetCalories} kcal \xB7 ${calStatus.percentage >= 70 ? "\u{1F7E1} On Track" : "\u{1F534} Di Bawah Target"})`;
-  const protDisplay = protStatus.isOver ? `\u2022 Protein: *${totals.protein}/${proteinGrams}g* (${protStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : protStatus.isReached ? `\u2022 Protein: *${totals.protein}/${proteinGrams}g* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Protein: *~${protStatus.remaining}g* (${totals.protein}/${proteinGrams}g \xB7 ${protStatus.percentage >= 70 ? "\u{1F7E1} On Track" : "\u{1F534} Di Bawah Target"})`;
-  const fatDisplay = fatStatus.isOver ? `\u2022 Lemak: *${totals.fat}/${fatGrams}g* (${fatStatus.percentage}% \xB7 \u{1F534} Melebihi Target)` : fatStatus.isReached ? `\u2022 Lemak: *${totals.fat}/${fatGrams}g* (100% \xB7 \u2705 Target Tercapai)` : `\u2022 Sisa Lemak: *~${fatStatus.remaining}g* (${totals.fat}/${fatGrams}g \xB7 ${fatStatus.percentage >= 70 ? "\u{1F7E1} On Track" : "\u{1F534} Di Bawah Target"})`;
-  const sodDisplay = `\u2022 Natrium: *${currentSodium.toLocaleString("id-ID")}/2,000 mg* (${sodStatus.statusBadge})`;
-  return `\u{1F37D}\uFE0F *REKOMENDASI MENU ${mealContextLabel.toUpperCase()}*
-\u{1F3AF} *Goal*: ${goalTitle} (${targetCalories} kcal/hari)
-
-\u{1F4CA} *Status Nutrisi Hari Ini*:
-${calDisplay}
-${protDisplay}
-${fatDisplay}
-${sodDisplay}
-
-` + (macroGuidance.length > 0 ? `${macroGuidance.join("\n")}
-
-` : "") + `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-${recommendedMenu}
-
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-\u{1F4AC} *${coachName}*:
-"${adviceQuote}"`;
+  return generatePersonalizedMealRecommendation(userData, totals, userText);
 }
 function formatEquipmentCard(parsedAi, userData) {
   const persona = userData.persona === "mia" || userData.persona === "nikita" ? "mia" : "max";
@@ -50420,69 +52634,13 @@ function formatRepsCompact(targetReps, targetSets) {
   return clean2;
 }
 function generateWeeklyWorkoutSchedule(userData) {
-  const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
-  const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
-  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
-  const todayDayName = dayNames[currentDayIdx];
-  const scheduleBlocks = dayOrder.map((day) => {
-    const routine = schedule.find((s) => s.day.toLowerCase() === day.toLowerCase());
-    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
-    const isRest = !routine || routine.focus.toLowerCase().includes("rest") || routine.focus.toLowerCase().includes("istirahat") || (routine.exercises || []).length === 0;
-    let header = `*${day}*`;
-    if (isToday) {
-      header += ` \u2190 _Hari ini_`;
-    }
-    if (isRest) {
-      return `${header}
-${routine?.focus || "Pemulihan Aktif & Hidrasi"}`;
-    }
-    const exLines = (routine.exercises || []).map((ex) => {
-      const repsFormatted = formatRepsCompact(ex.targetReps, ex.targetSets);
-      return `\u2022 ${ex.name} \u2014 ${repsFormatted}`;
-    }).join("\n");
-    return `${header}
-${routine.focus}
-${exLines}`;
-  }).join("\n\n");
-  return `\u{1F4C5} *JADWAL LATIHAN MINGGU INI*
------------------------------
-${scheduleBlocks}
-
-\u{1F4AC} _Ketik nama latihan dan jumlah set (misal: "aku sudah plank 2 set") untuk mencatat progress langsung ke Dashboard!_`;
+  return generatePersonalizedWeeklyWorkoutPlan(userData);
 }
 function generateWorkoutRecommendations(userData, targetDayOffset = 0) {
-  const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
-  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const targetDayIdx = ((/* @__PURE__ */ new Date()).getDay() + targetDayOffset + 7) % 7;
-  const targetDayName = dayNames[targetDayIdx];
-  const targetRoutine = schedule.find((s) => s.day.toLowerCase() === targetDayName.toLowerCase()) || schedule[0];
-  const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-  const dayLabel = targetDayOffset === 1 ? "BESOK" : "HARI INI";
-  const isRest = !targetRoutine || targetRoutine.focus.toLowerCase().includes("rest") || targetRoutine.focus.toLowerCase().includes("istirahat") || targetRoutine.exercises.length === 0;
-  if (isRest) {
-    return `\u{1F4C5} *JADWAL LATIHAN ${dayLabel} (${targetRoutine?.day || targetDayName})*
---------------------------------------------------
-\u{1F334} *FOKUS: REST & RECOVERY*
-
-Hari ini adalah hari pemulihan otot. Cukupi asupan protein, minum air putih minimal 2-3 liter, dan tidur yang cukup agar ototmu pulih maksimal! \u{1F33F}\u2728
-
-\u{1F4AC} *${coachName}*:
-"Istirahat sama pentingnya dengan latihan. Jangan lupa tetap jaga pola makan sehat hari ini!"`;
-  }
-  return `\u{1F4C5} *LATIHAN ${dayLabel} (${targetRoutine.day}): ${targetRoutine.focus.toUpperCase()}*
---------------------------------------------------
-Berikut daftar gerakan yang terjadwal untukmu:
-
-` + targetRoutine.exercises.map((ex, idx) => `${idx + 1}. *${ex.name}*: ${ex.targetReps}`).join("\n") + `
-
-\u{1F4A1} *Tips ${coachName}*:
-\u2022 Buka menu latihan di dashboard untuk mencatat checklist set kamu secara real-time!
-\u2022 Jika butuh panduan cara menggunakan alat atau teknik gerakannya, cukup ketik nama latihannya (misal: "cara ${targetRoutine.exercises[0]?.name || "squat"}").
-
-Selamat berlatih, tetap konsisten! \u{1F4AA}\u{1F525}`;
+  return generatePersonalizedWorkoutRecommendation(userData, targetDayOffset);
+}
+function generateWeeklyMealSchedule(userData) {
+  return generatePersonalizedWeeklyMealPlan(userData);
 }
 function extractWorkoutParameters(userText) {
   const lower = userText.toLowerCase().trim();
@@ -50926,16 +53084,18 @@ ${detailsStr}
   }
   return null;
 }
-async function startServer() {
+async function createExpressApp(options = {}) {
   const app = (0, import_express.default)();
   const PORT = Number(process.env.PORT) || 3e3;
   app.set("trust proxy", true);
   app.use((0, import_cors.default)());
   app.use(import_express.default.json({ limit: "25mb" }));
   app.use(import_express.default.urlencoded({ extended: true, limit: "25mb" }));
-  app.use("/api/", generalRateLimiter);
-  app.use("/api/ai/", aiRateLimiter);
-  app.use("/api/auth/", authRateLimiter);
+  if (process.env.NODE_ENV !== "test") {
+    app.use("/api/", generalRateLimiter);
+    app.use("/api/ai/", aiRateLimiter);
+    app.use("/api/auth/", authRateLimiter);
+  }
   getFirestore();
   await initDb();
   initReminderScheduler();
@@ -51914,9 +54074,13 @@ async function startServer() {
       const targetProt = Number(rawTargetProtein) || 150;
       const targetCarb = Number(rawTargetCarbs) || 200;
       const targetFat = Number(rawTargetFat) || 60;
+      const normPhone = phone ? normalizePhone(phone) : "";
+      const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone;
+      const storedUser = normPhone ? getUserProfile(normPhone) || getUserProfile(altPhone) || await findUserByPhoneOrId(normPhone) || {} : {};
+      const canonicalProfile = resolveCanonicalProfile(storedUser, { ...req.body });
       const nutritionSummary = calculateDailyNutritionSummary(
         { calories: currCal, protein: currProt, carbs: currCarb, fat: currFat, sodium: currSodium },
-        { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: 2e3 }
+        { targetCalories: targetCal, proteinGrams: targetProt, carbGrams: targetCarb, fatGrams: targetFat, sodiumLimit: canonicalProfile.sodiumTarget || 2e3 }
       );
       const remCal = nutritionSummary.calories.remaining;
       const remProt = nutritionSummary.protein.remaining;
@@ -51929,27 +54093,38 @@ async function startServer() {
         wibHour = ((/* @__PURE__ */ new Date()).getUTCHours() + 7) % 24;
       }
       const timeLabel = wibHour < 10 ? "pagi" : wibHour < 15 ? "siang" : wibHour < 18 ? "sore" : "malam";
-      const isMia = String(persona || "max").toLowerCase().includes("mia");
+      const isMia = String(canonicalProfile.persona || persona || "max").toLowerCase().includes("mia");
       const coachName = isMia ? "Coach Mia" : "Coach Max";
       const goalStr = goal === "lose" ? "menurunkan berat badan" : goal === "gain" ? "menaikkan massa otot" : "menjaga berat badan ideal";
+      const userHasEggAllergy = canonicalProfile.allergies.includes("eggs") || canonicalProfile.allergies.includes("telur");
+      const userHasSeafoodAllergy = canonicalProfile.allergies.includes("seafood") || canonicalProfile.allergies.includes("udang");
+      const userHasDairyAllergy = canonicalProfile.allergies.includes("dairy") || canonicalProfile.allergies.includes("susu");
+      const userHasPeanutAllergy = canonicalProfile.allergies.includes("peanuts") || canonicalProfile.allergies.includes("kacang");
+      let safeLeanProtein = "dada ayam kukus atau tahu kukus";
+      if (userHasEggAllergy && userHasSeafoodAllergy) {
+        safeLeanProtein = "dada ayam rebus atau tempe kukus";
+      } else if (!userHasEggAllergy && !userHasSeafoodAllergy) {
+        safeLeanProtein = "2 putih telur rebus atau 100g dada ayam kukus";
+      } else if (userHasEggAllergy) {
+        safeLeanProtein = "100g dada ayam kukus atau pepes ikan bening";
+      }
+      let safeSnack = "1 buah apel segar atau timun potong";
       const buildFallbackAdvice = () => {
         let advice = "";
         if (nutritionSummary.sodium.isOver) {
-          advice = isMia ? `Asupan natrium hari ini sudah melebihi batas 2.000 mg (${currSodium.toLocaleString("id-ID")} mg). Untuk meal selanjutnya, utamakan air putih dingin dan menu tawar/rendah garam seperti dada ayam rebus atau sayur bening ya \u2728` : `Sodium lo udah tembus ${currSodium.toLocaleString("id-ID")} mg bro (melebihi batas anjuran)! Next meal, hindari makanan berkuah asin atau saus kecap, dan minum air putih minimal 500ml sekarang! \u{1F4A7}`;
+          advice = isMia ? `Asupan natrium hari ini sudah melebihi batas (${currSodium.toLocaleString("id-ID")} mg). Untuk meal selanjutnya, utamakan air putih dan menu segar rendah garam seperti sayur bening atau dada ayam rebus ya \u2728` : `Sodium lo udah tembus ${currSodium.toLocaleString("id-ID")} mg bro (melebihi batas anjuran)! Next meal, hindari makanan berkuah asin atau saus pekat, dan minum air putih minimal 500ml sekarang! \u{1F4A7}`;
         } else if (nutritionSummary.calories.isOver) {
           if (nutritionSummary.protein.isUnder) {
-            advice = isMia ? `Kalori harian kamu sudah melewati target (${currCal}/${targetCal} kcal), tetapi kebutuhan protein masih kurang ${remProt}g. Jika masih ingin makan di waktu ${timeLabel}, pilih yang murni protein tanpa minyak seperti 2 putih telur rebus atau 100g dada ayam kukus ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Tapi protein masih kurang ${remProt}g. Kalau laper, pilih yang murni protein tanpa lemak/minyak \u2014 putih telur rebus atau dada ayam kukus! \u{1F4AA}\u{1F525}`;
+            advice = isMia ? `Kalori harian kamu sudah melewati target (${currCal}/${targetCal} kcal), tetapi kebutuhan protein masih kurang ${remProt}g. Jika masih ingin makan di waktu ${timeLabel}, pilih opsi murni protein yang aman untukmu seperti ${safeLeanProtein} ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Tapi protein masih kurang ${remProt}g. Kalau laper, pilih yang murni protein tanpa lemak \u2014 ${safeLeanProtein}! \u{1F4AA}\u{1F525}`;
           } else {
-            advice = isMia ? `Kalori harian kamu sudah terpenuhi dan sedikit melewati target (${currCal}/${targetCal} kcal). Untuk waktu ${timeLabel} ini, cukup minum air putih atau teh tawar hangat, lalu fokus istirahat optimal ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Kunci porsi makan lo hari ini. Minum air putih yang banyak dan fokus recovery buat besok! \u{1F4AF}`;
+            advice = isMia ? `Kalori harian kamu sudah terpenuhi (${currCal}/${targetCal} kcal). Untuk waktu ${timeLabel} ini, cukup minum air putih atau teh tawar hangat, lalu fokus istirahat optimal ya \u2728` : `Kalori lo udah tembus target (${currCal}/${targetCal} kcal) bro! Kunci porsi makan lo hari ini. Minum air putih yang banyak dan fokus recovery buat besok! \u{1F4AF}`;
           }
         } else if (remProt > 25) {
-          const foodSugg = goal === "lose" ? isMia ? "dada ayam panggang, ikan tuna, atau putih telur" : "dada ayam grill, ikan bakar, atau tuna kalengan" : isMia ? "dada ayam + nasi merah, susu, atau protein shake" : "chicken rice bowl, tuna + nasi, atau mass gainer shake";
-          advice = isMia ? `Sisa protein kamu hari ini masih *${remProt}g* \u2014 lumayan banyak ya. Untuk meal ${timeLabel} berikutnya, fokuskan ke ${foodSugg}. Ini penting banget buat recovery dan perkembangan ototmu! \u2728` : `Bro, masih kurang *${remProt}g protein* nih. Next meal lo harus fokus ke ${foodSugg}. Otot lo butuh ini buat tumbuh! Gas jangan skip makan! \u{1F525}`;
+          advice = isMia ? `Sisa protein kamu hari ini masih *${remProt}g*. Untuk meal ${timeLabel} berikutnya, prioritaskan ${safeLeanProtein}. Ini penting banget buat recovery dan perkembangan fisikmu! \u2728` : `Bro, masih kurang *${remProt}g protein* nih. Next meal lo harus fokus ke ${safeLeanProtein}. Otot lo butuh ini buat recovery! Gas jangan skip makan! \u{1F525}`;
         } else if (nutritionSummary.calories.percentage >= 85) {
-          advice = isMia ? `Kalori kamu udah hampir mencapai target hari ini! Kalau masih lapar di waktu ${timeLabel}, pilih camilan ringan aja ya \u2014 buah segar, salad, atau yogurt tanpa gula. Hindari yang berat supaya tetap di jalur ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target! Kalau laper ${timeLabel} ini, pilih yang ringan aja \u2014 buah, salad, atau yogurt. Jangan kalap makan berat lagi ya bro, kita lagi ngejer goal ${goalStr}! \u{1F4AF}`;
+          advice = isMia ? `Kalori kamu udah hampir mencapai target hari ini! Kalau masih lapar di waktu ${timeLabel}, pilih camilan segar ringan seperti ${safeSnack} agar tetap di jalur ${goalStr}! \u{1F957}` : `Kalori lo udah mepet target! Kalau laper ${timeLabel} ini, pilih yang segar seperti ${safeSnack}. Jangan kalap makan berat lagi ya bro, kita lagi ngejer goal ${goalStr}! \u{1F4AF}`;
         } else {
-          const goalAdvice = goal === "lose" ? isMia ? "makanan tinggi serat dan protein rendah kalori \u2014 sayur, ayam rebus, atau ikan panggang" : "yang tinggi protein dan serat \u2014 ayam panggang, ikan, atau salad protein" : goal === "gain" ? isMia ? "karbohidrat kompleks dan protein \u2014 nasi merah, kentang, dada ayam, atau protein shake" : "combo karbo + protein \u2014 nasi + ayam geprek, atau chicken rice bowl ukuran besar" : isMia ? "makanan seimbang \u2014 nasi, lauk berprotein, dan sayuran" : "makanan seimbang \u2014 nasi + ayam/ikan + sayur, klasik tapi efektif";
-          advice = isMia ? `Untuk meal ${timeLabel} berikutnya, ${coachName} saranin pilih ${goalAdvice}. Ini pas banget buat mendukung tujuanmu ${goalStr}! Jangan lupa minum air putih minimal 250ml sebelum makan ya. \u{1F4A7}\u2728` : `Next meal ${timeLabel} ini, lo butuh ${goalAdvice}. Itu yang paling optimal buat goal lo ${goalStr}! Dan minum air putih sekarang \u2014 jangan tunggu haus. Gas! \u{1F4AA}\u{1F525}`;
+          advice = isMia ? `Untuk meal ${timeLabel} berikutnya, ${coachName} saranin pilih makanan seimbang seperti nasi merah, ${safeLeanProtein}, dan sayuran hijau. Jangan lupa minum air putih sebelum makan ya. \u{1F4A7}\u2728` : `Next meal ${timeLabel} ini, lo butuh karbo bersih + ${safeLeanProtein} + sayur. Itu yang paling optimal buat goal lo ${goalStr}! Dan cukupi hidrasi lo sekarang. Gas! \u{1F4AA}\u{1F525}`;
         }
         return `\u{1F3AF} *SARAN MAKAN SELANJUTNYA \u2014 ${coachName.toUpperCase()}*
 
@@ -51961,10 +54136,13 @@ ${advice}`;
       const prompt = `Kamu adalah ${coachName}, AI Coach dari GymBuddy.
 
 DATA USER:
-- Nama: ${name || "Member"}
+- Nama: ${canonicalProfile.name || "Member"}
 - Goal: ${goalStr}
 - Makanan baru saja dikonsumsi: "${mealName || "Makanan"}"
 - Waktu sekarang: ${timeLabel} (pukul ${wibHour}:xx WIB)
+- Alergi Makanan Terdaftar: ${canonicalProfile.allergiesStatus === "reported" && canonicalProfile.allergies.length > 0 ? canonicalProfile.allergies.join(", ") : "Tidak ada alergi dilaporkan"}
+- Kondisi Medis: ${canonicalProfile.medicalConditionsStatus === "reported" && canonicalProfile.medicalConditions.length > 0 ? canonicalProfile.medicalConditions.join(", ") : "Tidak ada"}
+- Pantangan Makanan: ${canonicalProfile.dislikedFoods.length > 0 ? canonicalProfile.dislikedFoods.join(", ") : "Tidak ada"}
 
 STATUS NUTRISI RESMI (SINGLE SOURCE OF TRUTH DARI BACKEND):
 ${JSON.stringify({
@@ -51972,28 +54150,104 @@ ${JSON.stringify({
         protein: { current: currProt, target: targetProt, percentage: nutritionSummary.protein.percentage, status: nutritionSummary.protein.status, remaining: remProt },
         carbs: { current: currCarb, target: targetCarb, percentage: nutritionSummary.carbs.percentage, status: nutritionSummary.carbs.status, remaining: remCarb },
         fat: { current: currFat, target: targetFat, percentage: nutritionSummary.fat.percentage, status: nutritionSummary.fat.status, remaining: remFat },
-        sodium: { current: currSodium, limit: 2e3, percentage: nutritionSummary.sodium.percentage, status: nutritionSummary.sodium.status }
+        sodium: { current: currSodium, limit: canonicalProfile.sodiumTarget || 2e3, percentage: nutritionSummary.sodium.percentage, status: nutritionSummary.sodium.status }
       }, null, 2)}
 
 PERSONA:
-${isMia ? "Coach Mia: Perempuan, hangat, supportif, profesional. Tidak pernah bilang 'sayang/cinta/beb'. Sapaan sopan (kamu/aku)." : "Coach Max: Pria, tegas, penuh energi, gaya Jakarta gaul (lo/gue). Motivasional tapi realistis."}
+${isMia ? "Coach Mia: Perempuan, hangat, supportif, profesional. Tidak pernah bilang 'sayang/cinta/beb'. Sapaan sopan (kamu/aku). Akhiri pesan dengan emoticon lembut seperti \u2728." : "Coach Max: Pria, tegas, penuh energi, gaya Jakarta gaul (lo/gue). Motivasional tapi realistis. Sertakan kata seperti lo/bro dan emoticon api \u{1F525}."}
 
-ATURAN REKOMENDASI (PRIORITAS MUTLAK):
-1. Jika Kalori/Karbo/Lemak berstatus "over_target" (nilai > target):
-   - JANGAN PERNAH mengatakan "kalori masih tersisa" atau "karbohidrat masih aman".
+ATURAN REKOMENDASI DAN KEAMANAN (PRIORITAS MUTLAK):
+1. KEAMANAN ALERGI & KESEHATAN (HARD BLOCKER):
+   - JANGAN PERNAH menyarankan makanan yang mengandung alergen user (${canonicalProfile.allergies.join(", ")}).
+   - Jika user alergi telur, JANGAN sebut putih telur atau olahan telur.
+   - Jika user alergi seafood/udang, JANGAN sebut tuna, ikan laut, atau olahan udang/terasi.
+   - Jika user alergi susu/dairy, JANGAN sebut susu, whey, keju, atau yogurt.
+   - Jika user alergi kacang, JANGAN sebut kacang atau bumbu kacang.
+   - Jangan membuat klaim medis mengobati penyakit.
+2. Jika Kalori/Karbo/Lemak berstatus "over_target":
+   - JANGAN PERNAH mengatakan "kalori masih tersisa".
    - Nyatakan dengan jelas bahwa kalori/makro telah melebihi target.
-   - Jika protein masih kurang ("under_target"), rekomendasikan HANYA opsi sangat ringan tinggi protein (misal putih telur, dada ayam rebus) tanpa tambahan karbohidrat, lemak, atau sodium tinggi.
-   - Jika protein sudah tercapai, rekomendasikan hidrasi (air putih/teh tawar) dan istirahat.
-2. Jika Sodium berstatus "over_limit", ingatkan untuk minum air putih dan hindari kuah asin/saus.
+   - Jika protein masih kurang ("under_target"), rekomendasikan HANYA opsi sangat ringan murni protein yang aman untuk alergi user.
 3. Berikan saran singkat (MAX 3 kalimat) yang spesifik dan actionable.
 
 Output HANYA teks saran polos (bukan JSON). Mulai dengan "\u{1F3AF}".`;
       try {
         const rawAdvice = await generateGeminiContent(prompt);
         const cleanedAdvice = (rawAdvice || "").replace(/```/g, "").trim();
-        const finalAdvice = cleanedAdvice.length > 20 ? `\u{1F3AF} *SARAN ${coachName.toUpperCase()}*
+        let isAdviceSafe = true;
+        let rejectReason = "";
+        if (canonicalProfile.allergiesStatus === "reported") {
+          const lowerAdvice = cleanedAdvice.toLowerCase();
+          for (const allergy of canonicalProfile.allergies) {
+            const cleanAllergy = allergy.toLowerCase();
+            if (cleanAllergy.includes("egg") || cleanAllergy.includes("telur")) {
+              if (lowerAdvice.includes("telur") || lowerAdvice.includes("egg")) {
+                isAdviceSafe = false;
+                rejectReason = "Mentions egg when user has egg allergy";
+              }
+            }
+            if (cleanAllergy.includes("seafood") || cleanAllergy.includes("udang")) {
+              if (lowerAdvice.includes("udang") || lowerAdvice.includes("tuna") || lowerAdvice.includes("ikan") || lowerAdvice.includes("seafood")) {
+                isAdviceSafe = false;
+                rejectReason = "Mentions seafood when user has seafood allergy";
+              }
+            }
+            if (cleanAllergy.includes("peanut") || cleanAllergy.includes("kacang")) {
+              if (lowerAdvice.includes("kacang") || lowerAdvice.includes("peanut")) {
+                isAdviceSafe = false;
+                rejectReason = "Mentions peanuts when user has peanut allergy";
+              }
+            }
+            if (cleanAllergy.includes("dairy") || cleanAllergy.includes("susu")) {
+              if (lowerAdvice.includes("susu") || lowerAdvice.includes("yogurt") || lowerAdvice.includes("cheese") || lowerAdvice.includes("keju") || lowerAdvice.includes("whey")) {
+                isAdviceSafe = false;
+                rejectReason = "Mentions dairy when user has dairy allergy";
+              }
+            }
+          }
+        }
+        if (!isAdviceSafe) {
+          logRecommendationAudit({
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            userId: canonicalProfile.userId,
+            recommendationType: "next_step_tip",
+            constraintsDetected: {
+              allergies: canonicalProfile.allergies,
+              medicalConditions: canonicalProfile.medicalConditions,
+              injuries: canonicalProfile.injuries,
+              dislikedFoods: canonicalProfile.dislikedFoods,
+              equipment: canonicalProfile.equipment
+            },
+            candidateRecommendation: cleanedAdvice,
+            validationResult: "REJECTED",
+            rejectionReason: rejectReason,
+            fallbackUsed: "Safe deterministic fallback"
+          });
+          return res.json({ success: true, advice: buildFallbackAdvice() });
+        }
+        let formattedBody = cleanedAdvice;
+        if (isMia && !formattedBody.includes("\u2728")) {
+          formattedBody += " \u2728";
+        } else if (!isMia && !formattedBody.includes("\u{1F525}") && !formattedBody.includes("\u{1F4AA}")) {
+          formattedBody += " \u{1F525}";
+        }
+        const finalAdvice = formattedBody.length > 20 ? `\u{1F3AF} *SARAN ${coachName.toUpperCase()}*
 
-${cleanedAdvice}` : buildFallbackAdvice();
+${formattedBody}` : buildFallbackAdvice();
+        logRecommendationAudit({
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          userId: canonicalProfile.userId,
+          recommendationType: "next_step_tip",
+          constraintsDetected: {
+            allergies: canonicalProfile.allergies,
+            medicalConditions: canonicalProfile.medicalConditions,
+            injuries: canonicalProfile.injuries,
+            dislikedFoods: canonicalProfile.dislikedFoods,
+            equipment: canonicalProfile.equipment
+          },
+          candidateRecommendation: finalAdvice,
+          validationResult: "PASS"
+        });
         return res.json({ success: true, advice: finalAdvice });
       } catch (aiErr) {
         console.warn("[next-step] AI error, using fallback:", aiErr);
@@ -52060,15 +54314,77 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         const genericCheck = isGenericMealInput(cleanText);
         const isLowConfidence = genericCheck.isGeneric || calculatedNutrition.overallConfidence === "low" || calculatedNutrition.needsClarification;
         const isPureWater = Boolean(calculatedNutrition.isHydration);
+        const primaryRef = calculatedNutrition.components[0];
+        const canonicalItems = calculatedNutrition.components.map((c) => ({
+          originalName: c.originalInput || c.foodName,
+          resolvedName: c.resolvedFoodName || c.foodName,
+          category: c.cookingMethod ? "lauk" : "makanan",
+          portion: `${c.actualAmount}${c.actualUnit}`,
+          weightGrams: c.actualAmount,
+          nutrition: {
+            calories: c.calories,
+            protein: c.protein,
+            carbs: c.carbs,
+            fat: c.fat,
+            fiber: c.fiber,
+            sugar: c.sugar,
+            sodium: c.sodium
+          },
+          matchedRef: c.databaseId,
+          source: c.source,
+          // Backward compatibility fields:
+          food_name: c.foodName,
+          normalized_food_name: c.normalizedName,
+          original_input: c.originalInput || userInputFoodName,
+          resolved_food_name: c.resolvedFoodName || c.normalizedName,
+          database_id: c.databaseId,
+          data_source: c.source,
+          estimated_quantity: 1,
+          estimated_weight_grams: c.actualAmount,
+          serving_unit: `${c.actualAmount}${c.actualUnit}`,
+          display_unit: `${c.actualAmount}${c.actualUnit}`,
+          cooking_method: c.cookingMethod,
+          calories: c.calories,
+          protein: c.protein,
+          carbs: c.carbs,
+          fat: c.fat,
+          fiber: c.fiber,
+          sugar: c.sugar,
+          sodium: c.sodium,
+          confidence: c.portionConfidence >= 85 ? "high" : "medium",
+          notes: c.notes
+        }));
+        const dualConf = calculatedNutrition.dualConfidence || {
+          foodIdentityScore: isLowConfidence ? 40 : 92,
+          nutritionReferenceScore: isLowConfidence ? 40 : 88,
+          overallLevel: isLowConfidence ? "low" : calculatedNutrition.overallConfidence
+        };
+        const requiresReview = Boolean(calculatedNutrition.requiresReview || isLowConfidence);
+        const warningMessage = calculatedNutrition.warningMessage || (requiresReview ? "AI belum yakin dengan makanan yang terdeteksi. Pastikan nama makanan dan porsinya sudah benar sebelum menyimpan." : null);
         res.json({
           success: true,
           isFood: true,
-          // CRITICAL: Always use original user input as foodName — never AI/catalog name
-          foodName: userInputFoodName,
+          type: isPureWater ? "hydration" : "meal",
           originalInput: userInputFoodName,
           resolvedFoodName: calculatedNutrition.foodName,
-          type: isPureWater ? "hydration" : "meal",
+          foodName: calculatedNutrition.foodName,
           mealCategory: calculatedNutrition.mealType === "snack" ? "SNACK" : isPureWater ? "AIR" : "MAKANAN",
+          mealType: calculatedNutrition.mealType || parsed.mealType,
+          portion: {
+            amount: 1,
+            unit: isPureWater ? "ml" : "porsi",
+            weightGrams: calculatedNutrition.estimatedWeightGrams || (isPureWater ? Number(calculatedNutrition.volumeMl) : 250),
+            displayLabel: calculatedNutrition.portionDisplayLabel || `1 Porsi (~${calculatedNutrition.estimatedWeightGrams || 250}g)`
+          },
+          nutrition: {
+            calories: calculatedNutrition.calories,
+            protein: calculatedNutrition.protein,
+            carbs: calculatedNutrition.carbs,
+            fat: calculatedNutrition.fat,
+            fiber: calculatedNutrition.fiber,
+            sugar: calculatedNutrition.sugar,
+            sodium: calculatedNutrition.sodium
+          },
           calories: isLowConfidence ? void 0 : calculatedNutrition.calories,
           protein: isLowConfidence ? void 0 : calculatedNutrition.protein,
           carbs: isLowConfidence ? void 0 : calculatedNutrition.carbs,
@@ -52076,37 +54392,22 @@ ${cleanedAdvice}` : buildFallbackAdvice();
           fiber: isLowConfidence ? void 0 : calculatedNutrition.fiber,
           sugar: isLowConfidence ? void 0 : calculatedNutrition.sugar,
           sodium: isLowConfidence ? void 0 : calculatedNutrition.sodium,
+          confidence: dualConf,
+          databaseReference: {
+            source: primaryRef ? primaryRef.source : "TKPI",
+            matchedId: primaryRef ? primaryRef.databaseId : "tkpi_generic",
+            isExactMatch: !isLowConfidence
+          },
+          items: canonicalItems,
+          requiresReview,
+          warningMessage,
           isHydration: isPureWater,
           volumeMl: isPureWater ? Number(calculatedNutrition.volumeMl) : 0,
-          mealType: calculatedNutrition.mealType || parsed.mealType,
           portionNote: calculatedNutrition.portionNote,
-          items: calculatedNutrition.components.map((c) => ({
-            food_name: c.foodName,
-            normalized_food_name: c.normalizedName,
-            original_input: c.originalInput || userInputFoodName,
-            resolved_food_name: c.resolvedFoodName || c.normalizedName,
-            database_id: c.databaseId,
-            data_source: c.source,
-            estimated_quantity: 1,
-            estimated_weight_grams: c.actualAmount,
-            serving_unit: `${c.actualAmount}${c.actualUnit}`,
-            display_unit: `${c.actualAmount}${c.actualUnit}`,
-            cooking_method: c.cookingMethod,
-            calories: c.calories,
-            protein: c.protein,
-            carbs: c.carbs,
-            fat: c.fat,
-            fiber: c.fiber,
-            sugar: c.sugar,
-            sodium: c.sodium,
-            confidence: c.portionConfidence >= 85 ? "high" : "medium",
-            notes: c.notes
-          })),
-          confidence: isLowConfidence ? "low" : calculatedNutrition.overallConfidence,
+          portionDisplayLabel: calculatedNutrition.portionDisplayLabel,
           needsClarification: isLowConfidence,
           clarificationQuestion: genericCheck.isGeneric ? `What\u2019s included in your ${genericCheck.mealType}?` : `We need a little more information to estimate this meal accurately.`,
           suggestedOptions: genericCheck.suggestedOptions.length > 0 ? genericCheck.suggestedOptions : ["Chicken", "Beef", "Egg", "Vegetables", "Sauce", "Other"],
-          portionDisplayLabel: calculatedNutrition.portionDisplayLabel,
           debugLog: calculatedNutrition.traceabilityLog,
           sanityValid: calculatedNutrition.sanityValid
         });
@@ -52116,14 +54417,20 @@ ${cleanedAdvice}` : buildFallbackAdvice();
         res.json({
           success: true,
           ...deterministicResult,
-          foodName: userInputFoodName,
-          // Override with original user input
+          foodName: deterministicResult.foodName,
           originalInput: userInputFoodName,
           resolvedFoodName: deterministicResult.foodName,
           type: isPureWater ? "hydration" : "meal",
           mealCategory: deterministicResult.mealType === "snack" ? "SNACK" : isPureWater ? "AIR" : "MAKANAN",
           isHydration: isPureWater,
           volumeMl: isPureWater ? Number(deterministicResult.volumeMl) : 0,
+          confidence: deterministicResult.dualConfidence || {
+            foodIdentityScore: 90,
+            nutritionReferenceScore: 85,
+            overallLevel: deterministicResult.overallConfidence || "high"
+          },
+          requiresReview: Boolean(deterministicResult.requiresReview),
+          warningMessage: deterministicResult.warningMessage || null,
           note: "Estimated using USDA & TKPI verified database"
         });
       }
@@ -52168,7 +54475,7 @@ ${userTextContext ? `DESKRIPSI/KONTEKS USER: "${userTextContext}". (Gunakan teks
 - DEKONSTRUKSI MAKANAN KOMPOSIT: Pecah makanan kombinasi menjadi komponen individual (Main Food, Isian/Filling seperti sosis di dalam roti, Topping seperti keju, Saus, Side dish).
 - ESTIMASI PORSI REALISTIS DARI VISUAL CUES: Gunakan petunjuk visual seperti ukuran wadah/bungkus (misal 'nasi bungkus' biasanya \xB1250\u2013300g), piring, dan ketebalan potongan.
 - Hitung kalori & makronutrisi konsisten: (protein \xD7 4) + (carbs \xD7 4) + (fat \xD7 9) = calories.
-- Tentukan jika minuman (Americano, Teh, Air, Kopi, Jus, Boba, dll.) dengan isHydration=true.
+- PENTING ATURAN HIDRASI: HANYA air putih/air mineral murni (0 kcal) yang memiliki isHydration=true. Semua minuman lain (kopi, latte, americano, teh manis, boba, jus buah, susu, whey shake) HARUS isHydration=false dan tercatat sebagai meal.
 
 Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 {
@@ -52179,6 +54486,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   "carbs": 60,
   "fat": 15,
   "fiber": 3,
+  "sugar": 2,
+  "sodium": 450,
   "isHydration": false,
   "volumeMl": 0,
   "portion": "1 Porsi (\xB1250\u2013300g)",
@@ -52186,6 +54495,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     "\u2022 Komponen 1: ~100g",
     "\u2022 Komponen 2: ~50g"
   ],
+  "components": ["Komponen 1", "Komponen 2"],
   "mealType": "lunch"
 }`;
       try {
@@ -52205,24 +54515,106 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             portion: "-"
           });
         }
-        const protein = Math.max(0, Math.round(Number(parsed.protein) || 0));
-        const carbs = Math.max(0, Math.round(Number(parsed.carbs) || 0));
-        const fat = Math.max(0, Math.round(Number(parsed.fat) || 0));
-        const macroCal = protein * 4 + carbs * 4 + fat * 9;
-        const calories = macroCal > 0 ? macroCal : Math.max(0, Math.round(Number(parsed.calories) || 0));
+        const detectedName = String(parsed.foodName || "Makanan Terdeteksi").trim();
+        const primaryFoodQuery = userTextContext || detectedName;
+        let hasConflict = false;
+        let conflictMessage = null;
+        if (userTextContext && detectedName && userTextContext.toLowerCase() !== detectedName.toLowerCase()) {
+          const lowerUser = userTextContext.toLowerCase();
+          const lowerVision = detectedName.toLowerCase();
+          const isSaladVsJunk = lowerUser.includes("salad") && (lowerVision.includes("pizza") || lowerVision.includes("burger") || lowerVision.includes("gorengan"));
+          const isDrinkVsSolid = lowerUser.includes("air") && !lowerVision.includes("air") && !lowerVision.includes("minum");
+          if (isSaladVsJunk || isDrinkVsSolid) {
+            hasConflict = true;
+            conflictMessage = `Deskripsi teks (${userTextContext}) berbeda dengan visual yang terdeteksi (${detectedName}). Silakan periksa kembali.`;
+          }
+        }
+        const calculatedNutrition = calculateFoodNutrition(primaryFoodQuery, parsed.components || parsed.detectedFoods);
+        const isWaterQuery = isPureWaterInput(primaryFoodQuery) || isPureWaterInput(detectedName) && !userTextContext;
+        const hasCal = calculatedNutrition.calories > 0;
+        const isPureWater = isWaterQuery && !hasCal;
+        const finalCal = isPureWater ? 0 : calculatedNutrition.calories;
+        const finalProt = isPureWater ? 0 : calculatedNutrition.protein;
+        const finalCarb = isPureWater ? 0 : calculatedNutrition.carbs;
+        const finalFat = isPureWater ? 0 : calculatedNutrition.fat;
+        const finalFiber = isPureWater ? 0 : calculatedNutrition.fiber;
+        const finalSugar = isPureWater ? 0 : calculatedNutrition.sugar;
+        const finalSodium = isPureWater ? 0 : calculatedNutrition.sodium;
+        const requiresReview = hasConflict || calculatedNutrition.requiresReview || calculatedNutrition.overallConfidence !== "high";
+        const warningMessage = conflictMessage || calculatedNutrition.warningMessage || (requiresReview ? "AI belum yakin dengan makanan yang terdeteksi. Pastikan nama makanan dan porsinya sudah benar sebelum menyimpan." : null);
+        const canonicalItems = calculatedNutrition.components.map((c) => ({
+          originalName: c.originalInput || c.foodName,
+          resolvedName: c.resolvedFoodName || c.foodName,
+          category: c.cookingMethod ? "lauk" : "makanan",
+          portion: `${c.actualAmount}${c.actualUnit}`,
+          weightGrams: c.actualAmount,
+          nutrition: {
+            calories: c.calories,
+            protein: c.protein,
+            carbs: c.carbs,
+            fat: c.fat,
+            fiber: c.fiber,
+            sugar: c.sugar,
+            sodium: c.sodium
+          },
+          matchedRef: c.databaseId,
+          source: c.source,
+          food_name: c.foodName,
+          normalized_food_name: c.normalizedName,
+          resolved_food_name: c.resolvedFoodName || c.normalizedName,
+          estimated_weight_grams: c.actualAmount,
+          serving_unit: `${c.actualAmount}${c.actualUnit}`,
+          display_unit: `${c.actualAmount}${c.actualUnit}`,
+          calories: c.calories,
+          protein: c.protein,
+          carbs: c.carbs,
+          fat: c.fat,
+          fiber: c.fiber,
+          sugar: c.sugar,
+          sodium: c.sodium
+        }));
         return res.json({
           success: true,
           isFood: true,
-          foodName: parsed.foodName || "Makanan Terdeteksi",
-          calories,
-          protein,
-          carbs,
-          fat,
-          fiber: Number(parsed.fiber) || 0,
-          isHydration: Boolean(parsed.isHydration),
-          volumeMl: Number(parsed.volumeMl) || 0,
-          portion: parsed.portion || "1 Porsi Standar",
-          mealType: parsed.mealType || getMealTypeByHour()
+          type: isPureWater ? "hydration" : "meal",
+          originalInput: userTextContext || detectedName,
+          resolvedFoodName: calculatedNutrition.foodName,
+          foodName: calculatedNutrition.foodName,
+          mealCategory: isPureWater ? "AIR" : calculatedNutrition.mealType === "snack" ? "SNACK" : "MAKANAN",
+          mealType: calculatedNutrition.mealType || parsed.mealType || getMealTypeByHour(),
+          portion: {
+            amount: 1,
+            unit: isPureWater ? "ml" : "porsi",
+            weightGrams: calculatedNutrition.estimatedWeightGrams || (isPureWater ? 250 : 250),
+            displayLabel: parsed.portion || calculatedNutrition.portionDisplayLabel || `1 Porsi (~${calculatedNutrition.estimatedWeightGrams || 250}g)`
+          },
+          nutrition: {
+            calories: finalCal,
+            protein: finalProt,
+            carbs: finalCarb,
+            fat: finalFat,
+            fiber: finalFiber,
+            sugar: finalSugar,
+            sodium: finalSodium
+          },
+          calories: finalCal,
+          protein: finalProt,
+          carbs: finalCarb,
+          fat: finalFat,
+          fiber: finalFiber,
+          sugar: finalSugar,
+          sodium: finalSodium,
+          confidence: calculatedNutrition.dualConfidence || {
+            foodIdentityScore: hasConflict ? 50 : 88,
+            nutritionReferenceScore: 85,
+            overallLevel: hasConflict ? "medium" : "high"
+          },
+          requiresReview,
+          warningMessage,
+          isHydration: isPureWater,
+          volumeMl: isPureWater ? Number(calculatedNutrition.volumeMl || parsed.volumeMl || 250) : 0,
+          portionEstimates: parsed.portionEstimates || [calculatedNutrition.portionDisplayLabel || `1 Porsi (~${calculatedNutrition.estimatedWeightGrams || 250}g)`],
+          items: canonicalItems
         });
       } catch (aiErr) {
         console.error("Gemini Vision AI error:", aiErr);
@@ -52277,11 +54669,15 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     if (!meal || !meal.foodName) {
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
+    const incomingCal = Number(meal.calories) || 0;
+    const isWater = isPureWaterInput(meal.foodName);
+    const isPureWater = isWater && incomingCal === 0;
+    const mealId = meal.id || meal.clientGeneratedMealId || meal.idempotencyKey || `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const mealObj = {
-      id: meal.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      type: meal.type || (meal.isHydration ? "hydration" : "meal"),
+      id: mealId,
+      type: (meal.type === "hydration" || meal.isHydration) && isPureWater ? "hydration" : "meal",
       foodName: meal.foodName,
-      calories: Number(meal.calories) || 0,
+      calories: incomingCal,
       protein: Number(meal.protein) || 0,
       carbs: Number(meal.carbs) || 0,
       fat: Number(meal.fat) || 0,
@@ -52289,10 +54685,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       sugar: Number(meal.sugar) || 0,
       sodium: Number(meal.sodium) || 0,
       mealType: meal.mealType || getMealTypeByHour(),
-      mealCategory: meal.mealCategory || (meal.mealType ? getMealTypeLabel(meal.mealType) : "MAKANAN"),
+      mealCategory: isPureWater ? "AIR" : meal.mealCategory || (meal.mealType ? getMealTypeLabel(meal.mealType) : "MAKANAN"),
       timestamp: meal.timestamp || (/* @__PURE__ */ new Date()).toISOString(),
-      isHydration: meal.type === "hydration" || meal.isHydration === true || meal.isHydration === "true" ? true : false,
-      amountMl: meal.amountMl ? Number(meal.amountMl) : meal.volumeMl ? Number(meal.volumeMl) : void 0,
+      isHydration: isPureWater,
+      amountMl: isPureWater ? meal.amountMl ? Number(meal.amountMl) : meal.volumeMl ? Number(meal.volumeMl) : void 0 : void 0,
       volumeMl: meal.volumeMl ? Number(meal.volumeMl) : meal.amountMl ? Number(meal.amountMl) : void 0
     };
     const key = `${phone}_${targetDate}`;
@@ -52304,7 +54700,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (idx >= 0) {
         list[idx] = item;
       } else {
-        list.push(item);
+        const duplicateIdx = list.findIndex(
+          (m) => m && m.foodName === item.foodName && m.calories === item.calories && Math.abs(new Date(m.timestamp).getTime() - new Date(item.timestamp).getTime()) < 15e3
+        );
+        if (duplicateIdx >= 0) {
+          list[duplicateIdx] = item;
+        } else {
+          list.push(item);
+        }
       }
     };
     if (!dbData.dailyLogs[key]) dbData.dailyLogs[key] = [];
@@ -52947,8 +55350,9 @@ https://gymbuddygroup.com`
           }
           if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
-          const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
-          const isWeeklyScheduleQuery = lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini");
+          const isWeeklyMealPlanQuery = lowerText.includes("jadwal makanan minggu") || lowerText.includes("jadwal makan minggu") || lowerText.includes("saran makan minggu") || lowerText.includes("rekomendasi makan minggu") || lowerText.includes("jadwal makanan seminggu") || lowerText.includes("jadwal makan seminggu") || lowerText.includes("menu seminggu") || lowerText.includes("meal plan") || Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) || Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i));
+          const isRecommendationMessage = !isWeeklyMealPlanQuery && (lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+          const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini"));
           const isWorkoutReqMessage = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini apa") || lowerText.includes("mau latihan apa") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
           const parsedQueryDate = parseDateFromQuery(userText);
           const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
@@ -53041,6 +55445,12 @@ https://gymbuddygroup.com`
               }
             } else if (isProgressHistoryMessage) {
               responseMessages = [formatProgressHistoryCard(from)];
+            } else if (isWeeklyMealPlanQuery) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+              } else {
+                responseMessages = [generateWeeklyMealSchedule(userData)];
+              }
             } else if (isWeeklyScheduleQuery) {
               if (!planCapabilities.canWorkout) {
                 responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
@@ -53340,10 +55750,12 @@ Keluarkan output JSON valid:
               }
             }
           }
-          if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && responseMessages.length > 0) {
+          if (responseMessages && responseMessages.length > 0) {
             for (const msgText of responseMessages) {
               await sendMetaWhatsappMessage(from, msgText);
-              await new Promise((r) => setTimeout(r, 800));
+              if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && process.env.NODE_ENV !== "test") {
+                await new Promise((r) => setTimeout(r, 800));
+              }
             }
           }
         }
@@ -53367,7 +55779,9 @@ Keluarkan output JSON valid:
       const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
       let userProfile = null;
       try {
-        userProfile = await findUserByPhoneOrId(normFrom) || getUserProfile(normFrom) || await getUserProfileFromFirestore(normFrom);
+        const localUser = getUserProfile(normFrom);
+        const cloudUser = await findUserByPhoneOrId(normFrom) || await getUserProfileFromFirestore(normFrom);
+        userProfile = localUser ? { ...cloudUser || {}, ...localUser } : cloudUser;
       } catch (profileErr) {
         console.warn("[Twilio WA] User profile lookup error (non-fatal):", profileErr?.message || profileErr);
         userProfile = getUserProfile(normFrom) || null;
@@ -53448,8 +55862,9 @@ Keluarkan output JSON valid:
       }
       const userData = calculateUserData(userProfile);
       console.log(`[Twilio WA] \u2705 Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
-      const isRecommendationMessage = lowerText.includes("rekomendasi makanan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan");
-      const isWeeklyScheduleQuery = lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini");
+      const isWeeklyMealPlanQuery = lowerText.includes("jadwal makanan minggu") || lowerText.includes("jadwal makan minggu") || lowerText.includes("saran makan minggu") || lowerText.includes("rekomendasi makan minggu") || lowerText.includes("jadwal makanan seminggu") || lowerText.includes("jadwal makan seminggu") || lowerText.includes("menu seminggu") || lowerText.includes("meal plan") || Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) || Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i));
+      const isRecommendationMessage = !isWeeklyMealPlanQuery && (lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+      const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("program minggu ini"));
       const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && (lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("olahraga hari ini apa") || lowerText.includes("mau latihan apa") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || Boolean(lowerText.match(/^(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
       const parsedQueryDate = parseDateFromQuery(userText);
       const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
@@ -53528,6 +55943,8 @@ Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari l
             `\u2139\uFE0F Belum ada catatan makanan hari ini yang bisa dihapus.`
           ];
         }
+      } else if (isWeeklyMealPlanQuery) {
+        responseMessages = [generateWeeklyMealSchedule(userData)];
       } else if (isWeeklyScheduleQuery) {
         responseMessages = [generateWeeklyWorkoutSchedule(userData)];
       } else if (isWorkoutScheduleQuery) {
@@ -54038,7 +56455,7 @@ Keluarkan output JSON valid:
         const msg = messagesToSend[mIdx];
         const media = mIdx === 0 && mediaUrlToSend && mediaUrlToSend.startsWith("http") ? mediaUrlToSend : void 0;
         await sendWhatsAppAsync(rawFrom, msg, req.body?.To, media);
-        if (mIdx < messagesToSend.length - 1) {
+        if (mIdx < messagesToSend.length - 1 && process.env.NODE_ENV !== "test") {
           await new Promise((r) => setTimeout(r, 450));
         }
       }
@@ -54372,30 +56789,37 @@ ${mistakes}
 ` : "") + `\u{1F3A5} *Lihat Panduan Visual Gerakan*:
 \u{1F517} ${pwaUrl}`;
   }
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await (0, import_vite.createServer)({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = import_path3.default.join(process.cwd(), "dist");
-    const distIndex = import_path3.default.join(distPath, "index.html");
-    const rootIndex = import_path3.default.join(process.cwd(), "index.html");
-    if (import_fs3.default.existsSync(distPath)) {
-      app.use(import_express.default.static(distPath));
-    }
-    app.use(import_express.default.static(process.cwd()));
-    app.use((req, res) => {
-      if (import_fs3.default.existsSync(distIndex)) {
-        res.sendFile(distIndex);
-      } else if (import_fs3.default.existsSync(rootIndex)) {
-        res.sendFile(rootIndex);
-      } else {
-        res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
+  if (!options.skipVite) {
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await (0, import_vite.createServer)({
+        server: { middlewareMode: true },
+        appType: "spa"
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = import_path3.default.join(process.cwd(), "dist");
+      const distIndex = import_path3.default.join(distPath, "index.html");
+      const rootIndex = import_path3.default.join(process.cwd(), "index.html");
+      if (import_fs3.default.existsSync(distPath)) {
+        app.use(import_express.default.static(distPath));
       }
-    });
+      app.use(import_express.default.static(process.cwd()));
+      app.use((req, res) => {
+        if (import_fs3.default.existsSync(distIndex)) {
+          res.sendFile(distIndex);
+        } else if (import_fs3.default.existsSync(rootIndex)) {
+          res.sendFile(rootIndex);
+        } else {
+          res.status(200).send("<h1>GymBuddy Backend Server is Running</h1>");
+        }
+      });
+    }
   }
+  return app;
+}
+async function startServer() {
+  const PORT = Number(process.env.PORT) || 3e3;
+  const app = await createExpressApp({ skipVite: false });
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
@@ -54406,6 +56830,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   activeRegistrationLocks,
+  addMealLog,
   applyDeterministicCorrection,
   applyTargetedMealCorrection,
   authPendingSessions,
@@ -54413,6 +56838,8 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   calculateUserData,
   classifyMealType,
   classifyUserInput,
+  clearSentWhatsAppMessages,
+  createExpressApp,
   dbData,
   deletePendingSession,
   detectMealCorrectionIntent,
@@ -54423,13 +56850,19 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   formatDashboardMacro,
   formatDashboardPercent,
   formatNutritionCard,
+  generateMealRecommendations,
+  generateWeeklyMealSchedule,
+  generateWeeklyWorkoutSchedule,
+  generateWorkoutRecommendations,
   getDailyTotals,
   getLastFoodMeal,
+  getLastSentWhatsAppMessage,
   getLegacyPhoneVariations,
   getMealTypeByHour,
   getMealTypeFromTimeWindow,
   getMealTypeLabel,
   getPendingSession,
+  getSentWhatsAppMessagesFor,
   getUserPlanCapabilities,
   getUserProfile,
   handleAdditionalActivityLogging,
@@ -54447,8 +56880,10 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   savePendingSession,
   saveUserProfile,
   sendWhatsAppLoginMessage,
+  sentWhatsAppMessages,
   splitCompoundFoodItems,
   splitWhatsAppMessage,
+  startServer,
   updateExistingMealLog,
   validatePlanContext
 });

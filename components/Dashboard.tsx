@@ -2913,20 +2913,55 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
     const sug = Number(itemSugarInput) || 0;
     const sod = Number(itemSodiumInput) || 0;
 
-    const { foods, drinks } = splitAndCategorizeComboText(
-      foodNameToSave,
-      cal,
-      prot,
-      carb,
-      fat
-    );
+    let newItems: MealItem[] = [];
 
-    const newItems = [...foods, ...drinks].map(item => ({
-      ...item,
-      fiber: fib,
-      sugar: sug,
-      sodium: sod
-    }));
+    // If aiPreview has discrete decomposed items from a combo dish, use them directly with exact nutrition
+    if (aiPreview?.items && Array.isArray(aiPreview.items) && aiPreview.items.length > 1) {
+      newItems = aiPreview.items.map((it: any, idx: number) => {
+        const itemFoodName = it.resolved_food_name || it.resolvedName || it.food_name || it.foodName || foodNameToSave;
+        const isWater = isPlainWaterName(itemFoodName);
+        const itCal = Number(it.calories) || 0;
+        const itProt = Number(it.protein) || 0;
+        const itCarb = Number(it.carbs) || 0;
+        const itFat = Number(it.fat) || 0;
+        const isLiquid = it.item_type === "beverage" || isLiquidName(itemFoodName);
+        return {
+          id: `m-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+          type: (isWater && itCal === 0) ? "hydration" : "meal",
+          mealCategory: isWater ? "AIR" : (aiPreview?.mealCategory || (aiPreview?.mealType === "snack" ? "SNACK" : (isLiquid ? "MINUMAN" : "MAKANAN"))),
+          foodName: itemFoodName,
+          calories: itCal,
+          protein: itProt,
+          carbs: itCarb,
+          fat: itFat,
+          fiber: Number(it.fiber) || 0,
+          sugar: Number(it.sugar) || 0,
+          sodium: Number(it.sodium) || 0,
+          isHydration: isWater && itCal === 0,
+          amountMl: isWater ? (Number(it.volume_ml) || 250) : undefined,
+          volumeMl: isWater ? (Number(it.volume_ml) || 250) : undefined,
+          mealType: aiPreview?.mealType || "lunch",
+          timestamp: new Date().toISOString()
+        };
+      });
+    } else {
+      const { foods, drinks } = splitAndCategorizeComboText(
+        foodNameToSave,
+        cal,
+        prot,
+        carb,
+        fat
+      );
+
+      newItems = [...foods, ...drinks].map(item => ({
+        ...item,
+        mealCategory: item.isHydration ? "AIR" : (aiPreview?.mealCategory || (aiPreview?.mealType === "snack" ? "SNACK" : item.mealCategory)),
+        mealType: aiPreview?.mealType || (aiPreview?.mealCategory === "SNACK" ? "snack" : undefined),
+        fiber: fib,
+        sugar: sug,
+        sodium: sod
+      }));
+    }
 
     try {
       let serverLogs: MealItem[] | null = null;
@@ -7491,7 +7526,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-left">
                             <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
                             <span className="text-xs font-semibold text-amber-200 leading-relaxed">
-                              ⚠️ Periksa hasil AI: AI belum yakin dengan makanan yang terdeteksi. Pastikan nama dan porsinya sudah benar sebelum menyimpan.
+                              {(aiPreview as any).warningMessage || "⚠️ Periksa hasil AI: AI belum yakin dengan makanan yang terdeteksi. Pastikan nama makanan dan porsinya sudah benar sebelum menyimpan."}
                             </span>
                           </div>
                         )}
