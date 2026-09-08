@@ -50720,7 +50720,7 @@ var snap = new import_midtrans_client.default.Snap({
   clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || "dummy_client_key"
 });
 var WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
-var WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1193173453889657";
+var WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1232638216597845";
 var VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
 function normalizePhone(phone) {
   if (!phone) return "";
@@ -52610,27 +52610,29 @@ ${rowsStr}
 
 \u{1F4A1} *Tips*: Ketik *"update bb 75"* untuk mencatat berat badan terbarumu minggu ini!`;
 }
-async function sendMetaWhatsappMessage(to, bodyText) {
+async function sendMetaWhatsappMessage(to, bodyText, customPhoneId) {
   sentWhatsAppMessages.push({
     to,
     body: bodyText || "",
     timestamp: Date.now()
   });
   if (process.env.NODE_ENV === "test") return;
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
+  const phoneId = customPhoneId || WHATSAPP_PHONE_NUMBER_ID;
+  if (!WHATSAPP_TOKEN || !phoneId) return;
   try {
     const cleanText = sanitizeWhatsAppResponse(bodyText);
     await import_axios.default.post(
-      `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v20.0/${phoneId}/messages`,
       {
         messaging_product: "whatsapp",
         to,
+        type: "text",
         text: { body: cleanText }
       },
-      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
+      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("Error sending Meta WhatsApp message:", err);
+    console.error("Error sending Meta WhatsApp message:", err?.response?.data || err?.message || err);
   }
 }
 function parseDateFromQuery(userText) {
@@ -56121,6 +56123,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         const entry = body.entry?.[0];
         const changes = entry?.changes?.[0];
         const value = changes?.value;
+        const incomingPhoneId = value?.metadata?.phone_number_id || WHATSAPP_PHONE_NUMBER_ID;
         const message = value?.messages?.[0];
         if (message) {
           const from = message.from;
@@ -56143,7 +56146,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             userText = message.image.caption || "Analisis foto ini";
             if (WHATSAPP_TOKEN) {
               try {
-                const mediaRes = await import_axios.default.get(`https://graph.facebook.com/v19.0/${imageId}`, {
+                const mediaRes = await import_axios.default.get(`https://graph.facebook.com/v20.0/${imageId}`, {
                   headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
                 });
                 const mediaUrl = mediaRes.data.url;
@@ -56161,7 +56164,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const lowerText = userText.toLowerCase();
           const loginAck = await handleWhatsAppLoginConfirmation(from, userText);
           if (loginAck) {
-            await sendWhatsAppDirect(from, loginAck);
+            await sendMetaWhatsappMessage(from, loginAck, incomingPhoneId);
             return res.status(200).send("EVENT_RECEIVED");
           }
           const isWelcomeMessage = lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
@@ -56176,7 +56179,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 Halo! Nomor WhatsApp kamu belum terdaftar.
 
 Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! \u{1F3AF}\u2728
-https://gymbuddygroup.com`
+https://gymbuddygroup.com`,
+              incomingPhoneId
             );
             return res.sendStatus(200);
           }
@@ -56321,7 +56325,7 @@ https://gymbuddygroup.com`
                   const isAmbiguousQuery = !/\b(?:setengah|separuh|seperempat|tiga perempat|dobel|double|1\/2|1\/4|3\/4|g|gr|gram|kcal|kalori|potong|buah|butir|gelas|slice|sdm|sendok|tidak|nggak|gak|tanpa|tawar|batal|hapus)\b/i.test(userText);
                   if (!isAmbiguousQuery) {
                     const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... \u2728" : "Sebentar, gue update dulu hitungannya.";
-                    await sendMetaWhatsappMessage(from, processingMsg);
+                    await sendMetaWhatsappMessage(from, processingMsg, incomingPhoneId);
                   }
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
@@ -56353,7 +56357,7 @@ Silakan ketik nama makanannya dalam teks (misal: *"Nasi Putih + Telur Balado + A
                 const isMia = userData.persona === "mia" || userData.persona === "nikita";
                 const addressing = getValidatedUserAddressing(userData);
                 const processingMsg = isMia ? `Sebentar ya ${addressing.validatedAddress}, aku cek dulu... \u2728` : `Sebentar ${addressing.validatedAddress}. Aku cek dulu.`;
-                await sendMetaWhatsappMessage(from, processingMsg);
+                await sendMetaWhatsappMessage(from, processingMsg, incomingPhoneId);
                 const personaInstruction = isMia ? `PERSONA COACH MIA:
 - Karakter: Ramah, hangat, menyemangati secara halus (gentle encouragement), empatik, suportif, dan edukatif (aku/kamu).
 - Gaya Bicara & Sapaan:
@@ -56585,7 +56589,7 @@ Keluarkan output JSON valid:
           }
           if (responseMessages && responseMessages.length > 0) {
             for (const msgText of responseMessages) {
-              await sendMetaWhatsappMessage(from, msgText);
+              await sendMetaWhatsappMessage(from, msgText, incomingPhoneId);
               if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && process.env.NODE_ENV !== "test") {
                 await new Promise((r) => setTimeout(r, 800));
               }

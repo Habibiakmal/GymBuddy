@@ -838,7 +838,7 @@ const snap = new midtransClient.Snap({
 });
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1193173453889657";
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1232638216597845";
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
 
 // Helper for phone number normalization
@@ -3157,27 +3157,29 @@ ${rowsStr}
 
 
 // Send quick message via Meta Cloud API
-async function sendMetaWhatsappMessage(to: string, bodyText: string) {
+async function sendMetaWhatsappMessage(to: string, bodyText: string, customPhoneId?: string) {
   sentWhatsAppMessages.push({
     to,
     body: bodyText || "",
     timestamp: Date.now()
   });
   if (process.env.NODE_ENV === "test") return;
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
+  const phoneId = customPhoneId || WHATSAPP_PHONE_NUMBER_ID;
+  if (!WHATSAPP_TOKEN || !phoneId) return;
   try {
     const cleanText = sanitizeWhatsAppResponse(bodyText);
     await axios.post(
-      `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v20.0/${phoneId}/messages`,
       {
         messaging_product: "whatsapp",
         to: to,
+        type: "text",
         text: { body: cleanText },
       },
-      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
+      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
     );
-  } catch (err) {
-    console.error("Error sending Meta WhatsApp message:", err);
+  } catch (err: any) {
+    console.error("Error sending Meta WhatsApp message:", err?.response?.data || err?.message || err);
   }
 }
 
@@ -7427,6 +7429,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         const entry = body.entry?.[0];
         const changes = entry?.changes?.[0];
         const value = changes?.value;
+        const incomingPhoneId = value?.metadata?.phone_number_id || WHATSAPP_PHONE_NUMBER_ID;
         const message = value?.messages?.[0];
 
         if (message) {
@@ -7452,10 +7455,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             userText = message.image.caption || "Analisis foto ini";
             if (WHATSAPP_TOKEN) {
               try {
-                const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${imageId}`, {
+                const mediaRes = await axios.get(`https://graph.facebook.com/v20.0/${imageId}`, {
                   headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
                 });
-const mediaUrl = mediaRes.data.url;
+                const mediaUrl = mediaRes.data.url;
                 const imageBinary = await axios.get(mediaUrl, {
                   headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
                   responseType: 'arraybuffer'
@@ -7473,7 +7476,7 @@ const mediaUrl = mediaRes.data.url;
           // Check for pending login confirmation
           const loginAck = await handleWhatsAppLoginConfirmation(from, userText);
           if (loginAck) {
-            await sendWhatsAppDirect(from, loginAck);
+            await sendMetaWhatsappMessage(from, loginAck, incomingPhoneId);
             return res.status(200).send("EVENT_RECEIVED");
           }
 
@@ -7492,7 +7495,8 @@ const mediaUrl = mediaRes.data.url;
               `⚠️ *AKUN BELUM TERDAFTAR DI GYMBUDDY AI*\n-----------------------------\n` +
               `Halo! Nomor WhatsApp kamu belum terdaftar.\n\n` +
               `Silakan isi kuesioner Onboarding di website GymBuddy AI terlebih dahulu untuk memulai! 🎯✨\n` +
-              `https://gymbuddygroup.com`
+              `https://gymbuddygroup.com`,
+              incomingPhoneId
             );
             return res.sendStatus(200);
           }
@@ -7726,7 +7730,7 @@ const mediaUrl = mediaRes.data.url;
                   const isAmbiguousQuery = !/\b(?:setengah|separuh|seperempat|tiga perempat|dobel|double|1\/2|1\/4|3\/4|g|gr|gram|kcal|kalori|potong|buah|butir|gelas|slice|sdm|sendok|tidak|nggak|gak|tanpa|tawar|batal|hapus)\b/i.test(userText);
                   if (!isAmbiguousQuery) {
                     const processingMsg = isMia ? "Sebentar ya, aku perbarui hitungan makanannya... ✨" : "Sebentar, gue update dulu hitungannya.";
-                    await sendMetaWhatsappMessage(from, processingMsg);
+                    await sendMetaWhatsappMessage(from, processingMsg, incomingPhoneId);
                   }
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
@@ -7761,7 +7765,7 @@ const mediaUrl = mediaRes.data.url;
               const isMia = userData.persona === "mia" || userData.persona === "nikita";
               const addressing = getValidatedUserAddressing(userData);
               const processingMsg = isMia ? `Sebentar ya ${addressing.validatedAddress}, aku cek dulu... ✨` : `Sebentar ${addressing.validatedAddress}. Aku cek dulu.`;
-              await sendMetaWhatsappMessage(from, processingMsg);
+              await sendMetaWhatsappMessage(from, processingMsg, incomingPhoneId);
 
               const personaInstruction = isMia
                 ? `PERSONA COACH MIA:
@@ -8012,7 +8016,7 @@ Keluarkan output JSON valid:
 
         if (responseMessages && responseMessages.length > 0) {
           for (const msgText of responseMessages) {
-            await sendMetaWhatsappMessage(from, msgText);
+            await sendMetaWhatsappMessage(from, msgText, incomingPhoneId);
             if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID && process.env.NODE_ENV !== "test") {
               await new Promise(r => setTimeout(r, 800));
             }
