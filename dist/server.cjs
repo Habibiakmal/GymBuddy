@@ -31,6 +31,7 @@ var server_exports = {};
 __export(server_exports, {
   activeRegistrationLocks: () => activeRegistrationLocks,
   addMealLog: () => addMealLog,
+  applyCommercialPlan: () => applyCommercialPlan,
   applyDeterministicCorrection: () => applyDeterministicCorrection,
   applyTargetedMealCorrection: () => applyTargetedMealCorrection,
   authPendingSessions: () => authPendingSessions,
@@ -62,15 +63,21 @@ __export(server_exports, {
   getMealTypeFromTimeWindow: () => getMealTypeFromTimeWindow,
   getMealTypeLabel: () => getMealTypeLabel,
   getPendingSession: () => getPendingSession,
+  getPlanDisplayName: () => getPlanDisplayName,
   getSentWhatsAppMessagesFor: () => getSentWhatsAppMessagesFor,
+  getSubscriptionExpiryState: () => getSubscriptionExpiryState,
+  getUserEntitlements: () => getUserEntitlements,
   getUserPlanCapabilities: () => getUserPlanCapabilities,
   getUserProfile: () => getUserProfile,
+  getUserSubscription: () => getUserSubscription,
+  grantTrialToUser: () => grantTrialToUser,
   handleAdditionalActivityLogging: () => handleAdditionalActivityLogging,
   handleWhatsAppLoginConfirmation: () => handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging: () => handleWorkoutProgressLogging,
   isExistingUserPhone: () => isExistingUserPhone,
   isSmartSnack: () => isSmartSnack,
   isValidIndonesianMobile: () => isValidIndonesianMobile,
+  migrateExistingUsersToLifetime: () => migrateExistingUsersToLifetime,
   normalizePhoneToE164: () => normalizePhoneToE164,
   normalizePhoneToLocal: () => normalizePhoneToLocal,
   pendingWorkoutClarifications: () => pendingWorkoutClarifications,
@@ -86,6 +93,7 @@ __export(server_exports, {
   splitWhatsAppMessage: () => splitWhatsAppMessage,
   startServer: () => startServer,
   updateExistingMealLog: () => updateExistingMealLog,
+  validatePlanAndDuration: () => validatePlanAndDuration,
   validatePlanContext: () => validatePlanContext
 });
 module.exports = __toCommonJS(server_exports);
@@ -47907,32 +47915,492 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
   };
 }
 
+// services/subscriptionEngine.ts
+function getPlanDisplayName(plan, language = "ID") {
+  switch (plan) {
+    case "trial":
+      return language === "EN" ? "Trial Full Access" : "Trial Full Access";
+    case "nutritionist":
+      return "AI Nutritionist";
+    case "workout_coach":
+      return "AI Workout Coach";
+    case "premium":
+      return language === "EN" ? "Premium All-Access" : "Paket Premium (All-Access)";
+    case "lifetime":
+      return language === "EN" ? "Lifetime Access" : "Lifetime Access";
+    default:
+      return "GymBuddy Plan";
+  }
+}
+function validatePlanAndDuration(plan, duration) {
+  const p = plan;
+  const d = duration;
+  if (p === "trial") {
+    return d === "2_days";
+  }
+  if (p === "lifetime") {
+    return d === "lifetime";
+  }
+  if (p === "nutritionist" || p === "workout_coach" || p === "premium") {
+    return ["1_month", "3_months", "6_months", "1_year"].includes(d);
+  }
+  return false;
+}
+function parseNullableDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === "object" && typeof val.toDate === "function") {
+    return val.toDate();
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+function resolveCanonicalPlanString(user) {
+  const rawPlan = String(user?.plan || "").toLowerCase().trim();
+  if (rawPlan === "trial") return "trial";
+  if (rawPlan === "nutritionist") return "nutritionist";
+  if (rawPlan === "workout_coach") return "workout_coach";
+  if (rawPlan === "premium") return "premium";
+  if (rawPlan === "lifetime") return "lifetime";
+  const legacyService = String(
+    user?.activeService || user?.subscription?.activeService || user?.selectedFeature || ""
+  ).toLowerCase().trim();
+  if (legacyService === "nutritionist" || legacyService === "nutrition") {
+    return "nutritionist";
+  }
+  if (legacyService === "coach" || legacyService === "workout") {
+    return "workout_coach";
+  }
+  if (legacyService === "both") {
+    return "premium";
+  }
+  const legacySubPlan = String(user?.subscription?.plan || "").toLowerCase().trim();
+  if (legacySubPlan === "advanced") {
+    if (legacyService === "workout" || legacyService === "coach") return "workout_coach";
+    if (legacyService === "nutrition" || legacyService === "nutritionist") return "nutritionist";
+    return "premium";
+  }
+  if (legacySubPlan === "premium") {
+    return "premium";
+  }
+  return "lifetime";
+}
+function resolveCanonicalDuration(user, plan) {
+  if (plan === "trial") return "2_days";
+  if (plan === "lifetime") return "lifetime";
+  const rawDuration = String(user?.planDuration || user?.subscription?.billingDuration || "").toLowerCase().trim();
+  if (rawDuration === "2_days" || rawDuration === "2d") return "2_days";
+  if (rawDuration === "1_month" || rawDuration === "1m") return "1_month";
+  if (rawDuration === "3_months" || rawDuration === "3m") return "3_months";
+  if (rawDuration === "6_months" || rawDuration === "6m") return "6_months";
+  if (rawDuration === "1_year" || rawDuration === "1y") return "1_year";
+  if (rawDuration === "lifetime") return "lifetime";
+  return "1_month";
+}
+function getUserSubscription(user, now = /* @__PURE__ */ new Date()) {
+  if (!user || typeof user !== "object") {
+    const defaultEntitlements = {
+      canNutrition: false,
+      canWorkout: false,
+      isActive: false,
+      isExpired: true,
+      reason: "no_plan"
+    };
+    return {
+      plan: "trial",
+      planDuration: "2_days",
+      planStartedAt: null,
+      planExpiresAt: null,
+      hasUsedTrial: false,
+      isActive: false,
+      isExpired: true,
+      planDisplayName: getPlanDisplayName("trial"),
+      entitlements: defaultEntitlements
+    };
+  }
+  const plan = resolveCanonicalPlanString(user);
+  const planDuration = resolveCanonicalDuration(user, plan);
+  const rawStartedAt = user.planStartedAt || user.subscription?.startedAt || user.createdAt;
+  const startedAtDate = parseNullableDate(rawStartedAt);
+  const planStartedAt = startedAtDate ? startedAtDate.toISOString() : null;
+  let planExpiresAt = null;
+  let expiresAtDate = null;
+  if (plan === "lifetime") {
+    planExpiresAt = null;
+    expiresAtDate = null;
+  } else {
+    const rawExpiresAt = user.planExpiresAt || user.subscription?.expiresAt;
+    expiresAtDate = parseNullableDate(rawExpiresAt);
+    planExpiresAt = expiresAtDate ? expiresAtDate.toISOString() : null;
+  }
+  const hasUsedTrial = Boolean(user.hasUsedTrial || user.trialUsed || plan === "trial" || user.trialStartedAt);
+  let isActive = false;
+  let isExpired = false;
+  let entitlementReason = "active";
+  let daysRemaining;
+  let hoursRemaining;
+  const hasExplicitCanonicalPlan = Boolean(user.plan && ["trial", "nutritionist", "workout_coach", "premium", "lifetime"].includes(String(user.plan).toLowerCase().trim()));
+  if (plan === "lifetime") {
+    isActive = true;
+    isExpired = false;
+    entitlementReason = "active";
+  } else {
+    if (!expiresAtDate) {
+      if (hasExplicitCanonicalPlan) {
+        isActive = false;
+        isExpired = true;
+        entitlementReason = "invalid_config";
+      } else {
+        isActive = true;
+        isExpired = false;
+        entitlementReason = "active";
+      }
+    } else {
+      const diffMs = expiresAtDate.getTime() - now.getTime();
+      if (diffMs > 0) {
+        isActive = true;
+        isExpired = false;
+        entitlementReason = "active";
+        hoursRemaining = Math.max(0, Math.floor(diffMs / (1e3 * 60 * 60)));
+        daysRemaining = Math.max(0, Math.floor(diffMs / (1e3 * 60 * 60 * 24)));
+      } else {
+        isActive = false;
+        isExpired = true;
+        entitlementReason = "expired";
+        hoursRemaining = 0;
+        daysRemaining = 0;
+      }
+    }
+  }
+  let canNutrition = false;
+  let canWorkout = false;
+  switch (plan) {
+    case "trial":
+      canNutrition = true;
+      canWorkout = true;
+      break;
+    case "nutritionist":
+      canNutrition = true;
+      canWorkout = false;
+      break;
+    case "workout_coach":
+      canNutrition = false;
+      canWorkout = true;
+      break;
+    case "premium":
+      canNutrition = true;
+      canWorkout = true;
+      break;
+    case "lifetime":
+      canNutrition = true;
+      canWorkout = true;
+      break;
+  }
+  if (!isActive) {
+    canNutrition = false;
+    canWorkout = false;
+  }
+  const entitlements = {
+    canNutrition,
+    canWorkout,
+    isActive,
+    isExpired,
+    reason: entitlementReason
+  };
+  return {
+    plan,
+    planDuration,
+    planStartedAt,
+    planExpiresAt,
+    hasUsedTrial,
+    isActive,
+    isExpired,
+    planDisplayName: getPlanDisplayName(plan),
+    entitlements,
+    daysRemaining,
+    hoursRemaining
+  };
+}
+function getUserEntitlements(user, now = /* @__PURE__ */ new Date()) {
+  return getUserSubscription(user, now).entitlements;
+}
+function getSubscriptionExpiryState(user, now = /* @__PURE__ */ new Date()) {
+  const sub = getUserSubscription(user, now);
+  if (sub.plan === "lifetime") {
+    return { eligibleForNotification: false };
+  }
+  if (!sub.planExpiresAt) {
+    return { eligibleForNotification: false };
+  }
+  const expiresAt = new Date(sub.planExpiresAt);
+  const diffMs = expiresAt.getTime() - now.getTime();
+  const diffHours = diffMs / (1e3 * 60 * 60);
+  const diffDays = diffMs / (1e3 * 60 * 60 * 24);
+  const formattedExpiryWIB = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(expiresAt);
+  if (diffMs <= 0) {
+    if (sub.plan === "trial") {
+      return {
+        eligibleForNotification: true,
+        notificationType: "expired",
+        messageTextID: `\u{1F512} *TRIAL FULL ACCESS SUDAH BERAKHIR*
+-----------------------------
+Akses 2 hari uji coba kamu telah selesai pada ${formattedExpiryWIB}.
+
+Untuk melanjutkan konsultasi nutrisi & bimbingan latihan di WhatsApp, silakan pilih paket yang sesuai dengan kebutuhanmu di website ya! \u2728`,
+        messageTextEN: `\u{1F512} *TRIAL FULL ACCESS HAS ENDED*
+-----------------------------
+Your 2-day trial ended on ${formattedExpiryWIB}.
+
+To continue WhatsApp coaching and food photo tracking, choose your preferred plan on the website! \u2728`
+      };
+    } else {
+      const planName2 = getPlanDisplayName(sub.plan, "ID");
+      return {
+        eligibleForNotification: true,
+        notificationType: "expired",
+        messageTextID: `\u{1F512} *SUBSCRIPTION ${planName2.toUpperCase()} SUDAH BERAKHIR*
+-----------------------------
+Masa aktif paket ${planName2} kamu telah berakhir pada ${formattedExpiryWIB}.
+
+Yuk perpanjang paketmu sekarang agar progres kebugaran dan target defisitmu tetap terjaga konsisten! \u{1F4AA}`,
+        messageTextEN: `\u{1F512} *${getPlanDisplayName(sub.plan, "EN").toUpperCase()} SUBSCRIPTION EXPIRED*
+-----------------------------
+Your ${getPlanDisplayName(sub.plan, "EN")} subscription ended on ${formattedExpiryWIB}.
+
+Renew your plan today to keep your fitness transformation on track! \u{1F4AA}`
+      };
+    }
+  }
+  if (sub.plan === "trial") {
+    if (diffHours <= 3) {
+      return {
+        eligibleForNotification: true,
+        notificationType: "trial_2_hours",
+        messageTextID: `\u26A0\uFE0F *TRIAL FULL ACCESS AKAN SEGERA BERAKHIR*
+-----------------------------
+Akses seluruh fitur GymBuddy kamu akan berakhir dalam beberapa jam (${formattedExpiryWIB}).
+
+Pilih paket langganan sekarang untuk melanjutkan bimbingan coach AI tanpa terputus! \u{1F680}`,
+        messageTextEN: `\u26A0\uFE0F *TRIAL FULL ACCESS ENDING SOON*
+-----------------------------
+Your full trial access will expire in a few hours (${formattedExpiryWIB}).
+
+Choose your plan now to ensure uninterrupted AI coaching! \u{1F680}`
+      };
+    }
+    if (diffHours <= 26 && diffHours >= 20) {
+      return {
+        eligibleForNotification: true,
+        notificationType: "trial_1_day",
+        messageTextID: `\u{1F381} *TRIAL FULL ACCESS BERAKHIR BESOK*
+-----------------------------
+Kamu masih punya akses ke seluruh fitur AI Nutritionist & AI Workout Coach sampai besok (${formattedExpiryWIB}).
+
+Maksimalkan uji coba hari keduamu untuk cek foto makanan atau konsultasi latihan! \u2728`,
+        messageTextEN: `\u{1F381} *TRIAL FULL ACCESS ENDING TOMORROW*
+-----------------------------
+You have full access to AI Nutritionist & AI Workout Coach until tomorrow (${formattedExpiryWIB}).
+
+Make the most of your trial today with food photo logs and workout guidance! \u2728`
+      };
+    }
+    return { eligibleForNotification: false };
+  }
+  const planName = getPlanDisplayName(sub.plan, "ID");
+  if (diffDays <= 1.5 && diffDays > 0) {
+    return {
+      eligibleForNotification: true,
+      notificationType: "1_day",
+      messageTextID: `\u23F0 *PENGINGAT: PAKET ${planName.toUpperCase()} BERAKHIR BESOK*
+-----------------------------
+Masa aktif paket ${planName} kamu akan berakhir besok pada ${formattedExpiryWIB}.
+
+Perpanjang paket sekarang agar bimbingan harianmu di WhatsApp tetap aktif tanpa jeda! \u2728`,
+      messageTextEN: `\u23F0 *REMINDER: ${getPlanDisplayName(sub.plan, "EN").toUpperCase()} EXPIRES TOMORROW*
+-----------------------------
+Your ${getPlanDisplayName(sub.plan, "EN")} plan expires tomorrow at ${formattedExpiryWIB}.
+
+Renew today to keep your daily coaching running without interruption! \u2728`
+    };
+  }
+  if (diffDays <= 3.5 && diffDays > 2.5) {
+    return {
+      eligibleForNotification: true,
+      notificationType: "3_days",
+      messageTextID: `\u{1F4C5} *PENGINGAT: 3 HARI LAGI PAKET ${planName.toUpperCase()} BERAKHIR*
+-----------------------------
+Paket ${planName} kamu akan berakhir dalam 3 hari (${formattedExpiryWIB}).
+
+Yuk periksa dashboard atau hubungi kami jika ingin beralih ke paket All-Access! \u{1F31F}`,
+      messageTextEN: `\u{1F4C5} *REMINDER: 3 DAYS LEFT ON ${getPlanDisplayName(sub.plan, "EN").toUpperCase()}*
+-----------------------------
+Your ${getPlanDisplayName(sub.plan, "EN")} plan will expire in 3 days (${formattedExpiryWIB}).
+
+Check the dashboard or message us if you wish to upgrade to All-Access! \u{1F31F}`
+    };
+  }
+  if (diffDays <= 7.5 && diffDays > 6.5) {
+    return {
+      eligibleForNotification: true,
+      notificationType: "7_days",
+      messageTextID: `\u{1F514} *PENGINGAT: 7 HARI LAGI PAKET ${planName.toUpperCase()} BERAKHIR*
+-----------------------------
+Paket ${planName} kamu aktif sampai 7 hari ke depan (${formattedExpiryWIB}).
+
+Terima kasih telah konsisten berproses bersama GymBuddy! \u{1F4AA}`,
+      messageTextEN: `\u{1F514} *REMINDER: 7 DAYS LEFT ON ${getPlanDisplayName(sub.plan, "EN").toUpperCase()}*
+-----------------------------
+Your ${getPlanDisplayName(sub.plan, "EN")} plan is active for 7 more days (${formattedExpiryWIB}).
+
+Thank you for staying consistent with GymBuddy! \u{1F4AA}`
+    };
+  }
+  return { eligibleForNotification: false };
+}
+function grantTrialToUser(user, now = /* @__PURE__ */ new Date()) {
+  if (!user || typeof user !== "object") {
+    return { success: false, user, error: "Invalid user object" };
+  }
+  if (user.hasUsedTrial || user.trialUsed || user.trialStartedAt) {
+    return {
+      success: false,
+      user,
+      error: "User has already used the 2-day free trial."
+    };
+  }
+  const startedAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1e3).toISOString();
+  const updated = {
+    ...user,
+    plan: "trial",
+    planDuration: "2_days",
+    planStartedAt: startedAt,
+    planExpiresAt: expiresAt,
+    hasUsedTrial: true,
+    trialStartedAt: startedAt,
+    trialExpiresAt: expiresAt,
+    updatedAt: now.toISOString()
+  };
+  return {
+    success: true,
+    user: updated
+  };
+}
+function applyCommercialPlan(user, plan, duration, now = /* @__PURE__ */ new Date()) {
+  if (!validatePlanAndDuration(plan, duration)) {
+    return {
+      success: false,
+      user,
+      error: `Invalid plan and duration combination: ${plan} + ${duration}`
+    };
+  }
+  let planExpiresAt = null;
+  const startedAt = now.toISOString();
+  if (plan === "lifetime") {
+    planExpiresAt = null;
+  } else {
+    let daysToAdd = 30;
+    if (duration === "3_months") daysToAdd = 90;
+    else if (duration === "6_months") daysToAdd = 180;
+    else if (duration === "1_year") daysToAdd = 365;
+    planExpiresAt = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1e3).toISOString();
+  }
+  const updated = {
+    ...user,
+    plan,
+    planDuration: duration,
+    planStartedAt: startedAt,
+    planExpiresAt,
+    hasUsedTrial: true,
+    updatedAt: now.toISOString()
+  };
+  return {
+    success: true,
+    user: updated
+  };
+}
+async function migrateExistingUsersToLifetime(inMemoryUsers, firestoreUsersLoader, firestoreUserSaver) {
+  let migratedCount = 0;
+  let alreadyLifetimeCount = 0;
+  const processedKeys = /* @__PURE__ */ new Set();
+  for (const [key, user] of Object.entries(inMemoryUsers || {})) {
+    if (!user || typeof user !== "object" || key === "latest_onboarding") continue;
+    const normPhone = user.normalizedPhone || user.phone || key;
+    if (processedKeys.has(normPhone)) continue;
+    processedKeys.add(normPhone);
+    const isAlreadyLifetime = user.plan === "lifetime" && user.planDuration === "lifetime" && (user.planExpiresAt === null || user.planExpiresAt === void 0);
+    if (isAlreadyLifetime) {
+      alreadyLifetimeCount++;
+      continue;
+    }
+    user.plan = "lifetime";
+    user.planDuration = "lifetime";
+    user.planExpiresAt = null;
+    user.hasUsedTrial = true;
+    if (!user.planStartedAt) {
+      user.planStartedAt = user.createdAt ? new Date(user.createdAt).toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+    }
+    user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    migratedCount++;
+  }
+  if (typeof firestoreUsersLoader === "function") {
+    try {
+      const fsUsers = await firestoreUsersLoader();
+      if (Array.isArray(fsUsers)) {
+        for (const user of fsUsers) {
+          if (!user || typeof user !== "object") continue;
+          const normPhone = user.normalizedPhone || user.phone || user.userId;
+          if (!normPhone || processedKeys.has(normPhone)) continue;
+          processedKeys.add(normPhone);
+          const isAlreadyLifetime = user.plan === "lifetime" && user.planDuration === "lifetime" && (user.planExpiresAt === null || user.planExpiresAt === void 0);
+          if (isAlreadyLifetime) {
+            alreadyLifetimeCount++;
+            continue;
+          }
+          user.plan = "lifetime";
+          user.planDuration = "lifetime";
+          user.planExpiresAt = null;
+          user.hasUsedTrial = true;
+          if (!user.planStartedAt) {
+            user.planStartedAt = user.createdAt ? new Date(user.createdAt).toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+          }
+          user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          if (typeof firestoreUserSaver === "function") {
+            await firestoreUserSaver(user).catch((err) => {
+              console.warn("[Migration] Firestore user save error:", err?.message || err);
+            });
+          }
+          migratedCount++;
+        }
+      }
+    } catch (e) {
+      console.warn("[Migration] Firestore load warning:", e?.message || e);
+    }
+  }
+  const totalUsers = processedKeys.size;
+  return {
+    migratedCount,
+    alreadyLifetimeCount,
+    totalUsers
+  };
+}
+
 // services/planContextEngine.ts
 function getUserPlanCapabilities(userData) {
-  const rawService = String(
-    userData?.activeService || userData?.subscription?.activeService || userData?.selectedFeature || userData?.plan || "both"
-  ).toLowerCase().trim();
-  if (rawService === "nutritionist" || rawService === "nutrition") {
-    return {
-      activePlan: "nutritionist",
-      canNutrition: true,
-      canWorkout: false,
-      planDisplayName: "AI Nutritionist"
-    };
-  }
-  if (rawService === "workout" || rawService === "coach") {
-    return {
-      activePlan: "workout",
-      canNutrition: false,
-      canWorkout: true,
-      planDisplayName: "AI Workout Coach"
-    };
-  }
+  const sub = getUserSubscription(userData);
+  const activePlan = sub.plan === "nutritionist" ? "nutritionist" : sub.plan === "workout_coach" ? "workout" : "both";
   return {
-    activePlan: "both",
-    canNutrition: true,
-    canWorkout: true,
-    planDisplayName: "All-Access Premium"
+    activePlan,
+    canNutrition: sub.entitlements.canNutrition,
+    canWorkout: sub.entitlements.canWorkout,
+    planDisplayName: sub.planDisplayName,
+    isExpired: sub.isExpired,
+    isActive: sub.isActive,
+    canonicalPlan: sub.plan
   };
 }
 var CASUAL_GREETING_REGEX = /^(?:halo|hai|hey|hei|pagi|selamat\s+(?:pagi|siang|sore|malam)|assalamu['’]?alaikum|salam|terima\s*kasih|makasih|thanks|thank\s*you|ok|oke|siap|sip|baik|iya|yoi|yo|mantap|keren|paham|mengerti|nice|good)(?:\s+(?:coach|max|mia|min|gymbuddy|bro|kak))?[\s!.]*$/i;
@@ -48103,6 +48571,16 @@ function validatePlanContext(userText, hasImage, userData) {
       decision: "PROCESS_CASUAL",
       inputCategory: category,
       canProceed: true
+    };
+  }
+  if (capabilities.isExpired) {
+    const isTrial = capabilities.canonicalPlan === "trial";
+    const expiredMsg = isTrial ? isMax ? `Trial Full Access 2 hari lo di GymBuddy sudah berakhir nih, ${validatedAddr}! Buat lanjut tracking makanan, hitung kalori foto, dan jadwal workout via WhatsApp, yuk pilih paket lo di website ya! \u{1F680}` : `Trial Full Access 2 hari kamu di GymBuddy sudah berakhir ya, ${validatedAddr} \u2728 Untuk melanjutkan pencatatan nutrisi foto dan bimbingan latihan di WhatsApp, silakan pilih paket yang sesuai di website GymBuddy ya! \u{1F33F}` : isMax ? `Masa aktif paket ${capabilities.planDisplayName} lo sudah berakhir nih, ${validatedAddr}! Buat lanjut konsultasi dan tracking di WhatsApp, yuk perpanjang paket lo di website ya! \u{1F4AA}` : `Masa aktif paket ${capabilities.planDisplayName} kamu sudah berakhir ya, ${validatedAddr} \u2728 Untuk melanjutkan bimbingan dan pencatatan di WhatsApp, yuk perpanjang paket kamu di website GymBuddy ya! \u{1F33F}`;
+    return {
+      decision: "REDIRECT_EXPIRED",
+      inputCategory: category,
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(expiredMsg, userData)
     };
   }
   if (category === "MIXED") {
@@ -49449,7 +49927,7 @@ async function saveUserDocument(doc) {
     }
   }
 }
-async function getUserSubscription(userIdOrPhone) {
+async function getUserSubscription2(userIdOrPhone) {
   const clean2 = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
@@ -50241,8 +50719,8 @@ var snap = new import_midtrans_client.default.Snap({
   serverKey: process.env.MIDTRANS_SERVER_KEY || "dummy_server_key",
   clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || "dummy_client_key"
 });
-var WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-var WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+var WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
+var WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1193173453889657";
 var VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
 function normalizePhone(phone) {
   if (!phone) return "";
@@ -50530,6 +51008,21 @@ async function initDb() {
     const loaded = await loadFromFirestore();
     if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
+    try {
+      const migrationRes = await migrateExistingUsersToLifetime(
+        dbData.users,
+        getAllUsersFromFirestore,
+        async (u) => {
+          await saveUserDocument(u);
+        }
+      );
+      if (migrationRes.migratedCount > 0) {
+        saveDb();
+        console.log(`[Subscription Engine] Idempotent migration: Migrated ${migrationRes.migratedCount} existing users to Lifetime Access \u2705 (Total users: ${migrationRes.totalUsers})`);
+      }
+    } catch (migErr) {
+      console.warn("[Subscription Engine] Migration note on boot:", migErr?.message || migErr);
+    }
   } catch (err) {
     console.warn("[Firestore] Boot sync warning:", err);
   }
@@ -51003,6 +51496,34 @@ Yuk lakukan latihan ringan atau tuntaskan set kamu biar goal *${goalTitle}* cepa
             await sendWhatsAppDirect(norm, msg);
           }
         }
+        if (currentTimeStr === "10:00" && user.lastSubExpiryNoticeDate !== todayDateStr) {
+          const sub = getUserSubscription(user);
+          if (sub.plan === "trial" && sub.isActive && sub.hoursRemaining <= 24 && sub.hoursRemaining > 0) {
+            user.lastSubExpiryNoticeDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const msg = `\u23F3 *PENGINGAT MASA COBA GRATIS GYMBUDDY*
+-----------------------------
+Halo *${(user.name || "Member").toUpperCase()}*! Masa Coba Gratis 2 Hari kamu tersisa *${Math.max(1, Math.round(sub.hoursRemaining))} jam lagi*.
+
+Tetap lanjutkan progres latihan dan nutrisi harian kamu tanpa jeda dengan langganan paket resmi GymBuddy:
+\u2022 Advanced AI Nutritionist (Rp 89.000/bln)
+\u2022 Advanced AI Workout Coach (Rp 89.000/bln)
+\u2022 Premium All-Access (Rp 149.000/bln)
+
+Kunjungi aplikasi GymBuddy untuk memilih paket terbaikmu! \u{1F525}`;
+            await sendWhatsAppDirect(norm, msg);
+          } else if (sub.isExpired && user.lastSubExpiredAlertSent !== true) {
+            user.lastSubExpiredAlertSent = true;
+            user.lastSubExpiryNoticeDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const msg = `\u26A0\uFE0F *MASA AKTIF PAKET GYMBUDDY BERAKHIR*
+-----------------------------
+Halo *${(user.name || "Member").toUpperCase()}*! Masa aktif ${sub.planDisplayName} kamu telah berakhir.
+
+Aktifkan kembali langganan kamu di aplikasi GymBuddy untuk membuka kembali akses fitur bimbingan AI & pencatatan harian! \u{1F4AA}`;
+            await sendWhatsAppDirect(norm, msg);
+          }
+        }
       }
     } catch (schedErr) {
       console.error("[Scheduler] Error in background check cycle:", schedErr);
@@ -51335,10 +51856,10 @@ function calculateUserData(profile) {
   const activeService = profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
   const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
   const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0 ? profile.workoutSchedule : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
-  const subscription = profile?.subscription || {
-    plan: profile?.plan || "advanced",
-    activeService,
-    status: "active"
+  const sub = getUserSubscription(profile);
+  const subscription = {
+    ...sub,
+    status: sub.isActive ? sub.plan === "trial" ? "trial" : "active" : "expired"
   };
   const nickname = (profile?.nickname || name.trim().split(/\s+/)[0] || "Member").trim();
   const addressing = getValidatedUserAddressing({
@@ -51397,7 +51918,16 @@ function calculateUserData(profile) {
     activeService,
     hasReceivedWelcome,
     workoutSchedule,
-    subscription
+    subscription,
+    plan: sub.plan,
+    planDuration: sub.planDuration,
+    planStartedAt: sub.planStartedAt,
+    planExpiresAt: sub.planExpiresAt,
+    hasUsedTrial: sub.hasUsedTrial,
+    isExpired: sub.isExpired,
+    isActive: sub.isActive,
+    planDisplayName: sub.planDisplayName,
+    entitlements: sub.entitlements
   };
 }
 function deduplicateMealLogs(logs) {
@@ -53696,7 +54226,7 @@ async function createExpressApp(options = {}) {
       if (!user) {
         return res.status(404).json({ success: false, error: "User not found" });
       }
-      const sub = await getUserSubscription(phone);
+      const sub = getUserSubscription(user);
       const calculated = calculateUserData(user);
       res.json({ success: true, user: { ...user, subscription: sub, calculated } });
     } catch (e) {
@@ -53734,7 +54264,7 @@ async function createExpressApp(options = {}) {
         }
       }
       const localPhone = normalizePhoneToLocal(canonicalPhone);
-      const finalProfile = {
+      let finalProfile = {
         ...profile,
         normalizedPhone: canonicalPhone,
         phone: canonicalPhone,
@@ -53742,6 +54272,13 @@ async function createExpressApp(options = {}) {
         onboardingCompleted: true,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
+      if (!finalProfile.hasUsedTrial && !finalProfile.trialStartedAt) {
+        const trialGrant = grantTrialToUser(finalProfile);
+        if (trialGrant.success) {
+          finalProfile = trialGrant.user;
+          console.log(`[Trial Engine] Granted 2-Day Full Access Trial to new user ${canonicalPhone} (Expires: ${finalProfile.planExpiresAt}) \u2705`);
+        }
+      }
       const saved = saveUserProfile(canonicalPhone, finalProfile);
       saveUserProfile(localPhone, finalProfile);
       saveDb();
@@ -53785,6 +54322,70 @@ async function createExpressApp(options = {}) {
       history,
       streak,
       waterCups
+    });
+  });
+  app.get("/api/user/:phone/subscription", async (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const user = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found in database" });
+    }
+    const sub = getUserSubscription(user);
+    res.json({
+      success: true,
+      phone,
+      plan: sub.plan,
+      planDuration: sub.planDuration,
+      planStartedAt: sub.planStartedAt,
+      planExpiresAt: sub.planExpiresAt,
+      hasUsedTrial: sub.hasUsedTrial,
+      isActive: sub.isActive,
+      isExpired: sub.isExpired,
+      planDisplayName: sub.planDisplayName,
+      entitlements: sub.entitlements,
+      subscription: sub,
+      expiry: {
+        planExpiresAt: sub.planExpiresAt,
+        daysRemaining: sub.daysRemaining,
+        hoursRemaining: sub.hoursRemaining,
+        isActive: sub.isActive,
+        isExpired: sub.isExpired
+      }
+    });
+  });
+  app.get("/api/subscription/me", requireAuthMiddleware, async (req, res) => {
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const normPhone = normalizePhone(phone);
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone;
+    const user = getUserProfile(normPhone) || getUserProfile(altPhone) || await findUserByPhoneOrId(normPhone);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const sub = getUserSubscription(user);
+    res.json({
+      success: true,
+      phone: normPhone,
+      plan: sub.plan,
+      planDuration: sub.planDuration,
+      planStartedAt: sub.planStartedAt,
+      planExpiresAt: sub.planExpiresAt,
+      hasUsedTrial: sub.hasUsedTrial,
+      isActive: sub.isActive,
+      isExpired: sub.isExpired,
+      planDisplayName: sub.planDisplayName,
+      entitlements: sub.entitlements,
+      subscription: sub,
+      expiry: {
+        planExpiresAt: sub.planExpiresAt,
+        daysRemaining: sub.daysRemaining,
+        hoursRemaining: sub.hoursRemaining,
+        isActive: sub.isActive,
+        isExpired: sub.isExpired
+      }
     });
   });
   const handleUpdateProfile = async (req, res) => {
@@ -54875,6 +55476,20 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     if (!meal || !meal.foodName) {
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
+    const user = getUserProfile(phone) || getUserProfile(canonicalPhone) || await findUserByPhoneOrId(phone);
+    if (user) {
+      const sub = getUserSubscription(user);
+      if (!sub.isActive || !sub.entitlements.canNutrition) {
+        return res.status(403).json({
+          success: false,
+          error: "subscription_required",
+          reason: sub.entitlements.reason,
+          plan: sub.plan,
+          isExpired: sub.isExpired,
+          message: sub.isExpired ? `Masa aktif paket ${sub.planDisplayName} kamu telah berakhir.` : `Paket ${sub.planDisplayName} kamu tidak mencakup fitur pencatatan nutrisi.`
+        });
+      }
+    }
     const incomingCal = Number(meal.calories) || 0;
     const isWater = isPureWaterInput(meal.foodName);
     const isPureWater = isWater && incomingCal === 0;
@@ -55138,6 +55753,17 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const user = getUserProfile(phone);
     if (!user) {
       return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const sub = getUserSubscription(user);
+    if (!sub.isActive || !sub.entitlements.canWorkout) {
+      return res.status(403).json({
+        success: false,
+        error: "subscription_required",
+        reason: sub.entitlements.reason,
+        plan: sub.plan,
+        isExpired: sub.isExpired,
+        message: sub.isExpired ? `Masa aktif paket ${sub.planDisplayName} kamu telah berakhir.` : `Paket ${sub.planDisplayName} kamu tidak mencakup fitur jadwal latihan.`
+      });
     }
     const { schedule } = req.body;
     if (Array.isArray(schedule)) {
@@ -55462,7 +56088,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         console.log(`[Midtrans] Activated premium subscription in MongoDB for ${normPhone} \u2705`);
       } else if (isFailed && phone) {
         const normPhone = normalizePhone(phone);
-        const sub = await getUserSubscription(normPhone);
+        const sub = await getUserSubscription2(normPhone);
         if (sub) {
           sub.status = "expired";
           await saveUserSubscription(sub);
@@ -57041,6 +57667,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
 0 && (module.exports = {
   activeRegistrationLocks,
   addMealLog,
+  applyCommercialPlan,
   applyDeterministicCorrection,
   applyTargetedMealCorrection,
   authPendingSessions,
@@ -57072,15 +57699,21 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   getMealTypeFromTimeWindow,
   getMealTypeLabel,
   getPendingSession,
+  getPlanDisplayName,
   getSentWhatsAppMessagesFor,
+  getSubscriptionExpiryState,
+  getUserEntitlements,
   getUserPlanCapabilities,
   getUserProfile,
+  getUserSubscription,
+  grantTrialToUser,
   handleAdditionalActivityLogging,
   handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging,
   isExistingUserPhone,
   isSmartSnack,
   isValidIndonesianMobile,
+  migrateExistingUsersToLifetime,
   normalizePhoneToE164,
   normalizePhoneToLocal,
   pendingWorkoutClarifications,
@@ -57096,6 +57729,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   splitWhatsAppMessage,
   startServer,
   updateExistingMealLog,
+  validatePlanAndDuration,
   validatePlanContext
 });
 //# sourceMappingURL=server.cjs.map

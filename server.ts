@@ -95,6 +95,20 @@ import {
   getLegacyPhoneVariations,
   isValidIndonesianMobile
 } from "./services/phoneNormalizer";
+import {
+  getUserSubscription,
+  getUserEntitlements,
+  getSubscriptionExpiryState,
+  grantTrialToUser,
+  applyCommercialPlan,
+  validatePlanAndDuration,
+  getPlanDisplayName,
+  migrateExistingUsersToLifetime,
+  type CanonicalPlan,
+  type CanonicalPlanDuration,
+  type ResolvedSubscription,
+  type PlanEntitlements
+} from "./services/subscriptionEngine";
 
 export {
   getUserPlanCapabilities,
@@ -114,14 +128,26 @@ export {
   normalizePhoneToE164,
   normalizePhoneToLocal,
   getLegacyPhoneVariations,
-  isValidIndonesianMobile
+  isValidIndonesianMobile,
+  getUserSubscription,
+  getUserEntitlements,
+  getSubscriptionExpiryState,
+  grantTrialToUser,
+  applyCommercialPlan,
+  validatePlanAndDuration,
+  getPlanDisplayName,
+  migrateExistingUsersToLifetime
 };
 export type {
   UserPlanCapabilities,
   PlanValidationResult,
   MealComponentItem,
   MealCorrectionResult,
-  MealType
+  MealType,
+  CanonicalPlan,
+  CanonicalPlanDuration,
+  ResolvedSubscription,
+  PlanEntitlements
 };
 import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/cardGenerator";
 
@@ -604,8 +630,8 @@ import {
   findUserByPhoneOrId,
   saveUserDocument,
   deleteUserDocument,
-  getUserSubscription,
-  saveUserSubscription,
+  getUserSubscription as getFirestoreSubscription,
+  saveUserSubscription as saveFirestoreSubscription,
   getFoodLogsForDate,
   insertFoodLog,
   deleteFoodLog,
@@ -811,8 +837,8 @@ const snap = new midtransClient.Snap({
   clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || 'dummy_client_key'
 });
 
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1193173453889657";
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
 
 // Helper for phone number normalization
@@ -1290,6 +1316,21 @@ async function initDb(): Promise<void> {
     const loaded = await loadFromFirestore();
     if (!loaded) console.log("[Firestore] No existing cloud snapshot found");
     purgeLegacyMockLogs();
+
+    // Canonical Subscription Migration: Idempotently guarantee all existing users receive Lifetime Access
+    try {
+      const migrationRes = await migrateExistingUsersToLifetime(
+        dbData.users,
+        getAllUsersFromFirestore,
+        async (u) => { await saveUserDocument(u); }
+      );
+      if (migrationRes.migratedCount > 0) {
+        saveDb();
+        console.log(`[Subscription Engine] Idempotent migration: Migrated ${migrationRes.migratedCount} existing users to Lifetime Access ✅ (Total users: ${migrationRes.totalUsers})`);
+      }
+    } catch (migErr: any) {
+      console.warn("[Subscription Engine] Migration note on boot:", migErr?.message || migErr);
+    }
   } catch (err) {
     console.warn("[Firestore] Boot sync warning:", err);
   }
@@ -1863,6 +1904,33 @@ function initReminderScheduler() {
             await sendWhatsAppDirect(norm, msg);
           }
         }
+
+        // 4. Automated Subscription & Trial Expiry Check (Run at 10:00 WIB daily)
+        if (currentTimeStr === "10:00" && user.lastSubExpiryNoticeDate !== todayDateStr) {
+          const sub = getUserSubscription(user);
+          if (sub.plan === "trial" && sub.isActive && sub.hoursRemaining <= 24 && sub.hoursRemaining > 0) {
+            user.lastSubExpiryNoticeDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const msg =
+              `⏳ *PENGINGAT MASA COBA GRATIS GYMBUDDY*\n-----------------------------\n` +
+              `Halo *${(user.name || "Member").toUpperCase()}*! Masa Coba Gratis 2 Hari kamu tersisa *${Math.max(1, Math.round(sub.hoursRemaining))} jam lagi*.\n\n` +
+              `Tetap lanjutkan progres latihan dan nutrisi harian kamu tanpa jeda dengan langganan paket resmi GymBuddy:\n` +
+              `• Advanced AI Nutritionist (Rp 89.000/bln)\n` +
+              `• Advanced AI Workout Coach (Rp 89.000/bln)\n` +
+              `• Premium All-Access (Rp 149.000/bln)\n\n` +
+              `Kunjungi aplikasi GymBuddy untuk memilih paket terbaikmu! 🔥`;
+            await sendWhatsAppDirect(norm, msg);
+          } else if (sub.isExpired && user.lastSubExpiredAlertSent !== true) {
+            user.lastSubExpiredAlertSent = true;
+            user.lastSubExpiryNoticeDate = todayDateStr;
+            saveUserProfile(norm, user);
+            const msg =
+              `⚠️ *MASA AKTIF PAKET GYMBUDDY BERAKHIR*\n-----------------------------\n` +
+              `Halo *${(user.name || "Member").toUpperCase()}*! Masa aktif ${sub.planDisplayName} kamu telah berakhir.\n\n` +
+              `Aktifkan kembali langganan kamu di aplikasi GymBuddy untuk membuka kembali akses fitur bimbingan AI & pencatatan harian! 💪`;
+            await sendWhatsAppDirect(norm, msg);
+          }
+        }
       }
     } catch (schedErr) {
       console.error("[Scheduler] Error in background check cycle:", schedErr);
@@ -2279,10 +2347,10 @@ export function calculateUserData(profile: any) {
     ? profile.workoutSchedule
     : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
 
-  const subscription = profile?.subscription || {
-    plan: profile?.plan || "advanced",
-    activeService,
-    status: "active"
+  const sub = getUserSubscription(profile);
+  const subscription = {
+    ...sub,
+    status: sub.isActive ? (sub.plan === "trial" ? "trial" : "active") : "expired"
   };
 
   const nickname = (profile?.nickname || name.trim().split(/\s+/)[0] || "Member").trim();
@@ -2343,7 +2411,16 @@ export function calculateUserData(profile: any) {
     activeService,
     hasReceivedWelcome,
     workoutSchedule,
-    subscription
+    subscription,
+    plan: sub.plan,
+    planDuration: sub.planDuration,
+    planStartedAt: sub.planStartedAt,
+    planExpiresAt: sub.planExpiresAt,
+    hasUsedTrial: sub.hasUsedTrial,
+    isExpired: sub.isExpired,
+    isActive: sub.isActive,
+    planDisplayName: sub.planDisplayName,
+    entitlements: sub.entitlements
   };
 }
 
@@ -5144,7 +5221,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       if (!user) {
         return res.status(404).json({ success: false, error: "User not found" });
       }
-      const sub = await getUserSubscription(phone);
+      const sub = getUserSubscription(user);
       const calculated = calculateUserData(user);
       res.json({ success: true, user: { ...user, subscription: sub, calculated } });
     } catch (e: any) {
@@ -5190,7 +5267,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       }
 
       const localPhone = normalizePhoneToLocal(canonicalPhone);
-      const finalProfile = {
+      let finalProfile = {
         ...profile,
         normalizedPhone: canonicalPhone,
         phone: canonicalPhone,
@@ -5198,6 +5275,15 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         onboardingCompleted: true,
         updatedAt: new Date().toISOString()
       };
+
+      // Automatically grant 2-Day Full Access Trial to new user upon onboarding
+      if (!finalProfile.hasUsedTrial && !finalProfile.trialStartedAt) {
+        const trialGrant = grantTrialToUser(finalProfile);
+        if (trialGrant.success) {
+          finalProfile = trialGrant.user;
+          console.log(`[Trial Engine] Granted 2-Day Full Access Trial to new user ${canonicalPhone} (Expires: ${finalProfile.planExpiresAt}) ✅`);
+        }
+      }
 
       // Save under canonical and local keys
       const saved = saveUserProfile(canonicalPhone, finalProfile);
@@ -5248,6 +5334,74 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       history,
       streak,
       waterCups
+    });
+  });
+
+  // Canonical Single Source of Truth Subscription Endpoint
+  app.get("/api/user/:phone/subscription", async (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const user = getUserProfile(phone) || getUserProfile(altPhone) || (await findUserByPhoneOrId(phone));
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found in database" });
+    }
+    const sub = getUserSubscription(user);
+    res.json({
+      success: true,
+      phone,
+      plan: sub.plan,
+      planDuration: sub.planDuration,
+      planStartedAt: sub.planStartedAt,
+      planExpiresAt: sub.planExpiresAt,
+      hasUsedTrial: sub.hasUsedTrial,
+      isActive: sub.isActive,
+      isExpired: sub.isExpired,
+      planDisplayName: sub.planDisplayName,
+      entitlements: sub.entitlements,
+      subscription: sub,
+      expiry: {
+        planExpiresAt: sub.planExpiresAt,
+        daysRemaining: sub.daysRemaining,
+        hoursRemaining: sub.hoursRemaining,
+        isActive: sub.isActive,
+        isExpired: sub.isExpired
+      }
+    });
+  });
+
+  // Authenticated Subscription Endpoint
+  app.get("/api/subscription/me", requireAuthMiddleware, async (req: any, res) => {
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const normPhone = normalizePhone(phone);
+    const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+    const user = getUserProfile(normPhone) || getUserProfile(altPhone) || (await findUserByPhoneOrId(normPhone));
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const sub = getUserSubscription(user);
+    res.json({
+      success: true,
+      phone: normPhone,
+      plan: sub.plan,
+      planDuration: sub.planDuration,
+      planStartedAt: sub.planStartedAt,
+      planExpiresAt: sub.planExpiresAt,
+      hasUsedTrial: sub.hasUsedTrial,
+      isActive: sub.isActive,
+      isExpired: sub.isExpired,
+      planDisplayName: sub.planDisplayName,
+      entitlements: sub.entitlements,
+      subscription: sub,
+      expiry: {
+        planExpiresAt: sub.planExpiresAt,
+        daysRemaining: sub.daysRemaining,
+        hoursRemaining: sub.hoursRemaining,
+        isActive: sub.isActive,
+        isExpired: sub.isExpired
+      }
     });
   });
 
@@ -6524,6 +6678,24 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     if (!meal || !meal.foodName) {
       return res.status(400).json({ success: false, error: "Meal object with foodName is required" });
     }
+
+    // Authoritative Server-Side Subscription Check
+    const user = getUserProfile(phone) || getUserProfile(canonicalPhone) || (await findUserByPhoneOrId(phone));
+    if (user) {
+      const sub = getUserSubscription(user);
+      if (!sub.isActive || !sub.entitlements.canNutrition) {
+        return res.status(403).json({
+          success: false,
+          error: "subscription_required",
+          reason: sub.entitlements.reason,
+          plan: sub.plan,
+          isExpired: sub.isExpired,
+          message: sub.isExpired
+            ? `Masa aktif paket ${sub.planDisplayName} kamu telah berakhir.`
+            : `Paket ${sub.planDisplayName} kamu tidak mencakup fitur pencatatan nutrisi.`
+        });
+      }
+    }
     const incomingCal = Number(meal.calories) || 0;
     const isWater = isPureWaterInput(meal.foodName);
     const isPureWater = isWater && incomingCal === 0;
@@ -6831,6 +7003,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     const user = getUserProfile(phone);
     if (!user) {
       return res.status(404).json({ success: false, error: "User profile not found" });
+    }
+    const sub = getUserSubscription(user);
+    if (!sub.isActive || !sub.entitlements.canWorkout) {
+      return res.status(403).json({
+        success: false,
+        error: "subscription_required",
+        reason: sub.entitlements.reason,
+        plan: sub.plan,
+        isExpired: sub.isExpired,
+        message: sub.isExpired
+          ? `Masa aktif paket ${sub.planDisplayName} kamu telah berakhir.`
+          : `Paket ${sub.planDisplayName} kamu tidak mencakup fitur jadwal latihan.`
+      });
     }
     const { schedule } = req.body;
     if (Array.isArray(schedule)) {
@@ -7175,7 +7360,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         const normPhone = normalizePhone(phone);
         const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000); // 30 days default monthly
 
-        await saveUserSubscription({
+        await saveFirestoreSubscription({
           userId: `usr_${normPhone}`,
           phone: normPhone,
           plan: plan === "advanced" ? "advanced" : "premium",
@@ -7203,10 +7388,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         console.log(`[Midtrans] Activated premium subscription in MongoDB for ${normPhone} ✅`);
       } else if (isFailed && phone) {
         const normPhone = normalizePhone(phone);
-        const sub = await getUserSubscription(normPhone);
+        const sub = await getFirestoreSubscription(normPhone);
         if (sub) {
           sub.status = "expired";
-          await saveUserSubscription(sub);
+          await saveFirestoreSubscription(sub);
         }
       }
 

@@ -1,4 +1,9 @@
 import { getValidatedUserAddressing, validateAndFormatCoachNote } from "./nutritionEngine";
+import {
+  getUserSubscription,
+  type CanonicalPlan,
+  type PlanEntitlements
+} from "./subscriptionEngine";
 
 export type PlanCapability = "nutrition" | "workout";
 
@@ -7,6 +12,9 @@ export interface UserPlanCapabilities {
   canNutrition: boolean;
   canWorkout: boolean;
   planDisplayName: string;
+  isExpired: boolean;
+  isActive: boolean;
+  canonicalPlan: CanonicalPlan;
 }
 
 export type InputCategory =
@@ -24,6 +32,7 @@ export type PlanContextDecision =
   | "REDIRECT_UNSUPPORTED_WORKOUT"
   | "REDIRECT_UNSUPPORTED_NUTRITION"
   | "REDIRECT_OUT_OF_CONTEXT"
+  | "REDIRECT_EXPIRED"
   | "CLARIFY_AMBIGUOUS";
 
 export interface PlanValidationResult {
@@ -35,40 +44,25 @@ export interface PlanValidationResult {
 }
 
 /**
- * Normalizes the user's active subscription / service plan into capabilities.
+ * Normalizes the user's active subscription / service plan into capabilities using the centralized subscription engine.
  */
 export function getUserPlanCapabilities(userData: any): UserPlanCapabilities {
-  const rawService = String(
-    userData?.activeService ||
-    userData?.subscription?.activeService ||
-    userData?.selectedFeature ||
-    userData?.plan ||
-    "both"
-  ).toLowerCase().trim();
-
-  if (rawService === "nutritionist" || rawService === "nutrition") {
-    return {
-      activePlan: "nutritionist",
-      canNutrition: true,
-      canWorkout: false,
-      planDisplayName: "AI Nutritionist"
-    };
-  }
-
-  if (rawService === "workout" || rawService === "coach") {
-    return {
-      activePlan: "workout",
-      canNutrition: false,
-      canWorkout: true,
-      planDisplayName: "AI Workout Coach"
-    };
-  }
+  const sub = getUserSubscription(userData);
+  const activePlan: "nutritionist" | "workout" | "both" =
+    sub.plan === "nutritionist"
+      ? "nutritionist"
+      : sub.plan === "workout_coach"
+      ? "workout"
+      : "both";
 
   return {
-    activePlan: "both",
-    canNutrition: true,
-    canWorkout: true,
-    planDisplayName: "All-Access Premium"
+    activePlan,
+    canNutrition: sub.entitlements.canNutrition,
+    canWorkout: sub.entitlements.canWorkout,
+    planDisplayName: sub.planDisplayName,
+    isExpired: sub.isExpired,
+    isActive: sub.isActive,
+    canonicalPlan: sub.plan
   };
 }
 
@@ -204,6 +198,25 @@ export function validatePlanContext(
       decision: "PROCESS_CASUAL",
       inputCategory: category,
       canProceed: true
+    };
+  }
+
+  // 1b. EXPIRED PLAN OR TRIAL GUARD
+  if (capabilities.isExpired) {
+    const isTrial = capabilities.canonicalPlan === "trial";
+    const expiredMsg = isTrial
+      ? (isMax
+          ? `Trial Full Access 2 hari lo di GymBuddy sudah berakhir nih, ${validatedAddr}! Buat lanjut tracking makanan, hitung kalori foto, dan jadwal workout via WhatsApp, yuk pilih paket lo di website ya! 🚀`
+          : `Trial Full Access 2 hari kamu di GymBuddy sudah berakhir ya, ${validatedAddr} ✨ Untuk melanjutkan pencatatan nutrisi foto dan bimbingan latihan di WhatsApp, silakan pilih paket yang sesuai di website GymBuddy ya! 🌿`)
+      : (isMax
+          ? `Masa aktif paket ${capabilities.planDisplayName} lo sudah berakhir nih, ${validatedAddr}! Buat lanjut konsultasi dan tracking di WhatsApp, yuk perpanjang paket lo di website ya! 💪`
+          : `Masa aktif paket ${capabilities.planDisplayName} kamu sudah berakhir ya, ${validatedAddr} ✨ Untuk melanjutkan bimbingan dan pencatatan di WhatsApp, yuk perpanjang paket kamu di website GymBuddy ya! 🌿`);
+
+    return {
+      decision: "REDIRECT_EXPIRED",
+      inputCategory: category,
+      canProceed: false,
+      redirectMessage: validateAndFormatCoachNote(expiredMsg, userData)
     };
   }
 

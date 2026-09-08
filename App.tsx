@@ -37,6 +37,10 @@ import {
   Dumbbell,
   Leaf,
   HeartPulse,
+  Sparkles,
+  MessageSquare,
+  CheckCircle2,
+  Crown,
 } from "lucide-react";
 
 export default function App() {
@@ -385,26 +389,36 @@ export default function App() {
 
   const testimonialsEN = [
     {
-      text: "Your muscles grow while you sleep. Make 7-9 hours your secret weapon for maximum progress.",
-      location: "New York, USA",
-      date: "Nov.20",
+      text: "I used to feel lost at the gym and quit after a few weeks. GymBuddy personalizes my workouts and daily protein right in WhatsApp. 3 months consistent now.",
+      location: "Jakarta, ID",
+      date: "Dimas R. • Software Engineer",
     },
     {
-      text: "Consistency beats intensity. Show up every day and the results will naturally follow.",
-      location: "London, UK",
-      date: "Oct.15",
+      text: "Just snap a photo of my meal on WhatsApp and calories are estimated cleanly. No more stressful food weighing to stay on track.",
+      location: "Bandung, ID",
+      date: "Sarah A. • Architect",
+    },
+    {
+      text: "Workouts are tailored around my previous shoulder limitation. The coach always provides safe, effective movement alternatives.",
+      location: "Surabaya, ID",
+      date: "Rendy P. • Marketing Lead",
     },
   ];
   const testimonialsID = [
     {
-      text: "Otot Anda tumbuh saat tidur. Jadikan 7-9 jam tidur sebagai senjata rahasia Anda untuk progres maksimal.",
+      text: "Dulu sering bingung mau latihan apa dan gampang nyerah. Di GymBuddy jadwal & target protein disesuaikan tiap hari langsung di WhatsApp, sekarang konsisten 3 bulan.",
       location: "Jakarta, ID",
-      date: "Nov.20",
+      date: "Dimas R. • Software Engineer",
     },
     {
-      text: "Konsistensi mengalahkan intensitas. Hadirlah setiap hari dan hasil akan mengikuti secara alami.",
-      location: "Bali, ID",
-      date: "Okt.15",
+      text: "Cukup foto piring makan siang di WhatsApp, kalorinya langsung terhitung rapi. Gak perlu lagi nimbang makanan ribet buat jaga defisit kalori.",
+      location: "Bandung, ID",
+      date: "Sarah A. • Arsitek",
+    },
+    {
+      text: "Gerakan latihan disesuaikan sama keterbatasan bahu lama saya. Coach selalu kasih opsi variasi aman yang tetap efektif.",
+      location: "Surabaya, ID",
+      date: "Rendy P. • Marketing Lead",
     },
   ];
   const [testimonialIdx, setTestimonialIdx] = useState(0);
@@ -422,97 +436,163 @@ export default function App() {
 
   const faqsEN = [
     {
-      question:
-        "Is Gym Buddy AI suitable for beginners who have never been to a gym?",
+      question: "Is GymBuddy suitable for beginners who have never worked out?",
       answer:
-        "Absolutely. The AI is designed to adapt to any experience level, providing step-by-step guidance, form correction, and beginner-friendly workout plans.",
+        "Absolutely! GymBuddy is specifically designed to be beginner-friendly. Your plan starts with safe fundamental movements, accompanied by step-by-step guidance and form cues so you never feel intimidated or overwhelmed.",
     },
     {
-      question: "How does the AI correct my workout form?",
+      question: "Can GymBuddy be used without a gym or equipment?",
       answer:
-        "By using your smartphone's camera, our Vision AI analyzes your movements in real-time, tracking joint angles and posture to provide instant audio and visual feedback.",
+        "Yes, completely! During onboarding, you can select 'bodyweight only' or choose whatever equipment you have at home (like dumbbells or resistance bands). The AI crafts an effective workout routine tailored exactly to what is available to you.",
     },
     {
-      question: "Do I have to type all workout data manually?",
+      question: "How does GymBuddy determine my personalized workout plan?",
       answer:
-        "No, Gym Buddy AI automatically tracks your reps, sets, and rest times during your session, so you can focus entirely on your workout.",
+        "GymBuddy designs your plan around your core goal (fat loss, muscle gain, stamina), current fitness level, schedule, available equipment, and any past injuries or physical constraints you share with us.",
     },
     {
-      question: "Can Gym Buddy AI help with nutrition as well?",
+      question: "Can I change my goal or workout schedule later?",
       answer:
-        "Yes, our Nutrition AI generates personalized meal plans and macros based on your goals, integrating seamlessly with your training progress.",
+        "Of course! Your life and goals evolve, and your coach adapts with you. You can update your target anytime via the web dashboard or by simply messaging your coach on WhatsApp. Your weekly workouts and macro targets will recalculate automatically.",
     },
     {
-      question: "I have an old injury, does the AI know its limits?",
+      question: "What happens if I miss a workout or overeat?",
       answer:
-        "During onboarding, you can log any past injuries or physical limitations. The AI will avoid prescribing exercises that could aggravate them and suggest safe alternatives.",
+        "No guilt, and no harsh punishment. GymBuddy is not a rigid spreadsheet. The AI dynamically recalibrates your upcoming sessions and provides balancing nutrition suggestions to keep your momentum going without stress.",
     },
     {
-      question:
-        "Does Gym Buddy AI connect to Apple Watch or other smartwatches?",
+      question: "How does GymBuddy help me with daily nutrition?",
       answer:
-        "Yes, Gym Buddy AI integrates with Apple Health, Google Fit, and most major smartwatches to sync your heart rate, burned calories, and recovery data.",
+        "As simple as sending a WhatsApp chat! Just snap a photo of your meal or type a quick description. Your AI coach analyzes calories, protein, carbs, and fats instantly, and suggests your next meal to hit your daily targets.",
     },
     {
-      question: "How much does a Gym Buddy AI subscription cost?",
+      question: "Is my personal health data and privacy safe?",
       answer:
-        "We offer a flexible pricing model starting from $15/month for the basic plan, up to $30/month for the full Premium experience, including all advanced AI features.",
+        "Your privacy and data security are paramount. All profile information, workout logs, and health notes are securely encrypted, never sold to third parties, and used solely to personalize your coaching experience.",
     },
     {
-      question: "Can it be used in a gym that doesn't have complete equipment?",
+      question: "How does the 2-day free trial work?",
       answer:
-        "Definitely. You can input the equipment available to you, or select a 'bodyweight only' mode, and the AI will generate an optimal workout with what you have.",
+        "You get 48 hours of full, unrestricted access to both Workout and Nutrition AI directly on WhatsApp. No credit card required and zero commitment — try it out and experience the real coaching difference first-hand.",
     },
   ];
 
   const faqsID = [
     {
-      question:
-        "Apakah Gym Buddy AI cocok untuk pemula yang belum pernah ke gym?",
+      question: "Apakah GymBuddy cocok untuk pemula yang belum pernah ke gym?",
       answer:
-        "Tentu saja. AI ini dirancang untuk beradaptasi dengan tingkat pengalaman apa pun, memberikan panduan langkah demi langkah, koreksi postur, dan rencana latihan yang ramah pemula.",
+        "Sangat cocok! GymBuddy dirancang khusus agar ramah pemula. Program latihan dimulai dari gerakan dasar yang aman, disertai instruksi langkah demi langkah dan panduan postur visual sehingga kamu tidak akan merasa bingung atau kewalahan.",
     },
     {
-      question: "Bagaimana cara AI mengoreksi form latihan saya?",
+      question: "Apakah GymBuddy bisa digunakan tanpa gym atau tanpa alat?",
       answer:
-        "Dengan menggunakan kamera ponsel Anda, Vision AI kami menganalisis gerakan Anda secara real-time, melacak sudut sendi dan postur untuk memberikan umpan balik audio dan visual instan.",
+        "Bisa banget! Saat onboarding, kamu bisa memilih opsi 'hanya berat badan' (bodyweight) atau peralatan yang ada di rumah (seperti dumbbell). AI akan merancang program yang optimal sesuai fasilitas yang kamu miliki.",
     },
     {
-      question: "Apakah saya harus mengetik semua data latihan secara manual?",
+      question: "Bagaimana GymBuddy menentukan rencana latihan saya?",
       answer:
-        "Tidak, Gym Buddy AI secara otomatis melacak repetisi, set, dan waktu istirahat Anda selama sesi, sehingga Anda dapat fokus sepenuhnya pada latihan Anda.",
+        "GymBuddy menyusun rencana berdasarkan tujuan utamamu (fat loss, muscle gain, stamina), tingkat kebugaran saat ini, ketersediaan alat, jadwal harian, serta riwayat cedera atau kondisi fisik yang kamu laporkan.",
     },
     {
-      question: "Apakah Gym Buddy AI bisa bantu urusan nutrisi juga?",
+      question: "Apakah saya bisa mengubah target atau jadwal latihan di tengah jalan?",
       answer:
-        "Ya, Nutrition AI kami menghasilkan rencana makan dan makro yang dipersonalisasi berdasarkan tujuan Anda, terintegrasi secara mulus dengan kemajuan latihan Anda.",
+        "Tentu saja! Kebutuhan dan jadwalmu bisa berubah kapan saja. Kamu cukup perbarui tujuan melalui Dashboard atau beritahu Coach lewat chat WhatsApp, dan rencana latihan serta nutrisi akan otomatis menyesuaikan.",
     },
     {
-      question: "Saya punya cedera lama, apakah AI tahu batasannya?",
+      question: "Bagaimana jika saya melewatkan latihan atau makan berlebih?",
       answer:
-        "Selama pendaftaran, Anda dapat mencatat cedera masa lalu atau keterbatasan fisik. AI akan menghindari memberikan latihan yang dapat memperburuknya dan menyarankan alternatif yang aman.",
+        "Tidak perlu khawatir atau merasa bersalah! GymBuddy bukan sistem kaku. AI akan otomatis mengadaptasi target sesi berikutnya dan memberi saran nutrisi penyeimbang agar kamu tetap konsisten di jalur tujuan tanpa stres.",
     },
     {
-      question:
-        "Apakah Gym Buddy AI terhubung ke Apple Watch atau smartwatch lain?",
+      question: "Bagaimana GymBuddy membantu urusan nutrisi sehari-hari?",
       answer:
-        "Ya, Gym Buddy AI terintegrasi dengan Apple Health, Google Fit, dan sebagian besar smartwatch utama untuk menyinkronkan detak jantung, kalori yang terbakar, dan data pemulihan Anda.",
+        "Semudah mengirim chat di WhatsApp! Kamu cukup kirimkan foto makanan atau sebutkan apa yang kamu makan. AI Coach langsung menganalisis estimasi kalori dan makronutrisi (protein, karbo, lemak), serta menyarankan menu berikutnya untuk mencukupi target harianmu.",
     },
     {
-      question: "Berapa biaya berlangganan Gym Buddy AI?",
+      question: "Apakah data dan riwayat kesehatan saya aman?",
       answer:
-        "Kami menawarkan model harga yang fleksibel mulai dari $15/bulan untuk paket dasar, hingga $30/bulan untuk pengalaman Premium penuh, termasuk semua fitur AI canggih.",
+        "Keamanan dan privasi kamu adalah prioritas kami. Seluruh data profil, riwayat latihan, dan catatan kesehatan tersimpan secara terenkripsi, tidak pernah diperjualbelikan, dan hanya digunakan untuk mempersonalisasi pendampingan kebugaranmu.",
     },
     {
-      question:
-        "Apakah bisa dipakai gym yang tidak punya perlengkapan lengkap?",
+      question: "Bagaimana cara kerja uji coba gratis 2 hari?",
       answer:
-        "Pasti. Anda dapat memasukkan peralatan yang tersedia untuk Anda, atau memilih mode 'hanya berat badan', dan AI akan menghasilkan latihan yang optimal dengan apa yang Anda miliki.",
+        "Kamu mendapatkan akses penuh ke seluruh fitur Workout & Nutrition AI langsung di WhatsApp selama 48 jam. Tanpa kartu kredit dan tanpa komitmen, sehingga kamu bisa membuktikan manfaatnya secara nyata terlebih dahulu.",
     },
   ];
 
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(null);
   const activeFaqs = language === "EN" ? faqsEN : faqsID;
+
+  const [selectedPricingDuration, setSelectedPricingDuration] =
+    useState<"1m" | "3m" | "6m" | "1y" | "lifetime">("1m");
+
+  const durationPricingConfig = {
+    "1m": {
+      labelID: "1 Bulan",
+      labelEN: "1 Month",
+      singleIDR: "Rp 89rb",
+      singleUSD: "$6",
+      premiumIDR: "Rp 149rb",
+      premiumUSD: "$10",
+      periodID: "/bulan",
+      periodEN: "/month",
+      subNoteID: "Paket bulanan fleksibel",
+      subNoteEN: "Flexible monthly plan",
+      badge: null,
+    },
+    "3m": {
+      labelID: "3 Bulan",
+      labelEN: "3 Months",
+      singleIDR: "Rp 249rb",
+      singleUSD: "$16",
+      premiumIDR: "Rp 399rb",
+      premiumUSD: "$26",
+      periodID: "/3 bulan",
+      periodEN: "/3 months",
+      subNoteID: "Hemat ~11% vs bulanan",
+      subNoteEN: "Save ~11% vs monthly",
+      badge: "Hemat ~11%",
+    },
+    "6m": {
+      labelID: "6 Bulan",
+      labelEN: "6 Months",
+      singleIDR: "Rp 449rb",
+      singleUSD: "$29",
+      premiumIDR: "Rp 699rb",
+      premiumUSD: "$45",
+      periodID: "/6 bulan",
+      periodEN: "/6 months",
+      subNoteID: "Hemat 16% - 22% vs bulanan",
+      subNoteEN: "Save 16% - 22% vs monthly",
+      badge: "Hemat 22%",
+    },
+    "1y": {
+      labelID: "1 Tahun",
+      labelEN: "1 Year",
+      singleIDR: "Rp 749rb",
+      singleUSD: "$49",
+      premiumIDR: "Rp 1.199rb",
+      premiumUSD: "$79",
+      periodID: "/tahun",
+      periodEN: "/year",
+      subNoteID: "Hemat ~33% (Paling Laris)",
+      subNoteEN: "Best Value (Save ~33%)",
+      badge: "Paling Hemat ~33%",
+    },
+    "lifetime": {
+      labelID: "Lifetime",
+      labelEN: "Lifetime",
+      singleIDR: "Rp 1.499rb",
+      singleUSD: "$99",
+      premiumIDR: "Rp 2.499rb",
+      premiumUSD: "$160",
+      periodID: "1x bayar",
+      periodEN: "one-time",
+      subNoteID: "Akses selamanya (Fair Use)",
+      subNoteEN: "Pay once, access forever",
+      badge: "Akses Selamanya",
+    },
+  };
 
   const splashOverlay = (
     <AnimatePresence>
@@ -863,8 +943,16 @@ export default function App() {
                 </div>
               </h1>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mt-8 md:mt-12 xl:mt-16">
-                <div className="flex flex-col gap-3 items-start">
+              {/* Supporting Hero Messaging */}
+              <p className="text-lg sm:text-xl md:text-2xl 2xl:text-3xl text-neutral-300 font-medium leading-relaxed mt-6 md:mt-8 max-w-3xl">
+                {language === "EN"
+                  ? "Your personal AI trainer and nutrition coach that adapts to your goals, fitness level, daily habits, and real progress — directly on WhatsApp & Web Dashboard."
+                  : "Pelatih AI pribadi & ahli gizi yang beradaptasi dengan target, kemampuan, kebiasaan harian, dan perkembangan tubuhmu — langsung di WhatsApp & Web Dashboard."}
+              </p>
+
+              {/* Action Buttons & Microcopy */}
+              <div className="flex flex-col items-start gap-4 mt-8 md:mt-10 xl:mt-12">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4 w-full sm:w-auto">
                   <motion.button
                     whileHover={{
                       scale: 1.03,
@@ -872,9 +960,9 @@ export default function App() {
                     }}
                     transition={{ duration: 0.2 }}
                     onClick={() => setIsAppOnboarding(true)}
-                    className="bg-[#D4FF00] text-black px-6 py-3 md:px-8 md:py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center sm:justify-start gap-3 hover:bg-[#c4ec00] transition-colors text-base md:text-lg 2xl:text-xl w-full sm:w-auto group"
+                    className="bg-[#D4FF00] text-black px-6 py-3 md:px-8 md:py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center sm:justify-start gap-3 hover:bg-[#c4ec00] transition-colors text-base md:text-lg 2xl:text-xl w-full sm:w-auto group cursor-pointer"
                   >
-                    {language === "EN" ? "Try for free" : "Coba Gratis"}
+                    {language === "EN" ? "Start for Free" : "Mulai Gratis"}
                     <div className="bg-black text-white p-1.5 2xl:p-2 rounded-full shrink-0 relative overflow-hidden">
                       <ArrowUpRight
                         size={18}
@@ -883,12 +971,24 @@ export default function App() {
                       />
                     </div>
                   </motion.button>
-                  <span className="text-neutral-400 text-sm md:text-base ml-2">
-                    {language === "EN"
-                      ? "Integrates with WhatsApp & Dashboard"
-                      : "Terintegrasi WhatsApp & Dashboard"}
-                  </span>
+
+                  <button
+                    onClick={() => {
+                      const el = document.getElementById("ai-journey");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="border border-white/30 text-white hover:bg-white/10 px-6 py-3 md:px-8 md:py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center gap-2 transition-all text-base md:text-lg 2xl:text-xl w-full sm:w-auto cursor-pointer"
+                  >
+                    {language === "EN" ? "See How It Works" : "Lihat Cara Kerja"}
+                  </button>
                 </div>
+
+                <span className="text-neutral-400 text-xs sm:text-sm md:text-base flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-[#D4FF00]"></span>
+                  {language === "EN"
+                    ? "2-day full free trial • No credit card needed • Active on WhatsApp"
+                    : "Uji coba 2 hari penuh • Tanpa kartu kredit • Langsung aktif di WhatsApp"}
+                </span>
               </div>
             </div>
 
@@ -928,14 +1028,14 @@ export default function App() {
                       10,000+
                     </div>
                     <div className="text-[13px] 2xl:text-[15px] text-neutral-500 font-medium -mt-1">
-                      {language === "EN" ? "satisfied clients" : "klien puas"}
+                      {language === "EN" ? "active members" : "pengguna aktif"}
                     </div>
                   </div>
                 </div>
                 <p className="text-base 2xl:text-lg text-neutral-600 mt-6 leading-relaxed font-medium">
                   {language === "EN"
-                    ? "They arrive with different goals, yet they all find the support and motivation they need. Their success is the ultimate validation of our method."
-                    : "Mereka datang dengan tujuan berbeda, namun menemukan dukungan dan motivasi yang mereka butuhkan. Kesuksesan mereka adalah validasi akhir dari metode kami."}
+                    ? "From beginners to seasoned lifters, members build sustainable habits and reach their target weight and strength with an AI coach that learns their rhythm."
+                    : "Dari pemula hingga pegiat gym, mereka membangun kebiasaan sehat dan mencapai target berat badan serta otot bersama pelatih AI yang mengenal ritme mereka."}
                 </p>
               </motion.div>
 
@@ -950,14 +1050,14 @@ export default function App() {
                   <motion.button
                     whileTap={{ scale: 0.92 }}
                     onClick={prevTestimonial}
-                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20"
+                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20 cursor-pointer"
                   >
                     <MoveLeft size={18} className="2xl:w-5 2xl:h-5" />
                   </motion.button>
                   <motion.button
                     whileTap={{ scale: 0.92 }}
                     onClick={nextTestimonial}
-                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20"
+                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20 cursor-pointer"
                   >
                     <MoveRight size={18} className="2xl:w-5 2xl:h-5" />
                   </motion.button>
@@ -973,12 +1073,12 @@ export default function App() {
                       className="w-full"
                     >
                       <p className="font-semibold text-lg 2xl:text-xl leading-snug text-center text-white/90">
-                        {activeTestimonial.text}
+                        "{activeTestimonial.text}"
                       </p>
                     </motion.div>
                   </AnimatePresence>
                 </div>
-                <div className="relative z-10 flex justify-between items-end mt-8 text-sm 2xl:text-base text-neutral-400 font-medium px-2 md:px-4">
+                <div className="relative z-10 flex justify-between items-end mt-8 text-sm 2xl:text-base text-neutral-300 font-medium px-2 md:px-4">
                   <AnimatePresence mode="wait">
                     <motion.span
                       key={`loc-${testimonialIdx}`}
@@ -986,8 +1086,9 @@ export default function App() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.2 }}
+                      className="font-bold text-[#D4FF00]"
                     >
-                      {activeTestimonial.location}
+                      {activeTestimonial.date}
                     </motion.span>
                   </AnimatePresence>
                   <AnimatePresence mode="wait">
@@ -998,7 +1099,7 @@ export default function App() {
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.2 }}
                     >
-                      {activeTestimonial.date}
+                      {activeTestimonial.location}
                     </motion.span>
                   </AnimatePresence>
                 </div>
@@ -1006,7 +1107,7 @@ export default function App() {
 
               {/* Card 3 */}
               <motion.div
-                onClick={() => setIsPricingPage(true)}
+                onClick={() => setIsAppOnboarding(true)}
                 initial={{ opacity: 0, y: 32 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.56 }}
@@ -1026,36 +1127,36 @@ export default function App() {
                 <div className="mt-8">
                   <h3 className="font-['Archivo_Black'] font-normal text-2xl md:text-[28px] 2xl:text-4xl font-bold tracking-tight leading-tight">
                     {language === "EN"
-                      ? "Get 2 days free trial"
-                      : "Dapatkan 2 hari uji coba gratis"}
+                      ? "Full 2-Day Free Trial"
+                      : "Uji Coba 2 Hari Penuh"}
                   </h3>
-                  <p className="text-base md:text-lg 2xl:text-xl font-medium mt-2 text-black/70">
+                  <p className="text-base md:text-lg 2xl:text-xl font-medium mt-2 text-black/80">
                     {language === "EN"
-                      ? "Experience our premium fitness facilities for 48 hours completely free"
-                      : "Nikmati fasilitas kebugaran premium kami selama 48 jam secara gratis"}
+                      ? "Experience personalized workouts and nutrition guidance on WhatsApp with zero commitment."
+                      : "Nikmati program latihan personal dan panduan nutrisi harian di WhatsApp secara gratis selama 48 jam."}
                   </p>
                 </div>
               </motion.div>
             </div>
           </div>
         </div>
-        {/* SECTION 2: AI FEATURES */}
+        {/* SECTION 2: REAL USP (PERSONAL TRAINER & NUTRITIONIST ON WHATSAPP) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 2xl:gap-32 items-center px-4 md:px-6 lg:px-8 pt-8 md:pt-12 lg:pt-16 pb-0">
           <div className="lg:col-span-5">
-            <div className="inline-block border-2 border-neutral-800 text-neutral-800 rounded-full px-5 py-2 2xl:px-6 2xl:py-3 text-sm 2xl:text-base font-bold mb-8 cursor-default">
+            <div className="inline-block border-2 border-neutral-800 text-neutral-800 rounded-full px-5 py-2 2xl:px-6 2xl:py-3 text-sm 2xl:text-base font-bold mb-6 cursor-default">
               {language === "EN"
-                ? "Intelligent Fitness Platform"
-                : "Platform Kebugaran Cerdas"}
+                ? "PERSONAL TRAINER ON WHATSAPP"
+                : "PELATIH PRIBADI DI WHATSAPP"}
             </div>
-            <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-[3.5rem] 2xl:text-[4.5rem] font-bold tracking-tighter leading-[1.05] mb-6 md:mb-8 2xl:mb-10 text-neutral-900">
+            <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-[3.25rem] 2xl:text-[4.25rem] font-bold tracking-tighter leading-[1.08] mb-6 md:mb-8 text-neutral-900">
               {language === "EN"
-                ? "Meet GymBuddy AI, Your Personal Trainer That Never Sleeps."
-                : "Temui GymBuddy AI, Pelatih Pribadi Anda yang Tak Pernah Tidur."}
+                ? "Personal Trainer & Nutritionist 24/7 Directly in WhatsApp."
+                : "Pelatih Pribadi & Ahli Gizi 24/7 Langsung di WhatsApp."}
             </h2>
-            <p className="text-lg md:text-xl 2xl:text-2xl text-neutral-600 font-medium leading-relaxed mb-8 md:mb-10 2xl:mb-14 max-w-xl">
+            <p className="text-lg md:text-xl 2xl:text-2xl text-neutral-600 font-medium leading-relaxed mb-6 md:mb-8 max-w-xl">
               {language === "EN"
-                ? "Generate personalized workouts, analyze your form in real-time with computer vision, and track nutrition. Everything you need to build your best body, powered by advanced AI."
-                : "Buat latihan yang dipersonalisasi, analisis postur Anda secara real-time dengan visi komputer, dan lacak nutrisi. Segala yang Anda butuhkan untuk membentuk tubuh terbaik Anda, ditenagai oleh AI canggih."}
+                ? "No need to spend millions on gym personal trainers or install complex apps you rarely open. GymBuddy guides your workouts, checks your lifting posture via camera, and calculates meal calories from photos — directly in WhatsApp."
+                : "Gak perlu keluar jutaan rupiah sewa Personal Trainer gym atau ribet install aplikasi baru yang jarang dibuka. GymBuddy memandu program latihanmu (gym atau rumah), mengecek postur gerakan via kamera, dan menghitung kalori makanan lokal dari foto — langsung di chat WhatsApp."}
             </p>
           </div>
 
@@ -1073,23 +1174,23 @@ export default function App() {
                     "url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop')",
                 }}
               >
-                <div className="absolute top-5 left-5 2xl:top-8 2xl:left-8 bg-white px-4 py-2 2xl:px-6 2xl:py-3 rounded-full font-bold text-xs sm:text-[15px] 2xl:text-lg z-10 shadow-sm">
+                <div className="absolute top-5 left-5 2xl:top-8 2xl:left-8 bg-white px-4 py-2 2xl:px-6 2xl:py-3 rounded-full font-bold text-xs sm:text-[15px] 2xl:text-lg z-10 shadow-sm text-black">
                   {language === "EN"
-                    ? "AI Workout Coach"
-                    : "Pelatih Latihan AI"}
+                    ? "TRAIN SMARTER"
+                    : "LATIHAN LEBIH CERDAS"}
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 group-hover:from-black/95 transition-colors z-0"></div>
                 <div className="absolute bottom-6 left-6 right-6 2xl:bottom-10 2xl:left-10 2xl:right-10 flex justify-between items-end z-10 gap-3">
                   <div className="flex flex-col">
                     <h3 className="font-['Archivo_Black'] font-normal text-white text-2xl sm:text-3xl 2xl:text-4xl font-bold leading-tight mb-2 sm:mb-3">
                       {language === "EN"
-                        ? "Workouts Built Around You."
-                        : "Latihan yang Dibuat Khusus Untuk Anda."}
+                        ? "Workouts Built Around Your Real Ability."
+                        : "Latihan yang Menyesuaikan Kemampuanmu."}
                     </h3>
-                    <p className="text-white/80 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
+                    <p className="text-white/85 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
                       {language === "EN"
-                        ? "Personalized training plans generated from your goals, training experience, available equipment, workout history, and recovery status. Every session automatically adapts as your performance improves."
-                        : "Rencana pelatihan personal yang dihasilkan dari tujuan, pengalaman, peralatan yang tersedia, riwayat latihan, dan status pemulihan Anda. Setiap sesi beradaptasi otomatis seiring peningkatan performa Anda."}
+                        ? "No generic templates. Your sets, reps, weight loads, and movement variations automatically adapt to your equipment, schedule, and strength progression."
+                        : "Bukan jadwal kaku. Beban, repetisi, dan variasi gerakan otomatis disesuaikan dengan alat yang kamu punya, waktu luang, dan perkembangan kekuatanmu."}
                     </p>
                   </div>
                   <button className="w-10 h-10 sm:w-12 sm:h-12 2xl:w-16 2xl:h-16 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
@@ -1110,21 +1211,21 @@ export default function App() {
                     "url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop')",
                 }}
               >
-                <div className="absolute top-5 left-5 2xl:top-8 2xl:left-8 bg-white px-4 py-2 2xl:px-6 2xl:py-3 rounded-full font-bold text-xs sm:text-[15px] 2xl:text-lg z-10 shadow-sm">
-                  {language === "EN" ? "Nutrition AI" : "AI Nutrisi"}
+                <div className="absolute top-5 left-5 2xl:top-8 2xl:left-8 bg-white px-4 py-2 2xl:px-6 2xl:py-3 rounded-full font-bold text-xs sm:text-[15px] 2xl:text-lg z-10 shadow-sm text-black">
+                  {language === "EN" ? "EAT BETTER" : "NUTRISI LEBIH TEPAT"}
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 group-hover:from-black/95 transition-colors z-0"></div>
                 <div className="absolute bottom-6 left-6 right-6 2xl:bottom-10 2xl:left-10 2xl:right-10 flex justify-between items-end z-10 gap-3">
                   <div className="flex flex-col">
                     <h3 className="font-['Archivo_Black'] font-normal text-white text-2xl sm:text-3xl 2xl:text-4xl font-bold leading-tight mb-2 sm:mb-3">
                       {language === "EN"
-                        ? "Fuel Every Workout Smarter."
-                        : "Penuhi Nutrisi Latihan dengan Cerdas."}
+                        ? "Master Daily Nutrition Without Tedious Weighing."
+                        : "Pahami Nutrisi Harian Tanpa Ribet Nimbang."}
                     </h3>
-                    <p className="text-white/80 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
+                    <p className="text-white/85 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
                       {language === "EN"
-                        ? "Instantly track meals, analyze calories and macros, and receive personalized nutrition recommendations that support your training goals and recovery."
-                        : "Lacak makanan secara instan, analisis kalori dan makro, dan terima rekomendasi nutrisi personal yang mendukung tujuan latihan dan pemulihan Anda."}
+                        ? "Simply snap a meal photo on WhatsApp for instant calorie and macro estimates. Receive personalized meal suggestions to hit your daily protein targets without stress."
+                        : "Cukup kirim foto makanan di WhatsApp untuk estimasi kalori dan makro instan. Dapatkan saran menu berikutnya agar target protein harianmu selalu tercapai."}
                     </p>
                   </div>
                   <button className="w-10 h-10 sm:w-12 sm:h-12 2xl:w-16 2xl:h-16 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
@@ -1136,23 +1237,48 @@ export default function App() {
           </div>
         </div>
 
-        {/* SECTION 3: BENTO GRID */}
+        {/* SECTION 3: REAL APP USP & CAPABILITIES (BENTO GRID) */}
         <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 lg:py-16">
           <div className="bg-[#151515] rounded-[2.5rem] 2xl:rounded-[3.5rem] p-6 md:p-10 lg:p-12 text-white shadow-2xl">
+            
+            {/* Section Header: Real USP */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-10 gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-800/80 text-[#D4FF00] rounded-full px-4 py-1.5 text-xs md:text-sm font-bold mb-3 cursor-default">
+                  {language === "EN" ? "WHY GYMBUDDY?" : "KENAPA GYMBUDDY?"}
+                </div>
+                <h3 className="font-['Archivo_Black'] font-normal text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl text-white tracking-tight leading-tight">
+                  {language === "EN"
+                    ? "All Your Fitness Coaching, Right Inside WhatsApp."
+                    : "Semua Kebutuhan Fitnesmu, Langsung di WhatsApp."}
+                </h3>
+              </div>
+              <p className="text-neutral-400 text-sm md:text-base 2xl:text-lg max-w-md font-medium">
+                {language === "EN"
+                  ? "From Indonesian meal photo calorie tracking to lifting form check, your personal coach is on standby 24/7 without expensive personal trainers."
+                  : "Dari hitung kalori masakan lokal hingga koreksi teknik gerakan, semua standby 24/7 tanpa perlu sewa Personal Trainer mahal."}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 grid-flow-row-dense gap-4 md:gap-5 2xl:gap-6 auto-rows-[160px] md:auto-rows-[180px] 2xl:auto-rows-[220px]">
-              {/* Box 1: Professional coaches */}
+              {/* Box 1: PHOTO FOOD TRACKING */}
               <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-8 2xl:p-10 flex flex-col justify-center col-span-1 md:col-span-2 lg:col-span-2 xl:col-span-2 hover:bg-[#2a2a2a] transition-colors">
                 <div className="flex gap-6 items-center">
-                  <Asterisk
-                    size={56}
-                    className="text-neutral-400 shrink-0 2xl:w-20 2xl:h-20"
-                    strokeWidth={1}
+                  <Flame
+                    size={52}
+                    className="text-[#D4FF00] shrink-0 2xl:w-16 2xl:h-16"
+                    strokeWidth={1.5}
                   />
-                  <p className="text-xl 2xl:text-3xl font-medium leading-snug">
-                    {language === "EN"
-                      ? "AI Workout Generation adapted to your unique fitness goals."
-                      : "Pembuatan Latihan AI yang disesuaikan dengan tujuan kebugaran unik Anda."}
-                  </p>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#D4FF00] block mb-1">
+                      {language === "EN" ? "PHOTO FOOD TRACKING" : "HITUNG KALORI FOTO WA"}
+                    </span>
+                    <p className="text-lg sm:text-xl 2xl:text-2xl font-medium leading-snug">
+                      {language === "EN"
+                        ? "Snap any meal on WhatsApp. Instant calorie, protein & macro estimate without weighing."
+                        : "Foto piring makanmu di WhatsApp. Kalori & protein terhitung instan tanpa timbang manual."}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1172,150 +1298,147 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Box 3: Wi-Fi */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center gap-4 col-span-1 hover:bg-[#2a2a2a] transition-colors">
-                <Wifi
-                  size={48}
-                  className="text-neutral-300 2xl:w-16 2xl:h-16"
+              {/* Box 3: COACH PERSONA */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center gap-2 col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <Sparkles
+                  size={40}
+                  className="text-[#D4FF00] 2xl:w-12 2xl:h-12"
                   strokeWidth={1.5}
                 />
-                <span className="font-medium text-lg 2xl:text-xl text-neutral-300">
-                  {language === "EN" ? "AI Voice Coach" : "Pelatih Suara AI"}
+                <span className="font-bold text-base 2xl:text-lg text-white">
+                  Coach Mia & Max
+                </span>
+                <span className="text-[11px] text-neutral-400 font-medium leading-tight">
+                  {language === "EN" ? "Choose supportive or disciplined style" : "Pilih ramah suportif atau tegas disiplin"}
                 </span>
               </div>
 
-              {/* Box 4: Tanning bed */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
-                <span className="font-medium text-xl 2xl:text-2xl text-neutral-300">
-                  {language === "EN" ? (
-                    <>
-                      Vision
-                      <br />
-                      Form Check
-                    </>
-                  ) : (
-                    <>
-                      Pemeriksaan
-                      <br />
-                      Postur Visi
-                    </>
-                  )}
+              {/* Box 4: VISION AI FORM CHECK */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center gap-2 col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <ShieldCheck
+                  size={40}
+                  className="text-[#D4FF00] 2xl:w-12 2xl:h-12"
+                  strokeWidth={1.5}
+                />
+                <span className="text-xs font-bold uppercase tracking-wider text-[#D4FF00]">
+                  VISION AI
+                </span>
+                <span className="font-medium text-base 2xl:text-lg text-neutral-200 leading-snug">
+                  {language === "EN" ? "Camera Form Check" : "Koreksi Postur Kamera"}
                 </span>
               </div>
 
-              {/* Box 5: Medical */}
+              {/* Box 5: CUSTOM WORKOUTS */}
               <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-8 2xl:p-10 flex flex-col justify-center col-span-1 md:col-span-2 lg:col-span-2 xl:col-span-2 hover:bg-[#2a2a2a] transition-colors">
                 <div className="flex gap-6 items-center">
-                  <Activity
-                    size={56}
-                    className="text-neutral-400 shrink-0 2xl:w-20 2xl:h-20"
+                  <Dumbbell
+                    size={52}
+                    className="text-[#D4FF00] shrink-0 2xl:w-16 2xl:h-16"
                     strokeWidth={1.5}
                   />
-                  <p className="text-xl 2xl:text-3xl font-medium leading-snug">
-                    {language === "EN" ? (
-                      <>
-                        Advanced AI
-                        <br />
-                        Recovery Intelligence
-                      </>
-                    ) : (
-                      <>
-                        Kecerdasan Pemulihan
-                        <br />
-                        AI Lanjutan
-                      </>
-                    )}
-                  </p>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#D4FF00] block mb-1">
+                      {language === "EN" ? "CUSTOM WORKOUTS" : "LATIHAN GYM & RUMAH"}
+                    </span>
+                    <p className="text-lg sm:text-xl 2xl:text-2xl font-medium leading-snug">
+                      {language === "EN"
+                        ? "Personalized training plans built around your equipment and injury limitations."
+                        : "Program latihan personal yang disesuaikan dengan alat yang ada dan bebas cedera."}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Box 6: Fitness trackers */}
+              {/* Box 6: 24/7 WHATSAPP ACCOUNTABILITY */}
               <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-8 2xl:p-10 flex flex-col justify-center col-span-1 md:col-span-2 lg:col-span-2 xl:col-span-2 hover:bg-[#2a2a2a] transition-colors">
                 <div className="flex gap-6 items-center">
-                  <div className="shrink-0 flex items-center justify-center">
-                    <Flame
-                      size={56}
-                      className="text-neutral-400 2xl:w-20 2xl:h-20"
-                      strokeWidth={1.5}
-                    />
+                  <MessageSquare
+                    size={52}
+                    className="text-[#D4FF00] 2xl:w-16 2xl:h-16 shrink-0"
+                    strokeWidth={1.5}
+                  />
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#D4FF00] block mb-1">
+                      {language === "EN" ? "WHATSAPP ACCOUNTABILITY" : "AKUNTABILITAS DI WA"}
+                    </span>
+                    <p className="text-lg sm:text-xl 2xl:text-2xl font-medium leading-snug">
+                      {language === "EN"
+                        ? "Never forgotten. Your coach follows up on WhatsApp with hydration and workout reminders."
+                        : "Bukan aplikasi yang dilupakan. Coach selalu mengingatkan jadwal latihan & target air di WA."}
+                    </p>
                   </div>
-                  <p className="text-xl 2xl:text-3xl font-medium leading-snug">
-                    Smart Nutrition and AI data analysis.
-                  </p>
                 </div>
               </div>
 
-              {/* Box 7: Sports zones */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center gap-2 col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
-                <span className="text-5xl 2xl:text-6xl font-bold tracking-tighter">
-                  1200+
+              {/* Box 7: COST SAVINGS */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center gap-1 col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <span className="text-3xl sm:text-4xl 2xl:text-5xl font-['Archivo_Black'] tracking-tighter text-[#D4FF00]">
+                  HEMAT 95%
                 </span>
-                <span className="text-base 2xl:text-lg font-medium leading-tight text-neutral-400">
-                  unique
-                  <br />
-                  exercises
+                <span className="text-xs 2xl:text-sm font-medium leading-tight text-neutral-300">
+                  {language === "EN" ? "vs gym trainers (Rp 2-5M/mo)" : "vs PT gym (Rp 2-5jt/bln)"}
                 </span>
               </div>
 
-              {/* Box 8: Bar */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
-                <p className="text-lg 2xl:text-xl font-medium leading-snug text-neutral-300">
-                  Adaptive AI
-                  <br />
-                  Progressive Overload.
+              {/* Box 8: WEB DASHBOARD SYNC */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-1">
+                  {language === "EN" ? "WEB DASHBOARD" : "WEB DASHBOARD"}
+                </span>
+                <p className="text-sm 2xl:text-base font-semibold leading-snug text-neutral-200">
+                  {language === "EN"
+                    ? "Live Sync with Web Dashboard"
+                    : "Sync Real-Time ke Web Dashboard"}
                 </p>
               </div>
 
-              {/* Box 9: Massage */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
-                <p className="text-lg 2xl:text-xl font-medium leading-snug text-neutral-300">
-                  Personalized
-                  <br />
-                  Recovery Insights
+              {/* Box 9: ZERO APP DOWNLOAD */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-1">
+                  {language === "EN" ? "NO NEW APP" : "PRAKTIS"}
+                </span>
+                <p className="text-sm 2xl:text-base font-semibold leading-snug text-neutral-200">
+                  {language === "EN"
+                    ? "100% Inside WhatsApp"
+                    : "100% di WhatsApp"}
                 </p>
               </div>
 
-              {/* Box 10: 500m2 */}
-              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors">
-                <span className="text-[2.5rem] 2xl:text-[3.25rem] font-['Archivo_Black'] font-normal tracking-tighter leading-tight text-center">
-                  {language === "EN" ? (
-                    <>
-                      24/7 AI
-                      <br />
-                      Coaching
-                    </>
-                  ) : (
-                    <>
-                      Pelatihan
-                      <br />
-                      AI 24/7
-                    </>
-                  )}
+              {/* Box 10: 2-DAY FREE TRIAL */}
+              <div className="bg-[#222222] rounded-[2rem] 2xl:rounded-[2.5rem] p-6 2xl:p-8 flex flex-col items-center justify-center col-span-1 hover:bg-[#2a2a2a] transition-colors text-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#D4FF00] mb-1">
+                  {language === "EN" ? "RISK FREE" : "FREE TRIAL"}
+                </span>
+                <span className="text-xl 2xl:text-2xl font-['Archivo_Black'] font-normal tracking-tight text-white leading-tight">
+                  {language === "EN" ? "2-Day Free Trial" : "Coba Gratis 2 Hari"}
                 </span>
               </div>
             </div>
           </div>
         </div>
-        {/* SECTION 4: HOW IT WORKS */}
+        {/* SECTION 4: HOW IT WORKS (DYNAMIC ADAPTIVE JOURNEY) */}
         <div id="ai-journey" className="px-4 md:px-6 lg:px-8 py-0 w-full flex flex-col overflow-hidden relative">
           <div className="flex flex-col md:flex-row md:items-end justify-between text-left mb-8 2xl:mb-12 gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 border border-black bg-white text-neutral-800 rounded-full px-4 py-1.5 2xl:px-5 2xl:py-2 text-xs md:text-sm 2xl:text-base font-bold mb-6 cursor-default">
-                {language === "EN" ? "AI Journey" : "Perjalanan AI"}
+              <div className="inline-flex items-center gap-2 border border-black bg-white text-neutral-800 rounded-full px-4 py-1.5 2xl:px-5 2xl:py-2 text-xs md:text-sm 2xl:text-base font-bold mb-4 cursor-default">
+                {language === "EN" ? "HOW IT WORKS" : "CARA KERJA"}
               </div>
-              <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-5xl 2xl:text-[4rem] tracking-tighter leading-[0.9] mb-4 text-neutral-900">
+              <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-5xl 2xl:text-[4rem] tracking-tighter leading-[0.95] mb-3 text-neutral-900">
                 {language === "EN"
-                  ? "How GymBuddy Works"
-                  : "Cara Kerja GymBuddy"}
+                  ? "Your Plan Changes As You Change."
+                  : "Rencanamu Berkembang Seiring Perkembanganmu."}
               </h2>
               <p className="text-base md:text-lg 2xl:text-xl text-neutral-600 font-medium max-w-xl">
                 {language === "EN"
-                  ? "A complete AI-powered fitness experience from planning to recovery."
-                  : "Pengalaman kebugaran lengkap dengan AI dari perencanaan hingga pemulihan."}
+                  ? "GymBuddy is not a static PDF or rigid routine. Every workout and nutrition tip dynamically responds to your real daily progress."
+                  : "GymBuddy bukan jadwal kaku. Setiap sesi latihan dan saran nutrisi merespons progres harian serta kebiasaan nyatamu."}
               </p>
             </div>
-            <button className="inline-flex items-center justify-center gap-2 bg-neutral-900 text-white rounded-full px-6 py-3 md:px-8 md:py-4 font-bold text-sm 2xl:text-base hover:bg-black transition-colors self-start md:self-end">
-              {language === "EN" ? "Explore More" : "Jelajahi Lebih Lanjut"}
+            <button
+              onClick={() => setIsAppOnboarding(true)}
+              className="inline-flex items-center justify-center gap-2 bg-neutral-900 text-white rounded-full px-6 py-3 md:px-8 md:py-4 font-bold text-sm 2xl:text-base hover:bg-black transition-colors self-start md:self-end cursor-pointer"
+            >
+              {language === "EN" ? "Start for Free" : "Mulai Gratis"}
               <div className="w-6 h-6 rounded-full bg-[#D4FF00] flex items-center justify-center text-black ml-2">
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
@@ -1331,8 +1454,8 @@ export default function App() {
                   language === "EN" ? "Set Your Goal" : "Tentukan Tujuanmu",
                 desc:
                   language === "EN"
-                    ? "Choose your fitness objective, experience level, equipment, and preferences. GymBuddy creates a personalized foundation."
-                    : "Pilih tujuan kebugaran, tingkat pengalaman, peralatan, dan preferensi Anda. GymBuddy membuat fondasi yang dipersonalisasi.",
+                    ? "Share your fitness target (fat loss, muscle gain, stamina), current experience, equipment, and any physical limits. GymBuddy sets your baseline."
+                    : "Tentukan tujuan kebugaran (turunkan lemak, bentuk otot, stamina), level saat ini, peralatan yang ada, dan riwayat cedera. GymBuddy menyusun profil unikmu.",
                 image:
                   "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=2070&auto=format&fit=crop",
                 Icon: Target,
@@ -1341,11 +1464,11 @@ export default function App() {
                 id: 2,
                 step: "02",
                 title:
-                  language === "EN" ? "Train With AI" : "Berlatih Bersama AI",
+                  language === "EN" ? "GymBuddy Builds Your Blueprint" : "GymBuddy Membuat Rencana",
                 desc:
                   language === "EN"
-                    ? "Receive adaptive workouts, AI coaching, and real-time form guidance throughout every workout."
-                    : "Terima latihan adaptif, pelatihan AI, dan panduan postur real-time di sepanjang setiap latihan.",
+                    ? "Our AI generates a realistic, personalized weekly workout plan and daily macro targets designed around your schedule."
+                    : "Algoritma AI merancang jadwal latihan mingguan dan target makronutrisi harian yang realistis sesuai waktu luangmu.",
                 image:
                   "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=2000&auto=format&fit=crop",
                 Icon: Dumbbell,
@@ -1353,11 +1476,12 @@ export default function App() {
               {
                 id: 3,
                 step: "03",
-                title: language === "EN" ? "Fuel Your Body" : "Nutrisi Tubuhmu",
+                title:
+                  language === "EN" ? "Execute Workouts & Nutrition" : "Jalankan Latihan & Nutrisi",
                 desc:
                   language === "EN"
-                    ? "Track nutrition, monitor macros, and receive personalized meal recommendations powered by AI."
-                    : "Lacak nutrisi, pantau makro, dan terima rekomendasi makanan yang dipersonalisasi yang didukung oleh AI.",
+                    ? "Train with clear audio guidance, then log meals simply by sending a WhatsApp photo for instant calorie and macro breakdown."
+                    : "Latihan dengan instruksi gerakan yang aman, lalu catat makanan semudah kirim foto di WhatsApp untuk estimasi kalori dan makro instan.",
                 image:
                   "https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop",
                 Icon: Leaf,
@@ -1367,12 +1491,12 @@ export default function App() {
                 step: "04",
                 title:
                   language === "EN"
-                    ? "Recover & Improve"
-                    : "Pulih & Berkembang",
+                    ? "Track Progress & Adapt Dynamically"
+                    : "Pantau Progres & Adaptasi",
                 desc:
                   language === "EN"
-                    ? "Analyze recovery metrics and automatically optimize your future training plan."
-                    : "Analisis metrik pemulihan dan optimalkan rencana pelatihan Anda di masa depan secara otomatis.",
+                    ? "As your strength builds or life happens, GymBuddy automatically recalculates exercise weights, reps, and next meal recommendations."
+                    : "Saat kekuatanmu meningkat atau jadwalmu berubah, GymBuddy otomatis menyesuaikan beban latihan dan rekomendasi makanan berikutnya.",
                 image:
                   "https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=2070&auto=format&fit=crop",
                 Icon: HeartPulse,
@@ -1445,304 +1569,409 @@ export default function App() {
           </div>
         </div>
 
-        {/* SECTION 5: PRICING */}
+        {/* SECTION 5: PRICING (DECISION ARCHITECTURE) */}
         <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 lg:py-16">
           <div className="w-full bg-[#0D0D0D] rounded-[2rem] 2xl:rounded-[3rem] py-16 md:py-24 lg:py-32 px-6 md:px-10 lg:px-12 relative overflow-hidden flex flex-col">
-            <div className="w-full mb-12 md:mb-16">
+            <div className="w-full mb-10 md:mb-14">
+              <div className="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-800/80 text-neutral-300 rounded-full px-4 py-1.5 text-xs md:text-sm font-bold mb-4 cursor-default">
+                {language === "EN" ? "TRANSPARENT PRICING" : "BIAYA TRANSPARAN"}
+              </div>
               <h2 className="font-['Archivo_Black'] font-normal text-3xl md:text-5xl lg:text-6xl 2xl:text-7xl uppercase tracking-tighter leading-[1] md:leading-[0.95] text-white">
                 {language === "EN" ? (
                   <>
-                    MEMBERSHIP PLANS THAT SUIT
-                    <br /> YOUR LIFESTYLE
+                    MEMBERSHIP PLANS BUILT
+                    <br /> FOR YOUR GOALS
                   </>
                 ) : (
                   <>
-                    PAKET KEANGGOTAAN YANG SESUAI
-                    <br /> DENGAN GAYA HIDUP ANDA
+                    PILIHAN PAKET SESUAI
+                    <br /> TARGET DAN KEBUTUHANMU
                   </>
                 )}
               </h2>
+              <p className="text-neutral-400 text-base md:text-lg 2xl:text-xl font-medium mt-3 max-w-xl">
+                {language === "EN"
+                  ? "Clear pricing. No hidden costs. Start with a risk-free 2-day trial."
+                  : "Biaya jelas tanpa biaya tersembunyi. Mulai gratis 2 hari tanpa risiko."}
+              </p>
             </div>
 
-            <div className="w-full flex flex-col md:flex-row gap-4 md:gap-6 items-stretch">
-              {/* FREE TIER */}
-              <div className="w-full md:w-1/3 bg-[#F5F5F5] rounded-3xl p-6 md:p-8 flex flex-col min-h-[460px] 2xl:min-h-[500px]">
-                <div className="flex-grow">
-                  <div className="flex justify-between items-start mb-6">
-                    <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-2xl 2xl:text-3xl text-neutral-900">
-                      {language === "EN" ? "Free" : "Gratis"}
-                    </h3>
-                    <div className="flex flex-col items-end">
-                      <div className="flex items-start">
-                        <span className="text-lg font-bold mt-1 mr-1 text-neutral-900">
-                          {language === "EN" ? "$" : "Rp "}
-                        </span>
-                        <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-neutral-900">
-                          0
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold mt-1 text-neutral-500">
-                        {language === "EN" ? "/month" : "/bulan"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-neutral-600 text-sm md:text-base font-medium mb-8">
-                    {language === "EN"
-                      ? "Perfect for getting started with GymBuddy AI (2-Day Free Trial)."
-                      : "Sempurna untuk mencoba uji coba gratis 2 hari GymBuddy AI."}
-                  </p>
-                  <ul className="space-y-4">
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "AI Personalized Workout Plans"
-                          : "Rencana Latihan Personal dengan AI"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "Exercise & Progress Tracking"
-                          : "Pelacakan Latihan & Kemajuan"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "2-Day Full Access Trial to Workout & Nutrition AI"
-                          : "2 Hari Akses Penuh AI Workout & Nutrisi"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "WhatsApp AI Integration"
-                          : "Integrasi WhatsApp AI"}
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-                <button
-                  onClick={() => {
-                    if (isLoggedIn) setViewMode("dashboard");
-                    else setIsAppOnboarding(true);
-                  }}
-                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8 cursor-pointer"
-                >
-                  {isLoggedIn
-                    ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
-                    : (language === "EN" ? "Get Started Free" : "Mulai Coba Gratis")}
-                </button>
-              </div>
+            {/* DURATION SELECTION TABS */}
+            <div className="flex flex-wrap items-center justify-center gap-2 bg-[#1A1A1A] p-2 rounded-2xl border border-neutral-800 max-w-2xl mx-auto mb-10">
+              {(["1m", "3m", "6m", "1y", "lifetime"] as const).map((durKey) => {
+                const isSelected = selectedPricingDuration === durKey;
+                const cfg = durationPricingConfig[durKey];
+                const label = language === "EN" ? cfg.labelEN : cfg.labelID;
 
-              {/* ADVANCED TIER */}
-              <div className="w-full md:w-1/3 bg-white rounded-3xl p-6 md:p-8 flex flex-col min-h-[460px] 2xl:min-h-[500px] border border-[#D4FF00] relative">
-                <div className="absolute top-0 right-8 -translate-y-1/2 bg-[#D4FF00] text-black text-[10px] md:text-xs font-bold uppercase tracking-wider px-3 py-1 md:px-4 md:py-1.5 rounded-full">
-                  {language === "EN" ? "Recommended" : "Rekomendasi"}
-                </div>
-                <div className="flex-grow">
-                  <div className="flex justify-between items-start mb-6">
-                    <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-3xl 2xl:text-4xl text-black">
-                      {language === "EN" ? "Advanced" : "Lanjutan"}
-                    </h3>
-                    <div className="flex flex-col items-end">
-                      <div className="flex items-start">
-                        <span className="text-xl font-bold mt-1 mr-1 text-black">
-                          {language === "EN" ? "$" : "Rp "}
-                        </span>
-                        <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-black">
-                          {language === "EN" ? "5" : "79rb"}
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold mt-1 text-neutral-500">
-                        {language === "EN" ? "/month" : "/bulan"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-neutral-700 text-sm md:text-base font-medium mb-6">
-                    {language === "EN"
-                      ? "Choose the AI feature that matches your fitness journey."
-                      : "Pilih fitur AI yang sesuai dengan perjalanan kebugaran Anda."}
-                  </p>
-
-                  <div className="mb-4">
-                    <div className="text-xs font-bold text-neutral-500 uppercase mb-2 tracking-wide">
-                      {language === "EN"
-                        ? "Choose One AI Specialization"
-                        : "Pilih Satu Spesialisasi AI"}
-                    </div>
-                    <div className="bg-neutral-100 p-1.5 rounded-xl flex gap-1 mb-4">
-                      <button
-                        onClick={() => setSpecialization("nutrition")}
-                        className={`flex-1 font-bold text-xs py-3 px-3 rounded-lg transition-all focus:outline-none ${specialization === "nutrition" ? "bg-[#D4FF00] text-black" : "bg-transparent text-neutral-500 hover:text-black hover:bg-neutral-200"}`}
+                return (
+                  <button
+                    key={durKey}
+                    onClick={() => setSelectedPricingDuration(durKey)}
+                    className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer relative flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-[#D4FF00] text-black shadow-lg shadow-[#D4FF00]/20 scale-105"
+                        : "text-neutral-400 hover:text-white hover:bg-neutral-800/80"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {cfg.badge && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                          isSelected
+                            ? "bg-black text-[#D4FF00]"
+                            : "bg-neutral-800 text-neutral-300"
+                        }`}
                       >
-                        Nutrition AI
-                      </button>
-                      <button
-                        onClick={() => setSpecialization("vision")}
-                        className={`flex-1 font-bold text-xs py-3 px-3 rounded-lg transition-all focus:outline-none ${specialization === "vision" ? "bg-[#D4FF00] text-black" : "bg-transparent text-neutral-500 hover:text-black hover:bg-neutral-200"}`}
-                      >
-                        Vision AI
-                      </button>
-                    </div>
-
-                    {specialization === "nutrition" ? (
-                      <ul className="space-y-3 mb-4">
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Unlimited AI Meal Recognition"
-                              : "Pengenalan Makanan AI Tanpa Batas"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Personalized Nutrition Insights"
-                              : "Wawasan Nutrisi Personal"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Macro & Calorie Analysis"
-                              : "Analisis Makro & Kalori"}
-                          </span>
-                        </li>
-                      </ul>
-                    ) : (
-                      <ul className="space-y-3 mb-4">
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Unlimited AI Form Analysis"
-                              : "Analisis Postur AI Tanpa Batas"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Real-Time Technique Feedback"
-                              : "Umpan Balik Teknik Real-Time"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <Check className="text-black shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                          <span className="font-medium text-sm 2xl:text-base text-neutral-800">
-                            {language === "EN"
-                              ? "Exercise Performance Insights"
-                              : "Wawasan Performa Latihan"}
-                          </span>
-                        </li>
-                      </ul>
+                        {cfg.badge}
+                      </span>
                     )}
+                  </button>
+                );
+              })}
+            </div>
 
-                    <div className="text-[11px] text-neutral-500 font-medium">
-                      {language === "EN"
-                        ? "You can switch your AI specialization anytime."
-                        : "Anda dapat mengganti spesialisasi AI Anda kapan saja."}
+            {/* 3 REAL PRICING PLANS GRID */}
+            {(() => {
+              const currentPrice = durationPricingConfig[selectedPricingDuration];
+              const singlePrice = language === "EN" ? currentPrice.singleUSD : currentPrice.singleIDR;
+              const premiumPrice = language === "EN" ? currentPrice.premiumUSD : currentPrice.premiumIDR;
+              const periodText = language === "EN" ? currentPrice.periodEN : currentPrice.periodID;
+              const subNoteText = language === "EN" ? currentPrice.subNoteEN : currentPrice.subNoteID;
+
+              return (
+                <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch mb-8">
+                  {/* CARD 1: ADVANCED - AI NUTRITIONIST */}
+                  <div className="bg-[#151515] rounded-3xl p-6 md:p-8 flex flex-col justify-between border border-neutral-800 hover:border-neutral-700 transition-all shadow-xl">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
+                            🥗 {language === "EN" ? "NUTRITION SPECIALIST" : "SPESIALISASI NUTRISI"}
+                          </span>
+                          <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-2xl 2xl:text-3xl text-white">
+                            Advanced: AI Nutritionist
+                          </h3>
+                        </div>
+                      </div>
+
+                      <p className="text-neutral-400 text-xs sm:text-sm font-medium mb-6">
+                        {language === "EN"
+                          ? "Focused 100% on meal photo tracking, daily macros & deficit coaching in WhatsApp."
+                          : "Fokus 100% pada hitung kalori masakan harian via foto WhatsApp & bimbingan gizi."}
+                      </p>
+
+                      <div className="mb-6 pb-6 border-b border-neutral-800">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-white">
+                            {singlePrice}
+                          </span>
+                          <span className="text-neutral-400 text-sm font-semibold">
+                            {periodText}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-400 font-bold mt-1.5">
+                          {subNoteText}
+                        </p>
+                      </div>
+
+                      <ul className="space-y-3.5 mb-8">
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Dedicated AI Nutritionist Persona (Coach Mia)"
+                              : "Persona Coach Mia (Ahli Gizi AI Pribadi di WhatsApp)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Photo Food Logging & Instant Macro Breakdown (Local Foods)"
+                              : "Foto Makanan: Hitung Kalori & Makro Otomatis (Masakan Lokal)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "BMR, TDEE & Smart Deficit/Surplus Recommendations"
+                              : "Kalkulator BMR, TDEE, & Rekomendasi Menu Defisit/Surplus"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Daily WhatsApp Nutrition Summary & Hydration Cues"
+                              : "Rekap Nutrisi Harian & Pengingat Hidrasi di WhatsApp"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Unlimited Daily Meal Logs & 24/7 Nutrition Consultation"
+                              : "Unlimited Log Makanan & Konsultasi Nutrisi 24/7"}
+                          </span>
+                        </li>
+                      </ul>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        if (isLoggedIn) setViewMode("dashboard");
+                        else setIsAppOnboarding(true);
+                      }}
+                      className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-500 transition-all cursor-pointer"
+                    >
+                      {isLoggedIn
+                        ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                        : (language === "EN" ? `Choose Nutritionist (${singlePrice})` : `Pilih AI Nutritionist (${singlePrice})`)}
+                    </button>
+                  </div>
+
+                  {/* CARD 2: ADVANCED - AI WORKOUT COACH */}
+                  <div className="bg-[#151515] rounded-3xl p-6 md:p-8 flex flex-col justify-between border border-neutral-800 hover:border-neutral-700 transition-all shadow-xl">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
+                            ⚡ {language === "EN" ? "WORKOUT SPECIALIST" : "SPESIALISASI LATIHAN"}
+                          </span>
+                          <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-2xl 2xl:text-3xl text-white">
+                            Advanced: AI Workout Coach
+                          </h3>
+                        </div>
+                      </div>
+
+                      <p className="text-neutral-400 text-xs sm:text-sm font-medium mb-6">
+                        {language === "EN"
+                          ? "Focused 100% on gym/home workouts, machine guides & camera form checks."
+                          : "Fokus 100% pada program gym/rumah, cek postur kamera, & progressive overload."}
+                      </p>
+
+                      <div className="mb-6 pb-6 border-b border-neutral-800">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-white">
+                            {singlePrice}
+                          </span>
+                          <span className="text-neutral-400 text-sm font-semibold">
+                            {periodText}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-400 font-bold mt-1.5">
+                          {subNoteText}
+                        </p>
+                      </div>
+
+                      <ul className="space-y-3.5 mb-8">
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Dedicated AI Workout Coach Persona (Coach Max)"
+                              : "Persona Coach Max (Pelatih Kebugaran AI Pribadi di WA)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Custom Gym & Home Workout Routine (Tailored to Equipment)"
+                              : "Program Latihan Custom Gym & Rumah (Sesuai Alat)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Camera Pose & Exercise Form Check (Vision AI)"
+                              : "Form & Technique Check via Kamera HP (Vision AI Pose)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Progressive Overload Tracking & Injury-Safe Adjustments"
+                              : "Panduan Beban Progressive Overload & Batas Cedera"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Real-time Training Schedule Sync with Web Dashboard"
+                              : "Sinkronisasi Jadwal Latihan Real-Time ke Web Dashboard"}
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (isLoggedIn) setViewMode("dashboard");
+                        else setIsAppOnboarding(true);
+                      }}
+                      className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-500 transition-all cursor-pointer"
+                    >
+                      {isLoggedIn
+                        ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                        : (language === "EN" ? `Choose Workout Coach (${singlePrice})` : `Pilih AI Workout Coach (${singlePrice})`)}
+                    </button>
+                  </div>
+
+                  {/* CARD 3: PREMIUM ALL-ACCESS (HERO CARD) */}
+                  <div className="bg-[#181818] rounded-3xl p-6 md:p-8 flex flex-col justify-between border-2 border-[#D4FF00] shadow-2xl relative lg:-translate-y-2">
+                    <div className="absolute top-0 right-8 -translate-y-1/2 bg-[#D4FF00] text-black text-[10px] md:text-xs font-black uppercase tracking-wider px-3.5 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>{language === "EN" ? "Best Value • Most Popular" : "Paling Laris • Best Value"}</span>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-start mb-4 mt-2">
+                        <div>
+                          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#D4FF00] block mb-1">
+                            👑 {language === "EN" ? "ALL-ACCESS BUNDLE" : "PAKET LENGKAP 2 AI"}
+                          </span>
+                          <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-2xl 2xl:text-3xl text-white">
+                            {language === "EN" ? "Premium All-Access" : "Paket Premium All-Access"}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <p className="text-neutral-300 text-xs sm:text-sm font-medium mb-6">
+                        {language === "EN"
+                          ? "Both AI coaches active simultaneously in WhatsApp for complete physique transformation."
+                          : "Kedua AI aktif bersamaan di WhatsApp: Nutrisi + Workout Coach untuk hasil maksimal tanpa kompromi."}
+                      </p>
+
+                      <div className="mb-6 pb-6 border-b border-neutral-800">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-[#D4FF00]">
+                            {premiumPrice}
+                          </span>
+                          <span className="text-neutral-300 text-sm font-semibold">
+                            {periodText}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#D4FF00] font-bold mt-1.5">
+                          {subNoteText}
+                        </p>
+                      </div>
+
+                      <ul className="space-y-3.5 mb-8">
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-bold text-xs sm:text-sm text-white">
+                            {language === "EN"
+                              ? "Everything in Nutritionist & Workout Coach Included"
+                              : "Semua Fitur di Paket AI Nutritionist & AI Workout Coach"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Both AI Coaches Active Simultaneously 24/7 on WhatsApp"
+                              : "2 AI Coach Aktif Sekaligus 24/7 di Nomor WhatsApp Anda"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Gemini Pro Vision AI: Food Recognition & Camera Form Check"
+                              : "Presisi Tinggi Gemini Pro Vision AI (Foto Makanan & Form Check)"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Visual Infographic Poster Generation & Workout Logs"
+                              : "Generasi Poster Infografis Latihan & Rekap Nutrisi"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Recovery Intelligence & Weekly Fatigue Balance"
+                              : "Kecerdasan Pemulihan & Evaluasi Beban Mingguan"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <Check className="text-[#D4FF00] shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
+                          <span className="font-medium text-xs sm:text-sm text-neutral-200">
+                            {language === "EN"
+                              ? "Priority Fast-Track Response 24/7 & Full Web Dashboard Sync"
+                              : "Respon Cepat Prioritas 24/7 & Sync Real-Time Web Dashboard"}
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (isLoggedIn) setViewMode("dashboard");
+                        else setIsAppOnboarding(true);
+                      }}
+                      className="w-full py-3.5 2xl:py-4 rounded-full font-black text-sm 2xl:text-base bg-[#D4FF00] text-black hover:bg-[#c4ec00] hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-[#D4FF00] focus:ring-offset-2 focus:ring-offset-black transition-all cursor-pointer shadow-lg shadow-[#D4FF00]/20"
+                    >
+                      {isLoggedIn
+                        ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
+                        : (language === "EN" ? `Choose Premium All-Access (${premiumPrice})` : `Pilih Paket Premium All-Access (${premiumPrice})`)}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (isLoggedIn) setViewMode("dashboard");
-                    else setIsAppOnboarding(true);
-                  }}
-                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#D4FF00] text-black hover:brightness-105 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-all mt-auto cursor-pointer"
-                >
-                  {isLoggedIn
-                    ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
-                    : (language === "EN" ? "Pesan Advanced ($5)" : "Pesan Advanced (Rp 79rb)")}
-                </button>
+              );
+            })()}
+
+            {/* 2-DAY FREE TRIAL BANNER */}
+            <div className="w-full bg-[#161616] border border-neutral-800 rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-5 mt-2">
+              <div className="flex items-start sm:items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse"></span>
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#D4FF00]">
+                      {language === "EN" ? "Risk-Free Trial" : "Uji Coba Gratis"}
+                    </span>
+                  </div>
+                  <h4 className="text-base sm:text-lg font-bold text-white mt-0.5">
+                    {language === "EN"
+                      ? "Not ready to commit? Start with a 2-Day Full Access Free Trial."
+                      : "Belum yakin ingin ambil paket apa? Mulai dulu 2 Hari Gratis Penuh."}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-neutral-400 mt-1 max-w-2xl">
+                    {language === "EN"
+                      ? "Experience photo meal tracking and WhatsApp AI coaching directly on your phone. No credit card required, instant setup."
+                      : "Rasakan kemudahan foto makanan dan bimbingan coach AI langsung di nomor WhatsApp Anda. Tanpa kartu kredit, langsung aktif seketika."}
+                  </p>
+                </div>
               </div>
 
-              {/* PREMIUM TIER */}
-              <div className="w-full md:w-1/3 bg-[#F5F5F5] rounded-3xl p-6 md:p-8 flex flex-col min-h-[460px] 2xl:min-h-[500px]">
-                <div className="flex-grow">
-                  <div className="flex justify-between items-start mb-6">
-                    <h3 className="font-['Archivo_Black'] font-normal tracking-tighter text-2xl 2xl:text-3xl text-neutral-900">
-                      {language === "EN" ? "Premium" : "Premium"}
-                    </h3>
-                    <div className="flex flex-col items-end">
-                      <div className="flex items-start">
-                        <span className="text-lg font-bold mt-1 mr-1 text-neutral-900">
-                          {language === "EN" ? "$" : "Rp "}
-                        </span>
-                        <span className="font-['Archivo_Black'] font-normal tracking-tighter leading-none text-4xl 2xl:text-5xl text-neutral-900">
-                          {language === "EN" ? "8" : "139rb"}
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold mt-1 text-neutral-500">
-                        {language === "EN" ? "/month" : "/bulan"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-neutral-600 text-sm md:text-base font-medium mb-8">
-                    {language === "EN"
-                      ? "The complete GymBuddy AI experience with both AIs."
-                      : "Pengalaman GymBuddy AI yang lengkap dengan 2 AI sekaligus."}
-                  </p>
-                  <ul className="space-y-4">
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-900 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-bold text-sm 2xl:text-base text-neutral-900">
-                        {language === "EN"
-                          ? "Everything in Advanced"
-                          : "Semua yang ada di Advanced"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "Nutrition AI + Vision Workout AI"
-                          : "Nutrition AI + Vision Workout AI"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        Recovery Intelligence & Visual Posters
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "Full WhatsApp & Dashboard Sync"
-                          : "Sync Real-Time WhatsApp & Dashboard"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Check className="text-neutral-500 shrink-0 w-4 h-4 md:w-5 md:h-5 mt-0.5" />
-                      <span className="font-medium text-sm 2xl:text-base text-neutral-600">
-                        {language === "EN"
-                          ? "Priority Gemini Pro AI Processing"
-                          : "Pemrosesan AI Prioritas Gemini Pro"}
-                      </span>
-                    </li>
-                  </ul>
-                </div>
+              <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
                 <button
                   onClick={() => {
                     if (isLoggedIn) setViewMode("dashboard");
                     else setIsAppOnboarding(true);
                   }}
-                  className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-[#111111] text-white hover:bg-neutral-800 border border-transparent hover:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-colors mt-8 cursor-pointer"
+                  className="flex-1 md:flex-none px-6 py-3 rounded-full font-bold text-xs sm:text-sm bg-white text-black hover:bg-neutral-200 transition-colors cursor-pointer text-center whitespace-nowrap"
                 >
                   {isLoggedIn
                     ? (language === "EN" ? "Open Dashboard" : "Buka Dashboard")
-                    : (language === "EN" ? "Pesan Premium ($8)" : "Pesan Premium (Rp 139rb)")}
+                    : (language === "EN" ? "Start Free Trial (2 Days)" : "Mulai Coba Gratis (2 Hari)")}
+                </button>
+                <button
+                  onClick={() => setIsPricingPage(true)}
+                  className="px-4 py-3 rounded-full font-bold text-xs sm:text-sm text-neutral-400 hover:text-white transition-colors cursor-pointer text-center whitespace-nowrap"
+                >
+                  {language === "EN" ? "View Full Pricing ->" : "Detail Semua Paket ->"}
                 </button>
               </div>
             </div>
@@ -1777,19 +2006,19 @@ export default function App() {
                 >
                   <button
                     onClick={() => setOpenFaqIdx(isOpen ? null : index)}
-                    className="flex justify-between items-center py-5 sm:py-6 w-full text-left group focus:outline-none"
+                    className="flex justify-between items-center py-5 sm:py-6 w-full text-left group focus:outline-none cursor-pointer"
                   >
                     <span
-                      className={`text-base sm:text-lg font-semibold font-['Inter'] transition-colors duration-200 pr-8 ${isOpen ? "text-[#D4FF00]" : "text-[#111111] group-hover:text-[#D4FF00]"}`}
+                      className={`text-base sm:text-lg font-semibold font-['Inter'] transition-colors duration-200 pr-8 ${isOpen ? "text-black font-bold" : "text-[#222222] group-hover:text-black"}`}
                     >
                       {faq.question}
                     </span>
                     <motion.div
                       animate={{ rotate: isOpen ? 45 : 0 }}
                       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                      className={`text-xl shrink-0 transition-colors duration-200 ${isOpen ? "text-[#D4FF00]" : "text-emerald-600 group-hover:text-[#D4FF00]"}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xl shrink-0 transition-all duration-200 ${isOpen ? "bg-[#D4FF00] text-black" : "bg-neutral-100 text-neutral-800 group-hover:bg-[#D4FF00] group-hover:text-black"}`}
                     >
-                      <Plus className="w-5 h-5" strokeWidth={2} />
+                      <Plus className="w-4 h-4" strokeWidth={2.5} />
                     </motion.div>
                   </button>
                   <motion.div
@@ -1808,7 +2037,7 @@ export default function App() {
                     }}
                     className="overflow-hidden"
                   >
-                    <div className="pb-5 sm:pb-6 pt-3 text-sm sm:text-base font-['Inter'] text-[#6B7280] leading-relaxed">
+                    <div className="pb-5 sm:pb-6 pt-2 text-sm sm:text-base font-['Inter'] text-neutral-600 leading-relaxed max-w-4xl">
                       {faq.answer}
                     </div>
                   </motion.div>
@@ -1822,6 +2051,51 @@ export default function App() {
       {/* REVIEWS SECTION: 5-CARD TESTIMONIAL CAROUSEL */}
       <div id="reviews-section" className="px-4 md:px-6 lg:px-8 py-8 md:py-12 lg:py-16">
         <TestimonialCarousel language={language} />
+      </div>
+
+      {/* SECTION 8: FINAL CONVERSION CLOSER */}
+      <div className="px-4 md:px-6 lg:px-8 py-4 md:py-8">
+        <div className="w-full bg-[#0D0D0D] rounded-[2rem] 2xl:rounded-[3rem] py-14 md:py-20 px-6 md:px-12 text-center text-white relative overflow-hidden flex flex-col items-center justify-center shadow-2xl border border-neutral-800">
+          <div className="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-800/80 text-[#D4FF00] rounded-full px-4 py-1.5 text-xs md:text-sm font-bold mb-6 cursor-default">
+            {language === "EN" ? "READY TO START?" : "SIAP MEMULAI?"}
+          </div>
+          <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl uppercase tracking-tighter leading-tight max-w-3xl mb-4">
+            {language === "EN"
+              ? "Transform Your Fitness Journey Today."
+              : "Wujudkan Tubuh Idealmu Bersama GymBuddy."}
+          </h2>
+          <p className="text-neutral-400 text-base sm:text-lg 2xl:text-xl font-medium max-w-2xl mb-8 leading-relaxed">
+            {language === "EN"
+              ? "Join thousands of active members training smarter and eating right with a personal AI coach that adapts to you. Zero risk, 2-day free trial."
+              : "Bergabung bersama ribuan anggota aktif yang berlatih lebih cerdas dan makan lebih tepat dengan pelatih AI pribadi di WhatsApp. Uji coba gratis 2 hari penuh."}
+          </p>
+
+          <div className="flex flex-col items-center gap-3 w-full sm:w-auto">
+            <motion.button
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 0 24px rgba(212,255,0,0.4)",
+              }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsAppOnboarding(true)}
+              className="bg-[#D4FF00] text-black px-8 py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-[#c4ec00] transition-colors text-base md:text-lg 2xl:text-xl w-full sm:w-auto group cursor-pointer"
+            >
+              {language === "EN" ? "Start for Free Now" : "Mulai Gratis Sekarang"}
+              <div className="bg-black text-white p-1.5 2xl:p-2 rounded-full shrink-0 relative overflow-hidden">
+                <ArrowUpRight
+                  size={18}
+                  strokeWidth={2.5}
+                  className="md:w-5 md:h-5 2xl:w-6 2xl:h-6 transition-transform group-hover:translate-x-[2px] group-hover:-translate-y-[2px]"
+                />
+              </div>
+            </motion.button>
+            <span className="text-neutral-400 text-xs sm:text-sm mt-1">
+              {language === "EN"
+                ? "2-day full trial • No credit card needed • Active instantly in WhatsApp"
+                : "2 hari akses penuh • Tanpa kartu kredit • Langsung aktif di WhatsApp"}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* FOOTER */}

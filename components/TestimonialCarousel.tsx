@@ -14,70 +14,75 @@ export default function TestimonialCarousel({ language }: TestimonialCarouselPro
     {
       id: 1,
       name: "Budi Santoso",
+      role: isEN ? "Corporate Staff, 32" : "Karyawan Swasta, 32",
       initials: "BS",
       avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-      goal: isEN ? "Fat Loss & Calorie Control" : "Menurunkan Berat Badan",
+      goal: isEN ? "Fat Loss & Macro Control" : "Menurunkan Lemak Tubuh",
       progress: isEN ? "-8kg in 3 Months" : "-8kg dalam 3 bulan",
       badge: "-8 kg",
       quote: isEN
-        ? "Easiest meal tracking ever—just send a photo on WhatsApp and Wowo calculates exact calories instantly!"
-        : "Paling gampang foto makanan di WA, Wowo langsung ngitung kalori presisi tanpa perlu timbang manual!",
+        ? "The easiest way to track meals. Just snap a photo in WhatsApp, and GymBuddy calculates calories and macros without tedious weighing. Dieting feels sustainable."
+        : "Paling praktis kirim foto makanan di WhatsApp, GymBuddy langsung estimasi kalori dan makro tanpa perlu timbang manual. Diet jadi santai dan konsisten.",
       beforeImg: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&q=80&w=400",
       afterImg: "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&q=80&w=400",
     },
     {
       id: 2,
       name: "Sarah Amalia",
+      role: isEN ? "Architect, 27" : "Arsitek, 27",
       initials: "SA",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-      goal: isEN ? "Clean Bulk & Tone" : "Bulking Bersih & Tone",
-      progress: isEN ? "+4kg Muscle Mass" : "+4kg Massa Otot",
+      goal: isEN ? "Strength & Safe Lifting Form" : "Bentuk Otot & Postur Bebas Cedera",
+      progress: isEN ? "+4kg Lean Muscle" : "+4kg Massa Otot",
       badge: "+4 kg Otot",
       quote: isEN
-        ? "Vision AI form check eliminated my fear of heavy squats and deadlifts. Pose guidance is spot on!"
-        : "Vision AI form check bikin gak ragu lagi squat & deadlift sendiri di gym. Postur makin rapi!",
+        ? "Vision AI form check eliminated my hesitation with squats and deadlifts. Movement cues kept my posture clean and back protected."
+        : "Vision AI form check bikin gak ragu lagi squat & deadlift sendiri di gym. Postur makin rapi dan punggung aman dari cedera.",
       beforeImg: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=400",
       afterImg: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&q=80&w=400",
     },
     {
       id: 3,
       name: "Dimas Rizky",
+      role: isEN ? "Software Engineer, 29" : "Software Engineer, 29",
       initials: "DR",
       avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200",
-      goal: isEN ? "Stamina & Energy" : "Kesehatan & Stamina",
+      goal: isEN ? "Daily Consistency & Energy" : "Bangun Kebiasaan & Disiplin Harian",
       progress: isEN ? "3 Months Consistency" : "3 Bulan Konsisten",
       badge: "3 Bulan",
       quote: isEN
-        ? "24/7 WhatsApp assistant keeps me accountable for workouts and hydration. Completely transformed my daily routine!"
-        : "Asisten WA 24/7 selalu ngingetin target air & jadwal workout. Dari mager parah sekarang jadi rutin tiap pagi!",
+        ? "The 24/7 WhatsApp coach keeps me accountable for workouts and hydration. Turned erratic gym attendance into a consistent daily habit."
+        : "Asisten WhatsApp 24/7 selalu mengingatkan target air & jadwal workout. Dari yang dulu sering bolong latihan, sekarang rutin jalanin tiap pagi.",
       beforeImg: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=400",
       afterImg: "https://images.unsplash.com/photo-1483721310020-03333e577078?auto=format&fit=crop&q=80&w=400",
     },
     {
       id: 4,
       name: "Jessica Tan",
+      role: isEN ? "Entrepreneur, 25" : "Entrepreneur, 25",
       initials: "JT",
       avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200",
-      goal: isEN ? "Body Recomposition" : "Body Recomposition",
+      goal: isEN ? "Flexible Nutrition & Tone" : "Body Recomposition & Nutrisi Fleksibel",
       progress: isEN ? "-6cm Waistline" : "-6cm Lingkar Pinggang",
       badge: "-6 cm Waist",
       quote: isEN
-        ? "Coach Mia is encouraging yet firm. Her daily macro guidance makes dieting feel effortless and sustainable!"
-        : "Coach Mia bener-bener ramah tapi tegas. Panduan makro harian bikin diet gak berasa kaya siksaan.",
+        ? "Coach Mia is encouraging yet firm. Her daily macro guidance keeps my nutrition flexible without feeling starved or exhausted."
+        : "Coach Mia bener-bener ramah tapi tegas. Panduan makro harian bikin pola makan fleksibel tanpa rasa lapar berlebihan atau tersiksa.",
       beforeImg: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&q=80&w=400",
       afterImg: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&q=80&w=400",
     },
     {
       id: 5,
       name: "Rendy Pratama",
+      role: isEN ? "Marketing Lead, 31" : "Marketing Lead, 31",
       initials: "RP",
       avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200",
-      goal: isEN ? "Endurance & Fit Body" : "Fat Loss & Endurance",
-      progress: isEN ? "-10kg for Wedding" : "-10kg Fit Saat Wedding",
+      goal: isEN ? "Busy Schedule Fat Loss" : "Fat Loss Efektif di Tengah Kesibukan",
+      progress: isEN ? "-10kg Goal Achieved" : "-10kg Target Tercapai",
       badge: "-10 kg",
       quote: isEN
-        ? "Fitted into my old clothes within 2 months! The most effective solution for busy corporate schedules."
-        : "Dalam 2 bulan baju lama pas lagi. Solusi paling worth it buat yang super sibuk kerja kantoran.",
+        ? "The most realistic solution for demanding corporate hours. 35-45 minute efficient workouts that deliver measurable results."
+        : "Solusi paling realistis buat yang super sibuk kerja kantoran. Latihan cuma 35-45 menit tapi efektif dan terukur hasilnya.",
       beforeImg: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=400",
       afterImg: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&q=80&w=400",
     },
@@ -217,6 +222,7 @@ export default function TestimonialCarousel({ language }: TestimonialCarouselPro
                       <div className="text-sm font-bold text-white truncate flex items-center gap-1.5">
                         <span>{item.name}</span>
                         <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
+                        <span className="text-[11px] font-normal text-neutral-400">({item.role})</span>
                       </div>
                       <div className="text-xs text-white font-medium truncate mt-0.5">
                         {item.goal} • <span className="text-neutral-300 font-normal">{item.progress}</span>

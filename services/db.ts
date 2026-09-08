@@ -30,7 +30,16 @@ export interface UserDocument {
   fiberGrams?: number;
   customSchedule?: any;
   customGoals?: any;
-  reminderTime?: string;
+  // Canonical Single Source of Truth Subscription Plan
+  plan?: "trial" | "nutritionist" | "workout_coach" | "premium" | "lifetime";
+  planDuration?: "2_days" | "1_month" | "3_months" | "6_months" | "1_year" | "lifetime";
+  planStartedAt?: Date | string | null;
+  planExpiresAt?: Date | string | null;
+  hasUsedTrial?: boolean;
+  trialStartedAt?: Date | string | null;
+  trialExpiresAt?: Date | string | null;
+  lastExpiryNotificationType?: string | null;
+  lastExpiryNotificationDate?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,12 +47,14 @@ export interface UserDocument {
 export interface SubscriptionDocument {
   userId: string;
   phone: string;
-  plan: "free" | "advanced" | "premium";
+  plan: "free" | "advanced" | "premium" | "trial" | "nutritionist" | "workout_coach" | "lifetime";
   activeService: "nutrition" | "coach" | "both";
   status: "trial" | "active" | "expired" | "cancelled";
-  billingDuration: "1m" | "3m" | "6m" | "1y" | "lifetime";
+  billingDuration: "1m" | "3m" | "6m" | "1y" | "lifetime" | "2_days" | "1_month" | "3_months" | "6_months" | "1_year";
+  canonicalPlan?: "trial" | "nutritionist" | "workout_coach" | "premium" | "lifetime";
+  canonicalDuration?: "2_days" | "1_month" | "3_months" | "6_months" | "1_year" | "lifetime";
   startedAt: Date;
-  expiresAt: Date;
+  expiresAt: Date | null;
   midtransOrderId?: string;
   midtransTransactionId?: string;
   grossAmount?: number;

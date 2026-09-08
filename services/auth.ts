@@ -82,35 +82,67 @@ export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPay
   return res.status(401).json({ success: false, error: "Invalid or expired authentication token. Please log in again." });
 }
 
+import {
+  getUserSubscription as getCanonicalSubscription,
+  getUserEntitlements,
+  getPlanDisplayName,
+  type CanonicalPlan
+} from "./subscriptionEngine";
+
 /**
  * Server-Side Subscription Entitlement Guard
- * Ensures a Plan 1 user cannot access Plan 2 features without active subscription in MongoDB.
+ * Uses canonical subscriptionEngine as single source of truth.
  */
-export function requireEntitlementMiddleware(requiredTier: "advanced" | "premium" | "any_paid") {
+export function requireEntitlementMiddleware(requiredCapability: "nutrition" | "workout" | "both" | "advanced" | "premium" | "any_paid") {
   return async (req: Request & { user?: AuthTokenPayload }, res: Response, next: NextFunction) => {
     const userPhone = req.user?.phone || req.params.phone || req.body?.phone;
     if (!userPhone) {
       return res.status(401).json({ success: false, error: "User authentication required" });
     }
 
-    const sub = await getUserSubscription(userPhone);
-    if (!sub) {
-      // In trial window or free tier
-      return next();
+    const user = await findUserByPhoneOrId(String(userPhone));
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
     }
 
-    const now = new Date();
-    const isExpired = sub.expiresAt && new Date(sub.expiresAt) < now;
-    if (isExpired && sub.status === "active") {
-      sub.status = "expired";
-    }
-
-    if (requiredTier === "premium" && sub.plan !== "premium" && sub.status === "active") {
+    const sub = getCanonicalSubscription(user);
+    if (!sub.isActive) {
       return res.status(403).json({
         success: false,
-        error: "This feature requires the GymBuddy Premium (All-Access) plan. Upgrade to unlock.",
-        requiredPlan: "premium",
-        currentPlan: sub.plan
+        error: "subscription_required",
+        reason: sub.entitlements.reason,
+        plan: sub.plan,
+        isExpired: sub.isExpired,
+        message: sub.isExpired
+          ? `Masa aktif paket ${sub.planDisplayName} kamu telah berakhir.`
+          : `Paket ${sub.planDisplayName} kamu belum aktif.`
+      });
+    }
+
+    if ((requiredCapability === "nutrition" || requiredCapability === "advanced") && !sub.entitlements.canNutrition) {
+      return res.status(403).json({
+        success: false,
+        error: "entitlement_unauthorized",
+        plan: sub.plan,
+        message: `Paket ${sub.planDisplayName} kamu tidak mencakup fitur nutrisi. Upgrade ke AI Nutritionist atau Premium.`
+      });
+    }
+
+    if (requiredCapability === "workout" && !sub.entitlements.canWorkout) {
+      return res.status(403).json({
+        success: false,
+        error: "entitlement_unauthorized",
+        plan: sub.plan,
+        message: `Paket ${sub.planDisplayName} kamu tidak mencakup fitur latihan. Upgrade ke AI Workout Coach atau Premium.`
+      });
+    }
+
+    if ((requiredCapability === "both" || requiredCapability === "premium") && (!sub.entitlements.canNutrition || !sub.entitlements.canWorkout)) {
+      return res.status(403).json({
+        success: false,
+        error: "entitlement_unauthorized",
+        plan: sub.plan,
+        message: `Fitur ini memerlukan Paket Premium (All-Access).`
       });
     }
 
