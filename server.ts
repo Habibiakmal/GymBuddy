@@ -38,12 +38,14 @@ import {
   generatePersonalizedWorkoutRecommendation,
   generatePersonalizedWeeklyWorkoutPlan,
   classifyMealIntent,
+  classifyWorkoutIntent,
+  formatSetsReps,
   validateFoodSafety,
   validateWorkoutSafety,
   logRecommendationAudit,
   type CanonicalUserProfile
 } from "./services/recommendationEngine";
-export { classifyMealIntent };
+export { classifyMealIntent, classifyWorkoutIntent, formatSetsReps };
 import {
   estimateMealNutritionDeterministic,
   calculateFoodNutrition,
@@ -2574,13 +2576,13 @@ function hasFoodContext(text: string): boolean {
 }
 
 // Match pure water logging intent without meal context
-function matchPureWaterLog(text: string): RegExpMatchArray | null {
+export function matchPureWaterLog(text: string): RegExpMatchArray | null {
   if (hasFoodContext(text)) return null;
   return text.match(/(?:minum|air\s+putih|water|hidrasi)\s*:?\s*(\d+(?:[\.,]\d+)?)\s*(gelas|cup|cups|ml|l|liter)?/i);
 }
 
 // Match pure weight logging intent without meal context
-function matchPureWeightLog(text: string): RegExpMatchArray | null {
+export function matchPureWeightLog(text: string): RegExpMatchArray | null {
   const lower = text.toLowerCase().trim();
   if (lower.match(/(?:makan|sarapan|lunch|dinner|minum|porsi|kalori|kcal|resep)/i)) {
     return null;
@@ -4097,15 +4099,22 @@ export function extractWorkoutParameters(userText: string) {
   const setMatch = lower.match(/(\d+)\s*(?:set|sets)\b/i);
   if (setMatch) sets = parseInt(setMatch[1], 10);
 
-  // 2. Extract Reps (e.g. "12 repetisi", "12 reps", "12 rep", "12x", "12 kali", "masing masing 12 repetisi")
+  // 2. Extract Reps (e.g. "12 repetisi", "12 reps", "12 rep", "12x", "12 kali", "masing masing 12 repetisi", "10x")
   let reps: number | undefined = undefined;
-  const repMatch = lower.match(/(?:masing[-\s]*masing\s*)?(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/x\s*(\d+)\b/i);
+  const repMatch = lower.match(/(?:masing[-\s]*masing\s*)?(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) ||
+                   lower.match(/(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) ||
+                   lower.match(/x\s*(\d+)\b/i) ||
+                   lower.match(/(\d+)\s*x\b/i);
   if (repMatch) reps = parseInt(repMatch[1], 10);
 
   // 3. Extract Weight (e.g. "beban 25 kg", "25 kg", "25kg", "25 kilo", "beban 25kg")
+  // Body weight references MUST NOT be parsed as workout weight (e.g. "berat aku 75kg", "bb 75", "timbangan 70")
   let weightKg: number | undefined = undefined;
-  const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
-  if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
+  const isBodyWeightContext = Boolean(lower.match(/\b(?:berat\s*(?:badan)?|bb|timbangan|nimbang)\b/i));
+  if (!isBodyWeightContext) {
+    const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
+    if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
+  }
 
   // 4. Extract Duration (e.g. "30 menit", "45 mins", "1 jam", "setengah jam", "45 detik", "60 detik")
   let durationMinutes: number | undefined = undefined;
@@ -4396,12 +4405,17 @@ export function handleWorkoutProgressLogging(
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   const lower = userText.toLowerCase().trim();
 
+  // Guard 0: Body weight update (e.g. "berat aku skrng 75kg", "bb 75", "update bb 70")
+  if (matchPureWeightLog(userText)) {
+    return null;
+  }
+
   // Guard 1: if message is a question or request for tutorial / tips, do not log
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
   }
 
-  // Guard 2: Explicit schedule inquiry (must never log workout)
+  // Guard 2: Explicit schedule inquiry or recommendation request (must never log workout)
   const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
   const hasScheduleInquiry = Boolean(lower.match(/\bjadwal\b/i)) ||
     Boolean(lower.match(/\bschedule\b/i)) ||
@@ -4416,7 +4430,12 @@ export function handleWorkoutProgressLogging(
     lower.includes("rekomendasi latihan") ||
     lower.includes("rekomendasi workout") ||
     lower.includes("jadwal latihan besok") ||
-    lower.includes("workout besok apa");
+    lower.includes("workout besok apa") ||
+    lower.includes("saran olahraga") ||
+    lower.includes("saran workout") ||
+    lower.includes("saran latihan") ||
+    lower.includes("olahraga mingguan") ||
+    Boolean(lower.match(/(?:saran|rekomendasi)\s+(?:olahraga|latihan|workout|gym)/i));
 
   if (hasScheduleInquiry && !hasCompletionSignal) {
     return null; // Delegate to isWorkoutScheduleQuery / isWeeklyScheduleQuery
@@ -7560,27 +7579,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
           if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
+          const planCapabilities = getUserPlanCapabilities(userData);
 
           const mealIntent = classifyMealIntent(userText);
           const isTomorrowMealQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "tomorrow");
           const isWeeklyMealPlanQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "weekly");
 
-          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (
-            Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") ||
-            lowerText.includes("rekomendasi makanan") ||
-            lowerText.includes("rekomendasi makan") ||
-            lowerText.includes("menu makan") ||
-            lowerText.includes("saran makan") ||
-            lowerText.includes("pagi siang malam") ||
-            lowerText.includes("rekomendasi sarapan") ||
-            Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) ||
-            Boolean(lowerText.match(/ada\s+saran\s+makan/i)) ||
-            Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) ||
-            Boolean(lowerText.match(/saran\s+menu/i)) ||
-            Boolean(lowerText.match(/rekomendasi\s+menu/i))
-          );
-
-          const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (
+          const workoutIntent = classifyWorkoutIntent(userText);
+          const isWeeklyScheduleQuery = Boolean(
+            workoutIntent?.isWorkoutIntent &&
+            workoutIntent.scope === "weekly" &&
+            (workoutIntent.action === "recommendation" || workoutIntent.action === "schedule")
+          ) || (
             lowerText.includes("jadwal latihan minggu") ||
             lowerText.includes("jadwal olahraga minggu") ||
             lowerText.includes("jadwal olahraga seminggu") ||
@@ -7592,12 +7602,23 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             lowerText.includes("jadwal latihan mingguan") ||
             lowerText.includes("jadwal olahraga mingguan") ||
             lowerText.includes("program minggu ini") ||
-            Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i))
+            lowerText.includes("olahraga mingguan") ||
+            lowerText.includes("saran olahraga minggu ini") ||
+            lowerText.includes("saran latihan minggu ini") ||
+            Boolean(lowerText.match(/(?:jadwal|saran|rekomendasi)\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i))
           );
 
-          const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
+          const isWorkoutCompletionSignal = Boolean(
+            (workoutIntent?.isWorkoutIntent && workoutIntent.action === "log") ||
+            lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i)
+          );
 
           const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (
+            Boolean(
+              workoutIntent?.isWorkoutIntent &&
+              (workoutIntent.scope === "today" || workoutIntent.scope === "tomorrow") &&
+              (workoutIntent.action === "recommendation" || workoutIntent.action === "schedule")
+            ) ||
             lowerText.includes("jadwal olahraga") ||
             lowerText.includes("jadwal latihan") ||
             lowerText.includes("jadwal workout") ||
@@ -7613,13 +7634,15 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             lowerText.includes("program latihan") ||
             lowerText.includes("rekomendasi workout") ||
             lowerText.includes("rekomendasi latihan") ||
+            lowerText.includes("saran olahraga hari ini") ||
+            lowerText.includes("saran latihan hari ini") ||
             lowerText.includes("workout besok") ||
             lowerText.includes("latihan besok") ||
             lowerText.includes("schedule workout") ||
             lowerText.includes("workout schedule") ||
             Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) ||
             Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) ||
-            Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) ||
+            Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi|saran)\s+(?:workout|latihan|olahraga|gym)/i)) ||
             Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) ||
             Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i))
           );
@@ -7669,7 +7692,6 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             const currentCalculated = calculateUserData(userProfile);
             responseMessages = generateWelcomeMessages(currentCalculated);
           } else {
-            const planCapabilities = getUserPlanCapabilities(userData);
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
             if (!planValidation.canProceed) {
@@ -7686,23 +7708,22 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                 } else if (unit === "l" || unit === "liter") {
                   actualMl = rawAmount * 1000;
                 } else {
-                  actualMl = Math.round(rawAmount) * 250;
+                  // Default to standard Indonesian glass (250 ml)
+                  actualMl = rawAmount * 250;
                 }
-                const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-                const currentCups = getWaterCups(from);
-                const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
-                const liters = (newTotalCups * 0.25).toFixed(1);
-                const waterEntry: MealLog = {
-                  id: `wa-water-${Date.now()}`,
-                  foodName: `Air Putih ${actualMl} ml`,
+                const newWaterLog = addWaterIntake(from, actualMl);
+                const newTotalCups = (newWaterLog.totalMl / 250).toFixed(1);
+                const liters = (newWaterLog.totalMl / 1000).toFixed(2);
+                const waterEntry = {
+                  id: Date.now().toString(),
+                  userId: from,
+                  mealName: `Air Putih (${actualMl} ml)`,
                   calories: 0,
                   protein: 0,
                   carbs: 0,
                   fat: 0,
-                  isHydration: true,
-                  volumeMl: actualMl,
                   timestamp: new Date().toISOString(),
-                  mealType: getMealTypeByHour(userText)
+                  analysis: `Pencatatan hidrasi otomatis: ${actualMl} ml (${(actualMl/250).toFixed(1)} gelas). Total hari ini: ${liters} Liter.`
                 };
                 addMealLog(from, waterEntry);
                 const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -7718,6 +7739,15 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
+            } else if (isWeeklyMealPlanQuery && isWeeklyScheduleQuery) {
+              const multiMsgs: string[] = [];
+              if (planCapabilities.canWorkout) {
+                multiMsgs.push(generateWeeklyWorkoutSchedule(userData));
+              }
+              if (planCapabilities.canNutrition) {
+                multiMsgs.push(generateWeeklyMealSchedule(userData));
+              }
+              responseMessages = multiMsgs.length > 0 ? multiMsgs : ["Untuk plan kamu saat ini, silakan periksa paket langganan kamu ya ✨"];
             } else if (isTomorrowMealQuery) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -7740,14 +7770,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               if (!planCapabilities.canWorkout) {
                 responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
               } else {
-                const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
+                const isTomorrow = workoutIntent?.scope === "tomorrow" || lowerText.includes("besok") || lowerText.includes("tomorrow");
                 responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
-              }
-            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
-              if (!planCapabilities.canWorkout) {
-                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
-              } else {
-                responseMessages = handleWorkoutProgressLogging(from, userText, userData)!;
               }
             } else if (weightMatch) {
               const newW = parseFloat(weightMatch[1].replace(',', '.'));
@@ -7758,6 +7782,12 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                 } else {
                   responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
                 }
+              }
+            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
+              if (!planCapabilities.canWorkout) {
+                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
+              } else {
+                responseMessages = handleWorkoutProgressLogging(from, userText, userData)!;
               }
             } else if (isProgressHistoryMessage) {
               responseMessages = [formatProgressHistoryCard(from)];

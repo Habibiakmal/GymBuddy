@@ -2014,7 +2014,7 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
 
   const exerciseLines = selected.map((ex, idx) => 
     `${idx + 1}. *${ex.indonesianName || ex.name}*\n` +
-    `   🔢 ${ex.targetSets} Set x ${ex.targetReps}\n` +
+    `   🔢 ${formatSetsReps(ex.targetSets, ex.targetReps)}\n` +
     `   💡 Tips: ${ex.tips || "Jaga postur netral dan atur pernafasan."}`
   ).join("\n\n");
 
@@ -2040,12 +2040,145 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
   );
 }
 
+export function formatSetsReps(targetSets?: number, targetReps?: string): string {
+  if (!targetReps) {
+    return targetSets ? `${targetSets} Set` : "";
+  }
+  const cleanReps = targetReps.trim();
+  if (/^\d+\s*set\b/i.test(cleanReps)) {
+    return cleanReps;
+  }
+  if (targetSets && !cleanReps.toLowerCase().includes("set")) {
+    return `${targetSets} Set x ${cleanReps}`;
+  }
+  return cleanReps;
+}
+
+export interface WorkoutIntentResult {
+  isWorkoutIntent: boolean;
+  domain: "workout";
+  action: "recommendation" | "schedule" | "log" | "education";
+  scope: "today" | "tomorrow" | "weekly" | "general";
+  targetDayOffset: number; // 0 for today, 1 for tomorrow, 7 for weekly
+}
+
+export function classifyWorkoutIntent(userText: string): WorkoutIntentResult | null {
+  const lower = (userText || "").toLowerCase().trim();
+
+  // 1. Weight updates are pure body weight logs, NEVER workout intent
+  if (
+    lower.match(/(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan|tadi\s*nimbang|nimbang)\s*(?:hari\s*ini|saat\s*ini|sekarang|terbaru|terkini|adalah|di|:|udah|sudah)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)?/i) ||
+    lower.match(/^(?:berat\s*(?:badan)?|bb)\s*(?:aku|saya|gue|gw)?\s*(?:skrng|sekarang|saat\s*ini)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo)?$/i)
+  ) {
+    return null;
+  }
+
+  // 2. Pure logging / past workout signals (e.g. "aku tadi push up 10x", "aku tadi olahraga 45 menit", "selesai latihan", "lapor workout")
+  const hasPastSignal = Boolean(
+    lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga|aku melakukan)\b/i)
+  );
+
+  const isExplicitRequest = Boolean(
+    lower.match(/\b(?:kasih|minta|mau|saran|rekomendasi|jadwal|program|menu|plan|ide|gimana|apa\s*aja|bagus(?:nya)?)\b/i)
+  );
+
+  if (hasPastSignal && !isExplicitRequest) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "log",
+      scope: "today",
+      targetDayOffset: 0
+    };
+  }
+
+  // Check if text pertains to workout/exercise
+  const hasWorkoutKeyword = Boolean(
+    lower.match(/\b(?:olahraga|latihan|workout|gym|fitness|strength|kardio|cardio|senam|push\s*up|pull\s*up|squat)\b/i)
+  );
+
+  if (!hasWorkoutKeyword) {
+    return null;
+  }
+
+  // 3. Educational questions (e.g. "apa manfaat strength training?", "berapa kali seminggu sebaiknya cardio?", "kenapa harus pemanasan?")
+  const isEducationInquiry = Boolean(
+    lower.match(/^(?:apa\s+(?:manfaat|fungsi|keuntungan)|kenapa\s+harus|mengapa|berapa\s+kali\s+seminggu\s+sebaiknya)\b/i) ||
+    (lower.includes("?") && lower.match(/\b(?:apa\s+itu|definisi|pengertian|manfaat)\b/i))
+  );
+  if (isEducationInquiry && !isExplicitRequest) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "education",
+      scope: "general",
+      targetDayOffset: 0
+    };
+  }
+
+  // 4. WEEKLY SCOPE:
+  // "kasih aku saran olahraga minggu ini"
+  // "kasih aku jadwal olahraga minggu ini"
+  // "kasih aku olahraga mingguan"
+  // "jadwal latihan minggu ini"
+  // "saran olahraga minggu ini"
+  // "program minggu ini", etc.
+  const hasWeeklyKeyword = Boolean(
+    lower.match(/\b(?:minggu\s*ini|mingguan|seminggu(?:an)?|7\s*hari|tujuh\s*hari|pekan\s*ini)\b/i)
+  );
+
+  if (hasWeeklyKeyword) {
+    const isSchedule = lower.includes("jadwal") || lower.includes("program");
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: isSchedule ? "schedule" : "recommendation",
+      scope: "weekly",
+      targetDayOffset: 7
+    };
+  }
+
+  // 5. TOMORROW SCOPE:
+  const hasTomorrowKeyword = Boolean(
+    lower.match(/\b(?:besok|tomorrow|esok\s*hari)\b/i)
+  );
+  if (hasTomorrowKeyword) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "recommendation",
+      scope: "tomorrow",
+      targetDayOffset: 1
+    };
+  }
+
+  // 6. TODAY SCOPE:
+  const hasTodayKeyword = Boolean(
+    lower.match(/\b(?:hari\s*ini|today|sekarang)\b/i)
+  );
+  const isTodayRecommendation = Boolean(
+    hasTodayKeyword ||
+    lower.match(/\b(?:saran|rekomendasi|jadwal|menu|program)\s+(?:olahraga|latihan|workout|gym)\b/i) ||
+    lower.match(/\b(?:olahraga|latihan|workout|gym)\s+(?:apa|gimana|hari\s*ini)\b/i) ||
+    lower.match(/^(?:kasih\s+aku\s+)?(?:saran|jadwal|rekomendasi)\s+(?:olahraga|latihan|workout|gym)/i)
+  );
+
+  if (isTodayRecommendation) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "recommendation",
+      scope: "today",
+      targetDayOffset: 0
+    };
+  }
+
+  return null;
+}
+
 export function generatePersonalizedWeeklyWorkoutPlan(rawProfile: any): string {
   const profile = resolveCanonicalProfile(rawProfile);
-  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
-  const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
-  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const todayDayName = dayNames[new Date().getDay()];
+  const coachLabel = profile.persona === "max" ? "COACH MAX" : "COACH MIA";
 
   // Filter verified safe exercise pool
   const safePool = EXERCISE_REGISTRY.filter(ex => validateWorkoutSafety(ex, profile).pass);
@@ -2058,43 +2191,84 @@ export function generatePersonalizedWeeklyWorkoutPlan(rawProfile: any): string {
   const lowerExercises = safePool.filter(e => e.bodyArea === "lower_body");
   const coreExercises = safePool.filter(e => e.bodyArea === "core" || e.movementPattern === "cardio");
 
-  const scheduleBlocks = dayOrder.map(day => {
-    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
-    const todayMarker = isToday ? " ← _Hari ini_" : "";
+  // Generate safe 7-day schedule
+  // SENIN: Strength Training / Full Body
+  const monEx1 = upperExercises[0] || safePool[0];
+  const monEx2 = lowerExercises[0] || safePool[1] || monEx1;
+  const monEx3 = coreExercises[0] || upperExercises[1] || safePool[2] || monEx1;
+  const mondayBlock =
+    `📆 SENIN\n` +
+    `💪 Full Body / Push Day\n` +
+    `• ${monEx1.indonesianName || monEx1.name} — ${formatSetsReps(monEx1.targetSets, monEx1.targetReps)}\n` +
+    `• ${monEx2.indonesianName || monEx2.name} — ${formatSetsReps(monEx2.targetSets, monEx2.targetReps)}\n` +
+    `• ${monEx3.indonesianName || monEx3.name} — ${formatSetsReps(monEx3.targetSets, monEx3.targetReps)}`;
 
-    if (day === "Minggu") {
-      return `*Minggu*${todayMarker}\n🌴 Pemulihan Total & Istirahat (Rest Day)`;
-    } else if (day === "Rabu") {
-      const mobilityEx = safePool.find(e => e.id.includes("mobility") || e.id.includes("stretch")) || coreExercises[0] || safePool[0];
-      return `*Rabu*${todayMarker}\n🧘 Mobilitas Aktif & Peregangan\n• ${mobilityEx?.indonesianName || "Dynamic Stretching"} — 15 Menit`;
-    } else if (day === "Senin" || day === "Kamis") {
-      const ex1 = upperExercises[0] || safePool[0];
-      const ex2 = upperExercises[1] || safePool[1] || ex1;
-      return `*${day}*${todayMarker}\n💪 Upper Body Focus\n• ${ex1?.indonesianName || ex1?.name} — ${ex1?.targetReps}\n• ${ex2?.indonesianName || ex2?.name} — ${ex2?.targetReps}`;
-    } else {
-      const ex1 = lowerExercises[0] || safePool[0];
-      const ex2 = coreExercises[0] || lowerExercises[1] || safePool[1] || ex1;
-      return `*${day}*${todayMarker}\n🦵 Lower Body & Core Focus\n• ${ex1?.indonesianName || ex1?.name} — ${ex1?.targetReps}\n• ${ex2?.indonesianName || ex2?.name} — ${ex2?.targetReps}`;
-    }
-  }).join("\n\n");
+  // SELASA: Cardio / Active Recovery
+  const tuesdayBlock =
+    `📆 SELASA\n` +
+    `🚶 Cardio / Active Recovery\n` +
+    `• Jalan Cepat (Brisk Walk) / Incline Treadmill\n` +
+    `• 30–45 Menit (Intensitas Sedang)`;
 
-  const injurySummary = profile.injuriesStatus === "reported" && profile.injuries.length > 0
-    ? `🛡️ *Penyesuaian Fisik*: Jadwal disusun dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} dari profilmu.\n`
-    : `🛡️ *Penyesuaian Fisik*: Jadwal latihan terstruktur sesuai target kebugaranmu.\n`;
+  // RABU: Strength Training
+  const wedEx1 = upperExercises[1] || upperExercises[0] || safePool[0];
+  const wedEx2 = lowerExercises[1] || lowerExercises[0] || safePool[1] || wedEx1;
+  const wednesdayBlock =
+    `📆 RABU\n` +
+    `💪 Strength Training\n` +
+    `• ${wedEx1.indonesianName || wedEx1.name} — ${formatSetsReps(wedEx1.targetSets, wedEx1.targetReps)}\n` +
+    `• ${wedEx2.indonesianName || wedEx2.name} — ${formatSetsReps(wedEx2.targetSets, wedEx2.targetReps)}`;
 
-  const weeklyPersonaClosing = profile.persona === "max"
-    ? `Jadwal latihan ini gue rancang dengan mempertimbangkan data profil dan batasan fisik lo bro. Kalau ada gerakan yang terasa gak nyaman di sendi, kabari gue dan langsung switch ke opsi lebih aman! Gas! 💪`
-    : `Jadwal latihan ini disusun dengan mempertimbangkan data profil dan batasan fisikmu ya. Dengarkan sinyal tubuhmu, dan kalau ada gerakan yang terasa kurang nyaman, segera kabari aku ✨`;
+  // KAMIS: Recovery / Rest
+  const thursdayBlock =
+    `📆 KAMIS\n` +
+    `🧘 Recovery / Rest\n` +
+    `• Peregangan Dinamis & Mobilitas Sendi\n` +
+    `• 15–20 Menit`;
+
+  // JUMAT: Strength Training
+  const friEx1 = lowerExercises[0] || safePool[0];
+  const friEx2 = upperExercises[0] || safePool[1] || friEx1;
+  const fridayBlock =
+    `📆 JUMAT\n` +
+    `💪 Strength Training\n` +
+    `• ${friEx1.indonesianName || friEx1.name} — ${formatSetsReps(friEx1.targetSets, friEx1.targetReps)}\n` +
+    `• ${friEx2.indonesianName || friEx2.name} — ${formatSetsReps(friEx2.targetSets, friEx2.targetReps)}`;
+
+  // SABTU: Cardio / Activity
+  const saturdayBlock =
+    `📆 SABTU\n` +
+    `🏃 Cardio / Activity\n` +
+    `• Jogging Santai / Bersepeda Statis\n` +
+    `• 30–45 Menit (Intensitas Sedang)`;
+
+  // MINGGU: Rest / Recovery
+  const sundayBlock =
+    `📆 MINGGU\n` +
+    `😴 Rest / Recovery\n` +
+    `• Istirahat Total & Relaksasi Otot\n` +
+    `• Cukupi tidur 7–8 jam & hidrasi optimal`;
+
+  const coachGuidance = profile.persona === "max"
+    ? (profile.injuriesStatus === "reported" && profile.injuries.length > 0
+        ? `Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil. Konsistensi kunci utama, tetap disiplin dan gas pol! 🔥`
+        : `Latihan ini disusun dengan mempertimbangkan target kebugaran yang kamu masukkan di profil. Konsistensi kunci utama, tetap disiplin dan gas pol! 🔥`)
+    : (profile.injuriesStatus === "reported" && profile.injuries.length > 0
+        ? `Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil ya. Utamakan konsistensi dan nikmati setiap prosesnya ✨`
+        : `Latihan ini disusun dengan mempertimbangkan target kebugaran yang kamu masukkan di profil ya. Utamakan konsistensi dan nikmati setiap prosesnya ✨`);
 
   return (
-    `📅 *JADWAL OLAHRAGA MINGGUAN PERSONAL*\n` +
-    `--------------------------------------------------\n` +
-    `👤 *Nama*: ${profile.name} | *Goal*: ${profile.goalTitle}\n` +
-    `🏋️ *Alat*: ${profile.equipment.toUpperCase()}\n` +
-    injurySummary +
+    `🏋️‍♂️ *JADWAL OLAHRAGA MINGGU INI*\n` +
     `--------------------------------------------------\n\n` +
-    `${scheduleBlocks}\n\n` +
+    `${mondayBlock}\n\n` +
+    `${tuesdayBlock}\n\n` +
+    `${wednesdayBlock}\n\n` +
+    `${thursdayBlock}\n\n` +
+    `${fridayBlock}\n\n` +
+    `${saturdayBlock}\n\n` +
+    `${sundayBlock}\n\n` +
     `--------------------------------------------------\n` +
-    `💬 *${coachName}*:\n"${weeklyPersonaClosing}"`
+    `💬 *${coachLabel}*\n\n` +
+    `"${coachGuidance}"`
   );
 }

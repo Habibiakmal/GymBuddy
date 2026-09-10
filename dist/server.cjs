@@ -41,6 +41,7 @@ __export(server_exports, {
   classifyMealIntent: () => classifyMealIntent,
   classifyMealType: () => classifyMealType,
   classifyUserInput: () => classifyUserInput,
+  classifyWorkoutIntent: () => classifyWorkoutIntent,
   clearSentWhatsAppMessages: () => clearSentWhatsAppMessages,
   createExpressApp: () => createExpressApp,
   dbData: () => dbData,
@@ -53,6 +54,7 @@ __export(server_exports, {
   formatDashboardMacro: () => formatDashboardMacro,
   formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
+  formatSetsReps: () => formatSetsReps,
   generateMealRecommendations: () => generateMealRecommendations,
   generateTomorrowMealSchedule: () => generateTomorrowMealSchedule,
   generateWeeklyMealSchedule: () => generateWeeklyMealSchedule,
@@ -80,6 +82,8 @@ __export(server_exports, {
   isExistingUserPhone: () => isExistingUserPhone,
   isSmartSnack: () => isSmartSnack,
   isValidIndonesianMobile: () => isValidIndonesianMobile,
+  matchPureWaterLog: () => matchPureWaterLog,
+  matchPureWeightLog: () => matchPureWeightLog,
   migrateExistingUsersToLifetime: () => migrateExistingUsersToLifetime,
   normalizePhoneToE164: () => normalizePhoneToE164,
   normalizePhoneToLocal: () => normalizePhoneToLocal,
@@ -44778,7 +44782,7 @@ Hari ini adalah waktu untuk pemulihan otot dan relaksasi persendian. Cukupi air 
   });
   const exerciseLines = selected.map(
     (ex, idx) => `${idx + 1}. *${ex.indonesianName || ex.name}*
-   \u{1F522} ${ex.targetSets} Set x ${ex.targetReps}
+   \u{1F522} ${formatSetsReps(ex.targetSets, ex.targetReps)}
    \u{1F4A1} Tips: ${ex.tips || "Jaga postur netral dan atur pernafasan."}`
   ).join("\n\n");
   const injuryNote = profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil.` : `\u{1F6E1}\uFE0F *Kondisi Fisik*: Latihan disesuaikan dengan tingkat aktivitas dan tujuan kebugaranmu.`;
@@ -44803,12 +44807,102 @@ ${exerciseLines}
 
 "${workoutPersonaClosing}"`;
 }
+function formatSetsReps(targetSets, targetReps) {
+  if (!targetReps) {
+    return targetSets ? `${targetSets} Set` : "";
+  }
+  const cleanReps = targetReps.trim();
+  if (/^\d+\s*set\b/i.test(cleanReps)) {
+    return cleanReps;
+  }
+  if (targetSets && !cleanReps.toLowerCase().includes("set")) {
+    return `${targetSets} Set x ${cleanReps}`;
+  }
+  return cleanReps;
+}
+function classifyWorkoutIntent(userText) {
+  const lower = (userText || "").toLowerCase().trim();
+  if (lower.match(/(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan|tadi\s*nimbang|nimbang)\s*(?:hari\s*ini|saat\s*ini|sekarang|terbaru|terkini|adalah|di|:|udah|sudah)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)?/i) || lower.match(/^(?:berat\s*(?:badan)?|bb)\s*(?:aku|saya|gue|gw)?\s*(?:skrng|sekarang|saat\s*ini)?\s*(\d+(?:[.,]\d+)?)\s*(?:kg|kilo)?$/i)) {
+    return null;
+  }
+  const hasPastSignal = Boolean(
+    lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga|aku melakukan)\b/i)
+  );
+  const isExplicitRequest = Boolean(
+    lower.match(/\b(?:kasih|minta|mau|saran|rekomendasi|jadwal|program|menu|plan|ide|gimana|apa\s*aja|bagus(?:nya)?)\b/i)
+  );
+  if (hasPastSignal && !isExplicitRequest) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "log",
+      scope: "today",
+      targetDayOffset: 0
+    };
+  }
+  const hasWorkoutKeyword = Boolean(
+    lower.match(/\b(?:olahraga|latihan|workout|gym|fitness|strength|kardio|cardio|senam|push\s*up|pull\s*up|squat)\b/i)
+  );
+  if (!hasWorkoutKeyword) {
+    return null;
+  }
+  const isEducationInquiry = Boolean(
+    lower.match(/^(?:apa\s+(?:manfaat|fungsi|keuntungan)|kenapa\s+harus|mengapa|berapa\s+kali\s+seminggu\s+sebaiknya)\b/i) || lower.includes("?") && lower.match(/\b(?:apa\s+itu|definisi|pengertian|manfaat)\b/i)
+  );
+  if (isEducationInquiry && !isExplicitRequest) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "education",
+      scope: "general",
+      targetDayOffset: 0
+    };
+  }
+  const hasWeeklyKeyword = Boolean(
+    lower.match(/\b(?:minggu\s*ini|mingguan|seminggu(?:an)?|7\s*hari|tujuh\s*hari|pekan\s*ini)\b/i)
+  );
+  if (hasWeeklyKeyword) {
+    const isSchedule = lower.includes("jadwal") || lower.includes("program");
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: isSchedule ? "schedule" : "recommendation",
+      scope: "weekly",
+      targetDayOffset: 7
+    };
+  }
+  const hasTomorrowKeyword = Boolean(
+    lower.match(/\b(?:besok|tomorrow|esok\s*hari)\b/i)
+  );
+  if (hasTomorrowKeyword) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "recommendation",
+      scope: "tomorrow",
+      targetDayOffset: 1
+    };
+  }
+  const hasTodayKeyword = Boolean(
+    lower.match(/\b(?:hari\s*ini|today|sekarang)\b/i)
+  );
+  const isTodayRecommendation = Boolean(
+    hasTodayKeyword || lower.match(/\b(?:saran|rekomendasi|jadwal|menu|program)\s+(?:olahraga|latihan|workout|gym)\b/i) || lower.match(/\b(?:olahraga|latihan|workout|gym)\s+(?:apa|gimana|hari\s*ini)\b/i) || lower.match(/^(?:kasih\s+aku\s+)?(?:saran|jadwal|rekomendasi)\s+(?:olahraga|latihan|workout|gym)/i)
+  );
+  if (isTodayRecommendation) {
+    return {
+      isWorkoutIntent: true,
+      domain: "workout",
+      action: "recommendation",
+      scope: "today",
+      targetDayOffset: 0
+    };
+  }
+  return null;
+}
 function generatePersonalizedWeeklyWorkoutPlan(rawProfile) {
   const profile = resolveCanonicalProfile(rawProfile);
-  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
-  const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
-  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const todayDayName = dayNames[(/* @__PURE__ */ new Date()).getDay()];
+  const coachLabel = profile.persona === "max" ? "COACH MAX" : "COACH MIA";
   const safePool = EXERCISE_REGISTRY.filter((ex) => validateWorkoutSafety(ex, profile).pass);
   if (safePool.length === 0) {
     const defaultSafe = EXERCISE_REGISTRY.find((e) => e.id === "incline-treadmill-walk" || e.id === "active-mobility-stretch") || EXERCISE_REGISTRY[0];
@@ -44817,48 +44911,64 @@ function generatePersonalizedWeeklyWorkoutPlan(rawProfile) {
   const upperExercises = safePool.filter((e) => e.bodyArea === "upper_body");
   const lowerExercises = safePool.filter((e) => e.bodyArea === "lower_body");
   const coreExercises = safePool.filter((e) => e.bodyArea === "core" || e.movementPattern === "cardio");
-  const scheduleBlocks = dayOrder.map((day) => {
-    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
-    const todayMarker = isToday ? " \u2190 _Hari ini_" : "";
-    if (day === "Minggu") {
-      return `*Minggu*${todayMarker}
-\u{1F334} Pemulihan Total & Istirahat (Rest Day)`;
-    } else if (day === "Rabu") {
-      const mobilityEx = safePool.find((e) => e.id.includes("mobility") || e.id.includes("stretch")) || coreExercises[0] || safePool[0];
-      return `*Rabu*${todayMarker}
-\u{1F9D8} Mobilitas Aktif & Peregangan
-\u2022 ${mobilityEx?.indonesianName || "Dynamic Stretching"} \u2014 15 Menit`;
-    } else if (day === "Senin" || day === "Kamis") {
-      const ex1 = upperExercises[0] || safePool[0];
-      const ex2 = upperExercises[1] || safePool[1] || ex1;
-      return `*${day}*${todayMarker}
-\u{1F4AA} Upper Body Focus
-\u2022 ${ex1?.indonesianName || ex1?.name} \u2014 ${ex1?.targetReps}
-\u2022 ${ex2?.indonesianName || ex2?.name} \u2014 ${ex2?.targetReps}`;
-    } else {
-      const ex1 = lowerExercises[0] || safePool[0];
-      const ex2 = coreExercises[0] || lowerExercises[1] || safePool[1] || ex1;
-      return `*${day}*${todayMarker}
-\u{1F9B5} Lower Body & Core Focus
-\u2022 ${ex1?.indonesianName || ex1?.name} \u2014 ${ex1?.targetReps}
-\u2022 ${ex2?.indonesianName || ex2?.name} \u2014 ${ex2?.targetReps}`;
-    }
-  }).join("\n\n");
-  const injurySummary = profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Jadwal disusun dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} dari profilmu.
-` : `\u{1F6E1}\uFE0F *Penyesuaian Fisik*: Jadwal latihan terstruktur sesuai target kebugaranmu.
-`;
-  const weeklyPersonaClosing = profile.persona === "max" ? `Jadwal latihan ini gue rancang dengan mempertimbangkan data profil dan batasan fisik lo bro. Kalau ada gerakan yang terasa gak nyaman di sendi, kabari gue dan langsung switch ke opsi lebih aman! Gas! \u{1F4AA}` : `Jadwal latihan ini disusun dengan mempertimbangkan data profil dan batasan fisikmu ya. Dengarkan sinyal tubuhmu, dan kalau ada gerakan yang terasa kurang nyaman, segera kabari aku \u2728`;
-  return `\u{1F4C5} *JADWAL OLAHRAGA MINGGUAN PERSONAL*
+  const monEx1 = upperExercises[0] || safePool[0];
+  const monEx2 = lowerExercises[0] || safePool[1] || monEx1;
+  const monEx3 = coreExercises[0] || upperExercises[1] || safePool[2] || monEx1;
+  const mondayBlock = `\u{1F4C6} SENIN
+\u{1F4AA} Full Body / Push Day
+\u2022 ${monEx1.indonesianName || monEx1.name} \u2014 ${formatSetsReps(monEx1.targetSets, monEx1.targetReps)}
+\u2022 ${monEx2.indonesianName || monEx2.name} \u2014 ${formatSetsReps(monEx2.targetSets, monEx2.targetReps)}
+\u2022 ${monEx3.indonesianName || monEx3.name} \u2014 ${formatSetsReps(monEx3.targetSets, monEx3.targetReps)}`;
+  const tuesdayBlock = `\u{1F4C6} SELASA
+\u{1F6B6} Cardio / Active Recovery
+\u2022 Jalan Cepat (Brisk Walk) / Incline Treadmill
+\u2022 30\u201345 Menit (Intensitas Sedang)`;
+  const wedEx1 = upperExercises[1] || upperExercises[0] || safePool[0];
+  const wedEx2 = lowerExercises[1] || lowerExercises[0] || safePool[1] || wedEx1;
+  const wednesdayBlock = `\u{1F4C6} RABU
+\u{1F4AA} Strength Training
+\u2022 ${wedEx1.indonesianName || wedEx1.name} \u2014 ${formatSetsReps(wedEx1.targetSets, wedEx1.targetReps)}
+\u2022 ${wedEx2.indonesianName || wedEx2.name} \u2014 ${formatSetsReps(wedEx2.targetSets, wedEx2.targetReps)}`;
+  const thursdayBlock = `\u{1F4C6} KAMIS
+\u{1F9D8} Recovery / Rest
+\u2022 Peregangan Dinamis & Mobilitas Sendi
+\u2022 15\u201320 Menit`;
+  const friEx1 = lowerExercises[0] || safePool[0];
+  const friEx2 = upperExercises[0] || safePool[1] || friEx1;
+  const fridayBlock = `\u{1F4C6} JUMAT
+\u{1F4AA} Strength Training
+\u2022 ${friEx1.indonesianName || friEx1.name} \u2014 ${formatSetsReps(friEx1.targetSets, friEx1.targetReps)}
+\u2022 ${friEx2.indonesianName || friEx2.name} \u2014 ${formatSetsReps(friEx2.targetSets, friEx2.targetReps)}`;
+  const saturdayBlock = `\u{1F4C6} SABTU
+\u{1F3C3} Cardio / Activity
+\u2022 Jogging Santai / Bersepeda Statis
+\u2022 30\u201345 Menit (Intensitas Sedang)`;
+  const sundayBlock = `\u{1F4C6} MINGGU
+\u{1F634} Rest / Recovery
+\u2022 Istirahat Total & Relaksasi Otot
+\u2022 Cukupi tidur 7\u20138 jam & hidrasi optimal`;
+  const coachGuidance = profile.persona === "max" ? profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil. Konsistensi kunci utama, tetap disiplin dan gas pol! \u{1F525}` : `Latihan ini disusun dengan mempertimbangkan target kebugaran yang kamu masukkan di profil. Konsistensi kunci utama, tetap disiplin dan gas pol! \u{1F525}` : profile.injuriesStatus === "reported" && profile.injuries.length > 0 ? `Latihan ini dipilih dengan mempertimbangkan keterbatasan ${profile.injuries.join(", ")} yang kamu masukkan di profil ya. Utamakan konsistensi dan nikmati setiap prosesnya \u2728` : `Latihan ini disusun dengan mempertimbangkan target kebugaran yang kamu masukkan di profil ya. Utamakan konsistensi dan nikmati setiap prosesnya \u2728`;
+  return `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *JADWAL OLAHRAGA MINGGU INI*
 --------------------------------------------------
-\u{1F464} *Nama*: ${profile.name} | *Goal*: ${profile.goalTitle}
-\u{1F3CB}\uFE0F *Alat*: ${profile.equipment.toUpperCase()}
-` + injurySummary + `--------------------------------------------------
 
-${scheduleBlocks}
+${mondayBlock}
+
+${tuesdayBlock}
+
+${wednesdayBlock}
+
+${thursdayBlock}
+
+${fridayBlock}
+
+${saturdayBlock}
+
+${sundayBlock}
 
 --------------------------------------------------
-\u{1F4AC} *${coachName}*:
-"${weeklyPersonaClosing}"`;
+\u{1F4AC} *${coachLabel}*
+
+"${coachGuidance}"`;
 }
 
 // services/foodIdentityEngine.ts
@@ -53601,11 +53711,14 @@ function extractWorkoutParameters(userText) {
   const setMatch = lower.match(/(\d+)\s*(?:set|sets)\b/i);
   if (setMatch) sets = parseInt(setMatch[1], 10);
   let reps = void 0;
-  const repMatch = lower.match(/(?:masing[-\s]*masing\s*)?(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/x\s*(\d+)\b/i);
+  const repMatch = lower.match(/(?:masing[-\s]*masing\s*)?(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/(\d+)\s*(?:repetisi|reps|rep|kali)\b/i) || lower.match(/x\s*(\d+)\b/i) || lower.match(/(\d+)\s*x\b/i);
   if (repMatch) reps = parseInt(repMatch[1], 10);
   let weightKg = void 0;
-  const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
-  if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
+  const isBodyWeightContext = Boolean(lower.match(/\b(?:berat\s*(?:badan)?|bb|timbangan|nimbang)\b/i));
+  if (!isBodyWeightContext) {
+    const weightMatch = lower.match(/(?:beban\s*)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogram)\b/i);
+    if (weightMatch) weightKg = parseFloat(weightMatch[1].replace(",", "."));
+  }
   let durationMinutes = void 0;
   let durationSeconds = void 0;
   const secMatch = lower.match(/(\d+)\s*(?:detik|secs|sec|second|seconds|det)\b/i);
@@ -53822,11 +53935,14 @@ function handleWorkoutProgressLogging(rawPhone, userText, userData) {
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
   const lower = userText.toLowerCase().trim();
+  if (matchPureWeightLog(userText)) {
+    return null;
+  }
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
   }
   const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
-  const hasScheduleInquiry = Boolean(lower.match(/\bjadwal\b/i)) || Boolean(lower.match(/\bschedule\b/i)) || lower.includes("latihan hari ini") || lower.includes("workout hari ini") || lower.includes("olahraga hari ini") || lower.includes("latihan apa") || lower.includes("workout apa") || lower.includes("olahraga apa") || lower.includes("menu latihan") || lower.includes("program latihan") || lower.includes("rekomendasi latihan") || lower.includes("rekomendasi workout") || lower.includes("jadwal latihan besok") || lower.includes("workout besok apa");
+  const hasScheduleInquiry = Boolean(lower.match(/\bjadwal\b/i)) || Boolean(lower.match(/\bschedule\b/i)) || lower.includes("latihan hari ini") || lower.includes("workout hari ini") || lower.includes("olahraga hari ini") || lower.includes("latihan apa") || lower.includes("workout apa") || lower.includes("olahraga apa") || lower.includes("menu latihan") || lower.includes("program latihan") || lower.includes("rekomendasi latihan") || lower.includes("rekomendasi workout") || lower.includes("jadwal latihan besok") || lower.includes("workout besok apa") || lower.includes("saran olahraga") || lower.includes("saran workout") || lower.includes("saran latihan") || lower.includes("olahraga mingguan") || Boolean(lower.match(/(?:saran|rekomendasi)\s+(?:olahraga|latihan|workout|gym)/i));
   if (hasScheduleInquiry && !hasCompletionSignal) {
     return null;
   }
@@ -56513,13 +56629,20 @@ https://gymbuddygroup.com`,
           }
           if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
+          const planCapabilities2 = getUserPlanCapabilities(userData);
           const mealIntent = classifyMealIntent(userText);
           const isTomorrowMealQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "tomorrow");
           const isWeeklyMealPlanQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "weekly");
-          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
-          const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
-          const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
-          const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
+          const workoutIntent = classifyWorkoutIntent(userText);
+          const isWeeklyScheduleQuery = Boolean(
+            workoutIntent?.isWorkoutIntent && workoutIntent.scope === "weekly" && (workoutIntent.action === "recommendation" || workoutIntent.action === "schedule")
+          ) || (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || lowerText.includes("olahraga mingguan") || lowerText.includes("saran olahraga minggu ini") || lowerText.includes("saran latihan minggu ini") || Boolean(lowerText.match(/(?:jadwal|saran|rekomendasi)\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
+          const isWorkoutCompletionSignal = Boolean(
+            workoutIntent?.isWorkoutIntent && workoutIntent.action === "log" || lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i)
+          );
+          const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (Boolean(
+            workoutIntent?.isWorkoutIntent && (workoutIntent.scope === "today" || workoutIntent.scope === "tomorrow") && (workoutIntent.action === "recommendation" || workoutIntent.action === "schedule")
+          ) || lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("saran olahraga hari ini") || lowerText.includes("saran latihan hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi|saran)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
           const parsedQueryDate = parseDateFromQuery(userText);
           const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
           const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
@@ -56544,7 +56667,6 @@ https://gymbuddygroup.com`,
             const currentCalculated = calculateUserData(userProfile);
             responseMessages = generateWelcomeMessages(currentCalculated);
           } else {
-            const planCapabilities2 = getUserPlanCapabilities(userData);
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
             if (!planValidation.canProceed) {
               responseMessages = [planValidation.redirectMessage];
@@ -56560,23 +56682,21 @@ https://gymbuddygroup.com`,
                 } else if (unit === "l" || unit === "liter") {
                   actualMl = rawAmount * 1e3;
                 } else {
-                  actualMl = Math.round(rawAmount) * 250;
+                  actualMl = rawAmount * 250;
                 }
-                const cupsToAdd = Math.max(1, Math.round(actualMl / 250));
-                const currentCups = getWaterCups(from);
-                const newTotalCups = setWaterCups(from, currentCups + cupsToAdd);
-                const liters = (newTotalCups * 0.25).toFixed(1);
+                const newWaterLog = addWaterIntake(from, actualMl);
+                const newTotalCups = (newWaterLog.totalMl / 250).toFixed(1);
+                const liters = (newWaterLog.totalMl / 1e3).toFixed(2);
                 const waterEntry = {
-                  id: `wa-water-${Date.now()}`,
-                  foodName: `Air Putih ${actualMl} ml`,
+                  id: Date.now().toString(),
+                  userId: from,
+                  mealName: `Air Putih (${actualMl} ml)`,
                   calories: 0,
                   protein: 0,
                   carbs: 0,
                   fat: 0,
-                  isHydration: true,
-                  volumeMl: actualMl,
                   timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-                  mealType: getMealTypeByHour(userText)
+                  analysis: `Pencatatan hidrasi otomatis: ${actualMl} ml (${(actualMl / 250).toFixed(1)} gelas). Total hari ini: ${liters} Liter.`
                 };
                 addMealLog(from, waterEntry);
                 const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
@@ -56593,6 +56713,15 @@ https://gymbuddygroup.com`,
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData);
+            } else if (isWeeklyMealPlanQuery && isWeeklyScheduleQuery) {
+              const multiMsgs = [];
+              if (planCapabilities2.canWorkout) {
+                multiMsgs.push(generateWeeklyWorkoutSchedule(userData));
+              }
+              if (planCapabilities2.canNutrition) {
+                multiMsgs.push(generateWeeklyMealSchedule(userData));
+              }
+              responseMessages = multiMsgs.length > 0 ? multiMsgs : ["Untuk plan kamu saat ini, silakan periksa paket langganan kamu ya \u2728"];
             } else if (isTomorrowMealQuery) {
               if (!planCapabilities2.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
@@ -56615,14 +56744,8 @@ https://gymbuddygroup.com`,
               if (!planCapabilities2.canWorkout) {
                 responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
               } else {
-                const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
+                const isTomorrow = workoutIntent?.scope === "tomorrow" || lowerText.includes("besok") || lowerText.includes("tomorrow");
                 responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
-              }
-            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
-              if (!planCapabilities2.canWorkout) {
-                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
-              } else {
-                responseMessages = handleWorkoutProgressLogging(from, userText, userData);
               }
             } else if (weightMatch) {
               const newW = parseFloat(weightMatch[1].replace(",", "."));
@@ -56633,6 +56756,12 @@ https://gymbuddygroup.com`,
                 } else {
                   responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
                 }
+              }
+            } else if (handleWorkoutProgressLogging(from, userText, userData)) {
+              if (!planCapabilities2.canWorkout) {
+                responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+              } else {
+                responseMessages = handleWorkoutProgressLogging(from, userText, userData);
               }
             } else if (isProgressHistoryMessage) {
               responseMessages = [formatProgressHistoryCard(from)];
@@ -57039,7 +57168,7 @@ Keluarkan output JSON valid:
       const twilioMealIntent = classifyMealIntent(userText);
       const isTomorrowMealQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "tomorrow");
       const isWeeklyMealPlanQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "weekly");
-      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+      const isRecommendationMessage2 = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
       const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
       const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
       const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
@@ -57275,7 +57404,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           }
         } else if (isProgressHistoryMessage) {
           responseMessages = [formatProgressHistoryCard(normFrom)];
-        } else if (isRecommendationMessage) {
+        } else if (isRecommendationMessage2) {
           if (!planCapabilities2.canNutrition) {
             responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
           } else {
@@ -57996,6 +58125,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   classifyMealIntent,
   classifyMealType,
   classifyUserInput,
+  classifyWorkoutIntent,
   clearSentWhatsAppMessages,
   createExpressApp,
   dbData,
@@ -58008,6 +58138,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   formatDashboardMacro,
   formatDashboardPercent,
   formatNutritionCard,
+  formatSetsReps,
   generateMealRecommendations,
   generateTomorrowMealSchedule,
   generateWeeklyMealSchedule,
@@ -58035,6 +58166,8 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   isExistingUserPhone,
   isSmartSnack,
   isValidIndonesianMobile,
+  matchPureWaterLog,
+  matchPureWeightLog,
   migrateExistingUsersToLifetime,
   normalizePhoneToE164,
   normalizePhoneToLocal,
