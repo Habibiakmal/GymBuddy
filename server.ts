@@ -33,14 +33,17 @@ import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklyS
 import {
   resolveCanonicalProfile,
   generatePersonalizedMealRecommendation,
+  generatePersonalizedTomorrowMealPlan,
   generatePersonalizedWeeklyMealPlan,
   generatePersonalizedWorkoutRecommendation,
   generatePersonalizedWeeklyWorkoutPlan,
+  classifyMealIntent,
   validateFoodSafety,
   validateWorkoutSafety,
   logRecommendationAudit,
   type CanonicalUserProfile
 } from "./services/recommendationEngine";
+export { classifyMealIntent };
 import {
   estimateMealNutritionDeterministic,
   calculateFoodNutrition,
@@ -3946,6 +3949,13 @@ export function generateMealRecommendations(
   rawPhone?: string,
   userText?: string
 ): string {
+  const intent = classifyMealIntent(userText || "");
+  if (intent && intent.scope === "tomorrow") {
+    return generatePersonalizedTomorrowMealPlan(userData);
+  }
+  if (intent && intent.scope === "weekly") {
+    return generatePersonalizedWeeklyMealPlan(userData);
+  }
   const todayStr = getTodayDateStr();
   const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
   return generatePersonalizedMealRecommendation(userData, totals, userText);
@@ -4040,6 +4050,10 @@ export function generateWeeklyWorkoutSchedule(userData: ReturnType<typeof calcul
 
 export function generateWorkoutRecommendations(userData: ReturnType<typeof calculateUserData>, targetDayOffset: number = 0): string {
   return generatePersonalizedWorkoutRecommendation(userData, targetDayOffset);
+}
+
+export function generateTomorrowMealSchedule(userData: ReturnType<typeof calculateUserData>): string {
+  return generatePersonalizedTomorrowMealPlan(userData);
 }
 
 export function generateWeeklyMealSchedule(userData: ReturnType<typeof calculateUserData>): string {
@@ -7547,20 +7561,12 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
 
-          const isWeeklyMealPlanQuery = (
-            lowerText.includes("jadwal makanan minggu") ||
-            lowerText.includes("jadwal makan minggu") ||
-            lowerText.includes("saran makan minggu") ||
-            lowerText.includes("rekomendasi makan minggu") ||
-            lowerText.includes("jadwal makanan seminggu") ||
-            lowerText.includes("jadwal makan seminggu") ||
-            lowerText.includes("menu seminggu") ||
-            lowerText.includes("meal plan") ||
-            Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) ||
-            Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i))
-          );
+          const mealIntent = classifyMealIntent(userText);
+          const isTomorrowMealQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "tomorrow");
+          const isWeeklyMealPlanQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "weekly");
 
-          const isRecommendationMessage = !isWeeklyMealPlanQuery && (
+          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (
+            Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") ||
             lowerText.includes("rekomendasi makanan") ||
             lowerText.includes("rekomendasi makan") ||
             lowerText.includes("menu makan") ||
@@ -7712,6 +7718,12 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
+            } else if (isTomorrowMealQuery) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+              } else {
+                responseMessages = [generateTomorrowMealSchedule(userData)];
+              }
             } else if (isWeeklyMealPlanQuery) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -8194,20 +8206,12 @@ function escapeXml(unsafe: string): string {
       const userData = calculateUserData(userProfile);
       console.log(`[Twilio WA] ✅ Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
 
-      const isWeeklyMealPlanQuery = (
-        lowerText.includes("jadwal makanan minggu") ||
-        lowerText.includes("jadwal makan minggu") ||
-        lowerText.includes("saran makan minggu") ||
-        lowerText.includes("rekomendasi makan minggu") ||
-        lowerText.includes("jadwal makanan seminggu") ||
-        lowerText.includes("jadwal makan seminggu") ||
-        lowerText.includes("menu seminggu") ||
-        lowerText.includes("meal plan") ||
-        Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) ||
-        Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i))
-      );
+      const twilioMealIntent = classifyMealIntent(userText);
+      const isTomorrowMealQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "tomorrow");
+      const isWeeklyMealPlanQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "weekly");
 
-      const isRecommendationMessage = !isWeeklyMealPlanQuery && (
+      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (
+        Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") ||
         lowerText.includes("rekomendasi makanan") ||
         lowerText.includes("rekomendasi makan") ||
         lowerText.includes("menu makan") ||
@@ -8379,8 +8383,18 @@ function escapeXml(unsafe: string): string {
             `ℹ️ Belum ada catatan makanan hari ini yang bisa dihapus.`
           ];
         }
+      } else if (isTomorrowMealQuery) {
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+        } else {
+          responseMessages = [generateTomorrowMealSchedule(userData)];
+        }
       } else if (isWeeklyMealPlanQuery) {
-        responseMessages = [generateWeeklyMealSchedule(userData)];
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+        } else {
+          responseMessages = [generateWeeklyMealSchedule(userData)];
+        }
       } else if (isWeeklyScheduleQuery) {
         responseMessages = [generateWeeklyWorkoutSchedule(userData)];
       } else if (isWorkoutScheduleQuery) {

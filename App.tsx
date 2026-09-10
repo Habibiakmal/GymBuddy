@@ -20,8 +20,6 @@ import {
 import {
   ArrowRight,
   ArrowUpRight,
-  MoveLeft,
-  MoveRight,
   Wifi,
   Asterisk,
   Plus,
@@ -387,53 +385,6 @@ export default function App() {
     mouseY.set(e.clientY - rect.top);
   };
 
-  const testimonialsEN = [
-    {
-      text: "I used to feel lost at the gym and quit after a few weeks. GymBuddy personalizes my workouts and daily protein right in WhatsApp. 3 months consistent now.",
-      location: "Jakarta, ID",
-      date: "Dimas R. • Software Engineer",
-    },
-    {
-      text: "Just snap a photo of my meal on WhatsApp and calories are estimated cleanly. No more stressful food weighing to stay on track.",
-      location: "Bandung, ID",
-      date: "Sarah A. • Architect",
-    },
-    {
-      text: "Workouts are tailored around my previous shoulder limitation. The coach always provides safe, effective movement alternatives.",
-      location: "Surabaya, ID",
-      date: "Rendy P. • Marketing Lead",
-    },
-  ];
-  const testimonialsID = [
-    {
-      text: "Dulu sering bingung mau latihan apa dan gampang nyerah. Di GymBuddy jadwal & target protein disesuaikan tiap hari langsung di WhatsApp, sekarang konsisten 3 bulan.",
-      location: "Jakarta, ID",
-      date: "Dimas R. • Software Engineer",
-    },
-    {
-      text: "Cukup foto piring makan siang di WhatsApp, kalorinya langsung terhitung rapi. Gak perlu lagi nimbang makanan ribet buat jaga defisit kalori.",
-      location: "Bandung, ID",
-      date: "Sarah A. • Arsitek",
-    },
-    {
-      text: "Gerakan latihan disesuaikan sama keterbatasan bahu lama saya. Coach selalu kasih opsi variasi aman yang tetap efektif.",
-      location: "Surabaya, ID",
-      date: "Rendy P. • Marketing Lead",
-    },
-  ];
-  const [testimonialIdx, setTestimonialIdx] = useState(0);
-  const activeTestimonials =
-    language === "EN" ? testimonialsEN : testimonialsID;
-  const activeTestimonial =
-    activeTestimonials[testimonialIdx % activeTestimonials.length];
-
-  const nextTestimonial = () => setTestimonialIdx((prev) => prev + 1);
-  const prevTestimonial = () =>
-    setTestimonialIdx(
-      (prev) =>
-        (prev - 1 + activeTestimonials.length) % activeTestimonials.length,
-    );
-
   const faqsEN = [
     {
       question: "Is GymBuddy suitable for beginners who have never worked out?",
@@ -701,19 +652,22 @@ export default function App() {
       {splashOverlay}
       <div className="pb-12">
         {/* HERO SECTION */}
-        <div className="px-4 md:px-6 lg:px-8 pt-4 md:pt-6 lg:pt-8">
-          <div className="bg-[#111111] rounded-[2rem] text-white p-6 md:p-10 lg:p-12 flex flex-col min-h-[85vh] xl:min-h-[850px] 2xl:min-h-[920px] relative overflow-hidden shadow-2xl">
-            {/* Static Background Image */}
+        <div className="p-3 sm:p-4 lg:p-5 2xl:p-6 min-h-screen min-h-[100dvh] lg:h-screen lg:h-[100dvh] lg:max-h-screen lg:max-h-[100dvh] flex flex-col box-border">
+          <div className="bg-[#111111] rounded-[2rem] text-white p-6 sm:p-8 md:p-10 lg:p-12 2xl:p-14 flex-1 flex flex-col relative overflow-hidden shadow-2xl">
+            {/* Static Background Image Treatment */}
             <div
-              className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat pointer-events-none"
+              className="absolute inset-0 z-0 bg-cover bg-no-repeat pointer-events-none transition-all duration-300"
               style={{
                 backgroundImage: "url('/hero.png')",
+                backgroundPosition: "right 6% 40%",
               }}
             />
-            <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none"></div>
+            {/* Left Vignette for High Contrast & Text Legibility */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#111111] via-[#111111]/80 via-40% to-transparent lg:w-[54%] z-0 pointer-events-none" />
+            <div className="absolute inset-0 bg-black/15 z-0 pointer-events-none" />
 
             {/* Header */}
-            <header className="flex items-center justify-between z-10 relative">
+            <header className="flex items-center justify-between z-10 relative shrink-0">
               <GymBuddyLogo size={36} showText textClassName="text-2xl md:text-3xl text-white" />
 
               <nav className="hidden lg:flex items-center gap-10 text-lg 2xl:text-xl font-medium text-neutral-400">
@@ -899,276 +853,148 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            {/* Hero Content */}
-            <div className="mt-20 md:mt-32 2xl:mt-40 max-w-5xl z-10 relative">
-              <h1 className="font-['Archivo_Black'] font-normal text-[3.5rem] leading-[1.05] tracking-tighter sm:text-6xl md:text-[5.5rem] lg:text-[6.5rem] xl:text-[7.5rem] 2xl:text-[8.5rem] font-bold">
-                <div className="overflow-hidden">
-                  <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.6,
-                      delay: 0.1,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                  >
-                    {language === "EN" ? "Be healthier." : "Lebih sehat."}
-                  </motion.div>
-                </div>
-                <div className="overflow-hidden">
-                  <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.6,
-                      delay: 0.2,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                  >
-                    {language === "EN" ? "Be stronger." : "Lebih kuat."}
-                  </motion.div>
-                </div>
-                <div className="overflow-hidden">
-                  <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.6,
-                      delay: 0.3,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                  >
-                    {language === "EN" ? "Be confident." : "Lebih pede."}
-                  </motion.div>
-                </div>
-              </h1>
-
-              {/* Supporting Hero Messaging */}
-              <p className="text-lg sm:text-xl md:text-2xl 2xl:text-3xl text-neutral-300 font-medium leading-relaxed mt-6 md:mt-8 max-w-3xl">
-                {language === "EN"
-                  ? "Your personal AI trainer and nutrition coach that adapts to your goals, fitness level, daily habits, and real progress — directly on WhatsApp & Web Dashboard."
-                  : "Pelatih AI pribadi & ahli gizi yang beradaptasi dengan target, kemampuan, kebiasaan harian, dan perkembangan tubuhmu — langsung di WhatsApp & Web Dashboard."}
-              </p>
-
-              {/* Action Buttons & Microcopy */}
-              <div className="flex flex-col items-start gap-4 mt-8 md:mt-10 xl:mt-12">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4 w-full sm:w-auto">
-                  <motion.button
-                    whileHover={{
-                      scale: 1.03,
-                      boxShadow: "0 0 24px rgba(212,255,0,0.4)",
-                    }}
-                    transition={{ duration: 0.2 }}
-                    onClick={() => setIsAppOnboarding(true)}
-                    className="bg-[#D4FF00] text-black px-6 py-3 md:px-8 md:py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center sm:justify-start gap-3 hover:bg-[#c4ec00] transition-colors text-base md:text-lg 2xl:text-xl w-full sm:w-auto group cursor-pointer"
-                  >
-                    {language === "EN" ? "Start for Free" : "Mulai Gratis"}
-                    <div className="bg-black text-white p-1.5 2xl:p-2 rounded-full shrink-0 relative overflow-hidden">
-                      <ArrowUpRight
-                        size={18}
-                        strokeWidth={2.5}
-                        className="md:w-5 md:h-5 2xl:w-6 2xl:h-6 transition-transform group-hover:translate-x-[2px] group-hover:-translate-y-[2px]"
-                      />
-                    </div>
-                  </motion.button>
-
-                  <button
-                    onClick={() => {
-                      const el = document.getElementById("ai-journey");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    className="border border-white/30 text-white hover:bg-white/10 px-6 py-3 md:px-8 md:py-4 2xl:px-10 2xl:py-5 rounded-full font-bold flex items-center justify-center gap-2 transition-all text-base md:text-lg 2xl:text-xl w-full sm:w-auto cursor-pointer"
-                  >
-                    {language === "EN" ? "See How It Works" : "Lihat Cara Kerja"}
-                  </button>
-                </div>
-
-                <span className="text-neutral-400 text-xs sm:text-sm md:text-base flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-[#D4FF00]"></span>
-                  {language === "EN"
-                    ? "2-day full free trial • No credit card needed • Active on WhatsApp"
-                    : "Uji coba 2 hari penuh • Tanpa kartu kredit • Langsung aktif di WhatsApp"}
-                </span>
-              </div>
-            </div>
-
-            {/* Bottom Cards in Hero */}
-            <div className="mt-auto pt-16 md:pt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 xl:gap-6 z-10 relative">
-              {/* Card 1 */}
-              <motion.div
-                initial={{ opacity: 0, y: 32 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                className="bg-white text-black rounded-3xl p-6 md:p-8 xl:p-10 flex flex-col justify-between h-full"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex -space-x-4">
-                    {[
-                      { id: 1, src: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 1" },
-                      { id: 2, src: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 2" },
-                      { id: 3, src: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=250&q=80", alt: "Client Avatar 3" },
-                    ].map((person, idx) => (
-                      <motion.div
-                        key={person.id}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.4, delay: 0.4 + idx * 0.06 }}
-                        className="w-12 h-12 2xl:w-16 2xl:h-16 rounded-full border-[3px] border-white overflow-hidden shadow-sm bg-neutral-200"
-                      >
-                        <img
-                          src={person.src}
-                          alt={person.alt}
-                          className="w-full h-full object-cover"
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
-                  <div>
-                    <div className="text-3xl 2xl:text-4xl font-['Archivo_Black'] font-normal tracking-tight">
-                      10,000+
-                    </div>
-                    <div className="text-[13px] 2xl:text-[15px] text-neutral-500 font-medium -mt-1">
-                      {language === "EN" ? "active members" : "pengguna aktif"}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-base 2xl:text-lg text-neutral-600 mt-6 leading-relaxed font-medium">
-                  {language === "EN"
-                    ? "From beginners to seasoned lifters, members build sustainable habits and reach their target weight and strength with an AI coach that learns their rhythm."
-                    : "Dari pemula hingga pegiat gym, mereka membangun kebiasaan sehat dan mencapai target berat badan serta otot bersama pelatih AI yang mengenal ritme mereka."}
-                </p>
-              </motion.div>
-
-              {/* Card 2 */}
-              <motion.div
-                initial={{ opacity: 0, y: 32 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.48 }}
-                className="bg-white/20 backdrop-blur-md text-white rounded-3xl p-6 md:p-8 xl:p-10 flex flex-col justify-between border border-white/30 shadow-lg relative h-full overflow-hidden"
-              >
-                <div className="relative z-10 flex justify-between items-start mb-6">
-                  <motion.button
-                    whileTap={{ scale: 0.92 }}
-                    onClick={prevTestimonial}
-                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20 cursor-pointer"
-                  >
-                    <MoveLeft size={18} className="2xl:w-5 2xl:h-5" />
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.92 }}
-                    onClick={nextTestimonial}
-                    className="w-10 h-10 2xl:w-12 2xl:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/30 transition-colors border border-white/20 cursor-pointer"
-                  >
-                    <MoveRight size={18} className="2xl:w-5 2xl:h-5" />
-                  </motion.button>
-                </div>
-                <div className="relative z-10 px-2 md:px-6 flex-grow flex items-center justify-center">
-                  <AnimatePresence mode="popLayout" initial={false}>
+            {/* Hero Main Content (Two-Column Desktop: 55% Left, 45% Right) */}
+            <div className="my-auto py-2 sm:py-4 lg:py-6 grid grid-cols-1 lg:grid-cols-12 items-center gap-6 lg:gap-8 xl:gap-12 z-10 relative">
+              {/* Left Column (55%): Headline, Description, CTA */}
+              <div className="lg:col-span-7 xl:col-span-7 2xl:col-span-6 flex flex-col justify-center">
+                <h1
+                  className="font-['Archivo_Black'] font-normal text-white"
+                  style={{
+                    fontSize: "clamp(2.75rem, 5.2vw, 5.25rem)",
+                    lineHeight: 0.94,
+                    letterSpacing: "-0.035em",
+                  }}
+                >
+                  <div className="overflow-hidden">
                     <motion.div
-                      key={testimonialIdx}
-                      initial={{ opacity: 0, y: 8 }}
+                      initial={{ opacity: 0, y: 24 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.35 }}
-                      className="w-full"
+                      transition={{
+                        duration: 0.6,
+                        delay: 0.1,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
                     >
-                      <p className="font-semibold text-lg 2xl:text-xl leading-snug text-center text-white/90">
-                        "{activeTestimonial.text}"
-                      </p>
+                      {language === "EN" ? "Be healthier." : "Lebih sehat."}
                     </motion.div>
-                  </AnimatePresence>
-                </div>
-                <div className="relative z-10 flex justify-between items-end mt-8 text-sm 2xl:text-base text-neutral-300 font-medium px-2 md:px-4">
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={`loc-${testimonialIdx}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="font-bold text-[#D4FF00]"
+                  </div>
+                  <div className="overflow-hidden">
+                    <motion.div
+                      initial={{ opacity: 0, y: 24 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.6,
+                        delay: 0.2,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
                     >
-                      {activeTestimonial.date}
-                    </motion.span>
-                  </AnimatePresence>
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={`date-${testimonialIdx}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
+                      {language === "EN" ? "Be stronger." : "Lebih kuat."}
+                    </motion.div>
+                  </div>
+                  <div className="overflow-hidden">
+                    <motion.div
+                      initial={{ opacity: 0, y: 24 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.6,
+                        delay: 0.3,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
                     >
-                      {activeTestimonial.location}
-                    </motion.span>
-                  </AnimatePresence>
-                </div>
-              </motion.div>
+                      {language === "EN" ? "Be confident." : "Lebih pede."}
+                    </motion.div>
+                  </div>
+                </h1>
 
-              {/* Card 3 */}
-              <motion.div
-                onClick={() => setIsAppOnboarding(true)}
-                initial={{ opacity: 0, y: 32 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.56 }}
-                whileHover="hover"
-                variants={{ hover: { filter: "brightness(1.05)" } }}
-                className="bg-[#D4FF00] text-black rounded-3xl p-6 md:p-8 xl:p-10 flex flex-col justify-between h-full md:col-span-2 lg:col-span-1 cursor-pointer"
-              >
-                <div className="flex justify-end">
-                  <motion.button
-                    variants={{ hover: { rotate: 45 } }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="w-10 h-10 2xl:w-14 2xl:h-14 rounded-full bg-black text-white flex items-center justify-center hover:scale-105 transition-transform"
-                  >
-                    <ArrowUpRight size={18} className="2xl:w-6 2xl:h-6" />
-                  </motion.button>
-                </div>
-                <div className="mt-8">
-                  <h3 className="font-['Archivo_Black'] font-normal text-2xl md:text-[28px] 2xl:text-4xl font-bold tracking-tight leading-tight">
+                {/* Supporting Hero Messaging */}
+                <p className="text-base sm:text-lg xl:text-xl text-neutral-300 font-medium leading-relaxed mt-4 md:mt-5 max-w-lg xl:max-w-xl">
+                  {language === "EN"
+                    ? "Your personal AI trainer and nutrition coach that adapts to your goals, fitness level, daily habits, and real progress — directly on WhatsApp & Web Dashboard."
+                    : "Pelatih AI pribadi & ahli gizi yang beradaptasi dengan target, kemampuan, kebiasaan harian, dan perkembangan tubuhmu — langsung di WhatsApp & Web Dashboard."}
+                </p>
+
+                {/* Action Buttons & Microcopy */}
+                <div className="flex flex-col items-start gap-3 mt-6 md:mt-7">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 md:gap-4 w-full sm:w-auto">
+                    <motion.button
+                      whileHover={{
+                        scale: 1.03,
+                        boxShadow: "0 0 24px rgba(212,255,0,0.4)",
+                      }}
+                      transition={{ duration: 0.2 }}
+                      onClick={() => setIsAppOnboarding(true)}
+                      className="bg-[#D4FF00] text-black px-7 py-3.5 2xl:px-9 2xl:py-4 rounded-full font-bold flex items-center justify-center sm:justify-start gap-3 hover:bg-[#c4ec00] transition-colors text-base md:text-lg 2xl:text-xl w-full sm:w-auto group cursor-pointer"
+                    >
+                      {language === "EN" ? "Start for Free" : "Mulai Gratis"}
+                      <div className="bg-black text-white p-1.5 2xl:p-2 rounded-full shrink-0 relative overflow-hidden">
+                        <ArrowUpRight
+                          size={18}
+                          strokeWidth={2.5}
+                          className="md:w-5 md:h-5 2xl:w-6 2xl:h-6 transition-transform group-hover:translate-x-[2px] group-hover:-translate-y-[2px]"
+                        />
+                      </div>
+                    </motion.button>
+
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById("ai-journey");
+                        if (el) el.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className="border border-white/30 text-white hover:bg-white/10 px-7 py-3.5 2xl:px-9 2xl:py-4 rounded-full font-bold flex items-center justify-center gap-2 transition-all text-base md:text-lg 2xl:text-xl w-full sm:w-auto cursor-pointer"
+                    >
+                      {language === "EN" ? "See How It Works" : "Lihat Cara Kerja"}
+                    </button>
+                  </div>
+
+                  <span className="text-neutral-400 text-xs sm:text-sm md:text-base flex items-center gap-2 mt-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-[#D4FF00]"></span>
                     {language === "EN"
-                      ? "Full 2-Day Free Trial"
-                      : "Uji Coba 2 Hari Penuh"}
-                  </h3>
-                  <p className="text-base md:text-lg 2xl:text-xl font-medium mt-2 text-black/80">
-                    {language === "EN"
-                      ? "Experience personalized workouts and nutrition guidance on WhatsApp with zero commitment."
-                      : "Nikmati program latihan personal dan panduan nutrisi harian di WhatsApp secara gratis selama 48 jam."}
-                  </p>
+                      ? "2-day full free trial • No credit card needed • Active on WhatsApp"
+                      : "Uji coba 2 hari penuh • Tanpa kartu kredit • Langsung aktif di WhatsApp"}
+                  </span>
                 </div>
-              </motion.div>
+              </div>
+
+              {/* Right Column: 45% (Hero Visual Counterpart Space) */}
+              <div
+                className="hidden lg:block lg:col-span-5 xl:col-span-5 2xl:col-span-6 relative h-full min-h-[340px] xl:min-h-[400px] pointer-events-none select-none"
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>
-        {/* SECTION 2: REAL USP (PERSONAL TRAINER & NUTRITIONIST ON WHATSAPP) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 2xl:gap-32 items-center px-4 md:px-6 lg:px-8 pt-8 md:pt-12 lg:pt-16 pb-0">
-          <div className="lg:col-span-5">
-            <div className="inline-block border-2 border-neutral-800 text-neutral-800 rounded-full px-5 py-2 2xl:px-6 2xl:py-3 text-sm 2xl:text-base font-bold mb-6 cursor-default">
-              {language === "EN"
-                ? "PERSONAL TRAINER ON WHATSAPP"
-                : "PELATIH PRIBADI DI WHATSAPP"}
-            </div>
-            <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-[3.25rem] 2xl:text-[4.25rem] font-bold tracking-tighter leading-[1.08] mb-6 md:mb-8 text-neutral-900">
-              {language === "EN"
-                ? "Personal Trainer & Nutritionist 24/7 Directly in WhatsApp."
-                : "Pelatih Pribadi & Ahli Gizi 24/7 Langsung di WhatsApp."}
-            </h2>
-            <p className="text-lg md:text-xl 2xl:text-2xl text-neutral-600 font-medium leading-relaxed mb-6 md:mb-8 max-w-xl">
-              {language === "EN"
-                ? "No need to spend millions on gym personal trainers or install complex apps you rarely open. GymBuddy guides your workouts, checks your lifting posture via camera, and calculates meal calories from photos — directly in WhatsApp."
-                : "Gak perlu keluar jutaan rupiah sewa Personal Trainer gym atau ribet install aplikasi baru yang jarang dibuka. GymBuddy memandu program latihanmu (gym atau rumah), mengecek postur gerakan via kamera, dan menghitung kalori makanan lokal dari foto — langsung di chat WhatsApp."}
-            </p>
-          </div>
 
-          <div className="lg:col-span-7 w-full overflow-hidden">
-            <div className="flex gap-4 sm:gap-6 2xl:gap-8 overflow-x-auto pb-6 pt-2 snap-x hide-scrollbar items-stretch justify-start lg:justify-end scroll-smooth max-w-full">
+        {/* SECTION 2: REAL USP (PERSONAL TRAINER & NUTRITIONIST ON WHATSAPP) */}
+        <div className="max-w-[1700px] mx-auto px-4 md:px-6 lg:px-8 pt-12 md:pt-16 lg:pt-20 pb-0">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 items-center">
+            {/* Left Text Column: 4 cols */}
+            <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-center">
+              <div className="inline-block border-2 border-neutral-800 text-neutral-800 rounded-full px-5 py-2 2xl:px-6 2xl:py-3 text-sm 2xl:text-base font-bold mb-6 cursor-default self-start">
+                {language === "EN"
+                  ? "PERSONAL TRAINER ON WHATSAPP"
+                  : "PELATIH PRIBADI DI WHATSAPP"}
+              </div>
+              <h2 className="font-['Archivo_Black'] font-normal text-3xl sm:text-4xl md:text-[2.75rem] xl:text-[3.25rem] 2xl:text-[4rem] font-bold tracking-tighter leading-[1.08] mb-6 md:mb-8 text-neutral-900">
+                {language === "EN"
+                  ? "Personal Trainer & Nutritionist 24/7 Directly in WhatsApp."
+                  : "Pelatih Pribadi & Ahli Gizi 24/7 Langsung di WhatsApp."}
+              </h2>
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-2xl text-neutral-600 font-medium leading-relaxed max-w-xl">
+                {language === "EN"
+                  ? "No need to spend millions on gym personal trainers or install complex apps you rarely open. GymBuddy guides your workouts, checks your lifting posture via camera, and calculates meal calories from photos — directly in WhatsApp."
+                  : "Gak perlu keluar jutaan rupiah sewa Personal Trainer gym atau ribet install aplikasi baru yang jarang dibuka. GymBuddy memandu program latihanmu (gym atau rumah), mengecek postur gerakan via kamera, dan menghitung kalori makanan lokal dari foto — langsung di chat WhatsApp."}
+              </p>
+            </div>
+
+            {/* Right Feature Cards Container: 8 cols (4 cols Card 1, 4 cols Card 2) */}
+            <div className="lg:col-span-8 xl:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-6 xl:gap-8 items-stretch">
               {/* Feature 1 */}
               <div
                 onClick={() => {
                   window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                   setShowcaseVariant("workout");
                 }}
-                className="w-[82vw] sm:w-[350px] md:w-[380px] lg:w-[360px] xl:w-[420px] 2xl:w-[480px] shrink-0 aspect-[4/5] bg-neutral-200 rounded-[2rem] 2xl:rounded-[3rem] relative overflow-hidden snap-start group cursor-pointer bg-cover bg-center hover:scale-[1.015] hover:brightness-105 transition-all duration-300"
+                className="w-full aspect-[4/5] bg-neutral-200 rounded-[2rem] 2xl:rounded-[3rem] relative overflow-hidden group cursor-pointer bg-cover bg-center hover:scale-[1.015] hover:brightness-105 transition-all duration-300 shadow-md"
                 style={{
                   backgroundImage:
                     "url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop')",
@@ -1182,19 +1008,19 @@ export default function App() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 group-hover:from-black/95 transition-colors z-0"></div>
                 <div className="absolute bottom-6 left-6 right-6 2xl:bottom-10 2xl:left-10 2xl:right-10 flex justify-between items-end z-10 gap-3">
                   <div className="flex flex-col">
-                    <h3 className="font-['Archivo_Black'] font-normal text-white text-2xl sm:text-3xl 2xl:text-4xl font-bold leading-tight mb-2 sm:mb-3">
+                    <h3 className="font-['Archivo_Black'] font-normal text-white text-xl sm:text-2xl xl:text-3xl font-bold leading-tight mb-2">
                       {language === "EN"
                         ? "Workouts Built Around Your Real Ability."
                         : "Latihan yang Menyesuaikan Kemampuanmu."}
                     </h3>
-                    <p className="text-white/85 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
+                    <p className="text-white/85 text-xs sm:text-sm xl:text-base font-medium leading-relaxed max-w-sm line-clamp-3 sm:line-clamp-none">
                       {language === "EN"
                         ? "No generic templates. Your sets, reps, weight loads, and movement variations automatically adapt to your equipment, schedule, and strength progression."
                         : "Bukan jadwal kaku. Beban, repetisi, dan variasi gerakan otomatis disesuaikan dengan alat yang kamu punya, waktu luang, dan perkembangan kekuatanmu."}
                     </p>
                   </div>
-                  <button className="w-10 h-10 sm:w-12 sm:h-12 2xl:w-16 2xl:h-16 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
-                    <ArrowUpRight size={18} className="sm:w-5 sm:h-5 2xl:w-7 2xl:h-7" />
+                  <button className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
+                    <ArrowUpRight size={18} className="sm:w-5 sm:h-5" />
                   </button>
                 </div>
               </div>
@@ -1205,7 +1031,7 @@ export default function App() {
                   window.scrollTo({ top: 0, left: 0, behavior: "instant" });
                   setShowcaseVariant("nutrition");
                 }}
-                className="w-[82vw] sm:w-[350px] md:w-[380px] lg:w-[360px] xl:w-[420px] 2xl:w-[480px] shrink-0 aspect-[4/5] bg-neutral-200 rounded-[2rem] 2xl:rounded-[3rem] relative overflow-hidden snap-start group cursor-pointer bg-cover bg-center hover:scale-[1.015] hover:brightness-105 transition-all duration-300"
+                className="w-full aspect-[4/5] bg-neutral-200 rounded-[2rem] 2xl:rounded-[3rem] relative overflow-hidden group cursor-pointer bg-cover bg-center hover:scale-[1.015] hover:brightness-105 transition-all duration-300 shadow-md"
                 style={{
                   backgroundImage:
                     "url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop')",
@@ -1217,19 +1043,19 @@ export default function App() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 group-hover:from-black/95 transition-colors z-0"></div>
                 <div className="absolute bottom-6 left-6 right-6 2xl:bottom-10 2xl:left-10 2xl:right-10 flex justify-between items-end z-10 gap-3">
                   <div className="flex flex-col">
-                    <h3 className="font-['Archivo_Black'] font-normal text-white text-2xl sm:text-3xl 2xl:text-4xl font-bold leading-tight mb-2 sm:mb-3">
+                    <h3 className="font-['Archivo_Black'] font-normal text-white text-xl sm:text-2xl xl:text-3xl font-bold leading-tight mb-2">
                       {language === "EN"
                         ? "Master Daily Nutrition Without Tedious Weighing."
                         : "Pahami Nutrisi Harian Tanpa Ribet Nimbang."}
                     </h3>
-                    <p className="text-white/85 text-xs sm:text-sm md:text-base 2xl:text-xl font-medium leading-relaxed max-w-sm 2xl:max-w-md line-clamp-4 sm:line-clamp-none">
+                    <p className="text-white/85 text-xs sm:text-sm xl:text-base font-medium leading-relaxed max-w-sm line-clamp-3 sm:line-clamp-none">
                       {language === "EN"
                         ? "Simply snap a meal photo on WhatsApp for instant calorie and macro estimates. Receive personalized meal suggestions to hit your daily protein targets without stress."
                         : "Cukup kirim foto makanan di WhatsApp untuk estimasi kalori dan makro instan. Dapatkan saran menu berikutnya agar target protein harianmu selalu tercapai."}
                     </p>
                   </div>
-                  <button className="w-10 h-10 sm:w-12 sm:h-12 2xl:w-16 2xl:h-16 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
-                    <ArrowUpRight size={18} className="sm:w-5 sm:h-5 2xl:w-7 2xl:h-7" />
+                  <button className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 group-hover:scale-110 transition-all shrink-0 mb-1 cursor-pointer">
+                    <ArrowUpRight size={18} className="sm:w-5 sm:h-5" />
                   </button>
                 </div>
               </div>

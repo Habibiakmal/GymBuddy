@@ -38,6 +38,7 @@ __export(server_exports, {
   buildImageMealResponseMessages: () => buildImageMealResponseMessages,
   buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
   calculateUserData: () => calculateUserData,
+  classifyMealIntent: () => classifyMealIntent,
   classifyMealType: () => classifyMealType,
   classifyUserInput: () => classifyUserInput,
   clearSentWhatsAppMessages: () => clearSentWhatsAppMessages,
@@ -53,6 +54,7 @@ __export(server_exports, {
   formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
   generateMealRecommendations: () => generateMealRecommendations,
+  generateTomorrowMealSchedule: () => generateTomorrowMealSchedule,
   generateWeeklyMealSchedule: () => generateWeeklyMealSchedule,
   generateWeeklyWorkoutSchedule: () => generateWeeklyWorkoutSchedule,
   generateWorkoutRecommendations: () => generateWorkoutRecommendations,
@@ -44349,12 +44351,137 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
 \u{1F4AC} *${coachName}*:
 "${personaNote}"`;
 }
-function generatePersonalizedWeeklyMealPlan(rawProfile) {
+function getWibDateDetails(offsetDays = 0) {
+  const now = /* @__PURE__ */ new Date();
+  const targetTime = new Date(now.getTime() + offsetDays * 24 * 60 * 60 * 1e3);
+  const options = { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" };
+  const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(targetTime);
+  const year = parts.find((p) => p.type === "year").value;
+  const month = parts.find((p) => p.type === "month").value;
+  const day = parts.find((p) => p.type === "day").value;
+  const dateStr = `${year}-${month}-${day}`;
+  const dateObj = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const dayName = dayNames[dateObj.getDay()];
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Mei",
+    "Jun",
+    "Jul",
+    "Agu",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Des"
+  ];
+  const monthFullNames = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember"
+  ];
+  const mIdx = parseInt(month, 10) - 1;
+  const formattedDate = `${dayName}, ${parseInt(day, 10)} ${monthNames[mIdx]} ${year}`;
+  const fullDate = `${dayName}, ${parseInt(day, 10)} ${monthFullNames[mIdx]} ${year}`;
+  return { dateStr, dayName, formattedDate, fullDate };
+}
+function classifyMealIntent(userText) {
+  const lower = (userText || "").toLowerCase().trim();
+  const isPureWorkout = lower.match(/^(?:workout|latihan|olahraga|gym)\s+(?:besok|tomorrow|hari\s*ini|mingguan|seminggu)/i) || lower.match(/^(?:besok|tomorrow|hari\s*ini|mingguan|seminggu)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)/i) || lower.match(/\b(?:workout|latihan|olahraga|gym)\b/i) && !lower.match(/\b(?:makan|makanan|diet|menu|sarapan|lunch|dinner|snack|camilan|cemilan|nutrisi|meal)\b/i);
+  if (isPureWorkout) {
+    return null;
+  }
+  const hasMealKeyword = Boolean(
+    lower.match(/\b(?:makan|makanan|diet|menu|sarapan|lunch|dinner|breakfast|snack|camilan|cemilan|nutrisi|meal|meal\s*plan)\b/i)
+  );
+  let detectedMealType;
+  if (lower.match(/\b(?:sarapan|breakfast|pagi)\b/i)) {
+    detectedMealType = "breakfast";
+  } else if (lower.match(/\b(?:lunch|siang)\b/i)) {
+    detectedMealType = "lunch";
+  } else if (lower.match(/\b(?:dinner|malam)\b/i)) {
+    detectedMealType = "dinner";
+  } else if (lower.match(/\b(?:snack|camilan|cemilan|sore)\b/i)) {
+    detectedMealType = "snack";
+  }
+  const isTomorrow = lower.includes("besok") || lower.includes("tomorrow");
+  if (isTomorrow && hasMealKeyword) {
+    const { dateStr, formattedDate } = getWibDateDetails(1);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "recommendation",
+      scope: "tomorrow",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+  const hasWeeklyKeyword = Boolean(
+    lower.match(/\b(?:minggu(?:an)?|seminggu|7\s*hari|tujuh\s*hari|meal\s*plan)\b/i)
+  );
+  if (hasWeeklyKeyword && hasMealKeyword && !isTomorrow) {
+    const { dateStr, formattedDate } = getWibDateDetails(0);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "plan",
+      scope: "weekly",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+  const isTodayRecommendation = Boolean(
+    lower.includes("rekomendasi makanan") || lower.includes("rekomendasi makan") || lower.includes("menu makan") || lower.includes("saran makan") || lower.includes("pagi siang malam") || lower.includes("rekomendasi sarapan") || lower.includes("saran sarapan") || lower.match(/(?:saran|rekomendasi|ide|menu)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) || lower.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i) || lower.match(/ada\s+saran\s+makan/i) || lower.match(/makan\s+(?:siang|malam|pagi)\s+apa/i) || lower.match(/sarapan\s+(?:pagi|apa)/i) || lower.match(/saran\s+menu/i) || lower.match(/rekomendasi\s+menu/i)
+  );
+  if (isTodayRecommendation && !isTomorrow && !hasWeeklyKeyword) {
+    const { dateStr, formattedDate } = getWibDateDetails(0);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "recommendation",
+      scope: "today",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+  return null;
+}
+function generatePersonalizedTomorrowMealPlan(rawProfile) {
   const profile = resolveCanonicalProfile(rawProfile);
-  const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const { formattedDate } = getWibDateDetails(1);
+  const safeBreakfastPool = BASE_MEAL_POOL.filter((m) => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
   const safeLunchPool = BASE_MEAL_POOL.filter((m) => m.category === "siang" && validateFoodSafety(m, profile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter((m) => m.category === "snack" && validateFoodSafety(m, profile).pass);
   const safeDinnerPool = BASE_MEAL_POOL.filter((m) => m.category === "malam" && validateFoodSafety(m, profile).pass);
+  const certifiedFallbackBreakfast = {
+    name: "Oatmeal Apel Rebus + Biji Chia Alami",
+    category: "sarapan",
+    calories: 280,
+    protein: 8,
+    carbs: 52,
+    fat: 5,
+    fiber: 9,
+    sodium: 40,
+    sugar: 7,
+    ingredients: ["oatmeal", "apel kukus", "biji chia"],
+    prepMethod: "seduh",
+    rationale: "Karbohidrat kompleks larut air ramah eliminasi."
+  };
   const certifiedFallbackLunch = {
     name: "Sup Bening Dada Ayam Suwir + Nasi Merah + Wortel Rebus",
     category: "siang",
@@ -44368,6 +44495,152 @@ function generatePersonalizedWeeklyMealPlan(rawProfile) {
     ingredients: ["dada ayam tanpa kulit", "wortel kukus", "nasi merah", "daun bawang"],
     prepMethod: "rebus",
     rationale: "Menu netral dengan protein bersih dan bumbu alami ramah eliminasi."
+  };
+  const certifiedFallbackSnack = {
+    name: "1 Buah Pir Segar / Jambu Biji Merah Potong",
+    category: "snack",
+    calories: 80,
+    protein: 1,
+    carbs: 19,
+    fat: 0,
+    fiber: 5,
+    sodium: 5,
+    sugar: 12,
+    ingredients: ["buah pir segar"],
+    prepMethod: "segar",
+    rationale: "Bebas alergen total, hidrasi alami dan ramah indeks glikemik rendah."
+  };
+  const certifiedFallbackDinner = {
+    name: "Pepes Ikan Mas Kunyit Jahe + Kentang Kukus + Sayur Bening",
+    category: "malam",
+    calories: 330,
+    protein: 28,
+    carbs: 40,
+    fat: 6,
+    fiber: 5,
+    sodium: 180,
+    sugar: 2,
+    ingredients: ["ikan mas", "kunyit", "jahe", "kentang kukus", "bayam"],
+    prepMethod: "kukus",
+    rationale: "Kaya protein segar dan rempah antiinflamasi alami untuk pemulihan malam."
+  };
+  const certifiedVeganFallback = {
+    name: "Kentang Kukus Bening + Brokoli & Wortel Rebus Tanpa Garam",
+    category: "siang",
+    calories: 220,
+    protein: 6,
+    carbs: 48,
+    fat: 1,
+    fiber: 6,
+    sodium: 60,
+    sugar: 3,
+    ingredients: ["kentang kukus", "brokoli kukus", "wortel kukus"],
+    prepMethod: "kukus",
+    rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
+  };
+  let chosenBreakfast = safeBreakfastPool.length > 0 ? safeBreakfastPool[0] : validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback;
+  let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[0] : validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
+  let chosenSnack = safeSnackPool.length > 0 ? safeSnackPool[0] : validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback;
+  let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[0] : validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
+  if (!validateFoodSafety(chosenBreakfast, profile).pass) {
+    chosenBreakfast = safeBreakfastPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenLunch, profile).pass) {
+    chosenLunch = safeLunchPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenSnack, profile).pass) {
+    chosenSnack = safeSnackPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenDinner, profile).pass) {
+    chosenDinner = safeDinnerPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  const estCalories = chosenBreakfast.calories + chosenLunch.calories + chosenSnack.calories + chosenDinner.calories;
+  const estProtein = chosenBreakfast.protein + chosenLunch.protein + chosenSnack.protein + chosenDinner.protein;
+  const estCarbs = chosenBreakfast.carbs + chosenLunch.carbs + chosenSnack.carbs + chosenDinner.carbs;
+  const estFat = chosenBreakfast.fat + chosenLunch.fat + chosenSnack.fat + chosenDinner.fat;
+  const tomorrowCoachClosing = profile.persona === "max" ? `Rencana makan besok ini udah gue susun pas sesuai target harian lo bro. Siapkan bahan-bahannya dari sekarang biar besok tinggal eksekusi! Tetap disiplin & gas pol! \u{1F525}` : `Rencana makan besok ini sudah aku susun seimbang sesuai target nutrisi harianmu ya. Kamu bisa persiapkan bahannya dari sekarang agar besok lebih santai. Semangat! \u2728`;
+  return `\u{1F4C5} *JADWAL MAKAN BESOK*
+--------------------------------------------------
+
+\u{1F4C6} *${formattedDate}*
+
+\u2600\uFE0F *SARAPAN*
+${chosenBreakfast.name}
+~${chosenBreakfast.calories} kcal \u2022 Protein ${chosenBreakfast.protein}g
+
+\u{1F371} *MAKAN SIANG*
+${chosenLunch.name}
+~${chosenLunch.calories} kcal \u2022 Protein ${chosenLunch.protein}g
+
+\u{1F36A} *SNACK*
+${chosenSnack.name}
+~${chosenSnack.calories} kcal \u2022 Protein ${chosenSnack.protein}g
+
+\u{1F319} *MAKAN MALAM*
+${chosenDinner.name}
+~${chosenDinner.calories} kcal \u2022 Protein ${chosenDinner.protein}g
+
+--------------------------------------------------
+\u{1F4CA} *ESTIMASI HARIAN*
+
+\u{1F525} Kalori: ~${estCalories} kcal
+\u{1F356} Protein: ~${estProtein}g
+\u{1F35A} Karbo: ~${estCarbs}g
+\u{1F953} Lemak: ~${estFat}g
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"${tomorrowCoachClosing}"`;
+}
+function generatePersonalizedWeeklyMealPlan(rawProfile) {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const safeBreakfastPool = BASE_MEAL_POOL.filter((m) => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
+  const safeLunchPool = BASE_MEAL_POOL.filter((m) => m.category === "siang" && validateFoodSafety(m, profile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter((m) => m.category === "snack" && validateFoodSafety(m, profile).pass);
+  const safeDinnerPool = BASE_MEAL_POOL.filter((m) => m.category === "malam" && validateFoodSafety(m, profile).pass);
+  const certifiedFallbackBreakfast = {
+    name: "Oatmeal Apel Rebus + Biji Chia Alami",
+    category: "sarapan",
+    calories: 280,
+    protein: 8,
+    carbs: 52,
+    fat: 5,
+    fiber: 9,
+    sodium: 40,
+    sugar: 7,
+    ingredients: ["oatmeal", "apel kukus", "biji chia"],
+    prepMethod: "seduh",
+    rationale: "Karbohidrat kompleks larut air ramah eliminasi."
+  };
+  const certifiedFallbackLunch = {
+    name: "Sup Bening Dada Ayam Suwir + Nasi Merah + Wortel Rebus",
+    category: "siang",
+    calories: 360,
+    protein: 30,
+    carbs: 45,
+    fat: 5,
+    fiber: 5,
+    sodium: 200,
+    sugar: 2,
+    ingredients: ["dada ayam tanpa kulit", "wortel kukus", "nasi merah", "daun bawang"],
+    prepMethod: "rebus",
+    rationale: "Menu netral dengan protein bersih dan bumbu alami ramah eliminasi."
+  };
+  const certifiedFallbackSnack = {
+    name: "1 Buah Pir Segar / Jambu Biji Merah Potong",
+    category: "snack",
+    calories: 80,
+    protein: 1,
+    carbs: 19,
+    fat: 0,
+    fiber: 5,
+    sodium: 5,
+    sugar: 12,
+    ingredients: ["buah pir segar"],
+    prepMethod: "segar",
+    rationale: "Bebas alergen total, hidrasi alami dan ramah indeks glikemik rendah."
   };
   const certifiedFallbackDinner = {
     name: "Pepes Ikan Mas Kunyit Jahe + Kentang Kukus + Sayur Bening",
@@ -44398,20 +44671,28 @@ function generatePersonalizedWeeklyMealPlan(rawProfile) {
     rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
   };
   const dailyPlans = days.map((day, idx) => {
-    let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[idx % safeLunchPool.length] : validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
-    let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[(idx + 1) % safeDinnerPool.length] : validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
-    const lunchCheck = validateFoodSafety(chosenLunch, profile);
-    if (!lunchCheck.pass) {
+    let chosenBreakfast = safeBreakfastPool.length > 0 ? safeBreakfastPool[idx % safeBreakfastPool.length] : validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback;
+    let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[(idx + 1) % safeLunchPool.length] : validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
+    let chosenSnack = safeSnackPool.length > 0 ? safeSnackPool[idx % safeSnackPool.length] : validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback;
+    let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[(idx + 2) % safeDinnerPool.length] : validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
+    if (!validateFoodSafety(chosenBreakfast, profile).pass) {
+      chosenBreakfast = safeBreakfastPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    if (!validateFoodSafety(chosenLunch, profile).pass) {
       chosenLunch = safeLunchPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
     }
-    const dinnerCheck = validateFoodSafety(chosenDinner, profile);
-    if (!dinnerCheck.pass) {
+    if (!validateFoodSafety(chosenSnack, profile).pass) {
+      chosenSnack = safeSnackPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    if (!validateFoodSafety(chosenDinner, profile).pass) {
       chosenDinner = safeDinnerPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
     }
-    const dayRationale = idx === 0 ? "Fokus awal pekan: optimalisasi protein bersih." : idx === 1 ? "Pilihan rendah natrium untuk menjaga tekanan darah stabil." : idx === 2 ? "Karbohidrat kompleks untuk energi aktivitas tengah pekan." : idx === 3 ? "Serat tinggi dan antioksidan untuk pencernaan sehat." : idx === 4 ? "Recovery gizi seimbang menjelang akhir pekan." : idx === 5 ? "Menu praktis bernutrisi padat untuk mobilitas weekend." : "Pemulihan pencernaan & persiapan pekan berikutnya.";
-    return `*${day}*
-\u2600\uFE0F *Siang*: ${chosenLunch.name} (~${chosenLunch.calories} kcal, P:${chosenLunch.protein}g)
-\u{1F319} *Malam*: ${chosenDinner.name} (~${chosenDinner.calories} kcal, P:${chosenDinner.protein}g)
+    const dayRationale = idx === 0 ? "Fokus awal pekan: optimalisasi protein bersih & energi stabil." : idx === 1 ? "Pilihan rendah natrium untuk menjaga tekanan darah stabil." : idx === 2 ? "Karbohidrat kompleks untuk energi aktivitas tengah pekan." : idx === 3 ? "Serat tinggi dan antioksidan untuk kesehatan pencernaan." : idx === 4 ? "Recovery gizi seimbang menjelang akhir pekan." : idx === 5 ? "Menu bernutrisi padat untuk mobilitas weekend." : "Pemulihan pencernaan & persiapan pekan berikutnya.";
+    return `*${day.toUpperCase()}*
+\u2600\uFE0F *Sarapan*: ${chosenBreakfast.name} (~${chosenBreakfast.calories} kcal, P:${chosenBreakfast.protein}g)
+\u{1F371} *Makan Siang*: ${chosenLunch.name} (~${chosenLunch.calories} kcal, P:${chosenLunch.protein}g)
+\u{1F36A} *Snack*: ${chosenSnack.name} (~${chosenSnack.calories} kcal, P:${chosenSnack.protein}g)
+\u{1F319} *Makan Malam*: ${chosenDinner.name} (~${chosenDinner.calories} kcal, P:${chosenDinner.protein}g)
 \u{1F4A1} _${dayRationale}_`;
   }).join("\n\n");
   const constraintSummary = [];
@@ -53232,6 +53513,13 @@ ${mealListStr}
 "${quote}"`;
 }
 function generateMealRecommendations(userData, rawPhone, userText) {
+  const intent = classifyMealIntent(userText || "");
+  if (intent && intent.scope === "tomorrow") {
+    return generatePersonalizedTomorrowMealPlan(userData);
+  }
+  if (intent && intent.scope === "weekly") {
+    return generatePersonalizedWeeklyMealPlan(userData);
+  }
   const todayStr = getTodayDateStr();
   const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
   return generatePersonalizedMealRecommendation(userData, totals, userText);
@@ -53299,6 +53587,9 @@ function generateWeeklyWorkoutSchedule(userData) {
 }
 function generateWorkoutRecommendations(userData, targetDayOffset = 0) {
   return generatePersonalizedWorkoutRecommendation(userData, targetDayOffset);
+}
+function generateTomorrowMealSchedule(userData) {
+  return generatePersonalizedTomorrowMealPlan(userData);
 }
 function generateWeeklyMealSchedule(userData) {
   return generatePersonalizedWeeklyMealPlan(userData);
@@ -56222,8 +56513,10 @@ https://gymbuddygroup.com`,
           }
           if (!userProfile) userProfile = getOrCreateUserProfile(from, userText);
           const userData = calculateUserData(userProfile);
-          const isWeeklyMealPlanQuery = lowerText.includes("jadwal makanan minggu") || lowerText.includes("jadwal makan minggu") || lowerText.includes("saran makan minggu") || lowerText.includes("rekomendasi makan minggu") || lowerText.includes("jadwal makanan seminggu") || lowerText.includes("jadwal makan seminggu") || lowerText.includes("menu seminggu") || lowerText.includes("meal plan") || Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) || Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i));
-          const isRecommendationMessage = !isWeeklyMealPlanQuery && (lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+          const mealIntent = classifyMealIntent(userText);
+          const isTomorrowMealQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "tomorrow");
+          const isWeeklyMealPlanQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "weekly");
+          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
           const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
           const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
           const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
@@ -56251,12 +56544,12 @@ https://gymbuddygroup.com`,
             const currentCalculated = calculateUserData(userProfile);
             responseMessages = generateWelcomeMessages(currentCalculated);
           } else {
-            const planCapabilities = getUserPlanCapabilities(userData);
+            const planCapabilities2 = getUserPlanCapabilities(userData);
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
             if (!planValidation.canProceed) {
               responseMessages = [planValidation.redirectMessage];
             } else if (waterMatch) {
-              if (!planCapabilities.canNutrition) {
+              if (!planCapabilities2.canNutrition) {
                 responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
               } else {
                 const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
@@ -56300,27 +56593,33 @@ https://gymbuddygroup.com`,
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData);
+            } else if (isTomorrowMealQuery) {
+              if (!planCapabilities2.canNutrition) {
+                responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+              } else {
+                responseMessages = [generateTomorrowMealSchedule(userData)];
+              }
             } else if (isWeeklyMealPlanQuery) {
-              if (!planCapabilities.canNutrition) {
+              if (!planCapabilities2.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
               } else {
                 responseMessages = [generateWeeklyMealSchedule(userData)];
               }
             } else if (isWeeklyScheduleQuery) {
-              if (!planCapabilities.canWorkout) {
+              if (!planCapabilities2.canWorkout) {
                 responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
               } else {
                 responseMessages = [generateWeeklyWorkoutSchedule(userData)];
               }
             } else if (isWorkoutReqMessage) {
-              if (!planCapabilities.canWorkout) {
+              if (!planCapabilities2.canWorkout) {
                 responseMessages = [validatePlanContext("jadwal workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
               } else {
                 const isTomorrow = lowerText.includes("besok") || lowerText.includes("tomorrow");
                 responseMessages = [generateWorkoutRecommendations(userData, isTomorrow ? 1 : 0)];
               }
             } else if (handleWorkoutProgressLogging(from, userText, userData)) {
-              if (!planCapabilities.canWorkout) {
+              if (!planCapabilities2.canWorkout) {
                 responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
               } else {
                 responseMessages = handleWorkoutProgressLogging(from, userText, userData);
@@ -56338,7 +56637,7 @@ https://gymbuddygroup.com`,
             } else if (isProgressHistoryMessage) {
               responseMessages = [formatProgressHistoryCard(from)];
             } else if (isRecommendationMessage) {
-              if (!planCapabilities.canNutrition) {
+              if (!planCapabilities2.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
               } else {
                 responseMessages = [generateMealRecommendations(userData, from, userText)];
@@ -56352,7 +56651,7 @@ https://gymbuddygroup.com`,
                 responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
               }
             } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
-              if (!planCapabilities.canNutrition) {
+              if (!planCapabilities2.canNutrition) {
                 responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
               } else {
                 const recentMeal = getLastFoodMeal(from);
@@ -56456,7 +56755,7 @@ ATURAN KESELAMATAN & PERSONALISASI KESEHATAN:
 ${personaInstruction}
 
 BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
-- Plan Pengguna: ${planCapabilities.planDisplayName} (Nutrition Coach: ${planCapabilities.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities.canWorkout ? "AKTIF" : "NON-AKTIF"})
+- Plan Pengguna: ${planCapabilities2.planDisplayName} (Nutrition Coach: ${planCapabilities2.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities2.canWorkout ? "AKTIF" : "NON-AKTIF"})
 - AI DILARANG KERAS memperluas kapabilitas di luar paket aktif pengguna. Izin paket menentukan kapabilitas Coach yang tersedia, bukan kepribadian coach.
 - AI tidak boleh menjawab suatu permintaan hanya karena AI mampu menjawabnya; AI harus memverifikasi bahwa kapabilitas tersebut termasuk dalam paket aktif pengguna.
 - Jika pengguna meminta kapabilitas yang TIDAK aktif pada paketnya (misal meminta latihan/workout padahal paket Nutritionist, atau meminta kalori/makanan padahal paket Workout Coach): JANGAN berikan jawaban sebagai coach bidang tersebut. Berikan pengalihan sopan yang menjelaskan fokus paket saat ini dan arahkan ke fitur yang didukung serta upgrade paket.
@@ -56565,7 +56864,7 @@ Keluarkan output JSON valid:
                     parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
                   }
                   if (parsed.isFood && !parsed.isUnrelatedImage) {
-                    if (!planCapabilities.canNutrition) {
+                    if (!planCapabilities2.canNutrition) {
                       const redirectRes = validatePlanContext("makanan", true, userData);
                       responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
                     } else {
@@ -56585,7 +56884,7 @@ Keluarkan output JSON valid:
                       responseMessages = cardMessages;
                     }
                   } else if (parsed.isEquipment && !parsed.isUnrelatedImage) {
-                    if (!planCapabilities.canWorkout) {
+                    if (!planCapabilities2.canWorkout) {
                       const redirectRes = validatePlanContext("alat gym", true, userData);
                       responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
                     } else {
@@ -56737,8 +57036,10 @@ Keluarkan output JSON valid:
       }
       const userData = calculateUserData(userProfile);
       console.log(`[Twilio WA] \u2705 Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
-      const isWeeklyMealPlanQuery = lowerText.includes("jadwal makanan minggu") || lowerText.includes("jadwal makan minggu") || lowerText.includes("saran makan minggu") || lowerText.includes("rekomendasi makan minggu") || lowerText.includes("jadwal makanan seminggu") || lowerText.includes("jadwal makan seminggu") || lowerText.includes("menu seminggu") || lowerText.includes("meal plan") || Boolean(lowerText.match(/jadwal\s+(?:makan|makanan|diet)\s*(?:minggu(?:an)?|seminggu)?/i)) || Boolean(lowerText.match(/saran\s+makan\s+minggu\s*ini/i));
-      const isRecommendationMessage = !isWeeklyMealPlanQuery && (lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+      const twilioMealIntent = classifyMealIntent(userText);
+      const isTomorrowMealQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "tomorrow");
+      const isWeeklyMealPlanQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "weekly");
+      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
       const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
       const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
       const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
@@ -56819,8 +57120,18 @@ Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari l
             `\u2139\uFE0F Belum ada catatan makanan hari ini yang bisa dihapus.`
           ];
         }
+      } else if (isTomorrowMealQuery) {
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+        } else {
+          responseMessages = [generateTomorrowMealSchedule(userData)];
+        }
       } else if (isWeeklyMealPlanQuery) {
-        responseMessages = [generateWeeklyMealSchedule(userData)];
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
+        } else {
+          responseMessages = [generateWeeklyMealSchedule(userData)];
+        }
       } else if (isWeeklyScheduleQuery) {
         responseMessages = [generateWeeklyWorkoutSchedule(userData)];
       } else if (isWorkoutScheduleQuery) {
@@ -56904,12 +57215,12 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
       } else {
-        const planCapabilities = getUserPlanCapabilities(userData);
+        const planCapabilities2 = getUserPlanCapabilities(userData);
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
         if (!planValidation.canProceed) {
           responseMessages = [planValidation.redirectMessage];
         } else if (waterMatch) {
-          if (!planCapabilities.canNutrition) {
+          if (!planCapabilities2.canNutrition) {
             responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
           } else {
             const rawAmount = parseFloat(waterMatch[1].replace(",", "."));
@@ -56965,7 +57276,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         } else if (isProgressHistoryMessage) {
           responseMessages = [formatProgressHistoryCard(normFrom)];
         } else if (isRecommendationMessage) {
-          if (!planCapabilities.canNutrition) {
+          if (!planCapabilities2.canNutrition) {
             responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
           } else {
             responseMessages = [generateMealRecommendations(userData, normFrom, userText)];
@@ -56981,13 +57292,13 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
           responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData);
         } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
-          if (!planCapabilities.canWorkout) {
+          if (!planCapabilities2.canWorkout) {
             responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
           } else {
             responseMessages = handleWorkoutProgressLogging(normFrom, userText, userData);
           }
         } else if (isMealCorrection) {
-          if (!planCapabilities.canNutrition) {
+          if (!planCapabilities2.canNutrition) {
             responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
           } else if (recentFoodMeal) {
             console.log(`[Twilio WA] Executing meal correction on "${recentFoodMeal.foodName}" for ${normFrom}: "${userText}"`);
@@ -57026,7 +57337,7 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
   \u2022 Tegas tapi TIDAK PERNAH kasar, menghina, atau merendahkan.
   \u2022 Hindari basa-basi panjang, langsung sampaikan insight tindakan nyata.`;
           const planInstruction = `BATASAN MUTLAK LAYANAN PENGGUNA BERDASARKAN ACTIVE PLAN:
-- Plan Pengguna: ${planCapabilities.planDisplayName} (Nutrition Coach: ${planCapabilities.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities.canWorkout ? "AKTIF" : "NON-AKTIF"})
+- Plan Pengguna: ${planCapabilities2.planDisplayName} (Nutrition Coach: ${planCapabilities2.canNutrition ? "AKTIF" : "NON-AKTIF"}, Workout Coach: ${planCapabilities2.canWorkout ? "AKTIF" : "NON-AKTIF"})
 - AI DILARANG KERAS memperluas kapabilitas di luar paket aktif pengguna. Izin paket menentukan kapabilitas Coach yang tersedia, bukan kepribadian coach.
 - AI tidak boleh menjawab suatu permintaan hanya karena AI mampu menjawabnya; AI harus memverifikasi bahwa kapabilitas tersebut termasuk dalam paket aktif pengguna.
 - Jika pengguna meminta kapabilitas yang TIDAK aktif pada paketnya (misal meminta latihan/workout padahal paket Nutritionist, atau meminta kalori/makanan padahal paket Workout Coach): JANGAN berikan jawaban sebagai coach bidang tersebut. Berikan pengalihan sopan yang menjelaskan fokus paket saat ini dan arahkan ke fitur yang didukung serta upgrade paket.
@@ -57229,7 +57540,7 @@ Keluarkan output JSON valid:
                 const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
                 responseMessages = [validateAndFormatCoachNote(parsed.clarificationQuestion || defaultClarification, userData)];
               } else {
-                if (!planCapabilities.canNutrition) {
+                if (!planCapabilities2.canNutrition) {
                   const redirectRes = validatePlanContext("makanan", true, userData);
                   responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
                 } else {
@@ -57251,7 +57562,7 @@ Keluarkan output JSON valid:
                 }
               }
             } else if (isEquipmentMatch) {
-              if (!planCapabilities.canWorkout) {
+              if (!planCapabilities2.canWorkout) {
                 const redirectRes = validatePlanContext("alat gym", true, userData);
                 responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
               } else {
@@ -57682,6 +57993,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   buildImageMealResponseMessages,
   buildSingleSourceOfTruthMealRecord,
   calculateUserData,
+  classifyMealIntent,
   classifyMealType,
   classifyUserInput,
   clearSentWhatsAppMessages,
@@ -57697,6 +58009,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   formatDashboardPercent,
   formatNutritionCard,
   generateMealRecommendations,
+  generateTomorrowMealSchedule,
   generateWeeklyMealSchedule,
   generateWeeklyWorkoutSchedule,
   generateWorkoutRecommendations,

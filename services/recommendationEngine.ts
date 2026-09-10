@@ -1481,19 +1481,179 @@ export function generatePersonalizedMealRecommendation(
 }
 
 // ============================================================================
-// 9. PERSONALIZED WEEKLY MEAL PLAN GENERATOR (ITEM-BY-ITEM VALIDATION)
+// 8.5 TEMPORAL RESOLUTION & MEAL INTENT CLASSIFIER
 // ============================================================================
 
-export function generatePersonalizedWeeklyMealPlan(rawProfile: any): string {
+export interface MealIntentResult {
+  isMealIntent: boolean;
+  domain: "meal";
+  action: "recommendation" | "plan";
+  scope: "today" | "tomorrow" | "weekly";
+  targetDate: string; // YYYY-MM-DD
+  targetDateLabel: string; // e.g. "Jumat, 11 Sep 2026"
+  mealType?: "breakfast" | "lunch" | "dinner" | "snack";
+}
+
+export function getWibDateDetails(offsetDays: number = 0): {
+  dateStr: string;
+  dayName: string;
+  formattedDate: string;
+  fullDate: string;
+} {
+  const now = new Date();
+  const targetTime = new Date(now.getTime() + (offsetDays * 24 * 60 * 60 * 1000));
+  
+  const options = { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(targetTime);
+  const year = parts.find(p => p.type === "year")!.value;
+  const month = parts.find(p => p.type === "month")!.value;
+  const day = parts.find(p => p.type === "day")!.value;
+  const dateStr = `${year}-${month}-${day}`;
+
+  const dateObj = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const dayName = dayNames[dateObj.getDay()];
+
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+  ];
+  const monthFullNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const mIdx = parseInt(month, 10) - 1;
+  const formattedDate = `${dayName}, ${parseInt(day, 10)} ${monthNames[mIdx]} ${year}`;
+  const fullDate = `${dayName}, ${parseInt(day, 10)} ${monthFullNames[mIdx]} ${year}`;
+
+  return { dateStr, dayName, formattedDate, fullDate };
+}
+
+export function classifyMealIntent(userText: string): MealIntentResult | null {
+  const lower = (userText || "").toLowerCase().trim();
+
+  // Exclude queries that are strictly workout/exercise without meal words
+  const isPureWorkout = (
+    lower.match(/^(?:workout|latihan|olahraga|gym)\s+(?:besok|tomorrow|hari\s*ini|mingguan|seminggu)/i) ||
+    lower.match(/^(?:besok|tomorrow|hari\s*ini|mingguan|seminggu)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)/i) ||
+    (lower.match(/\b(?:workout|latihan|olahraga|gym)\b/i) && !lower.match(/\b(?:makan|makanan|diet|menu|sarapan|lunch|dinner|snack|camilan|cemilan|nutrisi|meal)\b/i))
+  );
+  if (isPureWorkout) {
+    return null;
+  }
+
+  const hasMealKeyword = Boolean(
+    lower.match(/\b(?:makan|makanan|diet|menu|sarapan|lunch|dinner|breakfast|snack|camilan|cemilan|nutrisi|meal|meal\s*plan)\b/i)
+  );
+
+  let detectedMealType: "breakfast" | "lunch" | "dinner" | "snack" | undefined;
+  if (lower.match(/\b(?:sarapan|breakfast|pagi)\b/i)) {
+    detectedMealType = "breakfast";
+  } else if (lower.match(/\b(?:lunch|siang)\b/i)) {
+    detectedMealType = "lunch";
+  } else if (lower.match(/\b(?:dinner|malam)\b/i)) {
+    detectedMealType = "dinner";
+  } else if (lower.match(/\b(?:snack|camilan|cemilan|sore)\b/i)) {
+    detectedMealType = "snack";
+  }
+
+  // 1. TOMORROW scope takes precedence when "besok" or "tomorrow" is present
+  const isTomorrow = lower.includes("besok") || lower.includes("tomorrow");
+  if (isTomorrow && hasMealKeyword) {
+    const { dateStr, formattedDate } = getWibDateDetails(1);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "recommendation",
+      scope: "tomorrow",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+
+  // 2. WEEKLY scope requires explicit weekly keywords
+  const hasWeeklyKeyword = Boolean(
+    lower.match(/\b(?:minggu(?:an)?|seminggu|7\s*hari|tujuh\s*hari|meal\s*plan)\b/i)
+  );
+  if (hasWeeklyKeyword && hasMealKeyword && !isTomorrow) {
+    const { dateStr, formattedDate } = getWibDateDetails(0);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "plan",
+      scope: "weekly",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+
+  // 3. TODAY scope for immediate meal recommendations
+  const isTodayRecommendation = Boolean(
+    lower.includes("rekomendasi makanan") ||
+    lower.includes("rekomendasi makan") ||
+    lower.includes("menu makan") ||
+    lower.includes("saran makan") ||
+    lower.includes("pagi siang malam") ||
+    lower.includes("rekomendasi sarapan") ||
+    lower.includes("saran sarapan") ||
+    lower.match(/(?:saran|rekomendasi|ide|menu)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) ||
+    lower.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i) ||
+    lower.match(/ada\s+saran\s+makan/i) ||
+    lower.match(/makan\s+(?:siang|malam|pagi)\s+apa/i) ||
+    lower.match(/sarapan\s+(?:pagi|apa)/i) ||
+    lower.match(/saran\s+menu/i) ||
+    lower.match(/rekomendasi\s+menu/i)
+  );
+
+  if (isTodayRecommendation && !isTomorrow && !hasWeeklyKeyword) {
+    const { dateStr, formattedDate } = getWibDateDetails(0);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "recommendation",
+      scope: "today",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate,
+      mealType: detectedMealType
+    };
+  }
+
+  return null;
+}
+
+// ============================================================================
+// 8.6 PERSONALIZED TOMORROW MEAL RECOMMENDATION GENERATOR
+// ============================================================================
+
+export function generatePersonalizedTomorrowMealPlan(rawProfile: any): string {
   const profile = resolveCanonicalProfile(rawProfile);
-  const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+  const { formattedDate } = getWibDateDetails(1);
 
   // Pre-filter safe pools using deterministic validator
+  const safeBreakfastPool = BASE_MEAL_POOL.filter(m => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
   const safeLunchPool = BASE_MEAL_POOL.filter(m => m.category === "siang" && validateFoodSafety(m, profile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter(m => m.category === "snack" && validateFoodSafety(m, profile).pass);
   const safeDinnerPool = BASE_MEAL_POOL.filter(m => m.category === "malam" && validateFoodSafety(m, profile).pass);
 
-  // Certified neutral fallback meals for extreme multiple restrictions
+  // Fallback items if extreme restriction
+  const certifiedFallbackBreakfast: MealCandidate = {
+    name: "Oatmeal Apel Rebus + Biji Chia Alami",
+    category: "sarapan",
+    calories: 280,
+    protein: 8,
+    carbs: 52,
+    fat: 5,
+    fiber: 9,
+    sodium: 40,
+    sugar: 7,
+    ingredients: ["oatmeal", "apel kukus", "biji chia"],
+    prepMethod: "seduh",
+    rationale: "Karbohidrat kompleks larut air ramah eliminasi."
+  };
+
   const certifiedFallbackLunch: MealCandidate = {
     name: "Sup Bening Dada Ayam Suwir + Nasi Merah + Wortel Rebus",
     category: "siang",
@@ -1507,6 +1667,178 @@ export function generatePersonalizedWeeklyMealPlan(rawProfile: any): string {
     ingredients: ["dada ayam tanpa kulit", "wortel kukus", "nasi merah", "daun bawang"],
     prepMethod: "rebus",
     rationale: "Menu netral dengan protein bersih dan bumbu alami ramah eliminasi."
+  };
+
+  const certifiedFallbackSnack: MealCandidate = {
+    name: "1 Buah Pir Segar / Jambu Biji Merah Potong",
+    category: "snack",
+    calories: 80,
+    protein: 1,
+    carbs: 19,
+    fat: 0,
+    fiber: 5,
+    sodium: 5,
+    sugar: 12,
+    ingredients: ["buah pir segar"],
+    prepMethod: "segar",
+    rationale: "Bebas alergen total, hidrasi alami dan ramah indeks glikemik rendah."
+  };
+
+  const certifiedFallbackDinner: MealCandidate = {
+    name: "Pepes Ikan Mas Kunyit Jahe + Kentang Kukus + Sayur Bening",
+    category: "malam",
+    calories: 330,
+    protein: 28,
+    carbs: 40,
+    fat: 6,
+    fiber: 5,
+    sodium: 180,
+    sugar: 2,
+    ingredients: ["ikan mas", "kunyit", "jahe", "kentang kukus", "bayam"],
+    prepMethod: "kukus",
+    rationale: "Kaya protein segar dan rempah antiinflamasi alami untuk pemulihan malam."
+  };
+
+  const certifiedVeganFallback: MealCandidate = {
+    name: "Kentang Kukus Bening + Brokoli & Wortel Rebus Tanpa Garam",
+    category: "siang",
+    calories: 220,
+    protein: 6,
+    carbs: 48,
+    fat: 1,
+    fiber: 6,
+    sodium: 60,
+    sugar: 3,
+    ingredients: ["kentang kukus", "brokoli kukus", "wortel kukus"],
+    prepMethod: "kukus",
+    rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
+  };
+
+  let chosenBreakfast: MealCandidate = safeBreakfastPool.length > 0
+    ? safeBreakfastPool[0]
+    : (validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback);
+
+  let chosenLunch: MealCandidate = safeLunchPool.length > 0
+    ? safeLunchPool[0]
+    : (validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback);
+
+  let chosenSnack: MealCandidate = safeSnackPool.length > 0
+    ? safeSnackPool[0]
+    : (validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback);
+
+  let chosenDinner: MealCandidate = safeDinnerPool.length > 0
+    ? safeDinnerPool[0]
+    : (validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback);
+
+  // Safety checks
+  if (!validateFoodSafety(chosenBreakfast, profile).pass) {
+    chosenBreakfast = safeBreakfastPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenLunch, profile).pass) {
+    chosenLunch = safeLunchPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenSnack, profile).pass) {
+    chosenSnack = safeSnackPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+  if (!validateFoodSafety(chosenDinner, profile).pass) {
+    chosenDinner = safeDinnerPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  }
+
+  const estCalories = chosenBreakfast.calories + chosenLunch.calories + chosenSnack.calories + chosenDinner.calories;
+  const estProtein = chosenBreakfast.protein + chosenLunch.protein + chosenSnack.protein + chosenDinner.protein;
+  const estCarbs = chosenBreakfast.carbs + chosenLunch.carbs + chosenSnack.carbs + chosenDinner.carbs;
+  const estFat = chosenBreakfast.fat + chosenLunch.fat + chosenSnack.fat + chosenDinner.fat;
+
+  const tomorrowCoachClosing = profile.persona === "max"
+    ? `Rencana makan besok ini udah gue susun pas sesuai target harian lo bro. Siapkan bahan-bahannya dari sekarang biar besok tinggal eksekusi! Tetap disiplin & gas pol! 🔥`
+    : `Rencana makan besok ini sudah aku susun seimbang sesuai target nutrisi harianmu ya. Kamu bisa persiapkan bahannya dari sekarang agar besok lebih santai. Semangat! ✨`;
+
+  return (
+    `📅 *JADWAL MAKAN BESOK*\n` +
+    `--------------------------------------------------\n\n` +
+    `📆 *${formattedDate}*\n\n` +
+    `☀️ *SARAPAN*\n` +
+    `${chosenBreakfast.name}\n` +
+    `~${chosenBreakfast.calories} kcal • Protein ${chosenBreakfast.protein}g\n\n` +
+    `🍱 *MAKAN SIANG*\n` +
+    `${chosenLunch.name}\n` +
+    `~${chosenLunch.calories} kcal • Protein ${chosenLunch.protein}g\n\n` +
+    `🍪 *SNACK*\n` +
+    `${chosenSnack.name}\n` +
+    `~${chosenSnack.calories} kcal • Protein ${chosenSnack.protein}g\n\n` +
+    `🌙 *MAKAN MALAM*\n` +
+    `${chosenDinner.name}\n` +
+    `~${chosenDinner.calories} kcal • Protein ${chosenDinner.protein}g\n\n` +
+    `--------------------------------------------------\n` +
+    `📊 *ESTIMASI HARIAN*\n\n` +
+    `🔥 Kalori: ~${estCalories} kcal\n` +
+    `🍖 Protein: ~${estProtein}g\n` +
+    `🍚 Karbo: ~${estCarbs}g\n` +
+    `🥓 Lemak: ~${estFat}g\n\n` +
+    `--------------------------------------------------\n` +
+    `💬 *${coachName}*:\n"${tomorrowCoachClosing}"`
+  );
+}
+
+// ============================================================================
+// 9. PERSONALIZED WEEKLY MEAL PLAN GENERATOR (ITEM-BY-ITEM VALIDATION)
+// ============================================================================
+
+export function generatePersonalizedWeeklyMealPlan(rawProfile: any): string {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
+
+  // Pre-filter safe pools using deterministic validator
+  const safeBreakfastPool = BASE_MEAL_POOL.filter(m => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
+  const safeLunchPool = BASE_MEAL_POOL.filter(m => m.category === "siang" && validateFoodSafety(m, profile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter(m => m.category === "snack" && validateFoodSafety(m, profile).pass);
+  const safeDinnerPool = BASE_MEAL_POOL.filter(m => m.category === "malam" && validateFoodSafety(m, profile).pass);
+
+  // Certified neutral fallback meals for extreme multiple restrictions
+  const certifiedFallbackBreakfast: MealCandidate = {
+    name: "Oatmeal Apel Rebus + Biji Chia Alami",
+    category: "sarapan",
+    calories: 280,
+    protein: 8,
+    carbs: 52,
+    fat: 5,
+    fiber: 9,
+    sodium: 40,
+    sugar: 7,
+    ingredients: ["oatmeal", "apel kukus", "biji chia"],
+    prepMethod: "seduh",
+    rationale: "Karbohidrat kompleks larut air ramah eliminasi."
+  };
+
+  const certifiedFallbackLunch: MealCandidate = {
+    name: "Sup Bening Dada Ayam Suwir + Nasi Merah + Wortel Rebus",
+    category: "siang",
+    calories: 360,
+    protein: 30,
+    carbs: 45,
+    fat: 5,
+    fiber: 5,
+    sodium: 200,
+    sugar: 2,
+    ingredients: ["dada ayam tanpa kulit", "wortel kukus", "nasi merah", "daun bawang"],
+    prepMethod: "rebus",
+    rationale: "Menu netral dengan protein bersih dan bumbu alami ramah eliminasi."
+  };
+
+  const certifiedFallbackSnack: MealCandidate = {
+    name: "1 Buah Pir Segar / Jambu Biji Merah Potong",
+    category: "snack",
+    calories: 80,
+    protein: 1,
+    carbs: 19,
+    fat: 0,
+    fiber: 5,
+    sodium: 5,
+    sugar: 12,
+    ingredients: ["buah pir segar"],
+    prepMethod: "segar",
+    rationale: "Bebas alergen total, hidrasi alami dan ramah indeks glikemik rendah."
   };
 
   const certifiedFallbackDinner: MealCandidate = {
@@ -1540,38 +1872,50 @@ export function generatePersonalizedWeeklyMealPlan(rawProfile: any): string {
   };
 
   const dailyPlans = days.map((day, idx) => {
-    // Select candidates matching daily rotation and validate each item deterministically
+    let chosenBreakfast: MealCandidate = safeBreakfastPool.length > 0
+      ? safeBreakfastPool[idx % safeBreakfastPool.length]
+      : (validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback);
+
     let chosenLunch: MealCandidate = safeLunchPool.length > 0 
-      ? safeLunchPool[idx % safeLunchPool.length]
+      ? safeLunchPool[(idx + 1) % safeLunchPool.length]
       : (validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback);
 
+    let chosenSnack: MealCandidate = safeSnackPool.length > 0
+      ? safeSnackPool[idx % safeSnackPool.length]
+      : (validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback);
+
     let chosenDinner: MealCandidate = safeDinnerPool.length > 0
-      ? safeDinnerPool[(idx + 1) % safeDinnerPool.length]
+      ? safeDinnerPool[(idx + 2) % safeDinnerPool.length]
       : (validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback);
 
-    // Hard gate assertion: verify both chosen meals strictly pass safety
-    const lunchCheck = validateFoodSafety(chosenLunch, profile);
-    if (!lunchCheck.pass) {
+    // Hard gate assertion: verify all four chosen meals strictly pass safety
+    if (!validateFoodSafety(chosenBreakfast, profile).pass) {
+      chosenBreakfast = safeBreakfastPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    if (!validateFoodSafety(chosenLunch, profile).pass) {
       chosenLunch = safeLunchPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
     }
-
-    const dinnerCheck = validateFoodSafety(chosenDinner, profile);
-    if (!dinnerCheck.pass) {
+    if (!validateFoodSafety(chosenSnack, profile).pass) {
+      chosenSnack = safeSnackPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+    }
+    if (!validateFoodSafety(chosenDinner, profile).pass) {
       chosenDinner = safeDinnerPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
     }
 
-    const dayRationale = idx === 0 ? "Fokus awal pekan: optimalisasi protein bersih." :
+    const dayRationale = idx === 0 ? "Fokus awal pekan: optimalisasi protein bersih & energi stabil." :
                          idx === 1 ? "Pilihan rendah natrium untuk menjaga tekanan darah stabil." :
                          idx === 2 ? "Karbohidrat kompleks untuk energi aktivitas tengah pekan." :
-                         idx === 3 ? "Serat tinggi dan antioksidan untuk pencernaan sehat." :
+                         idx === 3 ? "Serat tinggi dan antioksidan untuk kesehatan pencernaan." :
                          idx === 4 ? "Recovery gizi seimbang menjelang akhir pekan." :
-                         idx === 5 ? "Menu praktis bernutrisi padat untuk mobilitas weekend." :
+                         idx === 5 ? "Menu bernutrisi padat untuk mobilitas weekend." :
                                      "Pemulihan pencernaan & persiapan pekan berikutnya.";
 
     return (
-      `*${day}*\n` +
-      `☀️ *Siang*: ${chosenLunch.name} (~${chosenLunch.calories} kcal, P:${chosenLunch.protein}g)\n` +
-      `🌙 *Malam*: ${chosenDinner.name} (~${chosenDinner.calories} kcal, P:${chosenDinner.protein}g)\n` +
+      `*${day.toUpperCase()}*\n` +
+      `☀️ *Sarapan*: ${chosenBreakfast.name} (~${chosenBreakfast.calories} kcal, P:${chosenBreakfast.protein}g)\n` +
+      `🍱 *Makan Siang*: ${chosenLunch.name} (~${chosenLunch.calories} kcal, P:${chosenLunch.protein}g)\n` +
+      `🍪 *Snack*: ${chosenSnack.name} (~${chosenSnack.calories} kcal, P:${chosenSnack.protein}g)\n` +
+      `🌙 *Makan Malam*: ${chosenDinner.name} (~${chosenDinner.calories} kcal, P:${chosenDinner.protein}g)\n` +
       `💡 _${dayRationale}_`
     );
   }).join("\n\n");
