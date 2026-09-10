@@ -120,12 +120,11 @@ export async function canonicalApiFetch<T = any>(
 }
 
 /**
- * Resolves the official WhatsApp destination URL for GymBuddy bot.
- * Strictly avoids Twilio sandbox (+14155238886).
+ * Resolves the WhatsApp destination URL for GymBuddy bot (Twilio).
  * Formats appropriate link with prefilled text.
  */
 export function getWhatsAppDestinationUrl(prefilledText: string = "Halo GymBuddy 👋"): string {
-  const envNum = (typeof window !== "undefined" ? (import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER : process.env.VITE_WHATSAPP_BOT_NUMBER) || "62822222222";
+  const envNum = (typeof window !== "undefined" ? (import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER : process.env.VITE_WHATSAPP_BOT_NUMBER) || "14155238886";
   const cleanNum = String(envNum).replace(/[^\d]/g, "");
   const encodedText = encodeURIComponent(prefilledText);
   return `https://wa.me/${cleanNum}?text=${encodedText}`;

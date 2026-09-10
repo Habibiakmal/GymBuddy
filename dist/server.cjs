@@ -35,6 +35,7 @@ __export(server_exports, {
   applyDeterministicCorrection: () => applyDeterministicCorrection,
   applyTargetedMealCorrection: () => applyTargetedMealCorrection,
   authPendingSessions: () => authPendingSessions,
+  buildImageMealResponseMessages: () => buildImageMealResponseMessages,
   buildSingleSourceOfTruthMealRecord: () => buildSingleSourceOfTruthMealRecord,
   calculateUserData: () => calculateUserData,
   classifyMealType: () => classifyMealType,
@@ -50245,9 +50246,9 @@ var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 function sanitizeWhatsAppResponse(text) {
   if (!text || typeof text !== "string") return "";
   const STANDARD_SEP = "--------------------------------------------------";
-  let cleaned = text.replace(/[━─═]/g, "-").replace(/(?:^[ \t]*[-=]{1,50}[ \t]*(?:\r?\n|\r|$)(?:[ \t]*(?:\r?\n|\r|$))*)+/gm, `${STANDARD_SEP}
-`).replace(/(?:^[-=]{4,}\s*[\r\n]+){2,}/gm, `${STANDARD_SEP}
-`).replace(/^[-=]{4,50}$/gm, STANDARD_SEP).replace(/^[•\-\*]\s*$/gm, "").replace(/\n{3,}/g, "\n\n").replace(/[\r\n]+[-=]{4,}\s*$/g, "").trim();
+  let cleaned = text.replace(/[━─═]/g, "-").replace(/^[ \t]*[-=]{4,50}[ \t]*$/gm, STANDARD_SEP).replace(/(?:--------------------------------------------------\s*[\r\n]+){2,}/g, `${STANDARD_SEP}
+
+`).replace(/^[•\-\*]\s*$/gm, "").replace(/\n{3,}/g, "\n\n").replace(/[\r\n]+[-=]{4,}\s*$/g, "").trim();
   return cleaned;
 }
 function resolveCleanFoodNameAndMealType(rawUserText, detectedFoodName, hasImage, detectedMealType, detectedFoodsList, timeOrDate, calories) {
@@ -50485,7 +50486,7 @@ ${unitStr}` : unitStr;
   if (currentChunk.trim()) {
     chunks.push(currentChunk.trim());
   }
-  return chunks.map((c) => sanitizeWhatsAppResponse(c)).filter((c) => c.length > 0 && !/^[━─\-=]+$/gm.test(c.trim()));
+  return chunks.map((c) => sanitizeWhatsAppResponse(c)).filter((c) => c.length > 0 && !/^[-=━─═]+$/.test(c.trim()));
 }
 async function sendSingleTwilioMessage(to, body, customFrom, mediaUrl) {
   const client2 = getTwilio();
@@ -50719,9 +50720,9 @@ var snap = new import_midtrans_client.default.Snap({
   serverKey: process.env.MIDTRANS_SERVER_KEY || "dummy_server_key",
   clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || "dummy_client_key"
 });
-var WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
-var WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1232638216597845";
-var VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
+var WHATSAPP_TOKEN = (process.env.WHATSAPP_TOKEN || "").trim();
+var WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+var VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").trim();
 function normalizePhone(phone) {
   if (!phone) return "";
   let cleaned = String(phone).replace(/[^\d]/g, "");
@@ -51121,12 +51122,12 @@ async function sendWhatsAppDirect(rawPhone, message) {
       console.error(`[WhatsApp Reminder] Error delivering via Twilio to ${phone}:`, err?.message || err);
     }
   }
-  if (!sent && (process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN)) {
+  if (!sent && (process.env.WHATSAPP_TOKEN || "").trim()) {
     try {
       sent = Boolean(await sendMetaWhatsappMessage(phone, message));
-      if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta to: ${phone}`);
+      if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta fallback to: ${phone}`);
     } catch (err) {
-      console.error(`[WhatsApp Reminder] Error delivering via Meta to ${phone}:`, err?.message || err);
+      console.error(`[WhatsApp Reminder] Error delivering via Meta fallback to ${phone}:`, err?.message || err);
     }
   }
   return sent;
@@ -51135,54 +51136,7 @@ async function sendWhatsAppLoginMessage(rawPhone, message, sessionId) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return false;
   let sent = false;
-  const token = process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_PHONE_NUMBER_ID;
-  if (token && phoneId) {
-    try {
-      const cleanText = sanitizeWhatsAppResponse(message);
-      const recipient = phone.replace(/^0/, "62");
-      try {
-        await import_axios.default.post(
-          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-          {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: recipient,
-            type: "interactive",
-            interactive: {
-              type: "button",
-              body: { text: cleanText },
-              action: {
-                buttons: [
-                  { type: "reply", reply: { id: `auth_approve_${sessionId || "sess"}`, title: "Ya, ini saya" } },
-                  { type: "reply", reply: { id: `auth_reject_${sessionId || "sess"}`, title: "Bukan saya" } }
-                ]
-              }
-            }
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log(`[WhatsApp Auth] Successfully delivered interactive message via Meta to: ${recipient}`);
-        sent = true;
-      } catch (interactiveErr) {
-        console.warn("[WhatsApp Auth] Meta interactive button failed, falling back to text:", interactiveErr?.response?.data || interactiveErr?.message);
-        await import_axios.default.post(
-          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: recipient,
-            text: { body: cleanText }
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log(`[WhatsApp Auth] Successfully delivered text message via Meta to: ${recipient}`);
-        sent = true;
-      }
-    } catch (metaErr) {
-      console.error(`[WhatsApp Auth] Meta delivery failed for ${phone}:`, metaErr?.response?.data || metaErr?.message || metaErr);
-    }
-  }
-  if (!sent && getTwilio()) {
+  if (getTwilio()) {
     try {
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
       const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
@@ -51197,6 +51151,55 @@ async function sendWhatsAppLoginMessage(rawPhone, message, sessionId) {
       sent = true;
     } catch (twilioErr) {
       console.error(`[WhatsApp Auth] Twilio delivery failed for ${phone}:`, twilioErr?.message || twilioErr);
+    }
+  }
+  if (!sent) {
+    const token = (process.env.WHATSAPP_TOKEN || "").trim();
+    const phoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+    if (token && phoneId) {
+      try {
+        const cleanText = sanitizeWhatsAppResponse(message);
+        const recipient = phone.replace(/^0/, "62");
+        try {
+          await import_axios.default.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+            {
+              messaging_product: "whatsapp",
+              recipient_type: "individual",
+              to: recipient,
+              type: "interactive",
+              interactive: {
+                type: "button",
+                body: { text: cleanText },
+                action: {
+                  buttons: [
+                    { type: "reply", reply: { id: `auth_approve_${sessionId || "sess"}`, title: "Ya, ini saya" } },
+                    { type: "reply", reply: { id: `auth_reject_${sessionId || "sess"}`, title: "Bukan saya" } }
+                  ]
+                }
+              }
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log(`[WhatsApp Auth] Successfully delivered interactive message via Meta fallback to: ${recipient}`);
+          sent = true;
+        } catch (interactiveErr) {
+          console.warn("[WhatsApp Auth] Meta interactive button fallback failed, falling back to text:", interactiveErr?.response?.data || interactiveErr?.message);
+          await import_axios.default.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+            {
+              messaging_product: "whatsapp",
+              to: recipient,
+              text: { body: cleanText }
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log(`[WhatsApp Auth] Successfully delivered text message via Meta fallback to: ${recipient}`);
+          sent = true;
+        }
+      } catch (metaErr) {
+        console.error(`[WhatsApp Auth] Meta fallback delivery failed for ${phone}:`, metaErr?.response?.data || metaErr?.message || metaErr);
+      }
     }
   }
   return sent;
@@ -52712,7 +52715,19 @@ function parseDateFromQuery(userText) {
   const todayLabel = `${wibNow.getUTCDate()} ${monthNames[wibNow.getUTCMonth()]} ${wibNow.getUTCFullYear()}`;
   return { dateStr: getWibDate(wibNow), label: todayLabel, isYesterday: false, isToday: true, isSpecificDate: false };
 }
-function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
+function formatNutritionCard(parsedAi, inputSourceOrUserData, userDataOrDailyTotals, maybeDailyTotals) {
+  let inputSource = "Teks";
+  let userData;
+  let dailyTotals;
+  if (typeof inputSourceOrUserData === "string") {
+    inputSource = inputSourceOrUserData;
+    userData = userDataOrDailyTotals;
+    dailyTotals = maybeDailyTotals;
+  } else {
+    inputSource = "Teks";
+    userData = inputSourceOrUserData;
+    dailyTotals = userDataOrDailyTotals;
+  }
   const rawFoodName = String(parsedAi?.canonicalMealTitle || parsedAi?.foodName || "Estimasi Makanan").trim();
   const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Estimasi Makanan";
   const calories = Math.max(0, Math.round(Number(parsedAi?.calories) || 0));
@@ -52869,15 +52884,13 @@ function formatNutritionCard(parsedAi, inputSource, userData, dailyTotals) {
   const fatBarInfo = getStatusBar(totalTodayFat, targetFat, false, false);
   const sodBarInfo = getStatusBar(totalTodaySodium, sodiumLimit, true, false);
   const sugBarInfo = getStatusBar(totalTodaySugar, sugarLimit, true, false);
-  const majorSections = [];
+  const separator = "--------------------------------------------------";
   const emojiForHeader = resolvedMealType === "dinner" ? "\u{1F319}" : mealEmoji;
-  majorSections.push(
-    `\u{1F37D}\uFE0F *${cleanFoodName}*
+  const headerSection = `\u{1F37D}\uFE0F *${cleanFoodName}*
 
 ${emojiForHeader} *${mealLabel.toUpperCase()}*
-\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} GymBuddy AI: ${confidenceScore}%`
-  );
-  let nutrContent = `\u{1F4CA} *ESTIMASI NUTRISI*
+\u{1F552} ${dateStr}, ${timeStr} WIB \xB7 \u{1F916} GymBuddy AI: ${confidenceScore}%`;
+  const nutrSection = `\u{1F4CA} *ESTIMASI NUTRISI*
 
 \u{1F525} ${calories} kcal
 \u{1F356} Protein: ${protein}g
@@ -52886,13 +52899,10 @@ ${emojiForHeader} *${mealLabel.toUpperCase()}*
 \u{1F96C} Serat: ${fiber}g
 \u{1F9C2} Natrium: ${sodium} mg
 \u{1F36F} Gula: ${sugar}g`;
-  majorSections.push(nutrContent);
-  if (portionDetailText.trim()) {
-    majorSections.push(`\u{1F37D}\uFE0F *ESTIMASI PORSI*
+  const portionSection = `\u{1F37D}\uFE0F *ESTIMASI PORSI*
 
-${portionDetailText.trim()}`);
-  }
-  const dailyStatusContent = `\u{1F4C8} *STATUS HARI INI*
+${portionDetailText.trim()}`;
+  const dailyStatusSection = `\u{1F4C8} *STATUS HARI INI*
 
 \u{1F525} Kalori: ${totalTodayCal}/${targetCal} kcal
 [${calBarInfo.bar}] ${calBarInfo.percent}% \xB7 ${calBarInfo.statusBadge}
@@ -52911,21 +52921,47 @@ ${portionDetailText.trim()}`);
 
 \u{1F36F} Gula: ${totalTodaySugar}/${sugarLimit}g
 [${sugBarInfo.bar}] ${sugBarInfo.percent}% \xB7 ${sugBarInfo.statusBadge}`;
-  majorSections.push(dailyStatusContent);
   const cleanCoachTitle = isMax ? "Coach Max" : "Coach Mia";
-  majorSections.push(`\u{1F916} *${cleanCoachTitle.toUpperCase()}*
+  const coachSection = `\u{1F916} *${cleanCoachTitle.toUpperCase()}*
 
-"${coachComment}"`);
+"${coachComment}"`;
+  const correctionSection = `Ketik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`;
+  const part1 = [headerSection, nutrSection, portionSection].join(`
+
+${separator}
+
+`);
+  const part2 = [dailyStatusSection, coachSection, correctionSection].join("\n\n");
+  return `${part1}
+
+${separator}
+
+${part2}`;
+}
+function buildImageMealResponseMessages(parsedAi, inputSource, userData, dailyTotals, maxSafeLength = 1500) {
+  const card = formatNutritionCard(parsedAi, inputSource, userData, dailyTotals);
+  if (card.length <= maxSafeLength) {
+    return [card];
+  }
   const separator = "--------------------------------------------------";
-  return majorSections.join(`
+  const splitMarker = `
 
 ${separator}
 
-`) + `
+\u{1F4C8} *STATUS HARI INI*`;
+  const splitIndex = card.indexOf(splitMarker);
+  if (splitIndex !== -1) {
+    const part1 = card.substring(0, splitIndex).trim();
+    const part2 = card.substring(splitIndex + `
 
 ${separator}
 
-Ketik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`;
+`.length).trim();
+    if (part1 && part2) {
+      return [part1, part2];
+    }
+  }
+  return splitWhatsAppMessage(card, maxSafeLength);
 }
 function generateWelcomeMessages(userData) {
   const {
@@ -56540,13 +56576,13 @@ Keluarkan output JSON valid:
                       );
                       addMealLog(from, mealRecord);
                       const dailyTotals = getDailyTotals(from);
-                      const card = formatNutritionCard(
+                      const cardMessages = buildImageMealResponseMessages(
                         validatedParsed,
                         imagePart ? "Foto" : "Teks",
                         userData,
                         dailyTotals
                       );
-                      responseMessages = [card];
+                      responseMessages = cardMessages;
                     }
                   } else if (parsed.isEquipment && !parsed.isUnrelatedImage) {
                     if (!planCapabilities.canWorkout) {
@@ -56575,13 +56611,13 @@ Keluarkan output JSON valid:
                     );
                     addMealLog(from, mealRecord);
                     const dailyTotals = getDailyTotals(from);
-                    const card = formatNutritionCard(
+                    const cardMessages = buildImageMealResponseMessages(
                       validatedParsed,
                       "Teks",
                       userData,
                       dailyTotals
                     );
-                    responseMessages = [card];
+                    responseMessages = cardMessages;
                   }
                 }
               }
@@ -57204,46 +57240,14 @@ Keluarkan output JSON valid:
                   );
                   addMealLog(normFrom, mealRecord);
                   const dailyTotals = getDailyTotals(normFrom);
-                  const card = formatNutritionCard(
+                  const cardMessages = buildImageMealResponseMessages(
                     validatedParsed,
                     imagePart ? "Foto" : "Teks",
                     userData,
                     dailyTotals
                   );
-                  responseMessages = [card];
-                  if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
-                    const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-                    const mealTypeStr = validatedParsed.mealType;
-                    const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-                    const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
-                    cardMediaCache.set(cardId, {
-                      foodName: mealRecord.foodName,
-                      calories: mealRecord.calories,
-                      protein: mealRecord.protein,
-                      carbs: mealRecord.carbs,
-                      fat: mealRecord.fat,
-                      sodium: mealRecord.sodium || 0,
-                      fiber: mealRecord.fiber || 0,
-                      sugar: mealRecord.sugar || 0,
-                      mealType: mealTypeStr,
-                      dateStr,
-                      dailyTargetCalories: userData.targetCalories || 1966,
-                      consumedTodayCalories: dailyTotals.calories,
-                      dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
-                      dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
-                      dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
-                      insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
-                      imageBufferOrBase64: photoDataUri,
-                      createdAt: Date.now()
-                    });
-                    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-                    const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
-                    const dynamicOrigin = `${proto}://${host}`;
-                    const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
-                    mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
-                  } else {
-                    mediaUrlToSend = "";
-                  }
+                  responseMessages = cardMessages;
+                  mediaUrlToSend = "";
                 }
               }
             } else if (isEquipmentMatch) {
@@ -57279,13 +57283,13 @@ Keluarkan output JSON valid:
               );
               addMealLog(normFrom, mealRecord);
               const dailyTotals = getDailyTotals(normFrom);
-              const card = formatNutritionCard(
+              const cardMessages = buildImageMealResponseMessages(
                 validatedParsed,
                 "Teks",
                 userData,
                 dailyTotals
               );
-              responseMessages = [card];
+              responseMessages = cardMessages;
             }
           }
         }
@@ -57675,6 +57679,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   applyDeterministicCorrection,
   applyTargetedMealCorrection,
   authPendingSessions,
+  buildImageMealResponseMessages,
   buildSingleSourceOfTruthMealRecord,
   calculateUserData,
   classifyMealType,

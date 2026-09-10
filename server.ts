@@ -168,12 +168,10 @@ export function sanitizeWhatsAppResponse(text: string): string {
   let cleaned = text
     // Purge any unicode box-drawing characters
     .replace(/[━─═]/g, "-")
-    // Collapse any sequence of lines containing only separator chars into a single continuous separator
-    .replace(/(?:^[ \t]*[-=]{1,50}[ \t]*(?:\r?\n|\r|$)(?:[ \t]*(?:\r?\n|\r|$))*)+/gm, `${STANDARD_SEP}\n`)
-    // Replace 2 or more consecutive separator lines with a single clean separator
-    .replace(/(?:^[-=]{4,}\s*[\r\n]+){2,}/gm, `${STANDARD_SEP}\n`)
-    // Normalize isolated separator lines to canonical continuous separator line
-    .replace(/^[-=]{4,50}$/gm, STANDARD_SEP)
+    // Normalize isolated separator lines to canonical continuous separator line (50 hyphens)
+    .replace(/^[ \t]*[-=]{4,50}[ \t]*$/gm, STANDARD_SEP)
+    // Collapse 2 or more consecutive separator lines into a single clean separator line
+    .replace(/(?:--------------------------------------------------\s*[\r\n]+){2,}/g, `${STANDARD_SEP}\n\n`)
     // Remove isolated empty bullets
     .replace(/^[•\-\*]\s*$/gm, "")
     // Normalize 3+ newlines to max 2 newlines
@@ -522,7 +520,7 @@ export function splitWhatsAppMessage(text: string, maxSafeLength = 1400): string
 
   return chunks
     .map(c => sanitizeWhatsAppResponse(c))
-    .filter(c => c.length > 0 && !/^[━─\-=]+$/gm.test(c.trim()));
+    .filter(c => c.length > 0 && !/^[-=━─═]+$/.test(c.trim()));
 }
 
 async function sendSingleTwilioMessage(to: string, body: string, customFrom?: string, mediaUrl?: string) {
@@ -837,9 +835,9 @@ const snap = new midtransClient.Snap({
   clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || 'dummy_client_key'
 });
 
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "EAGLcyJSs0VEBSTJMAzWcISZBEseNjZBZAY2MM1v409dyRF7Mfq8JmYTi3dGwzzvW8uHhqqYPG0BdJz4KfaYvdvbZBVJsB3LOAiPvu1zqQCKpmhSSiLpWOLdRofWlTP8yXfffeXq3zMsPmuf0k6fKrq4RU3MRthBQUetSTLN7lOtsbRAzV5WIZA5UMd09NSAZDZD";
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "1232638216597845";
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "buddy_verify_token_123";
+const WHATSAPP_TOKEN = (process.env.WHATSAPP_TOKEN || "").trim();
+const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").trim();
 
 // Helper for phone number normalization
 function normalizePhone(phone: string): string {
@@ -1437,76 +1435,25 @@ async function sendWhatsAppDirect(rawPhone: string, message: string): Promise<bo
       console.error(`[WhatsApp Reminder] Error delivering via Twilio to ${phone}:`, err?.message || err);
     }
   }
-  if (!sent && (process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN)) {
+  if (!sent && (process.env.WHATSAPP_TOKEN || "").trim()) {
     try {
       sent = Boolean(await sendMetaWhatsappMessage(phone, message));
-      if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta to: ${phone}`);
+      if (sent) console.log(`[WhatsApp Reminder] Successfully delivered via Meta fallback to: ${phone}`);
     } catch (err: any) {
-      console.error(`[WhatsApp Reminder] Error delivering via Meta to ${phone}:`, err?.message || err);
+      console.error(`[WhatsApp Reminder] Error delivering via Meta fallback to ${phone}:`, err?.message || err);
     }
   }
   return sent;
 }
 
-// Helper to send login confirmation message via WhatsApp (with Meta interactive buttons or Twilio fallback)
+// Helper to send login confirmation message via WhatsApp (Twilio Primary)
 export async function sendWhatsAppLoginMessage(rawPhone: string, message: string, sessionId?: string): Promise<boolean> {
   const phone = normalizePhone(rawPhone);
   if (!phone) return false;
   let sent = false;
 
-  // 1. Try Meta WhatsApp Cloud API
-  const token = process.env.WHATSAPP_TOKEN || WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_PHONE_NUMBER_ID;
-  if (token && phoneId) {
-    try {
-      const cleanText = sanitizeWhatsAppResponse(message);
-      const recipient = phone.replace(/^0/, "62");
-
-      // Attempt interactive reply buttons first
-      try {
-        await axios.post(
-          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-          {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: recipient,
-            type: "interactive",
-            interactive: {
-              type: "button",
-              body: { text: cleanText },
-              action: {
-                buttons: [
-                  { type: "reply", reply: { id: `auth_approve_${sessionId || "sess"}`, title: "Ya, ini saya" } },
-                  { type: "reply", reply: { id: `auth_reject_${sessionId || "sess"}`, title: "Bukan saya" } }
-                ]
-              }
-            }
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log(`[WhatsApp Auth] Successfully delivered interactive message via Meta to: ${recipient}`);
-        sent = true;
-      } catch (interactiveErr: any) {
-        console.warn("[WhatsApp Auth] Meta interactive button failed, falling back to text:", interactiveErr?.response?.data || interactiveErr?.message);
-        await axios.post(
-          `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: recipient,
-            text: { body: cleanText },
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log(`[WhatsApp Auth] Successfully delivered text message via Meta to: ${recipient}`);
-        sent = true;
-      }
-    } catch (metaErr: any) {
-      console.error(`[WhatsApp Auth] Meta delivery failed for ${phone}:`, metaErr?.response?.data || metaErr?.message || metaErr);
-    }
-  }
-
-  // 2. Try Twilio if Meta was unconfigured or failed
-  if (!sent && getTwilio()) {
+  // 1. Primary: Send via Twilio
+  if (getTwilio()) {
     try {
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER || "whatsapp:+14155238886";
       const fromNum = twilioPhone.startsWith("whatsapp:") ? twilioPhone : `whatsapp:${twilioPhone}`;
@@ -1521,6 +1468,59 @@ export async function sendWhatsAppLoginMessage(rawPhone: string, message: string
       sent = true;
     } catch (twilioErr: any) {
       console.error(`[WhatsApp Auth] Twilio delivery failed for ${phone}:`, twilioErr?.message || twilioErr);
+    }
+  }
+
+  // 2. Optional Fallback: Meta Cloud API (only if Twilio failed or unconfigured, and valid token exists)
+  if (!sent) {
+    const token = (process.env.WHATSAPP_TOKEN || "").trim();
+    const phoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+    if (token && phoneId) {
+      try {
+        const cleanText = sanitizeWhatsAppResponse(message);
+        const recipient = phone.replace(/^0/, "62");
+
+        // Attempt interactive reply buttons first
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+            {
+              messaging_product: "whatsapp",
+              recipient_type: "individual",
+              to: recipient,
+              type: "interactive",
+              interactive: {
+                type: "button",
+                body: { text: cleanText },
+                action: {
+                  buttons: [
+                    { type: "reply", reply: { id: `auth_approve_${sessionId || "sess"}`, title: "Ya, ini saya" } },
+                    { type: "reply", reply: { id: `auth_reject_${sessionId || "sess"}`, title: "Bukan saya" } }
+                  ]
+                }
+              }
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log(`[WhatsApp Auth] Successfully delivered interactive message via Meta fallback to: ${recipient}`);
+          sent = true;
+        } catch (interactiveErr: any) {
+          console.warn("[WhatsApp Auth] Meta interactive button fallback failed, falling back to text:", interactiveErr?.response?.data || interactiveErr?.message);
+          await axios.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+            {
+              messaging_product: "whatsapp",
+              to: recipient,
+              text: { body: cleanText },
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log(`[WhatsApp Auth] Successfully delivered text message via Meta fallback to: ${recipient}`);
+          sent = true;
+        }
+      } catch (metaErr: any) {
+        console.error(`[WhatsApp Auth] Meta fallback delivery failed for ${phone}:`, metaErr?.response?.data || metaErr?.message || metaErr);
+      }
     }
   }
 
@@ -3269,10 +3269,24 @@ function parseDateFromQuery(userText: string): { dateStr: string; label: string;
 
 export function formatNutritionCard(
   parsedAi: any,
-  inputSource: string,
-  userData: ReturnType<typeof calculateUserData>,
-  dailyTotals: ReturnType<typeof getDailyTotals>
+  inputSourceOrUserData: string | any,
+  userDataOrDailyTotals?: any,
+  maybeDailyTotals?: any
 ): string {
+  let inputSource = "Teks";
+  let userData: any;
+  let dailyTotals: any;
+
+  if (typeof inputSourceOrUserData === "string") {
+    inputSource = inputSourceOrUserData;
+    userData = userDataOrDailyTotals;
+    dailyTotals = maybeDailyTotals;
+  } else {
+    inputSource = "Teks";
+    userData = inputSourceOrUserData;
+    dailyTotals = userDataOrDailyTotals;
+  }
+
   const rawFoodName = String(parsedAi?.canonicalMealTitle || parsedAi?.foodName || "Estimasi Makanan").trim();
   const cleanFoodName = rawFoodName.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳\s]+/, "").trim() || "Estimasi Makanan";
 
@@ -3546,18 +3560,17 @@ export function formatNutritionCard(
   const sugBarInfo = getStatusBar(totalTodaySugar, sugarLimit, true, false);
 
   // Construct sections cleanly under Single Formatter Ownership
-  const majorSections: string[] = [];
+  const separator = "--------------------------------------------------";
 
-  // 1. Meal Header Section
+  // 1. Meal Identification, Category, and Timestamp + AI confidence
   const emojiForHeader = resolvedMealType === "dinner" ? "🌙" : mealEmoji;
-  majorSections.push(
+  const headerSection =
     `🍽️ *${cleanFoodName}*\n\n` +
     `${emojiForHeader} *${mealLabel.toUpperCase()}*\n` +
-    `🕒 ${dateStr}, ${timeStr} WIB · 🤖 GymBuddy AI: ${confidenceScore}%`
-  );
+    `🕒 ${dateStr}, ${timeStr} WIB · 🤖 GymBuddy AI: ${confidenceScore}%`;
 
   // 2. Estimasi Nutrisi Section
-  let nutrContent = `📊 *ESTIMASI NUTRISI*\n\n` +
+  const nutrSection = `📊 *ESTIMASI NUTRISI*\n\n` +
     `🔥 ${calories} kcal\n` +
     `🍖 Protein: ${protein}g\n` +
     `🍚 Karbo: ${carbs}g\n` +
@@ -3565,15 +3578,12 @@ export function formatNutritionCard(
     `🥬 Serat: ${fiber}g\n` +
     `🧂 Natrium: ${sodium} mg\n` +
     `🍯 Gula: ${sugar}g`;
-  majorSections.push(nutrContent);
 
-  // 3. Estimasi Porsi Section (only if portion detail text exists)
-  if (portionDetailText.trim()) {
-    majorSections.push(`🍽️ *ESTIMASI PORSI*\n\n${portionDetailText.trim()}`);
-  }
+  // 3. Estimasi Porsi Section
+  const portionSection = `🍽️ *ESTIMASI PORSI*\n\n${portionDetailText.trim()}`;
 
   // 4. Status Hari Ini Section (Complete 6 Metrics)
-  const dailyStatusContent = `📈 *STATUS HARI INI*\n\n` +
+  const dailyStatusSection = `📈 *STATUS HARI INI*\n\n` +
     `🔥 Kalori: ${totalTodayCal}/${targetCal} kcal\n` +
     `[${calBarInfo.bar}] ${calBarInfo.percent}% · ${calBarInfo.statusBadge}\n\n` +
     `🍖 Protein: ${totalTodayProt}/${targetProt}g\n` +
@@ -3586,15 +3596,48 @@ export function formatNutritionCard(
     `[${sodBarInfo.bar}] ${sodBarInfo.percent}% · ${sodBarInfo.statusBadge}\n\n` +
     `🍯 Gula: ${totalTodaySugar}/${sugarLimit}g\n` +
     `[${sugBarInfo.bar}] ${sugBarInfo.percent}% · ${sugBarInfo.statusBadge}`;
-  majorSections.push(dailyStatusContent);
 
   // 5. Active Coach Section
   const cleanCoachTitle = isMax ? "Coach Max" : "Coach Mia";
-  majorSections.push(`🤖 *${cleanCoachTitle.toUpperCase()}*\n\n"${coachComment}"`);
+  const coachSection = `🤖 *${cleanCoachTitle.toUpperCase()}*\n\n"${coachComment}"`;
 
-  // Single Formatter Ownership: Join all major sections with standard separator
+  // 6. Correction Instruction
+  const correctionSection = `Ketik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`;
+
+  // Assemble Part 1 (Meal + nutrition + portion) and Part 2 (Daily status + coach + correction)
+  const part1 = [headerSection, nutrSection, portionSection].join(`\n\n${separator}\n\n`);
+  const part2 = [dailyStatusSection, coachSection, correctionSection].join("\n\n");
+
+  return `${part1}\n\n${separator}\n\n${part2}`;
+}
+
+export function buildImageMealResponseMessages(
+  parsedAi: any,
+  inputSource: string,
+  userData: ReturnType<typeof calculateUserData>,
+  dailyTotals: ReturnType<typeof getDailyTotals>,
+  maxSafeLength: number = 1500
+): string[] {
+  const card = formatNutritionCard(parsedAi, inputSource, userData, dailyTotals);
+  if (card.length <= maxSafeLength) {
+    return [card];
+  }
+
+  // Deterministic logical splitting when card exceeds maxSafeLength:
+  // Message 1: Meal + nutrition + portion
+  // Message 2: Daily status + coach + correction
   const separator = "--------------------------------------------------";
-  return majorSections.join(`\n\n${separator}\n\n`) + `\n\n${separator}\n\nKetik *koreksi: [porsi]* jika ada yang perlu diperbaiki.`;
+  const splitMarker = `\n\n${separator}\n\n📈 *STATUS HARI INI*`;
+  const splitIndex = card.indexOf(splitMarker);
+  if (splitIndex !== -1) {
+    const part1 = card.substring(0, splitIndex).trim();
+    const part2 = card.substring(splitIndex + `\n\n${separator}\n\n`.length).trim();
+    if (part1 && part2) {
+      return [part1, part2];
+    }
+  }
+
+  return splitWhatsAppMessage(card, maxSafeLength);
 }
 
 function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>): string[] {
@@ -7955,13 +7998,13 @@ Keluarkan output JSON valid:
 
                   addMealLog(from, mealRecord);
                   const dailyTotals = getDailyTotals(from);
-                  const card = formatNutritionCard(
+                  const cardMessages = buildImageMealResponseMessages(
                     validatedParsed,
                     imagePart ? "Foto" : "Teks",
                     userData,
                     dailyTotals
                   );
-                  responseMessages = [card];
+                  responseMessages = cardMessages;
                 }
               } else if (parsed.isEquipment && !parsed.isUnrelatedImage) {
                 if (!planCapabilities.canWorkout) {
@@ -8001,13 +8044,13 @@ Keluarkan output JSON valid:
 
                 addMealLog(from, mealRecord);
                 const dailyTotals = getDailyTotals(from);
-                const card = formatNutritionCard(
+                const cardMessages = buildImageMealResponseMessages(
                   validatedParsed,
                   "Teks",
                   userData,
                   dailyTotals
                 );
-                responseMessages = [card];
+                responseMessages = cardMessages;
               }
             }
           }
@@ -8776,50 +8819,17 @@ Keluarkan output JSON valid:
 
                 addMealLog(normFrom, mealRecord);
                 const dailyTotals = getDailyTotals(normFrom);
-                const card = formatNutritionCard(
+                const cardMessages = buildImageMealResponseMessages(
                   validatedParsed,
                   imagePart ? "Foto" : "Teks",
                   userData,
                   dailyTotals
                 );
-                responseMessages = [card];
+                responseMessages = cardMessages;
 
-                // HANYA kirim gambar kartu infografis jika user MENGIRIM FOTO MAKANAN (imagePart / MediaUrl0)
-                if (imagePart && imagePart.inlineData && req.body?.MediaUrl0) {
-                  const cardId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-                  const mealTypeStr = validatedParsed.mealType;
-                  const dateStr = new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
-                  const photoDataUri = `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
-
-                  cardMediaCache.set(cardId, {
-                    foodName: mealRecord.foodName,
-                    calories: mealRecord.calories,
-                    protein: mealRecord.protein,
-                    carbs: mealRecord.carbs,
-                    fat: mealRecord.fat,
-                    sodium: (mealRecord as any).sodium || 0,
-                    fiber: mealRecord.fiber || 0,
-                    sugar: (mealRecord as any).sugar || 0,
-                    mealType: mealTypeStr,
-                    dateStr,
-                    dailyTargetCalories: userData.targetCalories || 1966,
-                    consumedTodayCalories: dailyTotals.calories,
-                    dailyTargetProtein: userData.dailyTargetProtein || userData.proteinGrams || Math.round((userData.targetCalories || 1966) * 0.3 / 4),
-                    dailyTargetCarbs: userData.dailyTargetCarbs || userData.carbGrams || Math.round((userData.targetCalories || 1966) * 0.45 / 4),
-                    dailyTargetFat: userData.dailyTargetFat || userData.fatGrams || Math.round((userData.targetCalories || 1966) * 0.25 / 9),
-                    insight: parsed.coachComment || (Array.isArray(parsed.keyInsights) ? parsed.keyInsights[0] : "") || parsed.satietyExplanation || "",
-                    imageBufferOrBase64: photoDataUri,
-                    createdAt: Date.now()
-                  });
-
-                  const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-                  const host = req.get("host") || req.headers.host || "gymbuddy.brins.co.id";
-                  const dynamicOrigin = `${proto}://${host}`;
-                  const domainUrl = (process.env.PUBLIC_SERVER_URL || process.env.BASE_URL || dynamicOrigin).replace(/\/$/, "");
-                  mediaUrlToSend = `${domainUrl}/api/card/${cardId}.jpg`;
-                } else {
-                  mediaUrlToSend = "";
-                }
+                // For meal logging, response is delivered as clean WhatsApp text message (single coherent message)
+                // mediaUrlToSend is strictly disabled to prevent Twilio caption truncation (1024 char limit) & race conditions
+                mediaUrlToSend = "";
               }
             }
           } else if (isEquipmentMatch) {
@@ -8867,13 +8877,13 @@ Keluarkan output JSON valid:
 
             addMealLog(normFrom, mealRecord);
             const dailyTotals = getDailyTotals(normFrom);
-            const card = formatNutritionCard(
+            const cardMessages = buildImageMealResponseMessages(
               validatedParsed,
               "Teks",
               userData,
               dailyTotals
             );
-            responseMessages = [card];
+            responseMessages = cardMessages;
           }
         }
       }
