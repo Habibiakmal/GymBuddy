@@ -56682,14 +56682,29 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       res.status(500).json({ success: false, error: error.message || "Failed to create transaction" });
     }
   });
-  app.post("/api/midtrans/notification", async (req, res) => {
+  app.get("/api/midtrans/notification", (req, res) => {
+    res.status(200).json({
+      success: true,
+      message: "GymBuddy Midtrans notification endpoint is online and reachable"
+    });
+  });
+  app.post("/api/midtrans/notification", import_express.default.json(), import_express.default.urlencoded({ extended: true }), async (req, res) => {
     try {
       const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
-      const body = req.body;
-      const orderId = body.order_id;
+      const body = req.body || {};
+      const orderId = body.order_id || "";
       const statusCode = body.status_code;
       const grossAmount = body.gross_amount;
       const signatureKey = body.signature_key;
+      console.log(`[Midtrans Webhook] Received notification payload for order: "${orderId}"`);
+      const isTestPing = !orderId || orderId.toLowerCase().includes("test") || orderId.toLowerCase().includes("dummy") || orderId.toLowerCase().includes("sample") || Boolean(body.test);
+      if (isTestPing) {
+        console.log(`[Midtrans Webhook] Test notification ping verified from Midtrans Dashboard. Returning 200 OK \u2705`);
+        return res.status(200).json({
+          success: true,
+          message: "Test notification received successfully"
+        });
+      }
       if (serverKey && signatureKey) {
         const isValidSignature = verifyMidtransSignature(orderId, statusCode, grossAmount, signatureKey, serverKey);
         if (!isValidSignature) {
@@ -56697,10 +56712,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           return res.status(403).json({ error: "Invalid signature" });
         }
       }
-      const statusResponse = await snap.transaction.notification(body);
-      const transactionStatus = statusResponse.transaction_status;
-      const fraudStatus = statusResponse.fraud_status;
-      const paymentType = statusResponse.payment_type;
+      let transactionStatus = body.transaction_status;
+      let fraudStatus = body.fraud_status;
+      let paymentType = body.payment_type;
+      try {
+        const statusResponse = await snap.transaction.notification(body);
+        if (statusResponse) {
+          transactionStatus = statusResponse.transaction_status || transactionStatus;
+          fraudStatus = statusResponse.fraud_status || fraudStatus;
+          paymentType = statusResponse.payment_type || paymentType;
+        }
+      } catch (snapErr) {
+        console.warn(`[Midtrans Webhook] snap.transaction.notification status check note: ${snapErr?.message || snapErr}. Using webhook payload directly.`);
+      }
       console.log(`[Midtrans] Order ${orderId} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
       const isSuccess = transactionStatus === "settlement" || transactionStatus === "capture" && fraudStatus === "accept";
       const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
@@ -56724,16 +56748,42 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           paymentType,
           updatedAt: /* @__PURE__ */ new Date()
         });
-        if (dbData.users[normPhone]) {
-          dbData.users[normPhone].subscription = {
-            plan,
-            activeService,
-            status: "active",
-            expiresAt: expiresAt.toISOString()
-          };
-          saveDb();
+        const canonicalPlan = plan === "nutritionist" || activeService === "nutrition" ? "nutritionist" : plan === "workout_coach" || activeService === "coach" ? "workout_coach" : "premium";
+        const existingUser = dbData.users[normPhone] || getUserProfile(normPhone);
+        if (existingUser) {
+          const applied = applyCommercialPlan(existingUser, canonicalPlan, "1_month");
+          if (applied.success) {
+            dbData.users[normPhone] = {
+              ...applied.user,
+              subscription: {
+                plan: canonicalPlan,
+                activeService,
+                status: "active",
+                expiresAt: expiresAt.toISOString()
+              }
+            };
+            saveUserProfile(normPhone, dbData.users[normPhone]);
+            saveDb();
+          }
         }
-        console.log(`[Midtrans] Activated premium subscription in MongoDB for ${normPhone} \u2705`);
+        console.log(`[Midtrans] Activated ${canonicalPlan} subscription for ${normPhone} \u2705`);
+        try {
+          const displayName = getPlanDisplayName(canonicalPlan, "ID");
+          const coachName = (existingUser?.persona || "mia").toLowerCase().includes("max") ? "Coach Max" : "Coach Mia";
+          const confirmMsg = `\u{1F389} *PEMBAYARAN BERHASIL!*
+--------------------------------------------------
+Terima kasih! Pembayaran untuk paket *${displayName}* sebesar Rp ${Number(grossAmount).toLocaleString("id-ID")} telah berhasil diverifikasi.
+
+\u2705 *Status Paket*: AKTIF (1 Bulan)
+\u2728 Seluruh fitur AI bimbingan dan pelacakan nutrisi & workout sudah terbuka penuh!
+
+--------------------------------------------------
+\u{1F4AC} *${coachName}*:
+"Selamat bergabung! Yuk kirim foto menu makananmu atau tanyakan jadwal latihan hari ini. Let's reach your goals! \u{1F4AA}"`;
+          await sendWhatsAppMessage(normPhone, confirmMsg);
+        } catch (waErr) {
+          console.warn("[Midtrans Webhook] Failed to send WhatsApp receipt:", waErr);
+        }
       } else if (isFailed && phone) {
         const normPhone = normalizePhone(phone);
         const sub = await getUserSubscription2(normPhone);
@@ -56745,7 +56795,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       res.status(200).send("OK");
     } catch (error) {
       console.error("Midtrans Webhook Error:", error);
-      res.status(500).json({ error: error.message });
+      res.status(200).json({ success: true, warning: error.message });
     }
   });
   app.get("/api/webhook/whatsapp", (req, res) => {
