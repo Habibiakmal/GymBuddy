@@ -214,17 +214,92 @@ export default function PricingPage({
       setIsProcessingPayment(true);
       setPhoneError(null);
 
-      const res = await canonicalApiFetch<{ success: boolean; token?: string; orderId?: string; error?: string }>(
-        "/api/midtrans/create-transaction",
+      // 1. Authoritative Phone Identity & Entitlement Gate Check
+      const checkRes = await canonicalApiFetch<{
+        success: boolean;
+        exists: boolean;
+        canonicalPhone?: string;
+        entitlements?: { nutritionist: boolean; workoutCoach: boolean; both: boolean };
+        subscription?: any;
+        message?: string;
+      }>("/api/auth/check-phone", {
+        method: "POST",
+        body: JSON.stringify({ phone: normPhone })
+      });
+
+      if (!checkRes || !checkRes.success) {
+        throw new Error(checkRes?.message || "Gagal memverifikasi nomor WhatsApp.");
+      }
+
+      if (!checkRes.exists) {
+        setPhoneError(
+          isEN
+            ? "This phone number is not registered yet. Please complete onboarding first so our AI coach can tailor your personalized program."
+            : "Nomor WhatsApp ini belum terdaftar di GymBuddy. Silakan mulai pendaftaran akun baru melalui onboarding terlebih dahulu agar program latihan & nutrisi Anda dapat disesuaikan."
+        );
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      // Check current entitlements to prevent duplicate purchase / handle renewal & upgrade
+      const entitlements = checkRes.entitlements;
+      const sub = checkRes.subscription;
+      const hasLifetime = sub?.plan === "lifetime" && sub?.isActive;
+      const hasBoth = entitlements?.both && sub?.isActive;
+      const hasWorkout = entitlements?.workoutCoach && !hasBoth && sub?.isActive;
+      const hasNutrition = entitlements?.nutritionist && !hasBoth && sub?.isActive;
+
+      if (hasLifetime) {
+        setPhoneError(
+          isEN
+            ? "Your account already has Lifetime All-Access. No additional purchase needed."
+            : "Akun Anda sudah memiliki akses Lifetime (All-Access selamanya). Tidak perlu membeli paket lain."
+        );
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      let isExplicitRenewal = false;
+      const targetPlanCanonical = selectedDuration === "lifetime" ? "lifetime" : (plan === "premium" ? "both" : (service === "nutrition" ? "nutritionist" : "workout_coach"));
+
+      if (hasBoth) {
+        if (targetPlanCanonical === "nutritionist" || targetPlanCanonical === "workout_coach") {
+          setPhoneError(
+            isEN
+              ? "This specialist service is already included in your active All-Access plan."
+              : "Layanan ini sudah termasuk dalam paket Premium All-Access kamu yang sedang aktif."
+          );
+          setIsProcessingPayment(false);
+          return;
+        }
+        if (targetPlanCanonical === "both") {
+          isExplicitRenewal = true;
+        }
+      } else if (hasWorkout) {
+        if (targetPlanCanonical === "workout_coach") {
+          isExplicitRenewal = true;
+        }
+      } else if (hasNutrition) {
+        if (targetPlanCanonical === "nutritionist") {
+          isExplicitRenewal = true;
+        }
+      }
+
+      const canonicalPhone = checkRes.canonicalPhone || normPhone;
+
+      const res = await canonicalApiFetch<{ success: boolean; token?: string; orderId?: string; error?: string; message?: string; redirectUrl?: string }>(
+        "/api/orders/create",
         {
           method: "POST",
           body: JSON.stringify({
-            phone: normPhone,
-            plan: selectedDuration === "lifetime" ? "lifetime" : plan,
+            phone: canonicalPhone,
+            plan: targetPlanCanonical,
             activeService: service,
             selectedFeature: service,
             amount: amount,
             duration: selectedDuration,
+            billingPeriod: selectedDuration,
+            isExplicitRenewal,
             customerName: currentUser?.name || "Member GymBuddy"
           })
         }
@@ -264,13 +339,13 @@ export default function PricingPage({
               console.log("[Midtrans] Customer closed the payment modal.");
             }
           });
-        } else if (res.redirect_url) {
-          window.location.href = res.redirect_url;
+        } else if (res.redirectUrl || (res as any).redirect_url) {
+          window.location.href = res.redirectUrl || (res as any).redirect_url;
         } else {
           window.location.href = `https://app.sandbox.midtrans.com/snap/v4/redirection/${res.token}`;
         }
       } else {
-        throw new Error(res?.error || "Gagal membuat transaksi pembayaran");
+        throw new Error(res?.message || res?.error || "Gagal membuat transaksi pembayaran");
       }
     } catch (err: any) {
       console.error("[Midtrans Checkout Error]", err);

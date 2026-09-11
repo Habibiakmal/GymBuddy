@@ -562,7 +562,10 @@ export async function clearAccountDeletedTombstone(phone: string): Promise<void>
   const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
   const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
 
-  const variations = Array.from(new Set([phone, normPhone, altPhone, cleanPhone, canonicalPhone, `usr_${normPhone}`])).filter(Boolean);
+  const variations = Array.from(new Set([
+    phone, normPhone, altPhone, cleanPhone, canonicalPhone,
+    `usr_${normPhone}`, `usr_${cleanPhone}`, `usr_${altPhone}`, `usr_${canonicalPhone}`
+  ])).filter(Boolean);
   for (const v of variations) {
     deletedAccountsMap.delete(v);
   }

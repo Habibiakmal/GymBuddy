@@ -746,64 +746,7 @@ const ExerciseVisualPlayer = ({ item }: { item: ExerciseItem }) => {
   );
 };
 
-export const DUMMY_USERS: Record<string, any> = {
-  alex: {
-    userId: "usr_alex_demo",
-    name: "Alex",
-    phone: "08111111111",
-    gender: "Pria",
-    age: 26,
-    weight: 75,
-    startWeight: 75,
-    targetWeight: 70,
-    height: 175,
-    goal: "lose",
-    goalTitle: "Menurunkan Berat Badan",
-    persona: "max",
-    activeService: "nutritionist",
-    selectedFeature: "nutrition",
-    plan: "nutrition",
-    activityLevel: "moderate",
-    targetCalories: 2100,
-    dailyTargetCalories: 2100,
-    proteinGrams: 155,
-    dailyTargetProtein: 155,
-    carbGrams: 210,
-    dailyTargetCarbs: 210,
-    fatGrams: 65,
-    dailyTargetFat: 65,
-    fiberGrams: 30,
-    entitlements: { canNutrition: true, canWorkout: false }
-  },
-  mia: {
-    userId: "usr_mia_demo",
-    name: "Mia",
-    phone: "08222222222",
-    gender: "Wanita",
-    age: 24,
-    weight: 58,
-    startWeight: 58,
-    targetWeight: 54,
-    height: 165,
-    goal: "gain",
-    goalTitle: "Membentuk Otot & Tone",
-    persona: "mia",
-    activeService: "workout",
-    selectedFeature: "workout",
-    plan: "workout",
-    activityLevel: "moderate",
-    targetCalories: 1850,
-    dailyTargetCalories: 1850,
-    proteinGrams: 120,
-    dailyTargetProtein: 120,
-    carbGrams: 200,
-    dailyTargetCarbs: 200,
-    fatGrams: 55,
-    dailyTargetFat: 55,
-    fiberGrams: 28,
-    entitlements: { canNutrition: false, canWorkout: true }
-  }
-};
+
 
 export default function Dashboard({
   user: initialUser,
@@ -972,12 +915,17 @@ export default function Dashboard({
         upgradeTargetFeature === "nutrition" ? "nutritionist" : "workout_coach";
       const amount = getPrice(purchasePlan, upgradeSelectedDuration);
       const API_BASE_URL = getApiBaseUrl();
+      const token = localStorage.getItem("gymbuddy_auth_token");
 
       const res = await fetch(`${API_BASE_URL}/api/orders/create`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           userId: activeUser.userId,
+          phone: activeUser.phone,
           plan: purchasePlan,
           billingPeriod: upgradeSelectedDuration,
           amount,
@@ -985,13 +933,13 @@ export default function Dashboard({
         })
       });
       const data = await res.json().catch(() => null);
-      if (!data?.success) throw new Error(data?.error || "Gagal membuat pesanan upgrade");
+      if (!data?.success) throw new Error(data?.message || data?.error || "Gagal membuat pesanan upgrade");
 
-      const { token, redirectUrl } = data;
+      const { token: snapToken, redirectUrl } = data;
       setShowUpgradePlanModal(false);
 
-      if (token && (window as any).snap) {
-        (window as any).snap.pay(token, {
+      if (snapToken && (window as any).snap) {
+        (window as any).snap.pay(snapToken, {
           onSuccess: () => window.location.reload(),
           onPending: () => window.location.reload(),
           onError: (err: any) => console.error("[Upgrade] Snap error:", err),
@@ -1007,32 +955,6 @@ export default function Dashboard({
     } finally {
       setIsProcessingUpgrade(false);
     }
-  };
-
-  const handleSelectDemoUser = (userKey: "alex" | "mia" | "both") => {
-    if (userKey === "both") {
-      const bothUser: any = {
-        ...safeUser,
-        name: "Member (Full Access)",
-        activeService: "both",
-        selectedFeature: "both",
-        plan: "both",
-        entitlements: { canNutrition: true, canWorkout: true }
-      };
-      setLiveUser(bothUser);
-      localStorage.setItem("gymbuddy_active_session", JSON.stringify(bothUser));
-      return;
-    }
-    const dummy = DUMMY_USERS[userKey];
-    const enrichedDummy = {
-      ...dummy,
-      entitlements: userKey === "alex" 
-        ? { canNutrition: true, canWorkout: false }
-        : { canNutrition: false, canWorkout: true }
-    };
-    setLiveUser(enrichedDummy as any);
-    localStorage.setItem("gymbuddy_active_session", JSON.stringify(enrichedDummy));
-    setAllLogs(getLocalMeals(dummy.phone, selectedDate));
   };
 
   // Determine User Registration Date as Min Date Constraint

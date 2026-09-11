@@ -532,13 +532,181 @@ export function grantTrialToUser(user: any, now: Date = new Date()): {
   };
 }
 
+export type PurchaseType = "new_purchase" | "upgrade" | "renewal" | "invalid_duplicate";
+
+export interface PurchaseValidationResult {
+  allowed: boolean;
+  purchaseType: PurchaseType;
+  targetPlan: CanonicalPlan;
+  resolvedService: "nutrition" | "coach" | "both";
+  error?: string;
+  message?: string;
+}
+
 /**
- * Grants or sets a commercial plan on a user account (e.g. after migration or future verified purchase).
+ * Validates requested plan against user's current active entitlements.
+ * Evaluates whether a purchase is a New Purchase, Upgrade, Renewal, or Duplicate.
+ */
+export function determinePurchaseType(
+  user: any,
+  requestedPlan: string,
+  isExplicitRenewal = false
+): PurchaseValidationResult {
+  const normReq = String(requestedPlan || "").toLowerCase().trim();
+  const canonicalRequested: CanonicalPlan =
+    normReq === "both" || normReq === "premium"
+      ? "premium"
+      : normReq === "nutritionist" || normReq === "nutrition"
+      ? "nutritionist"
+      : normReq === "workout_coach" || normReq === "coach" || normReq === "workout"
+      ? "workout_coach"
+      : normReq === "lifetime"
+      ? "lifetime"
+      : "trial";
+
+  if (!user || typeof user !== "object") {
+    return {
+      allowed: true,
+      purchaseType: "new_purchase",
+      targetPlan: canonicalRequested,
+      resolvedService: canonicalRequested === "premium" || canonicalRequested === "lifetime" ? "both" : (canonicalRequested === "nutritionist" ? "nutrition" : "coach")
+    };
+  }
+
+  const currentSub = getUserSubscription(user);
+
+  // If user has no active subscription (or trial / expired)
+  if (!currentSub.isActive || currentSub.isExpired || currentSub.plan === "trial") {
+    return {
+      allowed: true,
+      purchaseType: "new_purchase",
+      targetPlan: canonicalRequested,
+      resolvedService: canonicalRequested === "premium" || canonicalRequested === "lifetime" ? "both" : (canonicalRequested === "nutritionist" ? "nutrition" : "coach")
+    };
+  }
+
+  // User has active Lifetime
+  if (currentSub.plan === "lifetime") {
+    return {
+      allowed: false,
+      purchaseType: "invalid_duplicate",
+      targetPlan: "lifetime",
+      resolvedService: "both",
+      error: "already_lifetime",
+      message: "Akun Anda sudah memiliki akses Lifetime (All-Access selamanya). Tidak perlu membeli paket lain."
+    };
+  }
+
+  // User has active Both / Premium
+  if (currentSub.plan === "premium") {
+    if (canonicalRequested === "nutritionist" || canonicalRequested === "workout_coach") {
+      return {
+        allowed: false,
+        purchaseType: "invalid_duplicate",
+        targetPlan: "premium",
+        resolvedService: "both",
+        error: "already_included_in_both",
+        message: "Layanan ini sudah termasuk dalam paket All-Access kamu yang sedang aktif."
+      };
+    }
+    if (canonicalRequested === "premium") {
+      if (!isExplicitRenewal) {
+        return {
+          allowed: false,
+          purchaseType: "invalid_duplicate",
+          targetPlan: "premium",
+          resolvedService: "both",
+          error: "already_active",
+          message: "Paket Premium All-Access kamu masih aktif. Pilih opsi perpanjangan (renewal) untuk menambah masa aktif."
+        };
+      }
+      return {
+        allowed: true,
+        purchaseType: "renewal",
+        targetPlan: "premium",
+        resolvedService: "both"
+      };
+    }
+  }
+
+  // User has active Workout Coach (Nutritionist is locked)
+  if (currentSub.plan === "workout_coach") {
+    if (canonicalRequested === "workout_coach") {
+      if (!isExplicitRenewal) {
+        return {
+          allowed: false,
+          purchaseType: "invalid_duplicate",
+          targetPlan: "workout_coach",
+          resolvedService: "coach",
+          error: "already_active",
+          message: "Paket AI Workout Coach kamu masih aktif. Pilih opsi perpanjangan (renewal) untuk menambah masa aktif."
+        };
+      }
+      return {
+        allowed: true,
+        purchaseType: "renewal",
+        targetPlan: "workout_coach",
+        resolvedService: "coach"
+      };
+    }
+    // Upgrading to Nutritionist or Both -> result is BOTH
+    if (canonicalRequested === "nutritionist" || canonicalRequested === "premium") {
+      return {
+        allowed: true,
+        purchaseType: "upgrade",
+        targetPlan: "premium",
+        resolvedService: "both"
+      };
+    }
+  }
+
+  // User has active Nutritionist (Workout Coach is locked)
+  if (currentSub.plan === "nutritionist") {
+    if (canonicalRequested === "nutritionist") {
+      if (!isExplicitRenewal) {
+        return {
+          allowed: false,
+          purchaseType: "invalid_duplicate",
+          targetPlan: "nutritionist",
+          resolvedService: "nutrition",
+          error: "already_active",
+          message: "Paket AI Nutritionist kamu masih aktif. Pilih opsi perpanjangan (renewal) untuk menambah masa aktif."
+        };
+      }
+      return {
+        allowed: true,
+        purchaseType: "renewal",
+        targetPlan: "nutritionist",
+        resolvedService: "nutrition"
+      };
+    }
+    // Upgrading to Workout Coach or Both -> result is BOTH
+    if (canonicalRequested === "workout_coach" || canonicalRequested === "premium") {
+      return {
+        allowed: true,
+        purchaseType: "upgrade",
+        targetPlan: "premium",
+        resolvedService: "both"
+      };
+    }
+  }
+
+  return {
+    allowed: true,
+    purchaseType: "new_purchase",
+    targetPlan: canonicalRequested,
+    resolvedService: canonicalRequested === "premium" ? "both" : (canonicalRequested === "nutritionist" ? "nutrition" : "coach")
+  };
+}
+
+/**
+ * Grants or sets a commercial plan on a user account (supports new purchase, upgrade, and renewal).
  */
 export function applyCommercialPlan(
   user: any,
   plan: CanonicalPlan,
   duration: CanonicalPlanDuration,
+  purchaseType: PurchaseType = "new_purchase",
   now: Date = new Date()
 ): { success: boolean; user: any; error?: string } {
   if (!validatePlanAndDuration(plan, duration)) {
@@ -550,7 +718,7 @@ export function applyCommercialPlan(
   }
 
   let planExpiresAt: string | null = null;
-  const startedAt = now.toISOString();
+  const startedAt = user?.planStartedAt || now.toISOString();
 
   if (plan === "lifetime") {
     planExpiresAt = null;
@@ -560,19 +728,38 @@ export function applyCommercialPlan(
     else if (duration === "6_months") daysToAdd = 180;
     else if (duration === "1_year") daysToAdd = 365;
 
-    planExpiresAt = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+    const rawExpiresAt = user?.planExpiresAt || user?.subscription?.expiresAt;
+    const existingExpiresAt = rawExpiresAt ? new Date(rawExpiresAt) : null;
+
+    if (purchaseType === "renewal") {
+      const baseMs = existingExpiresAt && existingExpiresAt.getTime() > now.getTime()
+        ? existingExpiresAt.getTime()
+        : now.getTime();
+      planExpiresAt = new Date(baseMs + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+    } else if (purchaseType === "upgrade") {
+      const upgradeMs = now.getTime() + daysToAdd * 24 * 60 * 60 * 1000;
+      // Guarantee user does not lose existing days if they had more days remaining
+      const finalMs = existingExpiresAt && existingExpiresAt.getTime() > upgradeMs
+        ? existingExpiresAt.getTime()
+        : upgradeMs;
+      planExpiresAt = new Date(finalMs).toISOString();
+    } else {
+      planExpiresAt = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+    }
   }
 
-  const isBoth = plan === "premium" || plan === "lifetime";
+  const effectivePlan = (purchaseType === "upgrade" || plan === "premium" || plan === "lifetime") ? (plan === "lifetime" ? "lifetime" : "premium") : plan;
+  const isBoth = effectivePlan === "premium" || effectivePlan === "lifetime";
+
   const updated = {
     ...user,
-    plan,
+    plan: effectivePlan,
     planDuration: duration,
     planStartedAt: startedAt,
     planExpiresAt,
     hasUsedTrial: true,
-    activeService: isBoth ? "both" : (plan === "nutritionist" ? "nutrition" : (plan === "workout_coach" ? "coach" : user.activeService)),
-    selectedFeature: isBoth ? "both" : (plan === "nutritionist" ? "nutrition" : (plan === "workout_coach" ? "coach" : user.selectedFeature)),
+    activeService: isBoth ? "both" : (effectivePlan === "nutritionist" ? "nutrition" : (effectivePlan === "workout_coach" ? "coach" : user.activeService)),
+    selectedFeature: isBoth ? "both" : (effectivePlan === "nutritionist" ? "nutrition" : (effectivePlan === "workout_coach" ? "coach" : user.selectedFeature)),
     updatedAt: now.toISOString()
   };
 

@@ -90,7 +90,7 @@ interface OnboardingProps {
 export default function Onboarding({ language = "EN", onComplete, onOpenLogin }: OnboardingProps) {
   const isEN = language === "EN";
   const [step, setStep] = useState(1);
-  const totalSteps = 11;
+  const totalSteps = 12;
 
   // Existing Account & Phone Verification States
   const [existingAccountDetected, setExistingAccountDetected] = useState(false);
@@ -127,6 +127,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       const savedProfileStr = localStorage.getItem("gymbuddy_pending_profile");
       if (savedProfileStr) {
         const p = JSON.parse(savedProfileStr);
+        if (p.phone) setPhone(p.phone);
         if (p.name) setName(p.name);
         if (p.goal) setGoal(p.goal);
         if (p.gender) setGender(p.gender);
@@ -287,6 +288,9 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
     setIsCreatingOrder(true);
     setPaymentError(null);
 
+    const cleanPhone = phone.replace(/\D/g, "");
+    const canonicalPhone = cleanPhone.startsWith("62") ? cleanPhone : (cleanPhone.startsWith("0") ? "62" + cleanPhone.substring(1) : "62" + cleanPhone);
+
     const isFree = targetPlan === "free_trial";
     const canonicalPlan: PlanKey =
       isFree || targetPlan === "premium"
@@ -305,6 +309,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
           method: "POST",
           body: JSON.stringify({
             userId: pendingUserId,
+            phone: canonicalPhone,
             plan: planParam,
             activeService: serviceParam,
             amount: amountParam,
@@ -327,9 +332,9 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       setIsCreatingOrder(false);
 
       if (isFree) {
-        setStep(16); // Direct to connect WhatsApp for Free Trial
+        await handleConnectWhatsApp();
       } else {
-        setStep(14); // Direct to Order Summary / Checkout for Paid
+        setStep(15); // Direct to Order Summary / Checkout for Paid
       }
     } catch (err: any) {
       console.error("[Onboarding] Order creation failed:", err);
@@ -350,10 +355,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
     if ((window as any).snap && typeof (window as any).snap.pay === "function") {
       (window as any).snap.pay(token, {
-        onSuccess: (result: any) => {
+        onSuccess: async (result: any) => {
           console.log("[Midtrans Snap] Payment success:", result);
           setIsPaymentPaid(true);
-          setStep(15);
+          await handleConnectWhatsApp();
         },
         onPending: (result: any) => {
           console.log("[Midtrans Snap] Payment pending:", result);
@@ -480,7 +485,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       console.warn("[Onboarding] Note saving profile:", e);
     } finally {
       setIsCreatingOrder(false);
-      setStep(13);
+      setStep(14);
     }
   };
 
@@ -605,7 +610,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       }
 
       setIsConnectingWhatsApp(false);
-      setStep(17);
+      setStep(16);
     } catch (err: any) {
       console.error("[Onboarding] Connect WhatsApp error:", err);
       setIsConnectingWhatsApp(false);
@@ -613,29 +618,68 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
     }
   };
 
-  const handleNext = () => {
-    if (step === 6 && !dob.trim()) {
+  const handleNext = async () => {
+    if (step === 1) {
+      const val = validateWhatsAppPhone(phone);
+      if (!val.isValid) {
+        setPhoneCheckError(val.message);
+        return;
+      }
+      const clean = val.cleaned;
+      const canonicalPhone = "62" + clean;
+
+      setIsCheckingPhone(true);
+      setPhoneCheckError(null);
+      try {
+        const res = await canonicalApiFetch<{
+          exists: boolean;
+          canOnboard?: boolean;
+          userId?: string;
+          canonicalPhone?: string;
+          isDeleted?: boolean;
+          error?: string;
+        }>("/api/auth/check-phone", {
+          method: "POST",
+          body: JSON.stringify({ phone: canonicalPhone })
+        });
+
+        if (res && res.exists && !res.canOnboard) {
+          setExistingAccountDetected(true);
+          setIsCheckingPhone(false);
+          return;
+        }
+
+        if (res?.userId) {
+          setPendingUserId(res.userId);
+        }
+        setIsCheckingPhone(false);
+        setStep(2);
+      } catch (err: any) {
+        console.warn("[Onboarding] Check phone error, proceeding:", err);
+        setIsCheckingPhone(false);
+        setStep(2);
+      }
+      return;
+    }
+
+    if (step === 7 && !dob.trim()) {
       setDobError(true);
       return;
     }
-    setStep((p) => Math.min(p + 1, 17));
+    setStep((p) => Math.min(p + 1, 16));
   };
 
   const handlePrev = () => {
-    if (step === 16 && selectedPlan !== "free_trial") {
-      setStep(15);
-      return;
-    }
-    if (step === 16 && selectedPlan === "free_trial") {
-      setStep(13);
-      return;
-    }
     if (step === 15) {
       setStep(14);
       return;
     }
     if (step === 14) {
       setStep(13);
+      return;
+    }
+    if (step === 13) {
+      setStep(12);
       return;
     }
     setStep((p) => Math.max(p - 1, 1));
@@ -717,22 +761,22 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
   const canProceed = () => {
     switch (step) {
-      case 1: return name.trim().length > 0;
-      case 2: return goal !== undefined;
-      case 3: return goalEvent !== "" && goalSecondary.length > 0;
-      case 4: return emotionalVision !== "";
-      case 5: return true; // Analysis 1 screen
-      case 6: return weight !== "" && height !== "" && age !== "" && dob.trim() !== "";
-      case 7: return activityLevel !== "";
-      case 8: return challenges.length > 0;
-      case 9: return true; // Analysis 2 screen
-      case 10: return persona !== "";
-      case 11: return true; // Commitment screen has default
-      case 12: return true; // Analysis summary roadmap
-      case 13: return selectedPlan !== undefined;
-      case 14: return true; // Order summary
-      case 15: return true; // Payment success
-      case 16: return validateWhatsAppPhone(phone).isValid;
+      case 1: return validateWhatsAppPhone(phone).isValid;
+      case 2: return name.trim().length > 0;
+      case 3: return goal !== undefined;
+      case 4: return goalEvent !== "" && goalSecondary.length > 0;
+      case 5: return emotionalVision !== "";
+      case 6: return true; // Analysis 1 screen
+      case 7: return weight !== "" && height !== "" && age !== "" && dob.trim() !== "";
+      case 8: return activityLevel !== "";
+      case 9: return challenges.length > 0;
+      case 10: return true; // Analysis 2 screen
+      case 11: return persona !== "";
+      case 12: return true; // Commitment screen has default
+      case 13: return true; // Analysis summary roadmap
+      case 14: return selectedPlan !== undefined;
+      case 15: return true; // Order summary
+      case 16: return true; // Account active
       default: return true;
     }
   };
@@ -1002,7 +1046,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
           </header>
         ) : (
           <header className="flex items-center justify-between mb-6 sm:mb-8 shrink-0">
-            {step < 17 && (
+            {step < 16 && (
               <button
                 onClick={handlePrev}
                 className="p-2 -ml-2 text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-['Inter'] font-bold tracking-wider uppercase"
@@ -1013,16 +1057,12 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
             )}
             <div className="flex items-center gap-2 ml-auto">
               <span className="px-2.5 py-1 rounded-full bg-[#161C28] border border-neutral-800 text-[11px] font-bold text-[#D4FF00]">
-                {step === 12
-                  ? (isEN ? "Step 1 of 4 • Analysis" : "Tahap 1/4 • Analisis AI")
-                  : step === 13
-                  ? (isEN ? "Step 2 of 4 • Plan Selection" : "Tahap 2/4 • Pilih Paket")
+                {step === 13
+                  ? (isEN ? "Step 1 of 3 • Analysis" : "Tahap 1/3 • Analisis AI")
                   : step === 14
-                  ? (isEN ? "Step 3 of 4 • Checkout" : "Tahap 3/4 • Pembayaran")
+                  ? (isEN ? "Step 2 of 3 • Plan Selection" : "Tahap 2/3 • Pilih Paket")
                   : step === 15
-                  ? (isEN ? "Payment Verified" : "Pembayaran Berhasil")
-                  : step === 16
-                  ? (isEN ? "Step 4 of 4 • WhatsApp" : "Tahap 4/4 • Hubungkan WhatsApp")
+                  ? (isEN ? "Step 3 of 3 • Checkout" : "Tahap 3/3 • Pembayaran")
                   : (isEN ? "Account Active" : "Akun Aktif")}
               </span>
             </div>
@@ -1033,10 +1073,128 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
         <main className="flex-grow flex flex-col justify-center pb-28">
           <AnimatePresence mode="wait">
 
-            {/* STEP 1: NAME INPUT */}
-            {step === 1 && (
+            {/* STEP 1: PHONE NUMBER IDENTITY GATE */}
+            {step === 1 && (() => {
+              const phoneVal = validateWhatsAppPhone(phone);
+              return (
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6 sm:space-y-8 text-left"
+                >
+                  <div className="space-y-3">
+                    <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest flex items-center gap-1.5">
+                      <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                      <span>{isEN ? "Step 1 — Identity Verification" : "Langkah 1 — Identitas WhatsApp"}</span>
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                      {isEN ? "What is your WhatsApp number?" : "Berapa nomor WhatsApp kamu?"}
+                    </h1>
+                    <p className="text-neutral-400 text-sm sm:text-base leading-relaxed">
+                      {isEN
+                        ? "Your AI Coach connects and delivers your workout & nutrition roadmap directly to your WhatsApp."
+                        : "Pelatih AI GymBuddy akan terhubung langsung ke WhatsApp kamu untuk mendampingi nutrisi dan latihan harian."}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                        <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
+                        <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, "");
+                          if (val.startsWith("62")) val = val.substring(2);
+                          else if (val.startsWith("0")) val = val.substring(1);
+                          setPhone(val);
+                          setPhoneCheckError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && phoneVal.isValid && !isCheckingPhone) {
+                            e.preventDefault();
+                            handleNext();
+                          }
+                        }}
+                        placeholder="812 3456 7890"
+                        autoFocus
+                        className={`w-full bg-[#111620] border rounded-xl pl-24 pr-12 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none transition-colors ${
+                          phone.length === 0
+                            ? "border-neutral-800 focus:border-[#25D366]"
+                            : phoneVal.isValid
+                            ? "border-[#25D366] bg-[#111620]"
+                            : "border-amber-500/60 focus:border-amber-500"
+                        }`}
+                      />
+                      {phone.length > 0 && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                          {phoneVal.isValid ? (
+                            <div className="w-6 h-6 rounded-full bg-[#25D366]/20 border border-[#25D366] flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 text-[#25D366]" strokeWidth={3} />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-xs font-bold">
+                              !
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Realtime Phone Feedback */}
+                    {phone.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 ${
+                          phoneVal.isValid
+                            ? "bg-[#25D366]/10 border-[#25D366]/30 text-[#25D366]"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{phoneVal.isValid ? "✅" : "⚠️"}</span>
+                          <span>{phoneVal.message}</span>
+                        </div>
+                        {phoneVal.operator && (
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white shrink-0">
+                            {phoneVal.operator}
+                          </span>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* Phone Check / Verification Error */}
+                    {phoneCheckError && (
+                      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+                        <AlertCircle size={16} className="shrink-0" />
+                        <span>{phoneCheckError}</span>
+                      </div>
+                    )}
+
+                    {/* Identity & Privacy Shield Guarantee */}
+                    <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
+                      <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
+                      <span>
+                        {isEN
+                          ? "Your number is securely verified. We never share your data or send spam. Pure 1-on-1 AI coaching."
+                          : "Nomor diverifikasi aman & anti-spam. Pelatih AI GymBuddy hanya mengirimkan arahan nutrisi & workout harianmu."}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* STEP 2: NAME INPUT */}
+            {step === 2 && (
               <motion.div
-                key="step1"
+                key="step2"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1044,7 +1202,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-3">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 1 — Introduction" : "Langkah 1 — Perkenalan"}
+                    {isEN ? "Step 2 — Introduction" : "Langkah 2 — Perkenalan"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "What is your nickname?" : "Siapa nama panggilan kamu?"}
@@ -1069,10 +1227,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 2: MAIN GOAL SELECTION */}
-            {step === 2 && (
+            {/* STEP 3: MAIN GOAL SELECTION */}
+            {step === 3 && (
               <motion.div
-                key="step2"
+                key="step3"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1080,7 +1238,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 2 — Primary Target" : "Langkah 2 — Target Utama"}
+                    {isEN ? "Step 3 — Primary Target" : "Langkah 3 — Target Utama"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? `Hello ${name || "Friend"}! What is your primary goal right now?` : `Halo ${name || "Teman"}! Apa target utama kamu saat ini?`}
@@ -1143,10 +1301,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 3: GOAL-SPECIFIC CONTEXT & EVENT SELECTION */}
-            {step === 3 && (
+            {/* STEP 4: GOAL-SPECIFIC CONTEXT & EVENT SELECTION */}
+            {step === 4 && (
               <motion.div
-                key="step3"
+                key="step4"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1154,7 +1312,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? `Step 3 — Target Details: ${goalData.title}` : `Langkah 3 — Detail Target: ${goalData.title}`}
+                    {isEN ? `Step 4 — Target Details: ${goalData.title}` : `Langkah 4 — Detail Target: ${goalData.title}`}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {goalData.eventQuestion}
@@ -1214,10 +1372,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 4: EMOTIONAL VISION */}
-            {step === 4 && (
+            {/* STEP 5: EMOTIONAL VISION */}
+            {step === 5 && (
               <motion.div
-                key="step4"
+                key="step5"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1225,7 +1383,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 4 — Expected Outcome" : "Langkah 4 — Hasil yang Diharapkan"}
+                    {isEN ? "Step 5 — Expected Outcome" : "Langkah 5 — Hasil yang Diharapkan"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "When your target is achieved, what change will be most meaningful?" : "Saat targetmu tercapai, perubahan apa yang paling bermakna?"}
@@ -1260,10 +1418,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 5: FIRST REPORT SCREEN */}
-            {step === 5 && (
+            {/* STEP 6: FIRST REPORT SCREEN */}
+            {step === 6 && (
               <motion.div
-                key="step5"
+                key="step6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -1318,10 +1476,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 6: PERSONAL DATA & BIOMETRICS */}
-            {step === 6 && (
+            {/* STEP 7: PERSONAL DATA & BIOMETRICS */}
+            {step === 7 && (
               <motion.div
-                key="step6"
+                key="step7"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1329,7 +1487,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 5 — Biometric Data & Allergies" : "Langkah 5 — Data Biometrik & Alergi"}
+                    {isEN ? "Step 7 — Biometric Data & Allergies" : "Langkah 7 — Data Biometrik & Alergi"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Physical & Metabolism Data" : "Data Fisik & Metabolisme"}
@@ -1784,10 +1942,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 7: LIFESTYLE & EXPERIENCE */}
-            {step === 7 && (
+            {/* STEP 8: LIFESTYLE & EXPERIENCE */}
+            {step === 8 && (
               <motion.div
-                key="step7"
+                key="step8"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1795,7 +1953,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 6 — Lifestyle" : "Langkah 6 — Gaya Hidup"}
+                    {isEN ? "Step 8 — Lifestyle" : "Langkah 8 — Gaya Hidup"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Activity & Experience" : "Aktivitas & Pengalaman"}
@@ -1964,10 +2122,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 8: DIET & CHALLENGES */}
-            {step === 8 && (
+            {/* STEP 9: DIET & CHALLENGES */}
+            {step === 9 && (
               <motion.div
-                key="step8"
+                key="step9"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1975,7 +2133,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 7 — Your Main Challenge" : "Langkah 7 — Tantangan Utamamu"}
+                    {isEN ? "Step 9 — Your Main Challenge" : "Langkah 9 — Tantangan Utamamu"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Biggest Consistency Obstacle?" : "Tantangan Terbesar dalam Konsistensi?"}
@@ -2013,10 +2171,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 9: SECOND REPORT SCREEN */}
-            {step === 9 && (
+            {/* STEP 10: SECOND REPORT SCREEN */}
+            {step === 10 && (
               <motion.div
-                key="step9"
+                key="step10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -2121,10 +2279,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 10: PERSONA SELECTION */}
-            {step === 10 && (
+            {/* STEP 11: PERSONA SELECTION */}
+            {step === 11 && (
               <motion.div
-                key="step10"
+                key="step11"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -2132,7 +2290,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 9 — AI Communication Style" : "Langkah 9 — Gaya Komunikasi AI"}
+                    {isEN ? "Step 11 — AI Communication Style" : "Langkah 11 — Gaya Komunikasi AI"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "Choose Your Coach Style" : "Pilih Gaya Pelatihmu"}
@@ -2293,10 +2451,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 11: COACH COMMITMENT & TIME ALLOCATION */}
-            {step === 11 && (
+            {/* STEP 12: COACH COMMITMENT & TIME ALLOCATION */}
+            {step === 12 && (
               <motion.div
-                key="step11"
+                key="step12"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -2304,7 +2462,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 11 — Daily Commitment" : "Langkah 11 — Komitmen Waktu"}
+                    {isEN ? "Step 12 — Daily Commitment" : "Langkah 12 — Komitmen Waktu"}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
                     {isEN ? "How Much Time Can You Dedicate Daily?" : "Berapa Waktu Harian yang Bisa Kamu Luangkan?"}
@@ -2370,8 +2528,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 12: AI ANALYSIS & TARGETS ROADMAP */}
-            {step === 12 && (() => {
+            {/* STEP 13: AI ANALYSIS & TARGETS ROADMAP */}
+            {step === 13 && (() => {
               const userW = Number(weight) || 65;
               const userH = Number(height) || 170;
               const userA = Number(age) || 25;
@@ -2422,7 +2580,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
               return (
                 <motion.div
-                  key="step12"
+                  key="step13"
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
@@ -2606,10 +2764,10 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               );
             })()}
 
-            {/* STEP 13: PLAN SELECTION */}
-            {step === 13 && (
+            {/* STEP 14: PLAN SELECTION */}
+            {step === 14 && (
               <motion.div
-                key="step13"
+                key="step14"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -2617,7 +2775,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               >
                 <div className="space-y-2">
                   <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                    {isEN ? "Step 2 of 4 — Plan Selection" : "Tahap 2/4 — Pilih Paket Coaching"}
+                    {isEN ? "Step 2 of 3 — Plan Selection" : "Tahap 2/3 — Pilih Paket Coaching"}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
                     {isEN ? "Select Your GymBuddy Plan" : "Pilih Paket Coaching Kamu"}
@@ -2886,8 +3044,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 14: ORDER SUMMARY & MIDTRANS SNAP CHECKOUT (PAID PLANS) */}
-            {step === 14 && (() => {
+            {/* STEP 15: ORDER SUMMARY & MIDTRANS SNAP CHECKOUT (PAID PLANS) */}
+            {step === 15 && (() => {
               const curPlanKey: PlanKey = selectedPlan === "premium"
                 ? "both"
                 : (selectedFeature === "nutrition" ? "nutritionist" : "workout_coach");
@@ -2900,7 +3058,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
               return (
                 <motion.div
-                  key="step14"
+                  key="step15"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -2908,7 +3066,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                 >
                   <div className="space-y-2">
                     <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
-                      {isEN ? "Step 3 of 4 — Order & Payment" : "Tahap 3/4 — Ringkasan & Pembayaran"}
+                      {isEN ? "Step 3 of 3 — Order & Payment" : "Tahap 3/3 — Ringkasan & Pembayaran"}
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
                       {isEN ? "Order Summary" : "Ringkasan Pesanan"}
@@ -3010,7 +3168,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
                     <button
                       type="button"
-                      onClick={() => setStep(13)}
+                      onClick={() => setStep(14)}
                       className="w-full py-2.5 text-xs text-neutral-400 hover:text-white font-bold transition-colors cursor-pointer text-center"
                     >
                       ← {isEN ? "Change Selected Plan" : "Ubah Pilihan Paket"}
@@ -3026,252 +3184,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               );
             })()}
 
-            {/* STEP 15: PAYMENT SUCCESS CONFIRMATION (PAID PLANS) */}
-            {step === 15 && (() => {
-              const planTitle = selectedPlan === "premium"
-                ? "Both: Nutritionist + Workout Coach"
-                : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist");
-              const grossAmount = selectedPlan === "premium" ? 149000 : 89000;
-              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
-
-              return (
-                <motion.div
-                  key="step15"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="space-y-6 max-w-md mx-auto text-center pb-6"
-                >
-                  {/* Glowing Green Success Badge */}
-                  <div className="w-20 h-20 rounded-3xl bg-[#25D366]/20 border-2 border-[#25D366] flex items-center justify-center mx-auto text-[#25D366] shadow-[0_0_40px_rgba(37,211,102,0.3)]">
-                    <Check size={40} strokeWidth={3} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-xs font-['Inter'] font-extrabold text-[#25D366] uppercase tracking-widest">
-                      {isEN ? "PAYMENT SUCCESSFUL" : "PEMBAYARAN BERHASIL"}
-                    </div>
-                    <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
-                      {isEN ? "Payment Successful! 🎉" : "Pembayaran Berhasil! 🎉"}
-                    </h2>
-                    <p className="text-neutral-300 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
-                      {isEN
-                        ? `Your ${planTitle} plan is ready.`
-                        : `Paket ${planTitle} kamu sudah siap aktif.`}
-                    </p>
-                  </div>
-
-                  {/* Status Card */}
-                  <div className="bg-[#161C28] border border-neutral-800 rounded-2xl p-4 text-left space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-400">{isEN ? "Payment Status" : "Status Pembayaran"}</span>
-                      <span className="font-extrabold text-[#25D366] uppercase">✅ LUNAS / PAID</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-400">{isEN ? "Active Plan" : "Paket"}</span>
-                      <span className="font-extrabold text-[#D4FF00]">{planTitle}</span>
-                    </div>
-                    {orderId && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-neutral-400">Order ID</span>
-                        <span className="font-mono text-neutral-300">{orderId}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-400">{isEN ? "Dedicated AI Coach" : "Pelatih Aktif"}</span>
-                      <span className="font-bold text-white">{coachLabel}</span>
-                    </div>
-                  </div>
-
-                  {/* Activation Guidance */}
-                  <div className="p-4 rounded-xl bg-[#111620] border border-[#25D366]/30 text-left space-y-2">
-                    <div className="flex items-center gap-2">
-                      <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
-                      <p className="text-xs font-extrabold text-white uppercase tracking-wide">
-                        {isEN ? `Connect WhatsApp to start using ${coachLabel}` : `Hubungkan WhatsApp untuk mulai menggunakan ${coachLabel}`}
-                      </p>
-                    </div>
-                    <p className="text-xs text-neutral-300 leading-relaxed">
-                      {isEN
-                        ? `WhatsApp is used to connect your GymBuddy account directly with your AI coach. You will be able to log meals with photos, ask workout questions, and get instant daily guidance.`
-                        : `WhatsApp digunakan untuk menghubungkan akun GymBuddy kamu dengan ${coachLabel}. Kamu bisa kirim foto makanan, tanya menu latihan, dan konsultasi kapan saja.`}
-                    </p>
-                  </div>
-
-                  {/* CTA to Connect WhatsApp */}
-                  <div>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setStep(16)}
-                      className="w-full py-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
-                    >
-                      <WhatsAppIcon className="w-5 h-5 text-white" />
-                      <span>{isEN ? "Connect WhatsApp →" : "Hubungkan WhatsApp →"}</span>
-                    </motion.button>
-                  </div>
-                </motion.div>
-              );
-            })()}
-
-            {/* STEP 16: CONNECT WHATSAPP NUMBER (FOR BOTH FREE & PAID) */}
+            {/* STEP 16: ACCOUNT ACTIVATED & DUAL LAUNCH */}
             {step === 16 && (() => {
-              const phoneVal = validateWhatsAppPhone(phone);
-              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
-              const isPaid = selectedPlan !== "free_trial";
-
-              return (
-                <motion.div
-                  key="step16"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="space-y-6 max-w-md mx-auto text-left pb-6"
-                >
-                  {/* Status Pill */}
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161C28] border border-neutral-800 text-xs">
-                    <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
-                    <span className="font-bold text-white">
-                      {isPaid
-                        ? (isEN ? "✅ Payment Verified — Ready to Connect" : "✅ Pembayaran Terverifikasi — Siap Terhubung")
-                        : (isEN ? "✨ 2-Day Free Trial — Ready to Activate" : "✨ Uji Coba Gratis 2 Hari — Siap Aktif")}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
-                      {isEN ? "Connect WhatsApp" : "Hubungkan WhatsApp"}
-                    </h1>
-                    <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
-                      {isEN
-                        ? `Enter the WhatsApp number you want to use to chat with ${coachLabel}.`
-                        : `Masukkan nomor WhatsApp yang ingin kamu gunakan untuk chat dengan ${coachLabel}.`}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                        <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
-                        <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => {
-                          let val = e.target.value.replace(/\D/g, "");
-                          if (val.startsWith("62")) val = val.substring(2);
-                          else if (val.startsWith("0")) val = val.substring(1);
-                          setPhone(val);
-                          setConnectWhatsAppError(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && phoneVal.isValid && !isConnectingWhatsApp) {
-                            e.preventDefault();
-                            handleConnectWhatsApp();
-                          }
-                        }}
-                        placeholder="812 3456 7890"
-                        autoFocus
-                        className={`w-full bg-[#111620] border rounded-xl pl-24 pr-12 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none transition-colors ${
-                          phone.length === 0
-                            ? "border-neutral-800 focus:border-[#25D366]"
-                            : phoneVal.isValid
-                            ? "border-[#25D366] bg-[#111620]"
-                            : "border-amber-500/60 focus:border-amber-500"
-                        }`}
-                      />
-                      {phone.length > 0 && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          {phoneVal.isValid ? (
-                            <div className="w-6 h-6 rounded-full bg-[#25D366]/20 border border-[#25D366] flex items-center justify-center">
-                              <Check className="w-3.5 h-3.5 text-[#25D366]" strokeWidth={3} />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-xs font-bold">
-                              !
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Realtime Phone Feedback */}
-                    {phone.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 ${
-                          phoneVal.isValid
-                            ? "bg-[#25D366]/10 border-[#25D366]/30 text-[#25D366]"
-                            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{phoneVal.isValid ? "✅" : "⚠️"}</span>
-                          <span>{phoneVal.message}</span>
-                        </div>
-                        {phoneVal.operator && (
-                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white shrink-0">
-                            {phoneVal.operator}
-                          </span>
-                        )}
-                      </motion.div>
-                    )}
-
-                    {/* Error Banner */}
-                    {connectWhatsAppError && (
-                      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
-                        <AlertCircle size={16} className="shrink-0" />
-                        <span>{connectWhatsAppError}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Privacy Notice */}
-                  <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
-                    <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
-                    <span>
-                      {isEN
-                        ? "Your phone number is strictly used for your AI coaching sessions on WhatsApp. We will never send spam."
-                        : "Nomor WhatsApp hanya digunakan untuk komunikasi coaching oleh pelatih AI GymBuddy. Privasi terjaga 100%."}
-                    </span>
-                  </div>
-
-                  {/* Connect WhatsApp CTA Button */}
-                  <div className="pt-2">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleConnectWhatsApp}
-                      disabled={!phoneVal.isValid || isConnectingWhatsApp}
-                      className={`w-full py-4 rounded-xl font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 ${
-                        phoneVal.isValid && !isConnectingWhatsApp
-                          ? "bg-[#25D366] hover:bg-[#20bd5a] text-white cursor-pointer"
-                          : "bg-[#111620] text-neutral-600 border border-neutral-800 cursor-not-allowed"
-                      }`}
-                    >
-                      {isConnectingWhatsApp ? (
-                        <>
-                          <RefreshCw size={18} className="animate-spin" />
-                          <span>{isEN ? "Connecting WhatsApp..." : "Menghubungkan WhatsApp..."}</span>
-                        </>
-                      ) : (
-                        <>
-                          <WhatsAppIcon className="w-5 h-5 text-white" />
-                          <span>
-                            {isEN ? "Connect & Start Chat →" : "Hubungkan & Mulai Chat →"}
-                          </span>
-                        </>
-                      )}
-                    </motion.button>
-                  </div>
-                </motion.div>
-              );
-            })()}
-
-            {/* STEP 17: ACCOUNT ACTIVATED & DUAL LAUNCH */}
-            {step === 17 && (() => {
               const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
               const planTitle = selectedPlan === "premium"
                 ? "Both: Nutritionist + Workout Coach"
@@ -3294,7 +3208,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
               return (
                 <motion.div
-                  key="step17"
+                  key="step16"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -3435,8 +3349,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
           )}
         </AnimatePresence>
 
-        {/* FOOTER CTA BUTTON FOR PROGRESSION (STEPS 1 TO 11) */}
-        {step <= 11 && (
+        {/* FOOTER CTA BUTTON FOR PROGRESSION (STEPS 1 TO 12) */}
+        {step <= 12 && (
           <div className="absolute bottom-0 inset-x-0 p-4 sm:p-6 bg-gradient-to-t from-[#111111] via-[#111111]/95 to-transparent pb-6 sm:pb-8 z-30 pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
               <button
@@ -3456,13 +3370,13 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                 ) : (
                   <>
                     <span>
-                      {step === 5 || step === 9
+                      {step === 6 || step === 10
                         ? (isEN ? "Continue to Next Stage →" : "Lanjut ke Tahap Berikutnya →")
-                        : step === 11
+                        : step === 12
                         ? (isEN ? "Generate My Nutrition Plan →" : "Buat Rencana Nutrisi Saya →")
                         : (isEN ? "Continue" : "Lanjut")}
                     </span>
-                    {canProceed() && step !== 5 && step !== 9 && (
+                    {canProceed() && step !== 6 && step !== 10 && (
                       <ChevronRight size={18} className="stroke-[3]" />
                     )}
                   </>
