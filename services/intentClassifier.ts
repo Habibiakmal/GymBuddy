@@ -18,11 +18,15 @@ export type UserIntentType =
   | "VAGUE_WORKOUT_NEEDS_CLARIFICATION"
   | "MEAL_LOG"
   | "MEAL_CORRECTION"
+  | "MEAL_DELETE"
   | "WEIGHT_LOG"
   | "BODY_MEASUREMENT_LOG"
   | "GOAL_UPDATE"
   | "PROFILE_UPDATE"
   | "NUTRITION_QUESTION"
+  | "HYDRATION_LOG"
+  | "CANCEL"
+  | "CONFIRMATION"
   | "UNKNOWN";
 
 export type MealCorrectionSubtype =
@@ -149,6 +153,13 @@ export function parseMealCorrectionDetails(
   const stripped = lower
     .replace(/^(?:koreksi(?:\s+lagi|\s+dong)?|ralat(?:\s+lagi|\s+dong)?|revisi(?:\s+lagi)?|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "")
     .trim();
+
+  // Standalone cancellation / abort phrases must NEVER be treated as meal correction
+  if (
+    stripped.match(/^(?:batal|stop|cancel|nggak\s+jadi|gak\s+jadi|tidak\s+jadi|lupakan|lupain)[.!]?$/i)
+  ) {
+    return null;
+  }
 
   // 1. Bare / Generic ambiguity: "koreksi", "ralat", "koreksi meal tadi", "yang tadi salah"
   if (
@@ -298,10 +309,10 @@ export function parseMealCorrectionDetails(
   // 4. Component Removal (MEAL_CORRECTION_COMPONENT)
   // "telurnya nggak jadi", "tanpa tahu", "nggak pake sambal", "hapus telur", "ternyata aku tidak makan tahunya"
   const r1 = stripped.match(/^(?:ternyata\s+)?(?:aku\s+|saya\s+|gue\s+)?(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal(?:\s+makan)?|hapus|dihapus|nggak\s+jadi|gak\s+jadi|tidak\s+jadi|nggak\s+pake|gak\s+pake)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
-  const r2 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tidak|nggak|gak|ngga)\s*(?:jadi|dimakan|pake|pakai)|batal|dihapus$/i);
+  const r2 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:(?:tidak|nggak|gak|ngga)\s*(?:jadi|dimakan|pake|pakai)|batal|dihapus)[.]?$/i);
   if (r1 || r2) {
     const target = cleanFoodTerm(r1 ? r1[1] : r2![1]);
-    if (target) {
+    if (target && target.length > 2 && !NON_FOOD_TOKENS.has(target.toLowerCase())) {
       return {
         subtype: "MEAL_CORRECTION_COMPONENT",
         action: "remove_component",
@@ -437,6 +448,66 @@ export function classifyUserIntent(
       intent: "GREETING",
       confidence: "high",
       reason: "User sent a conversational greeting or coach check"
+    };
+  }
+
+  // ── 2b. CANCEL / ABORT TASK ──────────────────────────────────────────────
+  // Examples: "batal", "stop", "cancel", "nggak jadi", "gak jadi", "tidak jadi", "lupakan"
+  const isCancel = Boolean(
+    lower.match(/^(?:batal|stop|cancel|nggak\s+jadi|gak\s+jadi|tidak\s+jadi|lupakan|lupain|kembali|exit|quit)[.!]?$/i) ||
+    lower.match(/^(?:tolong\s+)?(?:batalkan|batalin|cancel\s+aja|batal\s+aja)[.!]?$/i)
+  );
+
+  if (isCancel) {
+    return {
+      intent: "CANCEL",
+      confidence: "high",
+      reason: "User explicitly requested cancellation or abort of current task"
+    };
+  }
+
+  // ── 2c. CONFIRMATION ─────────────────────────────────────────────────────
+  // Examples: "ya", "iya", "betul", "benar", "oke", "ok", "siap", "simpan"
+  const isConfirmation = Boolean(
+    lower.match(/^(?:ya|iya|betul|benar|oke|ok|siap|simpan|yes|yep|yup|lanjut)[.!]?$/i) ||
+    lower.match(/^(?:sudah\s+benar|sudah\s+sesuai|udah\s+pas)[.!]?$/i)
+  );
+
+  if (isConfirmation) {
+    return {
+      intent: "CONFIRMATION",
+      confidence: "high",
+      reason: "User confirmed pending action"
+    };
+  }
+
+  // ── 2e. COURTESY / GRATITUDE (GENERAL CONVERSATION) ──────────────────────
+  // Examples: "makasih", "terima kasih", "thanks", "thank you", "mantap"
+  const isCourtesy = Boolean(
+    lower.match(/^(?:makasih|terima\s+kasih|makasi|mksh|thanks|thx|thank\s+you|arigato|nuhun|suwun)(?:\s+(?:mia|max|coach|gymbuddy|banyak|ya|bgt|banget))?[.!]?$/i) ||
+    lower.match(/^(?:mantap|keren|top|good|nice|sip|oke\s+deh|ok\s+deh)[.!]?$/i)
+  );
+
+  if (isCourtesy) {
+    return {
+      intent: "GENERAL_CONVERSATION",
+      confidence: "high",
+      reason: "User expressed gratitude or courteous chit-chat"
+    };
+  }
+
+  // ── 2d. HYDRATION LOG (EXPLICIT) ─────────────────────────────────────────
+  // Examples: "minum 500ml", "air 2 gelas", "minum 1 liter"
+  const isHydration = Boolean(
+    lower.match(/(?:minum|air(?:\s+putih)?|water)\s+(?:sebanyak\s+)?(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l|gelas|cup|botol)\b/i) ||
+    lower.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l|gelas|cup|botol)\s*(?:air(?:\s+putih)?|water)\b/i)
+  );
+
+  if (isHydration) {
+    return {
+      intent: "HYDRATION_LOG",
+      confidence: "high",
+      reason: "User explicitly reported water / hydration intake"
     };
   }
 
@@ -641,7 +712,7 @@ export function classifyUserIntent(
 
   if (isGeneralGreeting) {
     return {
-      intent: "GENERAL_CONVERSATION",
+      intent: "GREETING",
       confidence: "high",
       reason: "User is initiating standard conversational greeting"
     };

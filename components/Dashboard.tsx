@@ -920,65 +920,20 @@ export default function Dashboard({
   const activeUser = liveUser || safeUser;
 
   // ── PLAN ENTITLEMENTS & ACCESS CONTROL (Single Canonical Source of Truth) ──
-  const userPhone = String(activeUser?.phone || "").replace(/\D/g, "");
-  
-  // 1. Check Canonical Entitlements object directly
+  // Authoritative server-provided entitlements only. Zero client-side heuristics or legacy overrides.
   const sub = (activeUser as any)?.subscription;
   const entitlements = (activeUser as any)?.entitlements || sub?.entitlements;
 
-  // 2. Demo User Fallback for UI Testing (only for explicit demo user IDs or demo phone numbers)
-  const isAlexDemoUser = activeUser?.userId === "usr_alex_demo" || userPhone === "08111111111" || userPhone === "62811111111";
-  const isMiaDemoUser = activeUser?.userId === "usr_mia_demo" || userPhone === "08222222222" || userPhone === "62822222222";
-
-  // 3. Resolve plan identifier cleanly
-  const rawPlan = String(
-    (activeUser as any)?.plan ||
-    sub?.plan ||
-    (activeUser as any)?.selectedPlan ||
-    ""
-  ).toLowerCase().trim();
-
-  const rawActiveService = String(
-    (activeUser as any)?.activeService ||
-    (activeUser as any)?.selectedFeature ||
-    ""
-  ).toLowerCase().trim();
-
-  let hasNutritionAccess = true;
-  let hasWorkoutAccess = true;
+  let hasNutritionAccess = false;
+  let hasWorkoutAccess = false;
 
   if (entitlements && typeof entitlements.canNutrition === "boolean" && typeof entitlements.canWorkout === "boolean") {
     // Canonical entitlements from backend are supreme
     hasNutritionAccess = entitlements.canNutrition;
     hasWorkoutAccess = entitlements.canWorkout;
-  } else if (isAlexDemoUser) {
-    hasNutritionAccess = true;
-    hasWorkoutAccess = false;
-  } else if (isMiaDemoUser) {
-    hasNutritionAccess = false;
-    hasWorkoutAccess = true;
-  } else if (
-    rawPlan === "both" ||
-    rawPlan === "premium" ||
-    rawPlan === "lifetime" ||
-    rawPlan === "all_access" ||
-    rawActiveService === "both"
-  ) {
-    hasNutritionAccess = true;
-    hasWorkoutAccess = true;
-  } else if (rawPlan === "nutritionist" || rawPlan === "nutrition" || rawActiveService === "nutrition" || rawActiveService === "nutritionist") {
-    hasNutritionAccess = true;
-    hasWorkoutAccess = false;
-  } else if (rawPlan === "workout_coach" || rawPlan === "workout" || rawActiveService === "coach" || rawActiveService === "workout") {
-    hasNutritionAccess = false;
-    hasWorkoutAccess = true;
-  } else {
-    // Default to full access (free trial / both)
-    hasNutritionAccess = true;
-    hasWorkoutAccess = true;
   }
 
-  // Derived plan states for UI rendering
+  // Derived plan states for UI rendering strictly from authoritative entitlements
   const isBothPlan = hasNutritionAccess && hasWorkoutAccess;
   const isNutritionPlan = hasNutritionAccess && !hasWorkoutAccess;
   const isWorkoutPlan = !hasNutritionAccess && hasWorkoutAccess;

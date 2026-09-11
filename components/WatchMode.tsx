@@ -18,16 +18,6 @@ export default function WatchMode({ user: initialUser, onExit }: WatchModeProps)
       const stored = localStorage.getItem("gymbuddy_active_session");
       if (stored) return JSON.parse(stored);
     } catch {}
-    try {
-      const p = new URLSearchParams(window.location.search);
-      const phone = p.get("phone") || p.get("u");
-      const name = p.get("name") || p.get("n");
-      if (phone || name) {
-        const profile = { name: name ? decodeURIComponent(name) : "Member", phone: phone || "guest", goal: p.get("goal") || "muscle", persona: "max" };
-        localStorage.setItem("gymbuddy_active_session", JSON.stringify(profile));
-        return profile;
-      }
-    } catch {}
     return null;
   });
 

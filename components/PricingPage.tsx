@@ -899,6 +899,9 @@ export default function PricingPage({
                 <button
                   onClick={() => {
                     setPaymentSuccessData(null);
+                    try {
+                      window.dispatchEvent(new Event("gymbuddy_session_updated"));
+                    } catch (e) {}
                     onBack();
                   }}
                   className="w-full py-3 rounded-full border border-neutral-700 hover:border-neutral-500 text-neutral-300 font-bold text-xs transition-colors cursor-pointer"

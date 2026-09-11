@@ -67,9 +67,24 @@ export async function canonicalApiFetch<T = any>(
   const baseUrl = getApiBaseUrl();
   const primaryUrl = `${baseUrl}${cleanEndpoint}`;
 
+  let storedToken: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      storedToken = localStorage.getItem("gymbuddy_auth_token") || localStorage.getItem("gymbuddy_token");
+      if (!storedToken) {
+        const sessionStr = localStorage.getItem("gymbuddy_active_session");
+        if (sessionStr) {
+          const parsed = JSON.parse(sessionStr);
+          storedToken = parsed?.token || null;
+        }
+      }
+    } catch (e) {}
+  }
+
   const headers: Record<string, string> = {
     "Accept": "application/json",
     "Cache-Control": "no-cache",
+    ...(storedToken ? { "Authorization": `Bearer ${storedToken}` } : {}),
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.headers as Record<string, string> || {})
   };

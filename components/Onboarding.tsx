@@ -337,8 +337,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
         },
         onPending: (result: any) => {
           console.log("[Midtrans Snap] Payment pending:", result);
-          setIsPaymentPaid(true);
-          setStep(15);
+          setIsPaymentPaid(false);
+          setPaymentError(isEN ? "Payment is pending. Please complete your payment (Virtual Account / QRIS / Bank Transfer) to activate your account." : "Pembayaran sedang menunggu penyelesaian. Silakan selesaikan pembayaran sesuai petunjuk (Virtual Account / QRIS / Transfer) untuk aktivasi akun.");
         },
         onError: (result: any) => {
           console.warn("[Midtrans Snap] Payment error:", result);

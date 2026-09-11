@@ -36,19 +36,11 @@ export function verifyAuthToken(token: string): AuthTokenPayload | null {
 }
 
 import admin from "firebase-admin";
+import { normalizePhoneToE164 } from "./phoneNormalizer";
 
 export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPayload }, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    const legacyHeader = Array.isArray(req.headers["x-user-phone"]) ? req.headers["x-user-phone"][0] : req.headers["x-user-phone"];
-    const legacyPhone = req.params.phone || legacyHeader;
-    if (legacyPhone) {
-      const user = await findUserByPhoneOrId(String(legacyPhone));
-      if (user) {
-        req.user = { userId: user.userId, phone: user.phone };
-        return next();
-      }
-    }
     return res.status(401).json({ success: false, error: "Authentication required. Please log in." });
   }
 
@@ -179,4 +171,42 @@ export function verifyMidtransSignature(
   }
 
   return false;
+}
+
+/**
+ * User Data Ownership Guard Middleware
+ * Ensures the authenticated user can only view or mutate their own records.
+ */
+export function requireOwnershipMiddleware(req: Request & { user?: AuthTokenPayload }, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: "Authentication required." });
+  }
+  const candidatePhones = [
+    req.params?.phone,
+    req.body?.phone,
+    req.query?.phone,
+    req.query?.user
+  ].filter(Boolean) as string[];
+
+  const canonicalUserPhone = normalizePhoneToE164(String(req.user.phone));
+
+  for (const candidate of candidatePhones) {
+    const canonicalTarget = normalizePhoneToE164(String(candidate));
+    if (canonicalTarget && canonicalUserPhone && canonicalTarget !== canonicalUserPhone) {
+      return res.status(403).json({ success: false, error: "Access denied. You can only access your own data." });
+    }
+  }
+  next();
+}
+
+/**
+ * Admin Role & Secret Key Guard Middleware
+ */
+export function requireAdminAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  const adminKey = req.headers["x-admin-key"] || (req.headers["authorization"]?.startsWith("Bearer ") ? req.headers["authorization"].replace("Bearer ", "") : null);
+  const expectedKey = process.env.ADMIN_API_KEY || "gymbuddy-secure-admin-key";
+  if (!adminKey || adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: "Admin authorization required." });
+  }
+  next();
 }

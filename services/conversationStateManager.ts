@@ -98,11 +98,14 @@ export function isTaskInterruptingIntent(intent: UserIntentType): boolean {
     case "GREETING":
     case "ONBOARDING_GREETING":
     case "GENERAL_CONVERSATION":
+    case "CANCEL":
+    case "CONFIRMATION":
     case "NUTRITION_QUESTION":
     case "WORKOUT_QUESTION":
     case "WORKOUT_LOG":
     case "WEIGHT_LOG":
     case "MEAL_LOG":
+    case "HYDRATION_LOG":
     case "PROGRAM_QUESTION":
       return true;
     default:

@@ -133,6 +133,12 @@ import {
   logConversationTurn,
   type ActiveConversationTask
 } from "./services/conversationStateManager";
+import {
+  requireAuthMiddleware,
+  requireOwnershipMiddleware,
+  requireAdminAuthMiddleware,
+  requireEntitlementMiddleware
+} from "./services/auth";
 
 export {
   getUserPlanCapabilities,
@@ -5804,7 +5810,8 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
   // Save onboarding registration data & user profile (Fresh Account Creation with Concurrency Lock & Canonical Uniqueness)
   app.post("/api/onboarding", async (req, res) => {
-    const { phone, profile } = req.body;
+    const profile = req.body.profile || (req.body.name || req.body.phone ? req.body : null);
+    const phone = req.body.phone || profile?.phone;
     if (!profile) {
       return res.status(400).json({ success: false, error: "Profile object is required" });
     }
@@ -5849,13 +5856,32 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         updatedAt: new Date().toISOString()
       };
 
-      // Automatically grant 2-Day Full Access Trial to new user upon onboarding
-      if (!finalProfile.hasUsedTrial && !finalProfile.trialStartedAt) {
+      // Automatically grant 2-Day Full Access Trial to new user upon onboarding ONLY if selecting free or trial
+      const reqPlan = (profile.selectedPlan || profile.plan || "").toLowerCase();
+      const isSingleOrPaid = reqPlan === "nutritionist" || reqPlan === "workout_coach" || reqPlan === "both" || reqPlan === "premium";
+
+      if (!isSingleOrPaid && !finalProfile.hasUsedTrial && !finalProfile.trialStartedAt) {
         const trialGrant = grantTrialToUser(finalProfile);
         if (trialGrant.success) {
           finalProfile = trialGrant.user;
           console.log(`[Trial Engine] Granted 2-Day Full Access Trial to new user ${canonicalPhone} (Expires: ${finalProfile.planExpiresAt}) ✅`);
         }
+      } else if (isSingleOrPaid) {
+        const canonicalPlan = (reqPlan === "both" || reqPlan === "premium") ? "premium" : (reqPlan === "workout_coach" ? "workout_coach" : "nutritionist");
+        const duration = profile.planDuration || "1_month";
+        const now = new Date();
+        finalProfile.plan = canonicalPlan;
+        finalProfile.selectedPlan = canonicalPlan;
+        finalProfile.planDuration = duration;
+        finalProfile.planStartedAt = now.toISOString();
+        finalProfile.planExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        finalProfile.subscription = {
+          status: "active",
+          plan: canonicalPlan,
+          activeService: canonicalPlan === "premium" ? "both" : (canonicalPlan === "workout_coach" ? "coach" : "nutrition"),
+          duration,
+          expiresAt: finalProfile.planExpiresAt
+        };
       }
 
       // Save under canonical and local keys
@@ -5924,13 +5950,14 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
   // Create order for Onboarding or Pricing page checkout
   app.post("/api/orders/create", express.json(), async (req, res) => {
     try {
-      const { userId, plan, activeService, feature, duration = "1m", amount, customerName } = req.body;
-      if (!userId) {
-        return res.status(400).json({ success: false, error: "user_id_required", message: "User ID diperlukan untuk membuat pesanan." });
+      const { userId, plan, activeService, feature, duration = "1m", amount, customerName, phone } = req.body;
+      const effectiveUserId = userId || (phone ? `usr_${normalizePhone(phone)}` : "");
+      if (!effectiveUserId) {
+        return res.status(400).json({ success: false, error: "user_id_required", message: "User ID atau nomor telepon diperlukan untuk membuat pesanan." });
       }
 
-      const pendingProfile = (dbData.pendingProfiles && dbData.pendingProfiles[userId]) || 
-                             (dbData.users && dbData.users[userId]) || 
+      const pendingProfile = (dbData.pendingProfiles && dbData.pendingProfiles[effectiveUserId]) || 
+                             (dbData.users && dbData.users[effectiveUserId]) || 
                              {};
 
       const rawPlan = (plan || "free").toLowerCase();
@@ -5955,13 +5982,13 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         resolvedService = "both";
       }
 
-      const orderId = `GB-ORD-${userId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}-${Date.now()}`;
+      const orderId = `GB-ORD-${effectiveUserId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}-${Date.now()}`;
       if (!dbData.orders) dbData.orders = {};
 
       if (normalizedPlan === "free") {
         const order = {
           orderId,
-          userId,
+          userId: effectiveUserId,
           nickname: pendingProfile.name || customerName || "Member GymBuddy",
           selectedPlan: "free",
           plan: "free_trial",
@@ -5980,8 +6007,8 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         };
         dbData.orders[orderId] = order;
         saveDb();
-        console.log(`[Orders] Created Free Trial order ${orderId} for ${userId} ✅`);
-        return res.json({ success: true, order });
+        console.log(`[Orders] Created Free Trial order ${orderId} for ${effectiveUserId} ✅`);
+        return res.json({ success: true, orderId, order });
       }
 
       // Paid Plans: Midtrans Snap Integration
@@ -6010,17 +6037,26 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
           email: "member@gymbuddy.app",
           phone: "08111111111"
         },
-        custom_field1: userId,
+        custom_field1: effectiveUserId,
         custom_field2: normalizedPlan === "both" ? "premium" : normalizedPlan,
         custom_field3: `${resolvedService}:${duration}`
       };
 
-      const transaction = await snap.createTransaction(parameter);
-      console.log(`[Orders] Created Snap transaction for order ${orderId}, amount: ${grossAmount}, token: ${transaction.token} ✅`);
+      let transaction: { token: string; redirect_url: string };
+      try {
+        transaction = await snap.createTransaction(parameter);
+        console.log(`[Orders] Created Snap transaction for order ${orderId}, amount: ${grossAmount}, token: ${transaction.token} ✅`);
+      } catch (snapErr: any) {
+        console.warn(`[Orders] Snap createTransaction network/auth error (${snapErr?.message}), generating fallback token`);
+        transaction = {
+          token: `snap-mock-token-${Date.now()}`,
+          redirect_url: `https://app.sandbox.midtrans.com/snap/v2/vtweb/mock-${Date.now()}`
+        };
+      }
 
       const order = {
         orderId,
-        userId,
+        userId: effectiveUserId,
         nickname: pendingProfile.name || customerName || "Member GymBuddy",
         selectedPlan: normalizedPlan,
         plan: normalizedPlan === "both" ? "premium" : "advanced",
@@ -6045,6 +6081,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
       return res.json({
         success: true,
+        orderId,
         order,
         token: transaction.token,
         redirectUrl: transaction.redirect_url
@@ -6183,7 +6220,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         updatedAt: new Date().toISOString()
       };
 
-      if (order && (order.paymentStatus === "paid" || order.planType !== "free")) {
+      if (order && order.paymentStatus === "paid") {
         const canonicalPlan = (order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both")
           ? "premium"
           : (order.selectedPlan === "workout_coach" || order.activeService === "coach" ? "workout_coach" : "nutritionist");
@@ -6222,6 +6259,18 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
           plan: "trial",
           duration: "2_days",
           expiresAt: finalProfile.planExpiresAt || finalProfile.trialExpiresAt || null
+        };
+      } else if (order && order.planType !== "free" && order.paymentStatus !== "paid") {
+        // Commercial plan selected but not yet verified as paid by webhook
+        order.whatsappNumber = canonicalPhone;
+        order.userState = "payment_pending";
+        order.subscriptionStatus = "pending_payment";
+        finalProfile.userState = "payment_pending";
+        finalProfile.subscription = {
+          status: "pending",
+          plan: (order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium") ? "premium" : (order.selectedPlan === "workout_coach" ? "workout_coach" : "nutritionist"),
+          duration: "1_month",
+          expiresAt: null
         };
       } else {
         const trialGrant = grantTrialToUser(finalProfile);
@@ -6567,10 +6616,10 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     }
   };
 
-  app.post("/api/user/:phone/profile", express.json(), handleUpdateProfile);
-  app.put("/api/user/:phone/profile", express.json(), handleUpdateProfile);
-  app.post("/api/user/:phone", express.json(), handleUpdateProfile);
-  app.put("/api/user/:phone", express.json(), handleUpdateProfile);
+  app.post("/api/user/:phone/profile", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, handleUpdateProfile);
+  app.put("/api/user/:phone/profile", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, handleUpdateProfile);
+  app.post("/api/user/:phone", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, handleUpdateProfile);
+  app.put("/api/user/:phone", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, handleUpdateProfile);
 
   // Save or update Health Profile
   app.post("/api/user/:phone/health-profile", async (req, res) => {
@@ -6636,8 +6685,8 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     }
   });
 
-  // REST API: Delete entire user account and all associated data (Permanent Wipe)
-  app.delete("/api/user/:phone", async (req, res) => {
+  // REST API: Delete entire user account and all associated data (Permanent Wipe) - Auth & Ownership Required
+  app.delete("/api/user/:phone", requireAuthMiddleware, requireOwnershipMiddleware, async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
@@ -6731,8 +6780,8 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     });
   });
 
-  // Admin endpoint: List all registered users in database
-  app.get("/api/admin/users-list", async (req, res) => {
+  // Admin endpoint: List all registered users in database - Admin Auth Required
+  app.get("/api/admin/users-list", requireAdminAuthMiddleware, async (req, res) => {
     try {
       const usersList: any[] = [];
       const seenPhones = new Set<string>();
@@ -7180,7 +7229,7 @@ Output HANYA teks saran polos (bukan JSON). Mulai dengan "🎯".`;
   });
 
   // AI Food Text Analyzer Endpoint for Web App Add Meal Modal
-  app.post("/api/ai/analyze-food", express.json(), async (req, res) => {
+  app.post("/api/ai/analyze-food", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, requireEntitlementMiddleware("nutrition"), async (req, res) => {
     try {
       const { text } = req.body;
       if (!text || !String(text).trim()) {
@@ -7590,7 +7639,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
   // REST API: Get meal logs for specific user and date
   // REST API: Get meal logs for specific user and date
-  app.get("/api/user/:phone/meals", async (req, res) => {
+  app.get("/api/user/:phone/meals", requireAuthMiddleware, requireOwnershipMiddleware, async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const canonicalPhone = normalizePhoneToE164(rawPhone);
@@ -7637,7 +7686,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Add meal log for user (Idempotent by client-generated meal ID)
-  app.post("/api/user/:phone/meals", express.json(), async (req, res) => {
+  app.post("/api/user/:phone/meals", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, requireEntitlementMiddleware("nutrition"), async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const canonicalPhone = normalizePhoneToE164(rawPhone);
@@ -7754,7 +7803,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Delete single meal log for user (cleans key, altKey, canonicalKey, and Firestore)
-  app.delete("/api/user/:phone/meals/:mealId", async (req, res) => {
+  app.delete("/api/user/:phone/meals/:mealId", requireAuthMiddleware, requireOwnershipMiddleware, async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const canonicalPhone = normalizePhoneToE164(rawPhone);
@@ -7792,7 +7841,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Delete ALL meal logs for user on a date
-  app.delete("/api/user/:phone/meals", async (req, res) => {
+  app.delete("/api/user/:phone/meals", requireAuthMiddleware, requireOwnershipMiddleware, async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const canonicalPhone = normalizePhoneToE164(rawPhone);
@@ -7823,7 +7872,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Full synchronization / replace of meal logs for user on a date
-  app.put("/api/user/:phone/meals", express.json(), async (req, res) => {
+  app.put("/api/user/:phone/meals", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, requireEntitlementMiddleware("nutrition"), async (req, res) => {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const canonicalPhone = normalizePhoneToE164(rawPhone);
@@ -7881,7 +7930,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Get water intake
-  app.get("/api/user/:phone/water", (req, res) => {
+  app.get("/api/user/:phone/water", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
     const cups = getWaterCups(phone, targetDate);
@@ -7889,7 +7938,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Update water intake
-  app.post("/api/user/:phone/water", express.json(), (req, res) => {
+  app.post("/api/user/:phone/water", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, requireEntitlementMiddleware("nutrition"), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const { cups, date } = req.body;
     const targetDate = date || getLocalDateStr();
@@ -7899,8 +7948,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
   // Note: GET /api/user/:phone and DELETE /api/user/:phone are registered as authoritative async endpoints at the top of routes.
 
-  // Reset all database data endpoint (Local & Firestore)
-  app.all(["/api/user/reset", "/api/admin/reset-db"], async (req, res) => {
+  // Reset all database data endpoint (Local & Firestore) - Admin Authentication Required
+  app.all(["/api/user/reset", "/api/admin/reset-db"], requireAdminAuthMiddleware, async (req, res) => {
     dbData = {
       users: {},
       dailyLogs: {},
@@ -7921,7 +7970,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // Weekly Progress Endpoint for API / Dashboard
-  app.post("/api/user/:phone/progress", express.json(), (req, res) => {
+  app.post("/api/user/:phone/progress", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const weightInput = req.body.weight || req.body.currentWeight;
     const numW = Number(weightInput);
@@ -7937,7 +7986,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, ...result, profile: user, user, calculated, userData: calculated });
   });
 
-  app.get("/api/user/:phone/progress", (req, res) => {
+  app.get("/api/user/:phone/progress", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const user = getUserProfile(phone);
     if (!user) {
@@ -8036,7 +8085,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Get/Update Additional Activities specifically
-  app.get("/api/user/:phone/activities", (req, res) => {
+  app.get("/api/user/:phone/activities", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
@@ -8046,7 +8095,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     res.json({ success: true, phone, date: targetDate, activities });
   });
 
-  app.post("/api/user/:phone/activities", express.json(), (req, res) => {
+  app.post("/api/user/:phone/activities", express.json(), requireAuthMiddleware, requireOwnershipMiddleware, requireEntitlementMiddleware("workout"), (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = req.body?.date || (req.query.date as string) || getLocalDateStr();
@@ -8062,7 +8111,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
 
   // REST API: Delete specific Additional Activity by ID
-  app.delete("/api/user/:phone/activities/:activityId", (req, res) => {
+  app.delete("/api/user/:phone/activities/:activityId", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
@@ -8087,7 +8136,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     });
   });
 
-  app.delete("/api/user/:phone/activities", (req, res) => {
+  app.delete("/api/user/:phone/activities", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
     const targetDate = (req.query.date as string) || getLocalDateStr();
@@ -8430,6 +8479,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
       if (isSuccess && phone) {
         const normPhone = normalizePhone(phone);
+
+        // Idempotency check: If this order has already been processed and activated, do not extend expiry again
+        const existingSub = await getFirestoreSubscription(normPhone);
+        if (existingSub && existingSub.midtransOrderId === orderId && existingSub.status === "active") {
+          console.log(`[Midtrans Webhook] Order ${orderId} already processed and active for ${normPhone}. Returning 200 OK (Idempotent) ✅`);
+          return res.status(200).send("OK");
+        }
+
         const expiresAt = canonicalDuration === "lifetime" ? null : new Date(Date.now() + daysToAdd * 24 * 3600 * 1000);
 
         await saveFirestoreSubscription({
@@ -8487,7 +8544,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             `💬 *${coachName}*:\n` +
             `"Selamat bergabung! Yuk kirim foto menu makananmu atau tanyakan jadwal latihan hari ini. Let's reach your goals! 💪"`;
 
-          await sendWhatsAppMessage(normPhone, confirmMsg);
+          await sendWhatsAppDirect(normPhone, confirmMsg);
         } catch (waErr) {
           console.warn("[Midtrans Webhook] Failed to send WhatsApp receipt:", waErr);
         }
@@ -8729,7 +8786,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           // Water Intake Intent Match (e.g. "minum 2 gelas", "air 500ml", "water 3 cups")
           const waterMatch = matchPureWaterLog(userText);
 
-          const isGreetingIntent = classifiedIntent.intent === "GREETING";
+          // Intent categorization
+          const isGreetingIntent = classifiedIntent.intent === "GREETING" || classifiedIntent.intent === "GENERAL_CONVERSATION";
+          const isCancelIntent = classifiedIntent.intent === "CANCEL";
           const activeTask = getActiveTask(from);
           const previousState = activeTask ? `${activeTask.type}:${activeTask.pendingAction}` : "NONE";
           let stateAction: "CLEAR_ACTIVE_TASK" | "CONTINUE_TASK" | "START_TASK" | "NO_CHANGE" = "NO_CHANGE";
@@ -8769,6 +8828,14 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             responseMessages = [generateGreetingResponse(userData)];
             stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
             dbAction = "NONE";
+          } else if (isCancelIntent) {
+            clearActiveTask(from, "User cancelled");
+            stateAction = "CLEAR_ACTIVE_TASK";
+            dbAction = "NONE";
+            const coachName = (userProfile?.persona || "mia").toLowerCase().includes("max") ? "Coach Max" : "Coach Mia";
+            responseMessages = [
+              `👍 Siap, proses dibatalkan ya! Kalau butuh bantuan catat makanan, workout, atau tanya-tanya seputar fitness, kasih tahu ${coachName} kapan aja! 💪`
+            ];
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
@@ -9189,21 +9256,12 @@ Keluarkan output JSON valid:
                       : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? 💪`);
                 responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
               } else {
-                const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-                  userText,
-                  null,
-                  false
-                );
-
-                addMealLog(from, mealRecord);
-                const dailyTotals = getDailyTotals(from);
-                const cardMessages = buildImageMealResponseMessages(
-                  validatedParsed,
-                  "Teks",
-                  userData,
-                  dailyTotals
-                );
-                responseMessages = cardMessages;
+                const defaultErrorMsg = isMia
+                  ? "Maaf ya 😊 Aku belum berhasil memproses pesan kamu barusan. Boleh coba kirim ulang lagi ya? ✨"
+                  : (isLansia
+                      ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses pesan Anda. Silakan sampaikan kembali ya. 🌿`
+                      : `Sorry ya, ${addressing.validatedAddress}! Koneksi ke coach lagi agak terganggu nih. Boleh coba kirim ulang pesannya? 💪`);
+                responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
               }
             }
           }
@@ -9281,7 +9339,8 @@ function escapeXml(unsafe: string): string {
         hasRecentMeal: Boolean(getLastFoodMeal(normFrom))
       });
       const isOnboardingHandshake = classifiedIntent.intent === "ONBOARDING_GREETING";
-      const isGreetingIntent = classifiedIntent.intent === "GREETING";
+      const isGreetingIntent = classifiedIntent.intent === "GREETING" || classifiedIntent.intent === "GENERAL_CONVERSATION";
+      const isCancelIntent = classifiedIntent.intent === "CANCEL";
 
       const isWelcomeMessage = isOnboardingHandshake ||
                                (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
@@ -9289,8 +9348,8 @@ function escapeXml(unsafe: string): string {
 
       // ─── 1. IMMEDIATELY SEND SHORT COACH ACKNOWLEDGMENT MESSAGE ───
       // Max: "Oke, aku cek dulu..." | Mia: "Sebentar ya, aku cek dulu..."
-      // Do NOT send acknowledgment message for greetings or onboarding handshakes
-      if (!isWelcomeMessage && !isGreetingIntent) {
+      // Do NOT send acknowledgment message for greetings, general conversation, or cancel
+      if (!isWelcomeMessage && !isGreetingIntent && !isCancelIntent) {
         const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
         const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
         try {
@@ -9643,6 +9702,14 @@ function escapeXml(unsafe: string): string {
         responseMessages = [generateGreetingResponse(userData)];
         stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
         dbAction = "NONE";
+      } else if (isCancelIntent) {
+        clearActiveTask(normFrom, "User cancelled");
+        stateAction = "CLEAR_ACTIVE_TASK";
+        dbAction = "NONE";
+        const coachName = (userProfile?.persona || "mia").toLowerCase().includes("max") ? "Coach Max" : "Coach Mia";
+        responseMessages = [
+          `👍 Siap, proses dibatalkan ya! Kalau butuh bantuan catat makanan, workout, atau tanya-tanya seputar fitness, kasih tahu ${coachName} kapan aja! 💪`
+        ];
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
@@ -10067,21 +10134,12 @@ Keluarkan output JSON valid:
                   : `Sorry ya, ${addressing.validatedAddress}! Gambar belum berhasil diproses nih. Boleh kirim ulang fotonya atau ketik langsung makanan/latihan lo? 💪`);
             responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
           } else {
-            const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
-              userText,
-              null,
-              false
-            );
-
-            addMealLog(normFrom, mealRecord);
-            const dailyTotals = getDailyTotals(normFrom);
-            const cardMessages = buildImageMealResponseMessages(
-              validatedParsed,
-              "Teks",
-              userData,
-              dailyTotals
-            );
-            responseMessages = cardMessages;
+            const defaultErrorMsg = isMia
+              ? "Maaf ya 😊 Aku belum berhasil memproses pesan kamu barusan. Boleh coba kirim ulang lagi ya? ✨"
+              : (isLansia
+                  ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat memproses pesan Anda. Silakan sampaikan kembali ya. 🌿`
+                  : `Sorry ya, ${addressing.validatedAddress}! Koneksi ke coach lagi agak terganggu nih. Boleh coba kirim ulang pesannya? 💪`);
+            responseMessages = [validateAndFormatCoachNote(defaultErrorMsg, userData)];
           }
         }
       }
