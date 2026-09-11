@@ -43,9 +43,11 @@ import {
   validateFoodSafety,
   validateWorkoutSafety,
   logRecommendationAudit,
+  generateMealTimingAdvice,
+  isMealTimingAdviceQuery,
   type CanonicalUserProfile
 } from "./services/recommendationEngine";
-export { classifyMealIntent, classifyWorkoutIntent, formatSetsReps };
+export { classifyMealIntent, classifyWorkoutIntent, formatSetsReps, generateMealTimingAdvice, isMealTimingAdviceQuery };
 import {
   estimateMealNutritionDeterministic,
   calculateFoodNutrition,
@@ -2751,6 +2753,265 @@ function deleteMealLogByName(rawPhone: string, foodNameQuery: string, targetDate
   return deletedItem;
 }
 
+export interface DeleteMealIntentResult {
+  isDelete: boolean;
+  targetFoodQuery?: string;
+  scope: "recent" | "last" | "food_match";
+}
+
+/**
+ * Natural language detector for DELETE_MEAL intent.
+ * Handles all Indonesian variations:
+ * - "koreksi, hapus ayam barusan"
+ * - "hapus ayam barusan"
+ * - "hapus makanan tadi"
+ * - "hapus makanan terakhir"
+ * - "hapus meal terakhir"
+ * - "hapus yang tadi"
+ * - "koreksi hapus ayam"
+ * - "hapus ayam yang baru dicatat"
+ * - "aku salah, hapus makanan tadi"
+ * - "hapus makanan yang barusan aku log"
+ * - "batal catat makanan"
+ * - "hapus log terakhir"
+ * - "hapus makan terakhir"
+ * - "buang makanan tadi"
+ * - "hilangkan makanan barusan"
+ */
+export function detectDeleteMealIntent(userText: string): DeleteMealIntentResult | null {
+  if (!userText || typeof userText !== "string") return null;
+  const clean = userText.trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Exclude account reset / delete user account
+  if (
+    lower.includes("hapus akun") ||
+    lower.includes("reset akun") ||
+    lower.includes("hapus data saya") ||
+    lower.includes("reset data")
+  ) {
+    return null;
+  }
+
+  // 2. Exclude workout activities deletion (handled by workout / additional activities engine)
+  if (
+    /\b(?:workout|latihan|olahraga|gym|treadmill|lari|running|berenang|swimming|sepeda|cycling|push\s*up|pull\s*up|sit\s*up|senam)\b/i.test(lower)
+  ) {
+    return null;
+  }
+
+  // 3. Negative checks: eating, inquiring calories, nutrition recommendations
+  if (
+    /^(?:aku\s+(?:mau\s+)?makan|saran\s+makanan|kasih\s+aku\s+makanan|berapa\s+kalori|bagus\s+nggak\s+buat|mau\s+sarapan)\b/i.test(lower)
+  ) {
+    return null;
+  }
+
+  // 4. Must contain a deletion verb
+  const hasDeleteVerb = /\b(?:hapus|delete|batal(?:kan)?|buang|hilangkan|remove)\b/i.test(lower);
+  if (!hasDeleteVerb) {
+    return null;
+  }
+
+  // 5. Exclude meal correction that is NOT a deletion (e.g. "koreksi porsi ayam jadi 200g", "koreksi nasinya setengah")
+  if (/\b(?:koreksi|ralat|revisi)\b/i.test(lower)) {
+    const hasPortionAdjustment = /\b(?:jadi|menjadi|ubah\s+ke|ganti\s+ke|\d+\s*(?:g|gr|gram|kcal|kalori|potong|buah|sendok|sdm))\b/i.test(lower);
+    const hasExplicitDelete = /\b(?:hapus|buang|hilangkan|batal(?:kan)?)\b/i.test(lower);
+    if (hasPortionAdjustment && !hasExplicitDelete) {
+      return null;
+    }
+  }
+
+  // 6. Generic meal deletion variations:
+  const isGenericMealDelete = Boolean(
+    lower.match(/^(?:koreksi[,\s]+)?(?:aku\s+salah[,\s]+)?(?:hapus|delete|batal(?:kan)?|buang|hilangkan)\s+(?:log|catatan|makan(?:an)?|food|nutrisi|meal|sarapan|lunch|dinner|menu)?\s*(?:terakhir|barusan|tadi|yang\s+tadi|yang\s+barusan|yang\s+baru\s+dicatat|yang\s+barusan\s+aku\s+log|yang\s+baru\s+di-?log)?$/i) ||
+    lower.match(/^(?:koreksi[,\s]+)?(?:aku\s+salah[,\s]+)?(?:hapus|delete|batal(?:kan)?|buang|hilangkan)\s+(?:yang\s+tadi|yang\s+barusan|tadi|barusan|terakhir)$/i) ||
+    lower.match(/\b(?:hapus|delete|batal(?:kan)?)\s+(?:log|makan(?:an)?|food|nutrisi|meal)\s*(?:terakhir|tadi|barusan)?\b/i) ||
+    lower.match(/\b(?:hapus|delete|batal(?:kan)?)\s+(?:makanan\s+)?(?:yang\s+barusan\s+aku\s+log|yang\s+baru\s+dicatat|yang\s+baru\s+di-?log)\b/i) ||
+    lower.match(/\b(?:aku\s+salah[,\s]+)?(?:hapus|delete|batal(?:kan)?)\s+(?:makanan\s+tadi|yang\s+tadi|makanan\s+barusan)\b/i) ||
+    lower === "hapus log terakhir" ||
+    lower === "hapus makan terakhir" ||
+    lower === "hapus makanan terakhir" ||
+    lower === "batal catat makanan" ||
+    lower === "hapus log"
+  );
+
+  // 7. Extract specific food item if present:
+  let stripped = lower
+    .replace(/^(?:koreksi|ralat|revisi)[,:\s]*/i, "")
+    .replace(/^(?:aku\s+salah|salah\s+catat)[,:\s]*/i, "")
+    .replace(/^(?:tolong|coba|bisa|mohon)\s+/i, "")
+    .trim();
+
+  const foodDeleteMatch = stripped.match(
+    /^(?:hapus|delete|batal(?:kan)?|buang|hilangkan)\s+(?:catat(?:an)?\s+)?(?:makanan\s+)?([a-z\s]+?)(?:\s+(?:barusan|tadi|terakhir|yang\s+tadi|yang\s+barusan|yang\s+baru\s+dicatat|yang\s+barusan\s+aku\s+log|yang\s+baru\s+di-?log))?$/i
+  );
+
+  if (foodDeleteMatch) {
+    let candidateFood = foodDeleteMatch[1].trim();
+    candidateFood = candidateFood.replace(/^(?:makan(?:an)?|food|meal|log(?:nya)?|catatan)\s*/i, "").trim();
+    candidateFood = candidateFood.replace(/\s*(?:barusan|tadi|terakhir|yang\s+tadi|yang\s+barusan)$/i, "").trim();
+
+    if (
+      candidateFood &&
+      candidateFood !== "log" &&
+      candidateFood !== "makanan" &&
+      candidateFood !== "makan" &&
+      candidateFood !== "food" &&
+      candidateFood !== "yang"
+    ) {
+      return {
+        isDelete: true,
+        targetFoodQuery: candidateFood,
+        scope: "food_match"
+      };
+    }
+  }
+
+  if (isGenericMealDelete) {
+    return {
+      isDelete: true,
+      scope: "recent"
+    };
+  }
+
+  // Fallback: if contains delete verb and generic meal term
+  if (
+    hasDeleteVerb &&
+    /\b(?:makan(?:an)?|meal|sarapan|lunch|dinner|yang\s+tadi|makanan\s+tadi|makanan\s+barusan)\b/i.test(lower)
+  ) {
+    return {
+      isDelete: true,
+      scope: "recent"
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Handles the DELETE_MEAL operation:
+ * 1. Resolves the target meal scoped strictly to the authenticated user.
+ * 2. Removes it permanently from in-memory dailyLogs (key, altKey, canonicalKey).
+ * 3. Removes it permanently from persistent Firestore foodLogs.
+ * 4. Recalculates daily totals and guarantees non-negative nutrition values.
+ * 5. Returns concise, standardized WhatsApp confirmation per Section 13.
+ * 6. Idempotent: safe repeated calls return a polite notice without double-subtraction.
+ */
+export async function handleDeleteMealCommand(
+  rawPhone: string,
+  userText: string,
+  userData: any,
+  targetDateStr?: string
+): Promise<string[]> {
+  const normPhone = normalizePhone(rawPhone);
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+  const canonicalPhone = normalizePhoneToE164(rawPhone);
+  const targetDate = targetDateStr || getTodayDateStr();
+
+  const key = `${normPhone}_${targetDate}`;
+  const altKey = `${altPhone}_${targetDate}`;
+  const canonicalKey = `${canonicalPhone}_${targetDate}`;
+
+  // 1. Retrieve all solid food logs for today (excluding plain water & hydration)
+  let userDailyLogs = (dbData.dailyLogs[key] !== undefined)
+    ? dbData.dailyLogs[key]
+    : (dbData.dailyLogs[altKey] !== undefined
+        ? dbData.dailyLogs[altKey]
+        : (dbData.dailyLogs[canonicalKey] || []));
+
+  if (!Array.isArray(userDailyLogs)) userDailyLogs = [];
+
+  const foodLogs = userDailyLogs.filter(l => l && !l.isHydration && !isPlainWaterName(l.foodName));
+
+  const deleteIntent = detectDeleteMealIntent(userText);
+  const queryFood = deleteIntent?.targetFoodQuery?.toLowerCase();
+
+  const addressing = getValidatedUserAddressing(userData);
+  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
+  const coachName = isMia ? "Coach Mia" : "Coach Max";
+  const separator = "--------------------------------------------------";
+
+  if (foodLogs.length === 0) {
+    return [
+      `ℹ️ Belum ada catatan makanan hari ini yang bisa dihapus.`
+    ];
+  }
+
+  // 2. Resolve target meal:
+  let targetMeal: any = null;
+  if (queryFood) {
+    for (let i = foodLogs.length - 1; i >= 0; i--) {
+      const meal = foodLogs[i];
+      const nameMatch = (meal.foodName || "").toLowerCase().includes(queryFood);
+      const itemsMatch = Array.isArray(meal.items) && meal.items.some((it: any) =>
+        (it.food_name || it.name || "").toLowerCase().includes(queryFood)
+      );
+      if (nameMatch || itemsMatch) {
+        targetMeal = meal;
+        break;
+      }
+    }
+  }
+
+  // If no specific food query or no food matched but generic delete command:
+  if (!targetMeal && (!queryFood || deleteIntent?.scope === "recent")) {
+    targetMeal = foodLogs[foodLogs.length - 1];
+  }
+
+  // 3. Idempotency / No match found:
+  if (!targetMeal) {
+    return [
+      `ℹ️ Catatan makanan ${queryFood ? `"${queryFood}" ` : ""}sudah dihapus atau tidak ditemukan di jurnal hari ini.`
+    ];
+  }
+
+  // 4. Perform Canonical Deletion from database:
+  const mealIdToDelete = targetMeal.id;
+  const filterOut = (list: any[]) => (list || []).filter(m => {
+    if (!m) return false;
+    if (mealIdToDelete && m.id === mealIdToDelete) return false;
+    if (!mealIdToDelete && m.foodName === targetMeal.foodName && m.timestamp === targetMeal.timestamp) return false;
+    return true;
+  });
+
+  if (dbData.dailyLogs[key]) dbData.dailyLogs[key] = filterOut(dbData.dailyLogs[key]);
+  if (dbData.dailyLogs[altKey]) dbData.dailyLogs[altKey] = filterOut(dbData.dailyLogs[altKey]);
+  if (dbData.dailyLogs[canonicalKey]) dbData.dailyLogs[canonicalKey] = filterOut(dbData.dailyLogs[canonicalKey]);
+  saveDb();
+
+  // Async Firestore deletion
+  if (mealIdToDelete) {
+    try {
+      await deleteFoodLog(mealIdToDelete, normPhone, targetDate);
+      if (altPhone !== normPhone) await deleteFoodLog(mealIdToDelete, altPhone, targetDate);
+      if (canonicalPhone && canonicalPhone !== normPhone && canonicalPhone !== altPhone) {
+        await deleteFoodLog(mealIdToDelete, canonicalPhone, targetDate);
+      }
+    } catch (e: any) {
+      console.warn("[handleDeleteMealCommand] deleteFoodLog note:", e?.message || e);
+    }
+  }
+
+  // 5. Recalculate daily totals
+  getDailyTotals(normPhone, targetDate);
+
+  // 6. Format response adhering to Section 13
+  const coachQuote = isMia
+    ? `Sudah aku hapus ya, ${addressing.validatedAddress} ✨`
+    : `Catatan makanan sudah dihapus, ${addressing.validatedAddress}! Tetap fokus pada target nutrisimu ya 💪`;
+
+  return [
+    `🗑️ *MEAL DIHAPUS*\n` +
+    `${separator}\n\n` +
+    `✅ *${targetMeal.foodName}* sudah dihapus dari jurnal makanan hari ini.\n\n` +
+    `📊 Nutrisi hari ini sudah diperbarui.\n\n` +
+    `${separator}\n` +
+    `💬 *${coachName}*\n` +
+    `"${coachQuote}"`
+  ];
+}
+
 // Retrieve the last logged solid food meal for user on target date (ignoring plain water)
 export function getLastFoodMeal(rawPhone: string, targetDateStr?: string): MealLog | null {
   const phone = normalizePhone(rawPhone);
@@ -2848,6 +3109,12 @@ export function updateExistingMealLog(rawPhone: string, updatedMeal: MealLog, ta
 // Natural language meal correction intent detector
 export function detectMealCorrectionIntent(userText: string, hasRecentMeal: boolean): boolean {
   if (!userText || typeof userText !== "string") return false;
+
+  // PRIORITY RULE: Delete intent always takes precedence over correction
+  if (detectDeleteMealIntent(userText)) {
+    return false;
+  }
+
   const clean = userText.trim();
   const lower = clean.toLowerCase();
 
@@ -7584,6 +7851,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const mealIntent = classifyMealIntent(userText);
           const isTomorrowMealQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "tomorrow");
           const isWeeklyMealPlanQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "weekly");
+          const isMealTimingQuery = Boolean(mealIntent?.isMealIntent && mealIntent.scope === "meal_timing");
+          const isDeleteMealIntent = !imagePart && Boolean(detectDeleteMealIntent(userText));
 
           const workoutIntent = classifyWorkoutIntent(userText);
           const isWeeklyScheduleQuery = Boolean(
@@ -7669,6 +7938,21 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           const isProgressHistoryMessage = lowerText.includes("cek progress") || 
                                           lowerText.includes("riwayat progress") || 
                                           lowerText.includes("progress minggu");
+
+          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (
+            Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") ||
+            lowerText.includes("rekomendasi makanan") ||
+            lowerText.includes("rekomendasi makan") ||
+            lowerText.includes("menu makan") ||
+            lowerText.includes("saran makan") ||
+            lowerText.includes("pagi siang malam") ||
+            lowerText.includes("rekomendasi sarapan") ||
+            Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) ||
+            Boolean(lowerText.match(/ada\s+saran\s+makan/i)) ||
+            Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) ||
+            Boolean(lowerText.match(/saran\s+menu/i)) ||
+            Boolean(lowerText.match(/rekomendasi\s+menu/i))
+          );
 
           // Weight Update Intent Match (e.g. "update bb 78", "lapor bb 77.5", "bb 76")
           const weightMatch = matchPureWeightLog(userText);
@@ -7791,6 +8075,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               }
             } else if (isProgressHistoryMessage) {
               responseMessages = [formatProgressHistoryCard(from)];
+            } else if (isDeleteMealIntent) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("hapus makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+              } else {
+                responseMessages = await handleDeleteMealCommand(from, userText, userData);
+              }
+            } else if (isMealTimingQuery) {
+              if (!planCapabilities.canNutrition) {
+                responseMessages = [validatePlanContext("saran waktu makan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+              } else {
+                responseMessages = [generateMealTimingAdvice(userData, userText)];
+              }
             } else if (isRecommendationMessage) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("rekomendasi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -8235,12 +8531,14 @@ function escapeXml(unsafe: string): string {
       }
       const userData = calculateUserData(userProfile);
       console.log(`[Twilio WA] ✅ Step: userData calculated for ${normFrom}, name=${userData?.name}, goal=${userData?.goal}`);
+      const planCapabilities = getUserPlanCapabilities(userData);
 
       const twilioMealIntent = classifyMealIntent(userText);
       const isTomorrowMealQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "tomorrow");
       const isWeeklyMealPlanQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "weekly");
+      const isMealTimingQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "meal_timing");
 
-      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && (
+      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (
         Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") ||
         lowerText.includes("rekomendasi makanan") ||
         lowerText.includes("rekomendasi makan") ||
@@ -8332,13 +8630,7 @@ function escapeXml(unsafe: string): string {
                              lowerText.includes("reset data") ||
                              lowerText.includes("hapus data saya");
 
-      const isDeleteMealMessage = Boolean(
-        lowerText.match(/^(?:hapus|delete|batal(?:kan)?)\s+(?:log\s+)?(?:makan(?:an)?|food|nutrisi)(?:\s+terakhir)?$/i) ||
-        lowerText === "hapus log terakhir" ||
-        lowerText === "hapus makan terakhir" ||
-        lowerText === "hapus makanan terakhir" ||
-        lowerText === "batal catat makanan"
-      );
+      const isDeleteMealMessage = !imagePart && Boolean(detectDeleteMealIntent(userText));
 
       const recentFoodMeal = getLastFoodMeal(normFrom);
       const isMealCorrection = !imagePart && detectMealCorrectionIntent(userText, Boolean(recentFoodMeal));
@@ -8383,35 +8675,16 @@ function escapeXml(unsafe: string): string {
           `Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di website! ✨`
         ];
       } else if (isDeleteMealMessage) {
-        const todayStr = getTodayDateStr();
-        const key = `${normFrom}_${todayStr}`;
-        const altPhone = normFrom.startsWith("0") ? "62" + normFrom.substring(1) : (normFrom.startsWith("62") ? "0" + normFrom.substring(2) : normFrom);
-        const altKey = `${altPhone}_${todayStr}`;
-        const logs = dbData.dailyLogs[key] || dbData.dailyLogs[altKey] || [];
-        const foodLogs = logs.filter(l => !l.isHydration && !isPlainWaterName(l.foodName));
-
-        if (foodLogs.length > 0) {
-          const lastMeal = foodLogs[foodLogs.length - 1];
-          dbData.dailyLogs[key] = (dbData.dailyLogs[key] || []).filter(m => m.id !== lastMeal.id);
-          if (dbData.dailyLogs[altKey]) {
-            dbData.dailyLogs[altKey] = dbData.dailyLogs[altKey].filter(m => m.id !== lastMeal.id);
-          }
-          saveDb();
-          if (lastMeal.id) {
-            deleteFoodLog(normFrom, lastMeal.id).catch(() => {});
-          }
-          const updatedTotals = getDailyTotals(normFrom, todayStr);
-          const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-          responseMessages = [
-            `🗑️ *LOG MAKANAN DIHAPUS*\n--------------------------------------------------\n` +
-            `Catatan *${lastMeal.foodName}* (~${lastMeal.calories} kcal) telah dihapus dari log hari ini.\n\n` +
-            `📊 *Status Kalori Hari Ini*: ${updatedTotals.calories}/${userData.targetCalories} kcal\n\n` +
-            `💬 *${coachName}*:\n"Sip, catatannya sudah aku hapus ya! Kalau ada makanan lain yang mau dicatat, kirim saja langsung."`
-          ];
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("hapus makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
         } else {
-          responseMessages = [
-            `ℹ️ Belum ada catatan makanan hari ini yang bisa dihapus.`
-          ];
+          responseMessages = await handleDeleteMealCommand(normFrom, userText, userData);
+        }
+      } else if (isMealTimingQuery) {
+        if (!planCapabilities.canNutrition) {
+          responseMessages = [validatePlanContext("saran waktu makan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
+        } else {
+          responseMessages = [generateMealTimingAdvice(userData, userText)];
         }
       } else if (isTomorrowMealQuery) {
         if (!planCapabilities.canNutrition) {
@@ -8507,7 +8780,6 @@ function escapeXml(unsafe: string): string {
           responseMessages = generateWelcomeMessages(currentCalculated);
         }
       } else {
-        const planCapabilities = getUserPlanCapabilities(userData);
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
         if (!planValidation.canProceed) {

@@ -1487,11 +1487,47 @@ export function generatePersonalizedMealRecommendation(
 export interface MealIntentResult {
   isMealIntent: boolean;
   domain: "meal";
-  action: "recommendation" | "plan";
-  scope: "today" | "tomorrow" | "weekly";
+  action: "recommendation" | "plan" | "advice";
+  topic?: "meal_timing";
+  scope: "today" | "tomorrow" | "weekly" | "meal_timing";
   targetDate: string; // YYYY-MM-DD
   targetDateLabel: string; // e.g. "Jumat, 11 Sep 2026"
   mealType?: "breakfast" | "lunch" | "dinner" | "snack";
+}
+
+export function isMealTimingAdviceQuery(userText: string): boolean {
+  if (!userText || typeof userText !== "string") return false;
+  const lower = userText.toLowerCase().trim();
+
+  // Negative checks: exclude workout, pure food logs, delete requests, tomorrow, weekly
+  if (lower.match(/\b(?:workout|latihan|olahraga|gym|push\s*up|treadmill|berenang)\b/i)) return false;
+  if (lower.match(/^(?:hapus|delete|batal|koreksi|ralat|buang|hilangkan)/i)) return false;
+  if (lower.match(/^(?:aku\s+(?:tadi\s+)?makan|tadi\s+makan)\b/i)) return false;
+  if (lower.includes("besok") || lower.includes("tomorrow")) return false;
+  if (lower.match(/\b(?:seminggu|mingguan|7\s*hari|tujuh\s*hari)\b/i)) return false;
+
+  const hasLunch = /\b(?:siang|lunch)\b/i.test(lower);
+  const hasDinner = /\b(?:malam|dinner)\b/i.test(lower);
+  const hasBreakfast = /\b(?:sarapan|breakfast|pagi)\b/i.test(lower);
+  const hasSkip = /\b(?:skip|melewatkan|tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa\s+makan)\b/i.test(lower);
+  const hasComparison = /\b(?:mending|lebih\s+bagus|lebih\s+baik|atau|bagusan|cukup|boleh|harus|perlu|mendingan)\b/i.test(lower);
+
+  // 1. Dual-meal dilemma: lunch + dinner with skip / comparison
+  if (hasLunch && hasDinner && (hasSkip || hasComparison)) {
+    return true;
+  }
+
+  // 2. Explicit skip meal queries with meal context
+  if (hasSkip && (hasLunch || hasDinner || hasBreakfast)) {
+    return true;
+  }
+
+  // 3. Timing / frequency advice queries
+  if (/\b(?:waktu|jam|jadwal|aturan|pola)\s+makan\b/i.test(lower) && /\b(?:saran|bagus|baik|ideal|gimana|bagaimana|rekomendasi)\b/i.test(lower)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function getWibDateDetails(offsetDays: number = 0): {
@@ -1540,6 +1576,20 @@ export function classifyMealIntent(userText: string): MealIntentResult | null {
   );
   if (isPureWorkout) {
     return null;
+  }
+
+  // 0. MEAL TIMING ADVICE scope takes precedence for conversational meal timing questions
+  if (isMealTimingAdviceQuery(userText)) {
+    const { dateStr, formattedDate } = getWibDateDetails(0);
+    return {
+      isMealIntent: true,
+      domain: "meal",
+      action: "advice",
+      topic: "meal_timing",
+      scope: "meal_timing",
+      targetDate: dateStr,
+      targetDateLabel: formattedDate
+    };
   }
 
   const hasMealKeyword = Boolean(
@@ -2272,3 +2322,35 @@ export function generatePersonalizedWeeklyWorkoutPlan(rawProfile: any): string {
     `"${coachGuidance}"`
   );
 }
+
+/**
+ * Generates clear, concise, actionable meal timing advice.
+ * Addresses conversational questions comparing lunch + dinner vs skipping lunch,
+ * adhering to canonical user profile and Coach Mia/Max personas without truncation.
+ */
+export function generateMealTimingAdvice(rawProfile: any, userText?: string): string {
+  const profile = resolveCanonicalProfile(rawProfile);
+  const isMia = (profile.persona || "mia").toLowerCase().includes("mia");
+  const coachLabel = isMia ? "Coach Mia" : "Coach Max";
+
+  const separator = "--------------------------------------------------";
+
+  const coachQuote = isMia
+    ? "Kalau kamu kasih tahu kira-kira jam makan dan aktivitasmu hari ini, aku bisa bantu atur pembagian porsinya ya ✨"
+    : "Fokus pada total asupan harian dan dengarkan sinyal tubuhmu. Kabari jam aktivitasmu kalau mau aku bantu atur porsi! 💪";
+
+  return (
+    `🍽️ *SARAN WAKTU MAKAN*\n` +
+    `${separator}\n\n` +
+    `Kalau kamu memang lapar, lebih baik tetap makan siang dan makan malam dengan porsi yang disesuaikan kebutuhan harianmu. Nggak perlu sengaja melewatkan makan siang hanya supaya bisa makan banyak di malam hari.\n\n` +
+    `Kalau kamu tidak lapar saat siang, kamu juga tidak harus memaksakan makan hanya karena jadwal. Yang penting total asupan harian dan nutrisimu tetap terpenuhi seimbang.\n\n` +
+    `💡 *Praktisnya*:\n` +
+    `• Siang: porsi normal atau lebih ringan\n` +
+    `• Malam: sesuaikan sisa kebutuhan harian\n` +
+    `• Utamakan protein, sayur, dan karbohidrat sesuai targetmu\n\n` +
+    `${separator}\n` +
+    `💬 *${coachLabel}*\n` +
+    `"${coachQuote}"`
+  );
+}
+
