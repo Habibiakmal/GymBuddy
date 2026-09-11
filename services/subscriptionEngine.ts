@@ -108,40 +108,49 @@ function parseNullableDate(val: any): Date | null {
  * WITHOUT creating alternative sources of truth.
  */
 export function resolveCanonicalPlanString(user: any): CanonicalPlan {
-  const rawPlan = String(user?.plan || "").toLowerCase().trim();
-
-  if (rawPlan === "trial") return "trial";
-  if (rawPlan === "nutritionist") return "nutritionist";
-  if (rawPlan === "workout_coach") return "workout_coach";
-  if (rawPlan === "premium") return "premium";
-  if (rawPlan === "lifetime") return "lifetime";
-
-  // Legacy field normalization (for existing records prior to migration)
-  const legacyService = String(
-    user?.activeService ||
-    user?.subscription?.activeService ||
-    user?.selectedFeature ||
+  const rawPlan = String(
+    user?.plan ||
+    user?.selectedPlan ||
+    user?.order?.selectedPlan ||
+    user?.order?.plan ||
     ""
   ).toLowerCase().trim();
 
-  if (legacyService === "nutritionist" || legacyService === "nutrition") {
-    return "nutritionist";
-  }
-  if (legacyService === "coach" || legacyService === "workout") {
-    return "workout_coach";
-  }
-  if (legacyService === "both") {
-    return "premium";
-  }
+  if (rawPlan === "free" || rawPlan === "trial" || rawPlan === "free_trial") return "trial";
+  if (rawPlan === "both" || rawPlan === "premium") return "premium";
+  if (rawPlan === "lifetime") return "lifetime";
+  if (rawPlan === "nutritionist") return "nutritionist";
+  if (rawPlan === "workout_coach") return "workout_coach";
 
-  // If user has legacy subscription plan
-  const legacySubPlan = String(user?.subscription?.plan || "").toLowerCase().trim();
-  if (legacySubPlan === "advanced") {
-    if (legacyService === "workout" || legacyService === "coach") return "workout_coach";
-    if (legacyService === "nutrition" || legacyService === "nutritionist") return "nutritionist";
-    return "premium";
-  }
-  if (legacySubPlan === "premium") {
+  // Check subscription object plan
+  const subPlan = String(user?.subscription?.plan || "").toLowerCase().trim();
+  if (subPlan === "free" || subPlan === "trial" || subPlan === "free_trial") return "trial";
+  if (subPlan === "both" || subPlan === "premium") return "premium";
+  if (subPlan === "lifetime") return "lifetime";
+  if (subPlan === "nutritionist") return "nutritionist";
+  if (subPlan === "workout_coach") return "workout_coach";
+
+  // Check explicit activeService (activeService takes priority over legacy selectedFeature)
+  const explicitService = String(
+    user?.activeService ||
+    user?.subscription?.activeService ||
+    ""
+  ).toLowerCase().trim();
+
+  if (explicitService === "both") return "premium";
+  if (explicitService === "nutritionist" || explicitService === "nutrition") return "nutritionist";
+  if (explicitService === "workout" || explicitService === "coach") return "workout_coach";
+
+  // Legacy field normalization (selectedFeature fallback only if no activeService or plan)
+  const legacyFeature = String(user?.selectedFeature || "").toLowerCase().trim();
+  if (legacyFeature === "both") return "premium";
+  if (legacyFeature === "nutritionist" || legacyFeature === "nutrition") return "nutritionist";
+  if (legacyFeature === "workout" || legacyFeature === "coach") return "workout_coach";
+
+  // If user has legacy subscription plan 'advanced'
+  if (subPlan === "advanced") {
+    if (explicitService === "workout" || explicitService === "coach" || legacyFeature === "coach") return "workout_coach";
+    if (explicitService === "nutrition" || explicitService === "nutritionist" || legacyFeature === "nutrition") return "nutritionist";
     return "premium";
   }
 
@@ -197,7 +206,7 @@ export function getUserSubscription(user: any, now: Date = new Date()): Resolved
   const plan = resolveCanonicalPlanString(user);
   const planDuration = resolveCanonicalDuration(user, plan);
 
-  const rawStartedAt = user.planStartedAt || user.subscription?.startedAt || user.createdAt;
+  const rawStartedAt = user.planStartedAt || user.subscription?.startedAt || user.trialStartedAt || user.createdAt;
   const startedAtDate = parseNullableDate(rawStartedAt);
   const planStartedAt = startedAtDate ? startedAtDate.toISOString() : null;
 
@@ -208,7 +217,7 @@ export function getUserSubscription(user: any, now: Date = new Date()): Resolved
     planExpiresAt = null;
     expiresAtDate = null;
   } else {
-    const rawExpiresAt = user.planExpiresAt || user.subscription?.expiresAt;
+    const rawExpiresAt = user.planExpiresAt || user.subscription?.expiresAt || user.trialExpiresAt;
     expiresAtDate = parseNullableDate(rawExpiresAt);
     planExpiresAt = expiresAtDate ? expiresAtDate.toISOString() : null;
   }
@@ -222,7 +231,10 @@ export function getUserSubscription(user: any, now: Date = new Date()): Resolved
   let daysRemaining: number | undefined;
   let hoursRemaining: number | undefined;
 
-  const hasExplicitCanonicalPlan = Boolean(user.plan && ["trial", "nutritionist", "workout_coach", "premium", "lifetime"].includes(String(user.plan).toLowerCase().trim()));
+  const hasExplicitCanonicalPlan = Boolean(
+    user.plan &&
+    ["trial", "free_trial", "nutritionist", "workout_coach", "premium", "both", "lifetime"].includes(String(user.plan).toLowerCase().trim())
+  );
 
   if (plan === "lifetime") {
     isActive = true;
@@ -230,8 +242,12 @@ export function getUserSubscription(user: any, now: Date = new Date()): Resolved
     entitlementReason = "active";
   } else {
     if (!expiresAtDate) {
-      if (hasExplicitCanonicalPlan) {
-        // Explicit time-limited canonical plan without expiry timestamp is invalid configuration
+      if (user?.subscription?.status === "active" || user?.status === "active" || user?.userState === "active") {
+        isActive = true;
+        isExpired = false;
+        entitlementReason = "active";
+      } else if (hasExplicitCanonicalPlan) {
+        // Time-limited plan without expiry timestamp and without active status flag
         isActive = false;
         isExpired = true;
         entitlementReason = "invalid_config";
@@ -547,6 +563,7 @@ export function applyCommercialPlan(
     planExpiresAt = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
   }
 
+  const isBoth = plan === "premium" || plan === "lifetime";
   const updated = {
     ...user,
     plan,
@@ -554,6 +571,8 @@ export function applyCommercialPlan(
     planStartedAt: startedAt,
     planExpiresAt,
     hasUsedTrial: true,
+    activeService: isBoth ? "both" : (plan === "nutritionist" ? "nutrition" : (plan === "workout_coach" ? "coach" : user.activeService)),
+    selectedFeature: isBoth ? "both" : (plan === "nutritionist" ? "nutrition" : (plan === "workout_coach" ? "coach" : user.selectedFeature)),
     updatedAt: now.toISOString()
   };
 

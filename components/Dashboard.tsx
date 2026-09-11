@@ -763,7 +763,8 @@ export const DUMMY_USERS: Record<string, any> = {
     dailyTargetCarbs: 210,
     fatGrams: 65,
     dailyTargetFat: 65,
-    fiberGrams: 30
+    fiberGrams: 30,
+    entitlements: { canNutrition: true, canWorkout: false }
   },
   mia: {
     userId: "usr_mia_demo",
@@ -790,7 +791,8 @@ export const DUMMY_USERS: Record<string, any> = {
     dailyTargetCarbs: 200,
     fatGrams: 55,
     dailyTargetFat: 55,
-    fiberGrams: 28
+    fiberGrams: 28,
+    entitlements: { canNutrition: false, canWorkout: true }
   }
 };
 
@@ -917,22 +919,71 @@ export default function Dashboard({
 
   const activeUser = liveUser || safeUser;
 
-  // ── PLAN ENTITLEMENTS & ACCESS CONTROL (Nutrition Plan vs Workout Coach Plan) ──
+  // ── PLAN ENTITLEMENTS & ACCESS CONTROL (Single Canonical Source of Truth) ──
   const userPhone = String(activeUser?.phone || "").replace(/\D/g, "");
-  const userActiveService = String(activeUser?.activeService || activeUser?.selectedFeature || activeUser?.plan || "both").toLowerCase();
   
-  // Single-service checks: Only trigger if explicitly restricted or injected test user
-  const isAlexTestUser = userPhone === "08111111111" || userPhone === "62811111111" || (activeUser?.name === "Alex" && activeUser?.userId === "usr_alex_demo");
-  const isMiaTestUser = userPhone === "08222222222" || userPhone === "62822222222" || (activeUser?.name === "Mia" && activeUser?.userId === "usr_mia_demo");
+  // 1. Check Canonical Entitlements object directly
+  const sub = (activeUser as any)?.subscription;
+  const entitlements = (activeUser as any)?.entitlements || sub?.entitlements;
 
-  const isNutritionPlan = isAlexTestUser || (!isMiaTestUser && (userActiveService === "nutrition" || userActiveService === "nutritionist"));
-  const isWorkoutPlan = isMiaTestUser || (!isAlexTestUser && (userActiveService === "workout" || userActiveService === "coach"));
+  // 2. Demo User Fallback for UI Testing (only for explicit demo user IDs or demo phone numbers)
+  const isAlexDemoUser = activeUser?.userId === "usr_alex_demo" || userPhone === "08111111111" || userPhone === "62811111111";
+  const isMiaDemoUser = activeUser?.userId === "usr_mia_demo" || userPhone === "08222222222" || userPhone === "62822222222";
 
-  // Production default: Full access unless explicitly restricted to single plan
-  const isFullAccess = !isNutritionPlan && !isWorkoutPlan;
+  // 3. Resolve plan identifier cleanly
+  const rawPlan = String(
+    (activeUser as any)?.plan ||
+    sub?.plan ||
+    (activeUser as any)?.selectedPlan ||
+    ""
+  ).toLowerCase().trim();
 
-  const hasNutritionAccess = isNutritionPlan || isFullAccess;
-  const hasWorkoutAccess = isWorkoutPlan || isFullAccess;
+  const rawActiveService = String(
+    (activeUser as any)?.activeService ||
+    (activeUser as any)?.selectedFeature ||
+    ""
+  ).toLowerCase().trim();
+
+  let hasNutritionAccess = true;
+  let hasWorkoutAccess = true;
+
+  if (entitlements && typeof entitlements.canNutrition === "boolean" && typeof entitlements.canWorkout === "boolean") {
+    // Canonical entitlements from backend are supreme
+    hasNutritionAccess = entitlements.canNutrition;
+    hasWorkoutAccess = entitlements.canWorkout;
+  } else if (isAlexDemoUser) {
+    hasNutritionAccess = true;
+    hasWorkoutAccess = false;
+  } else if (isMiaDemoUser) {
+    hasNutritionAccess = false;
+    hasWorkoutAccess = true;
+  } else if (
+    rawPlan === "both" ||
+    rawPlan === "premium" ||
+    rawPlan === "lifetime" ||
+    rawPlan === "all_access" ||
+    rawActiveService === "both"
+  ) {
+    hasNutritionAccess = true;
+    hasWorkoutAccess = true;
+  } else if (rawPlan === "nutritionist" || rawPlan === "nutrition" || rawActiveService === "nutrition" || rawActiveService === "nutritionist") {
+    hasNutritionAccess = true;
+    hasWorkoutAccess = false;
+  } else if (rawPlan === "workout_coach" || rawPlan === "workout" || rawActiveService === "coach" || rawActiveService === "workout") {
+    hasNutritionAccess = false;
+    hasWorkoutAccess = true;
+  } else {
+    // Default to full access (free trial / both)
+    hasNutritionAccess = true;
+    hasWorkoutAccess = true;
+  }
+
+  // Derived plan states for UI rendering
+  const isBothPlan = hasNutritionAccess && hasWorkoutAccess;
+  const isNutritionPlan = hasNutritionAccess && !hasWorkoutAccess;
+  const isWorkoutPlan = !hasNutritionAccess && hasWorkoutAccess;
+  const isFreePlan = !hasNutritionAccess && !hasWorkoutAccess;
+  const isFullAccess = isBothPlan;
 
   const [showUpgradePlanModal, setShowUpgradePlanModal] = useState(false);
   const [upgradeTargetFeature, setUpgradeTargetFeature] = useState<"nutrition" | "workout" | "both">("workout");
@@ -949,15 +1000,22 @@ export default function Dashboard({
         name: "Member (Full Access)",
         activeService: "both",
         selectedFeature: "both",
-        plan: "both"
+        plan: "both",
+        entitlements: { canNutrition: true, canWorkout: true }
       };
       setLiveUser(bothUser);
       localStorage.setItem("gymbuddy_active_session", JSON.stringify(bothUser));
       return;
     }
     const dummy = DUMMY_USERS[userKey];
-    setLiveUser(dummy as any);
-    localStorage.setItem("gymbuddy_active_session", JSON.stringify(dummy));
+    const enrichedDummy = {
+      ...dummy,
+      entitlements: userKey === "alex" 
+        ? { canNutrition: true, canWorkout: false }
+        : { canNutrition: false, canWorkout: true }
+    };
+    setLiveUser(enrichedDummy as any);
+    localStorage.setItem("gymbuddy_active_session", JSON.stringify(enrichedDummy));
     setAllLogs(getLocalMeals(dummy.phone, selectedDate));
   };
 
@@ -3476,13 +3534,21 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       🔥 {currentStreak} {t.activeDaysConsecutive}
                     </span>
                     {/* Subtle Integrated Plan Badge */}
-                    {isNutritionPlan ? (
+                    {isBothPlan ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">
+                        🌟 {activeUser?.plan === "lifetime" ? "Lifetime All-Access" : (isEN ? "Both: Nutritionist + Workout Coach" : "Both: Nutrisi + Workout Coach")}
+                      </span>
+                    ) : isNutritionPlan ? (
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">
                         🥗 Nutritionist Plan
                       </span>
                     ) : isWorkoutPlan ? (
                       <span className="px-2.5 py-0.5 rounded-full bg-[#D4FF00]/15 border border-[#D4FF00]/30 text-[#D4FF00] font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">
                         🏋️ Workout Coach Plan
+                      </span>
+                    ) : isFreePlan ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-neutral-500/15 border border-neutral-500/30 text-neutral-400 font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">
+                        🔒 {isEN ? "Free Plan" : "Paket Gratis"}
                       </span>
                     ) : (
                       <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 font-extrabold text-[10px] sm:text-[11px] flex items-center gap-1 shrink-0">

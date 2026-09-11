@@ -49254,31 +49254,33 @@ function parseNullableDate(val) {
   return isNaN(d.getTime()) ? null : d;
 }
 function resolveCanonicalPlanString(user) {
-  const rawPlan = String(user?.plan || "").toLowerCase().trim();
-  if (rawPlan === "trial") return "trial";
+  const rawPlan = String(
+    user?.plan || user?.selectedPlan || user?.order?.selectedPlan || user?.order?.plan || ""
+  ).toLowerCase().trim();
+  if (rawPlan === "free" || rawPlan === "trial" || rawPlan === "free_trial") return "trial";
+  if (rawPlan === "both" || rawPlan === "premium") return "premium";
+  if (rawPlan === "lifetime") return "lifetime";
   if (rawPlan === "nutritionist") return "nutritionist";
   if (rawPlan === "workout_coach") return "workout_coach";
-  if (rawPlan === "premium") return "premium";
-  if (rawPlan === "lifetime") return "lifetime";
-  const legacyService = String(
-    user?.activeService || user?.subscription?.activeService || user?.selectedFeature || ""
+  const subPlan = String(user?.subscription?.plan || "").toLowerCase().trim();
+  if (subPlan === "free" || subPlan === "trial" || subPlan === "free_trial") return "trial";
+  if (subPlan === "both" || subPlan === "premium") return "premium";
+  if (subPlan === "lifetime") return "lifetime";
+  if (subPlan === "nutritionist") return "nutritionist";
+  if (subPlan === "workout_coach") return "workout_coach";
+  const explicitService = String(
+    user?.activeService || user?.subscription?.activeService || ""
   ).toLowerCase().trim();
-  if (legacyService === "nutritionist" || legacyService === "nutrition") {
-    return "nutritionist";
-  }
-  if (legacyService === "coach" || legacyService === "workout") {
-    return "workout_coach";
-  }
-  if (legacyService === "both") {
-    return "premium";
-  }
-  const legacySubPlan = String(user?.subscription?.plan || "").toLowerCase().trim();
-  if (legacySubPlan === "advanced") {
-    if (legacyService === "workout" || legacyService === "coach") return "workout_coach";
-    if (legacyService === "nutrition" || legacyService === "nutritionist") return "nutritionist";
-    return "premium";
-  }
-  if (legacySubPlan === "premium") {
+  if (explicitService === "both") return "premium";
+  if (explicitService === "nutritionist" || explicitService === "nutrition") return "nutritionist";
+  if (explicitService === "workout" || explicitService === "coach") return "workout_coach";
+  const legacyFeature = String(user?.selectedFeature || "").toLowerCase().trim();
+  if (legacyFeature === "both") return "premium";
+  if (legacyFeature === "nutritionist" || legacyFeature === "nutrition") return "nutritionist";
+  if (legacyFeature === "workout" || legacyFeature === "coach") return "workout_coach";
+  if (subPlan === "advanced") {
+    if (explicitService === "workout" || explicitService === "coach" || legacyFeature === "coach") return "workout_coach";
+    if (explicitService === "nutrition" || explicitService === "nutritionist" || legacyFeature === "nutrition") return "nutritionist";
     return "premium";
   }
   return "lifetime";
@@ -49318,7 +49320,7 @@ function getUserSubscription(user, now = /* @__PURE__ */ new Date()) {
   }
   const plan = resolveCanonicalPlanString(user);
   const planDuration = resolveCanonicalDuration(user, plan);
-  const rawStartedAt = user.planStartedAt || user.subscription?.startedAt || user.createdAt;
+  const rawStartedAt = user.planStartedAt || user.subscription?.startedAt || user.trialStartedAt || user.createdAt;
   const startedAtDate = parseNullableDate(rawStartedAt);
   const planStartedAt = startedAtDate ? startedAtDate.toISOString() : null;
   let planExpiresAt = null;
@@ -49327,7 +49329,7 @@ function getUserSubscription(user, now = /* @__PURE__ */ new Date()) {
     planExpiresAt = null;
     expiresAtDate = null;
   } else {
-    const rawExpiresAt = user.planExpiresAt || user.subscription?.expiresAt;
+    const rawExpiresAt = user.planExpiresAt || user.subscription?.expiresAt || user.trialExpiresAt;
     expiresAtDate = parseNullableDate(rawExpiresAt);
     planExpiresAt = expiresAtDate ? expiresAtDate.toISOString() : null;
   }
@@ -49337,14 +49339,20 @@ function getUserSubscription(user, now = /* @__PURE__ */ new Date()) {
   let entitlementReason = "active";
   let daysRemaining;
   let hoursRemaining;
-  const hasExplicitCanonicalPlan = Boolean(user.plan && ["trial", "nutritionist", "workout_coach", "premium", "lifetime"].includes(String(user.plan).toLowerCase().trim()));
+  const hasExplicitCanonicalPlan = Boolean(
+    user.plan && ["trial", "free_trial", "nutritionist", "workout_coach", "premium", "both", "lifetime"].includes(String(user.plan).toLowerCase().trim())
+  );
   if (plan === "lifetime") {
     isActive = true;
     isExpired = false;
     entitlementReason = "active";
   } else {
     if (!expiresAtDate) {
-      if (hasExplicitCanonicalPlan) {
+      if (user?.subscription?.status === "active" || user?.status === "active" || user?.userState === "active") {
+        isActive = true;
+        isExpired = false;
+        entitlementReason = "active";
+      } else if (hasExplicitCanonicalPlan) {
         isActive = false;
         isExpired = true;
         entitlementReason = "invalid_config";
@@ -49607,6 +49615,7 @@ function applyCommercialPlan(user, plan, duration, now = /* @__PURE__ */ new Dat
     else if (duration === "1_year") daysToAdd = 365;
     planExpiresAt = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1e3).toISOString();
   }
+  const isBoth = plan === "premium" || plan === "lifetime";
   const updated = {
     ...user,
     plan,
@@ -49614,6 +49623,8 @@ function applyCommercialPlan(user, plan, duration, now = /* @__PURE__ */ new Dat
     planStartedAt: startedAt,
     planExpiresAt,
     hasUsedTrial: true,
+    activeService: isBoth ? "both" : plan === "nutritionist" ? "nutrition" : plan === "workout_coach" ? "coach" : user.activeService,
+    selectedFeature: isBoth ? "both" : plan === "nutritionist" ? "nutrition" : plan === "workout_coach" ? "coach" : user.selectedFeature,
     updatedAt: now.toISOString()
   };
   return {
@@ -53052,65 +53063,6 @@ function saveUserProfile(rawPhone, profile) {
   saveDb();
   return updated;
 }
-function getDefaultWorkoutSchedule(goal, equipment, injuries) {
-  const isBodyweight = equipment === "bodyweight";
-  const isDumbbells = equipment === "dumbbells";
-  const hasKneePain = Array.isArray(injuries) && injuries.includes("knee");
-  const hasBackPain = Array.isArray(injuries) && injuries.includes("lower_back");
-  if (isBodyweight) {
-    return [
-      { day: "Senin", focus: "Push & Core (Rumah)", exercises: [{ name: "Push Up (Regular / Knee)", setsReps: "3 Set x 12 Reps" }, { name: "Pike Push Up (Bahu)", setsReps: "3 Set x 10 Reps" }, { name: "Plank Hold", setsReps: "3 Set x 45 Detik" }] },
-      { day: "Selasa", focus: "Lower Body (Bodyweight)", exercises: [{ name: hasKneePain ? "Glute Bridge & Hip Thrust" : "Bodyweight Squat", setsReps: "4 Set x 15 Reps" }, { name: "Calf Raise & Wall Sit", setsReps: "3 Set x 15 Reps" }] },
-      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Stretching & Active Rest", setsReps: "Rest Day" }] },
-      { day: "Kamis", focus: "Pull & Core (Rumah)", exercises: [{ name: "Doorframe / Towel Inverted Row", setsReps: "4 Set x 12 Reps" }, { name: "Chair Dips", setsReps: "3 Set x 12 Reps" }, { name: "Superman Hold", setsReps: "3 Set x 45 Detik" }] },
-      { day: "Jumat", focus: "Full Body Bodyweight Circuit", exercises: [{ name: "Jumping Jacks / Shadow Boxing", setsReps: "4 Set x 1 Menit" }, { name: "Bodyweight Lunge / Step Up", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Sabtu", focus: "Cardio & Mobility", exercises: [{ name: "Brisk Walk / Jogging Rumah", setsReps: "30 Menit" }] },
-      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
-    ];
-  }
-  if (isDumbbells) {
-    return [
-      { day: "Senin", focus: "Dumbbell Upper Push", exercises: [{ name: "Dumbbell Floor / Bench Press", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Overhead Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Tricep Dumbbell Extension", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Selasa", focus: "Dumbbell Lower Body", exercises: [{ name: hasKneePain ? "Dumbbell Romanian Deadlift" : "Dumbbell Goblet Squat", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Lunge / Step Up", setsReps: "3 Set x 10 Reps/kaki" }] },
-      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Active Recovery", setsReps: "Rest Day" }] },
-      { day: "Kamis", focus: "Dumbbell Upper Pull", exercises: [{ name: hasBackPain ? "Chest-Supported Dumbbell Row" : "Single Arm Dumbbell Row", setsReps: "4 Set x 12 Reps" }, { name: "Dumbbell Bicep Curl", setsReps: "3 Set x 12 Reps" }, { name: "Dumbbell Rear Delt Fly", setsReps: "3 Set x 15 Reps" }] },
-      { day: "Jumat", focus: "Dumbbell Full Body Blast", exercises: [{ name: "Dumbbell Thrusters", setsReps: "3 Set x 12 Reps" }, { name: "Dumbbell Farmer Walk", setsReps: "4 Set x 45 Detik" }] },
-      { day: "Sabtu", focus: "Cardio & Core", exercises: [{ name: "Dumbbell Woodchopper & Plank", setsReps: "3 Set x 15 Reps" }] },
-      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
-    ];
-  }
-  if (goal === "lose") {
-    return [
-      { day: "Senin", focus: "Upper Body & Cardio", exercises: [{ name: "Incline Push Up / Bench Press", setsReps: "3 Set x 12 Reps" }, { name: "Lat Pulldown Wide Grip", setsReps: "3 Set x 12 Reps" }, { name: "Treadmill Incline Walk", setsReps: "20 Menit" }] },
-      { day: "Selasa", focus: "Lower Body & Core", exercises: [{ name: hasKneePain ? "Leg Extension & Glute Bridge" : "Goblet Squat / Leg Press", setsReps: "4 Set x 12 Reps" }, { name: hasBackPain ? "Chest Supported Row" : "Romanian Deadlift", setsReps: "3 Set x 10 Reps" }, { name: "Plank Hold", setsReps: "3 Set x 45 Detik" }] },
-      { day: "Rabu", focus: "Rest & Active Recovery", exercises: [{ name: "Jalan Santai / Stretching", setsReps: "30 Menit" }] },
-      { day: "Kamis", focus: "Full Body HIIT", exercises: [{ name: "Dumbbell Thrusters", setsReps: "3 Set x 15 Reps" }, { name: "Kettlebell Swing", setsReps: "4 Set x 15 Reps" }, { name: "Jump Rope", setsReps: "5 Ronde x 1 Menit" }] },
-      { day: "Jumat", focus: "Push & Core Focus", exercises: [{ name: "Dumbbell Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Cable Tricep Pushdown", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Sabtu", focus: "Cardio & Fat Burn", exercises: [{ name: "Outdoor Jogging / Cycling", setsReps: "35 Menit" }] },
-      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
-    ];
-  } else if (goal === "gain") {
-    return [
-      { day: "Senin", focus: "Dada & Tricep (Push)", exercises: [{ name: "Barbell Bench Press", setsReps: "4 Set x 8-10 Reps" }, { name: "Incline Dumbbell Press", setsReps: "3 Set x 10 Reps" }, { name: "Tricep Cable Pushdown", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Selasa", focus: "Punggung & Bicep (Pull)", exercises: [{ name: hasBackPain ? "Chest Supported Cable Row" : "Barbell Bent Row", setsReps: "4 Set x 8-10 Reps" }, { name: "Lat Pulldown Wide Grip", setsReps: "3 Set x 10 Reps" }, { name: "Bicep Dumbbell Curl", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Istirahat & Recovery Muscle", setsReps: "Rest Day" }] },
-      { day: "Kamis", focus: "Kaki & Bahu", exercises: [{ name: hasKneePain ? "Leg Press & Leg Curl" : "Barbell Back Squat", setsReps: "4 Set x 8 Reps" }, { name: "Overhead Dumbbell Press", setsReps: "4 Set x 10 Reps" }] },
-      { day: "Jumat", focus: "Upper Body Hypertrophy", exercises: [{ name: "Dumbbell Chest Fly", setsReps: "3 Set x 12 Reps" }, { name: "Seated Cable Row", setsReps: "3 Set x 12 Reps" }, { name: "Lateral Raise", setsReps: "4 Set x 15 Reps" }] },
-      { day: "Sabtu", focus: "Core & Arms Blast", exercises: [{ name: "Hammer Curl & Dip Superset", setsReps: "3 Set x 12 Reps" }, { name: "Cable Crunch", setsReps: "4 Set x 15 Reps" }] },
-      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
-    ];
-  } else {
-    return [
-      { day: "Senin", focus: "Full Body Maintenance", exercises: [{ name: hasKneePain ? "Leg Press" : "Goblet Squat", setsReps: "3 Set x 12 Reps" }, { name: "Push Up", setsReps: "3 Set x 15 Reps" }, { name: "Dumbbell Row", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Selasa", focus: "Cardio & Core", exercises: [{ name: "Brisk Walk / Cycling", setsReps: "30 Menit" }, { name: "Plank & Bicycle Crunch", setsReps: "3 Set x 1 Menit" }] },
-      { day: "Rabu", focus: "Rest Day", exercises: [{ name: "Recovery", setsReps: "Rest Day" }] },
-      { day: "Kamis", focus: "Upper Body & Mobility", exercises: [{ name: "Dumbbell Shoulder Press", setsReps: "3 Set x 12 Reps" }, { name: "Lat Pulldown", setsReps: "3 Set x 12 Reps" }, { name: "Yoga / Stretching", setsReps: "15 Menit" }] },
-      { day: "Jumat", focus: "Lower Body Focus", exercises: [{ name: "Leg Extension & Calf Raise", setsReps: "3 Set x 12 Reps" }] },
-      { day: "Sabtu", focus: "Outdoor Activity", exercises: [{ name: "Renang / Badminton / Running", setsReps: "45 Menit" }] },
-      { day: "Minggu", focus: "Rest Day", exercises: [{ name: "Istirahat Total", setsReps: "Rest Day" }] }
-    ];
-  }
-}
 function calculateAgeFromDob(dobStr, fallbackAge = 25) {
   let calculatedAge = Math.max(10, Number(fallbackAge) || 25);
   if (dobStr && /^\d{4}-\d{2}-\d{2}$/.test(dobStr)) {
@@ -53240,14 +53192,12 @@ function calculateUserData(profile) {
   } else {
     fiberGrams = Math.round(Number(fiberGrams));
   }
-  const activeService = profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
-  const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
-  const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0 ? profile.workoutSchedule : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
   const sub = getUserSubscription(profile);
   const subscription = {
     ...sub,
     status: sub.isActive ? sub.plan === "trial" ? "trial" : "active" : "expired"
   };
+  const activeService = sub.entitlements.canNutrition && sub.entitlements.canWorkout ? "both" : sub.entitlements.canNutrition ? "nutritionist" : sub.entitlements.canWorkout ? "workout" : profile?.activeService === "both" || profile?.subscription?.activeService === "both" ? "both" : profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
   const nickname = (profile?.nickname || name.trim().split(/\s+/)[0] || "Member").trim();
   const addressing = getValidatedUserAddressing({
     name,
@@ -53303,8 +53253,8 @@ function calculateUserData(profile) {
     phone: profile?.phone || profile?.normalizedPhone || "",
     userId: profile?.userId || (profile?.phone ? `usr_${normalizePhone(profile.phone)}` : ""),
     activeService,
-    hasReceivedWelcome,
-    workoutSchedule,
+    hasReceivedWelcome: Boolean(profile?.hasReceivedWelcome),
+    workoutSchedule: profile?.workoutSchedule || null,
     subscription,
     plan: sub.plan,
     planDuration: sub.planDuration,
@@ -56264,7 +56214,7 @@ async function createExpressApp(options = {}) {
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       if (order && (order.paymentStatus === "paid" || order.planType !== "free")) {
-        const canonicalPlan = order.selectedPlan === "both" ? "premium" : order.selectedPlan === "workout_coach" ? "workout_coach" : "nutritionist";
+        const canonicalPlan = order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both" ? "premium" : order.selectedPlan === "workout_coach" || order.activeService === "coach" ? "workout_coach" : "nutritionist";
         const canonicalDuration = order.billingPeriod === "lifetime" ? "lifetime" : order.billingPeriod === "1y" ? "1_year" : order.billingPeriod === "6m" ? "6_months" : order.billingPeriod === "3m" ? "3_months" : "1_month";
         const applied = applyCommercialPlan(finalProfile, canonicalPlan, canonicalDuration);
         if (applied.success) {
@@ -56273,9 +56223,14 @@ async function createExpressApp(options = {}) {
         order.subscriptionStatus = "active";
         order.userState = "active";
         order.whatsappNumber = canonicalPhone;
+        if (canonicalPlan === "premium") {
+          finalProfile.activeService = "both";
+          finalProfile.selectedFeature = "both";
+        }
         finalProfile.subscription = {
           status: "active",
           plan: canonicalPlan,
+          activeService: canonicalPlan === "premium" ? "both" : order.activeService || "coach",
           duration: canonicalDuration,
           expiresAt: finalProfile.planExpiresAt || null
         };
@@ -56328,6 +56283,9 @@ async function createExpressApp(options = {}) {
         console.warn("[Firestore] connect-whatsapp sync note:", fErr?.message || fErr);
       }
       console.log(`[Account] Connected WhatsApp ${canonicalPhone} to user ${finalProfile.name} (Plan: ${finalProfile.plan || "free_trial"}) \u2705`);
+      const sub = getUserSubscription(finalProfile);
+      finalProfile.subscription = sub;
+      finalProfile.entitlements = sub.entitlements;
       const token = generateAuthToken({ userId: finalProfile.userId, phone: canonicalPhone });
       const botNumber = (process.env.VITE_WHATSAPP_BOT_NUMBER || process.env.WHATSAPP_BOT_NUMBER || process.env.TWILIO_PHONE_NUMBER || "14155238886").replace(/[^\d]/g, "");
       return res.json({ success: true, user: finalProfile, order, token, botNumber });
@@ -56343,16 +56301,19 @@ async function createExpressApp(options = {}) {
       return res.status(404).json({ error: "User profile not found in database" });
     }
     const calculated = calculateUserData(user);
+    const sub = getUserSubscription(user);
     const streak = getStreakCount(phone);
     const waterCups = getWaterCups(phone);
     const history = dbData.weeklyProgress[phone] || dbData.weeklyProgress[altPhone] || [];
     res.json({
       ...user,
       ...calculated,
-      user: { ...user, ...calculated },
-      profile: { ...user, ...calculated },
+      user: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
+      profile: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
       userData: calculated,
       calculated,
+      subscription: sub,
+      entitlements: sub.entitlements,
       history,
       streak,
       waterCups
@@ -58165,12 +58126,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (plan === "lifetime") {
         canonicalPlan = "lifetime";
         canonicalDuration = "lifetime";
+        activeService = "both";
+      } else if (plan === "premium" || plan === "both") {
+        canonicalPlan = "premium";
+        activeService = "both";
       } else if (plan === "nutritionist" || activeService === "nutrition") {
         canonicalPlan = "nutritionist";
-      } else if (plan === "workout_coach" || activeService === "coach") {
+        activeService = "nutrition";
+      } else if (plan === "workout_coach" || activeService === "coach" || activeService === "workout") {
         canonicalPlan = "workout_coach";
+        activeService = "coach";
       } else {
         canonicalPlan = "premium";
+        activeService = "both";
       }
       if (isSuccess && phone) {
         const normPhone = normalizePhone(phone);

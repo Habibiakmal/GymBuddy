@@ -445,7 +445,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       fatGrams: fatGram,
       dailyTargetFat: fatGram,
       fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
-      activeService: selectedPlan === "premium" ? "both" : (selectedFeature || "coach"),
+      selectedFeature: (selectedPlan === "premium" || selectedPlan === "both") ? "both" : (selectedFeature || "coach"),
+      activeService: (selectedPlan === "premium" || selectedPlan === "both") ? "both" : (selectedFeature || "coach"),
       onboardingCompleted: true
     };
 
@@ -531,7 +532,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       persona,
       commitmentLevel,
       selectedPlan,
-      selectedFeature,
+      selectedFeature: (selectedPlan === "premium" || selectedPlan === "both") ? "both" : (selectedFeature || "coach"),
       targetCalories: targetCal,
       dailyTargetCalories: targetCal,
       proteinGrams: proteinGram,
@@ -541,7 +542,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       fatGrams: fatGram,
       dailyTargetFat: fatGram,
       fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
-      activeService: selectedPlan === "premium" ? "both" : (selectedFeature || "coach"),
+      activeService: (selectedPlan === "premium" || selectedPlan === "both") ? "both" : (selectedFeature || "coach"),
       onboardingCompleted: true
     };
 
@@ -2742,7 +2743,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                   <div
                     onClick={() => {
                       setSelectedPlan("premium");
-                      setSelectedFeature(null);
+                      setSelectedFeature("both" as any);
                     }}
                     className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden ${
                       selectedPlan === "premium"

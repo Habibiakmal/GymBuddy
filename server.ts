@@ -2386,20 +2386,22 @@ export function calculateUserData(profile: any) {
     fiberGrams = Math.round(Number(fiberGrams));
   }
 
-  // Active AI persona service scope ('nutritionist' | 'workout' | 'both')
-  const activeService: "nutritionist" | "workout" | "both" =
-    profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both";
-
-  const hasReceivedWelcome = Boolean(profile?.hasReceivedWelcome);
-  const workoutSchedule = profile?.workoutSchedule && Array.isArray(profile.workoutSchedule) && profile.workoutSchedule.length > 0
-    ? profile.workoutSchedule
-    : getDefaultWorkoutSchedule(goal, profile?.equipment, profile?.injuries);
-
   const sub = getUserSubscription(profile);
   const subscription = {
     ...sub,
     status: sub.isActive ? (sub.plan === "trial" ? "trial" : "active") : "expired"
   };
+
+  // Active AI persona service scope ('nutritionist' | 'workout' | 'both')
+  // Canonical entitlements strictly dictate activeService scope
+  const activeService: "nutritionist" | "workout" | "both" =
+    (sub.entitlements.canNutrition && sub.entitlements.canWorkout)
+      ? "both"
+      : sub.entitlements.canNutrition
+      ? "nutritionist"
+      : sub.entitlements.canWorkout
+      ? "workout"
+      : (profile?.activeService === "both" || profile?.subscription?.activeService === "both" ? "both" : (profile?.activeService || profile?.subscription?.activeService || profile?.selectedFeature || "both"));
 
   const nickname = (profile?.nickname || name.trim().split(/\s+/)[0] || "Member").trim();
   const addressing = getValidatedUserAddressing({
@@ -2457,8 +2459,8 @@ export function calculateUserData(profile: any) {
     phone: profile?.phone || profile?.normalizedPhone || "",
     userId: profile?.userId || (profile?.phone ? `usr_${normalizePhone(profile.phone)}` : ""),
     activeService,
-    hasReceivedWelcome,
-    workoutSchedule,
+    hasReceivedWelcome: Boolean(profile?.hasReceivedWelcome),
+    workoutSchedule: profile?.workoutSchedule || null,
     subscription,
     plan: sub.plan,
     planDuration: sub.planDuration,
@@ -6182,7 +6184,9 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       };
 
       if (order && (order.paymentStatus === "paid" || order.planType !== "free")) {
-        const canonicalPlan = order.selectedPlan === "both" ? "premium" : (order.selectedPlan === "workout_coach" ? "workout_coach" : "nutritionist");
+        const canonicalPlan = (order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both")
+          ? "premium"
+          : (order.selectedPlan === "workout_coach" || order.activeService === "coach" ? "workout_coach" : "nutritionist");
         const canonicalDuration = order.billingPeriod === "lifetime" ? "lifetime" : 
                                  order.billingPeriod === "1y" ? "1_year" :
                                  order.billingPeriod === "6m" ? "6_months" :
@@ -6194,9 +6198,14 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         order.subscriptionStatus = "active";
         order.userState = "active";
         order.whatsappNumber = canonicalPhone;
+        if (canonicalPlan === "premium") {
+          finalProfile.activeService = "both";
+          finalProfile.selectedFeature = "both";
+        }
         finalProfile.subscription = {
           status: "active",
           plan: canonicalPlan,
+          activeService: canonicalPlan === "premium" ? "both" : (order.activeService || "coach"),
           duration: canonicalDuration,
           expiresAt: finalProfile.planExpiresAt || null
         };
@@ -6252,6 +6261,9 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       }
 
       console.log(`[Account] Connected WhatsApp ${canonicalPhone} to user ${finalProfile.name} (Plan: ${finalProfile.plan || "free_trial"}) ✅`);
+      const sub = getUserSubscription(finalProfile);
+      finalProfile.subscription = sub;
+      finalProfile.entitlements = sub.entitlements;
       const token = generateAuthToken({ userId: finalProfile.userId, phone: canonicalPhone });
       const botNumber = (
         process.env.VITE_WHATSAPP_BOT_NUMBER ||
@@ -6274,16 +6286,19 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       return res.status(404).json({ error: "User profile not found in database" });
     }
     const calculated = calculateUserData(user);
+    const sub = getUserSubscription(user);
     const streak = getStreakCount(phone);
     const waterCups = getWaterCups(phone);
     const history = dbData.weeklyProgress[phone] || dbData.weeklyProgress[altPhone] || [];
     res.json({
       ...user,
       ...calculated,
-      user: { ...user, ...calculated },
-      profile: { ...user, ...calculated },
+      user: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
+      profile: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
       userData: calculated,
       calculated,
+      subscription: sub,
+      entitlements: sub.entitlements,
       history,
       streak,
       waterCups
@@ -8398,12 +8413,19 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (plan === "lifetime") {
         canonicalPlan = "lifetime";
         canonicalDuration = "lifetime";
+        activeService = "both";
+      } else if (plan === "premium" || plan === "both") {
+        canonicalPlan = "premium";
+        activeService = "both";
       } else if (plan === "nutritionist" || activeService === "nutrition") {
         canonicalPlan = "nutritionist";
-      } else if (plan === "workout_coach" || activeService === "coach") {
+        activeService = "nutrition";
+      } else if (plan === "workout_coach" || activeService === "coach" || activeService === "workout") {
         canonicalPlan = "workout_coach";
+        activeService = "coach";
       } else {
         canonicalPlan = "premium";
+        activeService = "both";
       }
 
       if (isSuccess && phone) {

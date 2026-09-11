@@ -221,6 +221,7 @@ export default function PricingPage({
             phone: normPhone,
             plan: selectedDuration === "lifetime" ? "lifetime" : plan,
             activeService: service,
+            selectedFeature: service,
             amount: amount,
             duration: selectedDuration,
             customerName: currentUser?.name || "Member GymBuddy"
