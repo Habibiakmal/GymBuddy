@@ -120,9 +120,19 @@ import {
   classifyUserIntent,
   sanitizeTextForIntent,
   parseMealCorrectionDetails,
+  isGreeting,
   type IntentClassificationResult,
   type UserIntentType
 } from "./services/intentClassifier";
+import {
+  getActiveTask,
+  setActiveTask,
+  clearActiveTask,
+  clearAllActiveTasks,
+  isTaskInterruptingIntent,
+  logConversationTurn,
+  type ActiveConversationTask
+} from "./services/conversationStateManager";
 
 export {
   getUserPlanCapabilities,
@@ -133,6 +143,11 @@ export {
   formatDashboardMacro,
   formatDashboardInteger,
   formatDashboardPercent,
+  getActiveTask,
+  setActiveTask,
+  clearActiveTask,
+  clearAllActiveTasks,
+  isGreeting,
   applyTargetedMealCorrection,
   extractMealComponents,
   splitCompoundFoodItems,
@@ -3136,8 +3151,13 @@ export function updateExistingMealLog(rawPhone: string, updatedMeal: MealLog, ta
 export function detectMealCorrectionIntent(userText: string, hasRecentMeal: boolean): boolean {
   if (!userText || typeof userText !== "string") return false;
 
-  // PRIORITY RULE: Delete intent always takes precedence over correction
+  // PRIORITY RULE 1: Delete intent always takes precedence over correction
   if (detectDeleteMealIntent(userText)) {
+    return false;
+  }
+
+  // PRIORITY RULE 2: Standalone greetings must NEVER trigger meal correction
+  if (isGreeting(userText)) {
     return false;
   }
 
@@ -3207,6 +3227,16 @@ export function applyDeterministicCorrection(lastMeal: MealLog, userText: string
     ? user
     : { name: String(user || "Member"), nickname: String(user || "Member"), persona: isMia ? "mia" : "max" };
   return applyTargetedMealCorrection(lastMeal, userText, userDataObj);
+}
+
+export function generateGreetingResponse(userData: any): string {
+  const addressing = getValidatedUserAddressing(userData);
+  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
+  if (isMia) {
+    return `Halo ${addressing.validatedAddress}! 👋 Aku Coach Mia. Ada yang mau kamu tanyakan atau catat hari ini? ✨`;
+  } else {
+    return `Halo ${addressing.validatedAddress}! 💪 Gue Coach Max. Ada yang mau lo tanyakan atau catat hari ini? ⚡`;
+  }
 }
 
 // Master Process Meal Correction Handler
@@ -8677,6 +8707,17 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           // Water Intake Intent Match (e.g. "minum 2 gelas", "air 500ml", "water 3 cups")
           const waterMatch = matchPureWaterLog(userText);
 
+          const isGreetingIntent = classifiedIntent.intent === "GREETING";
+          const activeTask = getActiveTask(from);
+          const previousState = activeTask ? `${activeTask.type}:${activeTask.pendingAction}` : "NONE";
+          let stateAction: "CLEAR_ACTIVE_TASK" | "CONTINUE_TASK" | "START_TASK" | "NO_CHANGE" = "NO_CHANGE";
+          let dbAction: "NONE" | "UPDATE_MEAL" | "ADD_MEAL" | "ADD_WORKOUT" | "UPDATE_WEIGHT" = "NONE";
+
+          if (activeTask && isTaskInterruptingIntent(classifiedIntent.intent)) {
+            clearActiveTask(from, `User expressed ${classifiedIntent.intent}`);
+            stateAction = "CLEAR_ACTIVE_TASK";
+          }
+
           let responseMessages: string[] = [];
 
           if (isWelcomeMessage) {
@@ -8702,6 +8743,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               const currentCalculated = calculateUserData(userProfile);
               responseMessages = generateWelcomeMessages(currentCalculated);
             }
+          } else if (isGreetingIntent) {
+            responseMessages = [generateGreetingResponse(userData)];
+            stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
+            dbAction = "NONE";
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
@@ -8832,7 +8877,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
               } else {
                 responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
               }
-            } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
+            } else if (!imagePart && !isGreetingIntent && (
+              detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from))) ||
+              (activeTask?.type === "MEAL_CORRECTION" && !isTaskInterruptingIntent(classifiedIntent.intent))
+            )) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
               } else {
@@ -8847,6 +8895,20 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
                     responseMessages = [correctionResult.card];
+                    if (correctionResult.validatedParsed?.isAmbiguous) {
+                      setActiveTask(from, {
+                        type: "MEAL_CORRECTION",
+                        targetId: recentMeal.id,
+                        pendingAction: "WAITING_FOR_CORRECTION",
+                        targetItem: correctionResult.validatedParsed?.correctedComponent || ""
+                      });
+                      stateAction = "START_TASK";
+                      dbAction = "NONE";
+                    } else {
+                      clearActiveTask(from, "Correction completed");
+                      stateAction = previousState !== "NONE" ? "CONTINUE_TASK" : "NO_CHANGE";
+                      dbAction = "UPDATE_MEAL";
+                    }
                   } else {
                     responseMessages = [
                       isMia
@@ -9134,6 +9196,16 @@ Keluarkan output JSON valid:
             }
           }
         }
+
+        logConversationTurn({
+          phone: from,
+          userMessage: userText,
+          previousState,
+          currentIntent: classifiedIntent.intent,
+          stateAction,
+          databaseAction: dbAction,
+          details: responseMessages[0]?.substring(0, 80)
+        });
       }
       res.sendStatus(200);
     } else {
@@ -9183,9 +9255,11 @@ function escapeXml(unsafe: string): string {
       // Strict Intent Classification Gate
       const classifiedIntent = classifyUserIntent(userText, {
         hasImage: Boolean(NumMedia && parseInt(NumMedia) > 0),
-        userProfile
+        userProfile,
+        hasRecentMeal: Boolean(getLastFoodMeal(normFrom))
       });
       const isOnboardingHandshake = classifiedIntent.intent === "ONBOARDING_GREETING";
+      const isGreetingIntent = classifiedIntent.intent === "GREETING";
 
       const isWelcomeMessage = isOnboardingHandshake ||
                                (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
@@ -9193,7 +9267,8 @@ function escapeXml(unsafe: string): string {
 
       // ─── 1. IMMEDIATELY SEND SHORT COACH ACKNOWLEDGMENT MESSAGE ───
       // Max: "Oke, aku cek dulu..." | Mia: "Sebentar ya, aku cek dulu..."
-      if (!isWelcomeMessage) {
+      // Do NOT send acknowledgment message for greetings or onboarding handshakes
+      if (!isWelcomeMessage && !isGreetingIntent) {
         const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
         const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
         try {
@@ -9372,7 +9447,20 @@ function escapeXml(unsafe: string): string {
       const isDeleteMealMessage = !imagePart && Boolean(detectDeleteMealIntent(userText));
 
       const recentFoodMeal = getLastFoodMeal(normFrom);
-      const isMealCorrection = !imagePart && detectMealCorrectionIntent(userText, Boolean(recentFoodMeal));
+      const activeTask = getActiveTask(normFrom);
+      const previousState = activeTask ? `${activeTask.type}:${activeTask.pendingAction}` : "NONE";
+      let stateAction: "CLEAR_ACTIVE_TASK" | "CONTINUE_TASK" | "START_TASK" | "NO_CHANGE" = "NO_CHANGE";
+      let dbAction: "NONE" | "UPDATE_MEAL" | "ADD_MEAL" | "ADD_WORKOUT" | "UPDATE_WEIGHT" = "NONE";
+
+      if (activeTask && isTaskInterruptingIntent(classifiedIntent.intent)) {
+        clearActiveTask(normFrom, `User expressed ${classifiedIntent.intent}`);
+        stateAction = "CLEAR_ACTIVE_TASK";
+      }
+
+      const isMealCorrection = !imagePart && !isGreetingIntent && (
+        detectMealCorrectionIntent(userText, Boolean(recentFoodMeal)) ||
+        (activeTask?.type === "MEAL_CORRECTION" && !isTaskInterruptingIntent(classifiedIntent.intent))
+      );
 
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | undefined = undefined;
@@ -9529,6 +9617,10 @@ function escapeXml(unsafe: string): string {
             responseMessages = generateWelcomeMessages(currentCalculated);
           }
         }
+      } else if (isGreetingIntent) {
+        responseMessages = [generateGreetingResponse(userData)];
+        stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
+        dbAction = "NONE";
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
@@ -9623,6 +9715,20 @@ function escapeXml(unsafe: string): string {
             const correctionResult = await processMealCorrection(normFrom, userText, userData);
             if (correctionResult) {
               responseMessages = [correctionResult.card];
+              if (correctionResult.validatedParsed?.isAmbiguous) {
+                setActiveTask(normFrom, {
+                  type: "MEAL_CORRECTION",
+                  targetId: recentFoodMeal.id,
+                  pendingAction: "WAITING_FOR_CORRECTION",
+                  targetItem: correctionResult.validatedParsed?.correctedComponent || ""
+                });
+                stateAction = "START_TASK";
+                dbAction = "NONE";
+              } else {
+                clearActiveTask(normFrom, "Correction completed");
+                stateAction = previousState !== "NONE" ? "CONTINUE_TASK" : "NO_CHANGE";
+                dbAction = "UPDATE_MEAL";
+              }
             } else {
               const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
               responseMessages = [
@@ -9958,6 +10064,16 @@ Keluarkan output JSON valid:
         }
       }
     }
+
+    logConversationTurn({
+      phone: normFrom,
+      userMessage: userText,
+      previousState,
+      currentIntent: classifiedIntent.intent,
+      stateAction,
+      databaseAction: dbAction,
+      details: responseMessages[0]?.substring(0, 80)
+    });
 
       // ─── 2. SEND FINAL COACH RESPONSE IN ORDER (SAFE MULTI-MESSAGE DELIVERY) ───
       const messagesToSend = (responseMessages && responseMessages.length > 0)

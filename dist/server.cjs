@@ -43,6 +43,8 @@ __export(server_exports, {
   classifyUserInput: () => classifyUserInput,
   classifyUserIntent: () => classifyUserIntent,
   classifyWorkoutIntent: () => classifyWorkoutIntent,
+  clearActiveTask: () => clearActiveTask,
+  clearAllActiveTasks: () => clearAllActiveTasks,
   clearSentWhatsAppMessages: () => clearSentWhatsAppMessages,
   createExpressApp: () => createExpressApp,
   dbData: () => dbData,
@@ -57,6 +59,7 @@ __export(server_exports, {
   formatDashboardPercent: () => formatDashboardPercent,
   formatNutritionCard: () => formatNutritionCard,
   formatSetsReps: () => formatSetsReps,
+  generateGreetingResponse: () => generateGreetingResponse,
   generateMealRecommendations: () => generateMealRecommendations,
   generateMealTimingAdvice: () => generateMealTimingAdvice,
   generateOnboardingHandshakeResponse: () => generateOnboardingHandshakeResponse,
@@ -66,6 +69,7 @@ __export(server_exports, {
   generateWeeklyMealSchedule: () => generateWeeklyMealSchedule,
   generateWeeklyWorkoutSchedule: () => generateWeeklyWorkoutSchedule,
   generateWorkoutRecommendations: () => generateWorkoutRecommendations,
+  getActiveTask: () => getActiveTask,
   getDailyTotals: () => getDailyTotals,
   getLastFoodMeal: () => getLastFoodMeal,
   getLastSentWhatsAppMessage: () => getLastSentWhatsAppMessage,
@@ -87,6 +91,7 @@ __export(server_exports, {
   handleWhatsAppLoginConfirmation: () => handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging: () => handleWorkoutProgressLogging,
   isExistingUserPhone: () => isExistingUserPhone,
+  isGreeting: () => isGreeting,
   isMealTimingAdviceQuery: () => isMealTimingAdviceQuery,
   isSmartSnack: () => isSmartSnack,
   isValidIndonesianMobile: () => isValidIndonesianMobile,
@@ -105,6 +110,7 @@ __export(server_exports, {
   saveUserProfile: () => saveUserProfile,
   sendWhatsAppLoginMessage: () => sendWhatsAppLoginMessage,
   sentWhatsAppMessages: () => sentWhatsAppMessages,
+  setActiveTask: () => setActiveTask,
   splitCompoundFoodItems: () => splitCompoundFoodItems,
   splitWhatsAppMessage: () => splitWhatsAppMessage,
   startServer: () => startServer,
@@ -45729,6 +45735,95 @@ function calculateDualConfidence(identity, dbMatch) {
 function sanitizeTextForIntent(text) {
   return text.replace(/\bgym\s*buddy\b/gi, "").replace(/\bgymbuddy\b/gi, "").trim();
 }
+var NON_FOOD_TOKENS = /* @__PURE__ */ new Set([
+  "halo",
+  "hai",
+  "hi",
+  "hello",
+  "hei",
+  "hey",
+  "pagi",
+  "siang",
+  "sore",
+  "malam",
+  "mia",
+  "max",
+  "coach",
+  "gymbuddy",
+  "bot",
+  "tes",
+  "test",
+  "ping",
+  "oy",
+  "woi",
+  "bro",
+  "sis",
+  "ok",
+  "oke",
+  "sip",
+  "siap",
+  "iya",
+  "ya",
+  "tidak",
+  "gak",
+  "nggak",
+  "makasih",
+  "terima kasih",
+  "thanks",
+  "thx",
+  "apa",
+  "siapa",
+  "gimana",
+  "bagaimana",
+  "kenapa",
+  "mengapa",
+  "kapan",
+  "dimana",
+  "bisa",
+  "tolong",
+  "bantu",
+  "mau",
+  "tanya",
+  "dong",
+  "saja",
+  "aja",
+  "doang",
+  "latihan",
+  "olahraga",
+  "workout",
+  "gym",
+  "lari",
+  "jalan",
+  "renang"
+]);
+function isGreeting(text) {
+  if (!text || typeof text !== "string") return false;
+  const clean2 = text.trim().toLowerCase().replace(/[?!.,;:~]/g, "");
+  const exactGreetings = /* @__PURE__ */ new Set([
+    "halo",
+    "hai",
+    "hi",
+    "hello",
+    "hei",
+    "hey",
+    "pagi",
+    "siang",
+    "sore",
+    "malam",
+    "mia",
+    "max",
+    "tes",
+    "test",
+    "ping",
+    "assalamualaikum",
+    "oy",
+    "woi"
+  ]);
+  if (exactGreetings.has(clean2)) return true;
+  return Boolean(
+    clean2.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) || clean2.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) || clean2.match(/^(?:halo|hai|hello|hi)\s+semua$/i) || clean2 === "assalamu'alaikum" || clean2 === "assalamualaikum wr wb" || clean2 === "assalamu alaikum"
+  );
+}
 function cleanFoodTerm(term) {
   if (!term) return "";
   let res = term.trim().replace(/^[,\.\s:;"']+|[,\.\s:;"']+$/g, "");
@@ -45743,8 +45838,8 @@ function parseMealCorrectionDetails(rawText, lastMeal) {
   if (!rawText || typeof rawText !== "string") return null;
   const cleanRaw = rawText.trim();
   const lower = cleanRaw.toLowerCase();
-  const stripped = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "").trim();
-  if (!stripped || stripped === "meal" || stripped === "meal tadi" || stripped === "meal tadi." || stripped === "makanan" || stripped === "makanan tadi" || stripped === "porsi" || stripped === "porsi tadi" || stripped === "yang tadi salah" || stripped === "yang tadi salah." || stripped === "tadi salah" || stripped === "salah semua" || stripped === "salah" || stripped === "menu tadi" || lower === "koreksi meal tadi." || lower === "koreksi meal tadi" || lower === "koreksi meal" || lower === "yang tadi salah." || lower === "yang tadi salah") {
+  const stripped = lower.replace(/^(?:koreksi(?:\s+lagi|\s+dong)?|ralat(?:\s+lagi|\s+dong)?|revisi(?:\s+lagi)?|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "").trim();
+  if (!stripped || stripped === "meal" || stripped === "meal tadi" || stripped === "meal tadi." || stripped === "makanan" || stripped === "makanan tadi" || stripped === "porsi" || stripped === "porsi tadi" || stripped === "yang tadi salah" || stripped === "yang tadi salah." || stripped === "tadi salah" || stripped === "salah semua" || stripped === "salah" || stripped === "menu tadi" || stripped === "lagi" || lower === "koreksi lagi" || lower === "koreksi lagi." || lower === "koreksi meal tadi." || lower === "koreksi meal tadi" || lower === "koreksi meal" || lower === "yang tadi salah." || lower === "yang tadi salah") {
     return {
       subtype: "MEAL_CORRECTION_GENERAL",
       action: "general_clarification",
@@ -45814,7 +45909,7 @@ function parseMealCorrectionDetails(rawText, lastMeal) {
       };
     }
   }
-  const p5 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  const p5 = stripped.match(/^(?:yang\s+tadi\s+|tadi\s+)?([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya|ternyata)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
   if (p5) {
     const target = cleanFoodTerm(p5[1]);
     const replacement = cleanFoodTerm(p5[2]);
@@ -45890,14 +45985,25 @@ function parseMealCorrectionDetails(rawText, lastMeal) {
   if (!/\b(?:cuma|hanya|setengah|separuh|seperempat|tidak|nggak|gak|batal|makan|gram|g|gr|potong|buah|butir|dan|sama|kcal|kalori)\b/i.test(stripped)) {
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length <= 2) {
-      const target = cleanFoodTerm(stripped);
-      if (target) {
-        return {
-          subtype: "MEAL_CORRECTION_GENERAL",
-          action: "general_clarification",
-          targetItem: target,
-          isAmbiguous: true
-        };
+      const hasNonFoodToken = words.some((w) => NON_FOOD_TOKENS.has(w.toLowerCase().replace(/[?!.,;:~]/g, "")));
+      if (!hasNonFoodToken) {
+        const target = cleanFoodTerm(stripped);
+        const hasExplicitCorrectionKeyword = /^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i.test(lower);
+        let isConfirmedFood = hasExplicitCorrectionKeyword;
+        if (!isConfirmedFood && lastMeal) {
+          const comps = Array.isArray(lastMeal.components) ? lastMeal.components : [];
+          const mealFoodName = String(lastMeal.foodName || "").toLowerCase();
+          const targetLow = target.toLowerCase();
+          isConfirmedFood = comps.some((c) => c.name.toLowerCase().includes(targetLow) || targetLow.includes(c.name.toLowerCase())) || mealFoodName.includes(targetLow);
+        }
+        if (target && isConfirmedFood) {
+          return {
+            subtype: "MEAL_CORRECTION_GENERAL",
+            action: "general_clarification",
+            targetItem: target,
+            isAmbiguous: true
+          };
+        }
       }
     }
   }
@@ -45919,6 +46025,13 @@ function classifyUserIntent(rawText, context = {}) {
       intent: "ONBOARDING_GREETING",
       confidence: "high",
       reason: "User is introducing themselves after finishing onboarding"
+    };
+  }
+  if (isGreeting(text)) {
+    return {
+      intent: "GREETING",
+      confidence: "high",
+      reason: "User sent a conversational greeting or coach check"
     };
   }
   const weightRegex = /(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|tadi\s*nimbang|nimbang|weight)\s*(?:hari\s*ini|saat\s*ini|sekarang|skrg|terbaru|terkini|adalah|menjadi|jadi|di|=|:|udah|sudah)?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|kilo|kilogram)?\b/i;
@@ -46051,20 +46164,20 @@ function classifyUserIntent(rawText, context = {}) {
       }
     };
   }
+  const isNutritionQuestion = Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan|serat)\b/i) && lower.match(/\b(?:apa|berapa|bagaimana|gimana|berapaan|bisa|kah|\?)\b/i)) || Boolean(lower.match(/^(?:berapa\s+(?:kalori|protein|karbo|lemak|gula|natrium)|berapaan\s+(?:kalori|protein))\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
+  if (isNutritionQuestion) {
+    return {
+      intent: "NUTRITION_QUESTION",
+      confidence: "high",
+      reason: "User is asking for nutritional advice or food recommendations"
+    };
+  }
   const hasMealSignal = context.hasImage || Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) || Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
   if (hasMealSignal) {
     return {
       intent: "MEAL_LOG",
       confidence: context.hasImage ? "high" : "medium",
       reason: "User reported food intake or provided food photo"
-    };
-  }
-  const isNutritionQuestion = Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan)\s+(?:apa|berapa|bagaimana|gimana)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
-  if (isNutritionQuestion) {
-    return {
-      intent: "NUTRITION_QUESTION",
-      confidence: "high",
-      reason: "User is asking for nutritional advice or food recommendations"
     };
   }
   const isGeneralGreeting = Boolean(
@@ -50066,6 +50179,76 @@ function isValidIndonesianMobile(phone) {
   return digitsAfterPrefix.length >= 7 && digitsAfterPrefix.length <= 13;
 }
 
+// services/conversationStateManager.ts
+var activeTasks = /* @__PURE__ */ new Map();
+var DEFAULT_TASK_TTL_MS = 10 * 60 * 1e3;
+function getActiveTask(phone) {
+  if (!phone) return null;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const task = activeTasks.get(cleanPhone);
+  if (!task) return null;
+  if (Date.now() > task.expiresAt) {
+    activeTasks.delete(cleanPhone);
+    return null;
+  }
+  return task;
+}
+function setActiveTask(phone, task, ttlMs = DEFAULT_TASK_TTL_MS) {
+  if (!phone) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const now = Date.now();
+  activeTasks.set(cleanPhone, {
+    ...task,
+    createdAt: now,
+    expiresAt: now + ttlMs
+  });
+}
+function clearActiveTask(phone, reason) {
+  if (!phone) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  if (activeTasks.has(cleanPhone)) {
+    if (reason) {
+      console.log(`[ConversationState] Cleared active task for ${cleanPhone}. Reason: ${reason}`);
+    }
+    activeTasks.delete(cleanPhone);
+  }
+}
+function clearAllActiveTasks() {
+  activeTasks.clear();
+}
+function isTaskInterruptingIntent(intent) {
+  switch (intent) {
+    case "GREETING":
+    case "ONBOARDING_GREETING":
+    case "GENERAL_CONVERSATION":
+    case "NUTRITION_QUESTION":
+    case "WORKOUT_QUESTION":
+    case "WORKOUT_LOG":
+    case "WEIGHT_LOG":
+    case "MEAL_LOG":
+    case "PROGRAM_QUESTION":
+      return true;
+    default:
+      return false;
+  }
+}
+function logConversationTurn(log) {
+  const border = "\u2500".repeat(60);
+  console.log(`
+[CONVERSATION TURN] ${border}`);
+  console.log(`PHONE:           ${log.phone}`);
+  console.log(`USER MESSAGE:    "${log.userMessage}"`);
+  console.log(`PREVIOUS STATE:  ${log.previousState || "NONE"}`);
+  console.log(`CURRENT INTENT:  ${log.currentIntent}`);
+  console.log(`STATE ACTION:    ${log.stateAction}`);
+  console.log(`DATABASE ACTION: ${log.databaseAction}`);
+  if (log.details) {
+    console.log(`DETAILS:         ${log.details}`);
+  }
+  console.log(`[END TURN] ${border}
+`);
+}
+
 // services/cardGenerator.ts
 var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
@@ -53735,6 +53918,9 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
   if (detectDeleteMealIntent(userText)) {
     return false;
   }
+  if (isGreeting(userText)) {
+    return false;
+  }
   const details = parseMealCorrectionDetails(userText);
   if (details) {
     if (hasRecentMeal) return true;
@@ -53762,6 +53948,15 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
 function applyDeterministicCorrection(lastMeal, userText, isMia, user = "Member") {
   const userDataObj = typeof user === "object" && user !== null ? user : { name: String(user || "Member"), nickname: String(user || "Member"), persona: isMia ? "mia" : "max" };
   return applyTargetedMealCorrection(lastMeal, userText, userDataObj);
+}
+function generateGreetingResponse(userData) {
+  const addressing = getValidatedUserAddressing(userData);
+  const isMia = (userData?.persona || "mia").toLowerCase().includes("mia");
+  if (isMia) {
+    return `Halo ${addressing.validatedAddress}! \u{1F44B} Aku Coach Mia. Ada yang mau kamu tanyakan atau catat hari ini? \u2728`;
+  } else {
+    return `Halo ${addressing.validatedAddress}! \u{1F4AA} Gue Coach Max. Ada yang mau lo tanyakan atau catat hari ini? \u26A1`;
+  }
 }
 async function processMealCorrection(rawPhone, userText, userData, targetDateStr) {
   const phone = normalizePhone(rawPhone);
@@ -58157,6 +58352,15 @@ https://gymbuddygroup.com`,
           const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
           const weightMatch = matchPureWeightLog(userText);
           const waterMatch = matchPureWaterLog(userText);
+          const isGreetingIntent = classifiedIntent.intent === "GREETING";
+          const activeTask = getActiveTask(from);
+          const previousState = activeTask ? `${activeTask.type}:${activeTask.pendingAction}` : "NONE";
+          let stateAction = "NO_CHANGE";
+          let dbAction = "NONE";
+          if (activeTask && isTaskInterruptingIntent(classifiedIntent.intent)) {
+            clearActiveTask(from, `User expressed ${classifiedIntent.intent}`);
+            stateAction = "CLEAR_ACTIVE_TASK";
+          }
           let responseMessages = [];
           if (isWelcomeMessage) {
             if (isOnboardingHandshake) {
@@ -58185,6 +58389,10 @@ https://gymbuddygroup.com`,
               const currentCalculated = calculateUserData(userProfile);
               responseMessages = generateWelcomeMessages(currentCalculated);
             }
+          } else if (isGreetingIntent) {
+            responseMessages = [generateGreetingResponse(userData)];
+            stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
+            dbAction = "NONE";
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
             if (!planValidation.canProceed) {
@@ -58314,7 +58522,7 @@ https://gymbuddygroup.com`,
               } else {
                 responseMessages = [generateDailySummaryCard(userData, totals, parsedDate.label)];
               }
-            } else if (!imagePart && detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from)))) {
+            } else if (!imagePart && !isGreetingIntent && (detectMealCorrectionIntent(userText, Boolean(getLastFoodMeal(from))) || activeTask?.type === "MEAL_CORRECTION" && !isTaskInterruptingIntent(classifiedIntent.intent))) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("koreksi porsi makanan", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
               } else {
@@ -58329,6 +58537,20 @@ https://gymbuddygroup.com`,
                   const correctionResult = await processMealCorrection(from, userText, userData);
                   if (correctionResult) {
                     responseMessages = [correctionResult.card];
+                    if (correctionResult.validatedParsed?.isAmbiguous) {
+                      setActiveTask(from, {
+                        type: "MEAL_CORRECTION",
+                        targetId: recentMeal.id,
+                        pendingAction: "WAITING_FOR_CORRECTION",
+                        targetItem: correctionResult.validatedParsed?.correctedComponent || ""
+                      });
+                      stateAction = "START_TASK";
+                      dbAction = "NONE";
+                    } else {
+                      clearActiveTask(from, "Correction completed");
+                      stateAction = previousState !== "NONE" ? "CONTINUE_TASK" : "NO_CHANGE";
+                      dbAction = "UPDATE_MEAL";
+                    }
                   } else {
                     responseMessages = [
                       isMia ? `Maaf, aku belum berhasil memproses koreksi ini ya \u2728 Boleh coba sebutkan lagi porsi yang ingin diubah?` : `Sorry ${getValidatedUserAddressing(userData).validatedAddress}, koreksi belum berhasil diproses. Boleh sebutkan lagi bagian mana yang mau diubah? \u{1F4AA}`
@@ -58594,6 +58816,15 @@ Keluarkan output JSON valid:
               }
             }
           }
+          logConversationTurn({
+            phone: from,
+            userMessage: userText,
+            previousState,
+            currentIntent: classifiedIntent.intent,
+            stateAction,
+            databaseAction: dbAction,
+            details: responseMessages[0]?.substring(0, 80)
+          });
         }
         res.sendStatus(200);
       } else {
@@ -58631,11 +58862,13 @@ Keluarkan output JSON valid:
       }
       const classifiedIntent = classifyUserIntent(userText, {
         hasImage: Boolean(NumMedia && parseInt(NumMedia) > 0),
-        userProfile
+        userProfile,
+        hasRecentMeal: Boolean(getLastFoodMeal(normFrom))
       });
       const isOnboardingHandshake = classifiedIntent.intent === "ONBOARDING_GREETING";
+      const isGreetingIntent = classifiedIntent.intent === "GREETING";
       const isWelcomeMessage = isOnboardingHandshake || lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan")) || lowerText.includes("nama saya") && lowerText.includes("target saya");
-      if (!isWelcomeMessage) {
+      if (!isWelcomeMessage && !isGreetingIntent) {
         const isMia = userProfile?.persona === "mia" || userProfile?.persona === "nikita";
         const ackText = isMia ? "Sebentar ya, aku cek dulu..." : "Oke, aku cek dulu...";
         try {
@@ -58722,7 +58955,15 @@ Keluarkan output JSON valid:
       const isResetMessage = lowerText.includes("reset akun") || lowerText.includes("hapus akun") || lowerText.includes("reset data") || lowerText.includes("hapus data saya");
       const isDeleteMealMessage = !imagePart && Boolean(detectDeleteMealIntent(userText));
       const recentFoodMeal = getLastFoodMeal(normFrom);
-      const isMealCorrection = !imagePart && detectMealCorrectionIntent(userText, Boolean(recentFoodMeal));
+      const activeTask = getActiveTask(normFrom);
+      const previousState = activeTask ? `${activeTask.type}:${activeTask.pendingAction}` : "NONE";
+      let stateAction = "NO_CHANGE";
+      let dbAction = "NONE";
+      if (activeTask && isTaskInterruptingIntent(classifiedIntent.intent)) {
+        clearActiveTask(normFrom, `User expressed ${classifiedIntent.intent}`);
+        stateAction = "CLEAR_ACTIVE_TASK";
+      }
+      const isMealCorrection = !imagePart && !isGreetingIntent && (detectMealCorrectionIntent(userText, Boolean(recentFoodMeal)) || activeTask?.type === "MEAL_CORRECTION" && !isTaskInterruptingIntent(classifiedIntent.intent));
       let responseMessages = [];
       let mediaUrlToSend = void 0;
       const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
@@ -58871,6 +59112,10 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
             responseMessages = generateWelcomeMessages(currentCalculated);
           }
         }
+      } else if (isGreetingIntent) {
+        responseMessages = [generateGreetingResponse(userData)];
+        stateAction = previousState !== "NONE" ? "CLEAR_ACTIVE_TASK" : "NO_CHANGE";
+        dbAction = "NONE";
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
         if (!planValidation.canProceed) {
@@ -58965,6 +59210,20 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
             const correctionResult = await processMealCorrection(normFrom, userText, userData);
             if (correctionResult) {
               responseMessages = [correctionResult.card];
+              if (correctionResult.validatedParsed?.isAmbiguous) {
+                setActiveTask(normFrom, {
+                  type: "MEAL_CORRECTION",
+                  targetId: recentFoodMeal.id,
+                  pendingAction: "WAITING_FOR_CORRECTION",
+                  targetItem: correctionResult.validatedParsed?.correctedComponent || ""
+                });
+                stateAction = "START_TASK";
+                dbAction = "NONE";
+              } else {
+                clearActiveTask(normFrom, "Correction completed");
+                stateAction = previousState !== "NONE" ? "CONTINUE_TASK" : "NO_CHANGE";
+                dbAction = "UPDATE_MEAL";
+              }
             } else {
               const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
               responseMessages = [
@@ -59265,6 +59524,15 @@ Keluarkan output JSON valid:
           }
         }
       }
+      logConversationTurn({
+        phone: normFrom,
+        userMessage: userText,
+        previousState,
+        currentIntent: classifiedIntent.intent,
+        stateAction,
+        databaseAction: dbAction,
+        details: responseMessages[0]?.substring(0, 80)
+      });
       const messagesToSend = responseMessages && responseMessages.length > 0 ? responseMessages : ["Sip, data kamu sudah tercatat!"];
       for (let mIdx = 0; mIdx < messagesToSend.length; mIdx++) {
         const msg = messagesToSend[mIdx];
@@ -59658,6 +59926,8 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   classifyUserInput,
   classifyUserIntent,
   classifyWorkoutIntent,
+  clearActiveTask,
+  clearAllActiveTasks,
   clearSentWhatsAppMessages,
   createExpressApp,
   dbData,
@@ -59672,6 +59942,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   formatDashboardPercent,
   formatNutritionCard,
   formatSetsReps,
+  generateGreetingResponse,
   generateMealRecommendations,
   generateMealTimingAdvice,
   generateOnboardingHandshakeResponse,
@@ -59681,6 +59952,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   generateWeeklyMealSchedule,
   generateWeeklyWorkoutSchedule,
   generateWorkoutRecommendations,
+  getActiveTask,
   getDailyTotals,
   getLastFoodMeal,
   getLastSentWhatsAppMessage,
@@ -59702,6 +59974,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging,
   isExistingUserPhone,
+  isGreeting,
   isMealTimingAdviceQuery,
   isSmartSnack,
   isValidIndonesianMobile,
@@ -59720,6 +59993,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   saveUserProfile,
   sendWhatsAppLoginMessage,
   sentWhatsAppMessages,
+  setActiveTask,
   splitCompoundFoodItems,
   splitWhatsAppMessage,
   startServer,

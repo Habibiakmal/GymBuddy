@@ -310,12 +310,12 @@ async function runTests() {
   // TEST 17: Weekly Plans (7-Day Meal & Workout Schedules)
   console.log("\n--- TEST 17: 7-Day Personalized Meal & Workout Schedules ---");
   const weeklyMeal = generatePersonalizedWeeklyMealPlan(multiProfile);
-  assert(weeklyMeal.includes("Senin") && weeklyMeal.includes("Minggu"), "Weekly meal plan contains all 7 days");
+  assert(weeklyMeal.toLowerCase().includes("senin") && weeklyMeal.toLowerCase().includes("minggu"), "Weekly meal plan contains all 7 days");
   assert(!weeklyMeal.toLowerCase().includes("kacang"), "Weekly meal plan strictly avoids peanut allergen for multiProfile");
   assert(!weeklyMeal.includes("━━━━━━━━━━━━━━"), "Weekly meal plan has no WhatsApp splitting characters");
 
   const weeklyWorkout = generatePersonalizedWeeklyWorkoutPlan(multiProfile);
-  assert(weeklyWorkout.includes("Senin") && weeklyWorkout.includes("Minggu"), "Weekly workout plan contains 7-day schedule");
+  assert(weeklyWorkout.toLowerCase().includes("senin") && weeklyWorkout.toLowerCase().includes("minggu"), "Weekly workout plan contains 7-day schedule");
   assert(!weeklyWorkout.toLowerCase().includes("jump squat"), "Weekly workout plan excludes jump squats for knee injury");
   assert(!weeklyWorkout.toLowerCase().includes("jumping rope"), "Weekly workout plan excludes jump rope for knee injury");
 

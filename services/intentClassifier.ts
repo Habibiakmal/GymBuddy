@@ -10,6 +10,7 @@
 
 export type UserIntentType =
   | "ONBOARDING_GREETING"
+  | "GREETING"
   | "GENERAL_CONVERSATION"
   | "PROGRAM_QUESTION"
   | "WORKOUT_QUESTION"
@@ -77,6 +78,45 @@ export function sanitizeTextForIntent(text: string): string {
 /**
  * Cleans a food term by stripping leading articles and trailing suffixes.
  */
+export const NON_FOOD_TOKENS = new Set([
+  "halo", "hai", "hi", "hello", "hei", "hey",
+  "pagi", "siang", "sore", "malam",
+  "mia", "max", "coach", "gymbuddy", "bot",
+  "tes", "test", "ping", "oy", "woi", "bro", "sis",
+  "ok", "oke", "sip", "siap", "iya", "ya", "tidak", "gak", "nggak",
+  "makasih", "terima kasih", "thanks", "thx",
+  "apa", "siapa", "gimana", "bagaimana", "kenapa", "mengapa", "kapan", "dimana",
+  "bisa", "tolong", "bantu", "mau", "tanya", "dong", "saja", "aja", "doang",
+  "latihan", "olahraga", "workout", "gym", "lari", "jalan", "renang"
+]);
+
+/**
+ * Recognizes standalone greetings or coach callouts.
+ */
+export function isGreeting(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const clean = text.trim().toLowerCase().replace(/[?!.,;:~]/g, "");
+
+  // Single word greetings
+  const exactGreetings = new Set([
+    "halo", "hai", "hi", "hello", "hei", "hey",
+    "pagi", "siang", "sore", "malam",
+    "mia", "max",
+    "tes", "test", "ping", "assalamualaikum", "oy", "woi"
+  ]);
+  if (exactGreetings.has(clean)) return true;
+
+  // Multi-word greetings
+  return Boolean(
+    clean.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) ||
+    clean.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) ||
+    clean.match(/^(?:halo|hai|hello|hi)\s+semua$/i) ||
+    clean === "assalamu'alaikum" ||
+    clean === "assalamualaikum wr wb" ||
+    clean === "assalamu alaikum"
+  );
+}
+
 export function cleanFoodTerm(term: string): string {
   if (!term) return "";
   let res = term.trim().replace(/^[,\.\s:;"']+|[,\.\s:;"']+$/g, "");
@@ -107,7 +147,7 @@ export function parseMealCorrectionDetails(
 
   // Strip leading correction commands
   const stripped = lower
-    .replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "")
+    .replace(/^(?:koreksi(?:\s+lagi|\s+dong)?|ralat(?:\s+lagi|\s+dong)?|revisi(?:\s+lagi)?|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "")
     .trim();
 
   // 1. Bare / Generic ambiguity: "koreksi", "ralat", "koreksi meal tadi", "yang tadi salah"
@@ -126,6 +166,9 @@ export function parseMealCorrectionDetails(
     stripped === "salah semua" ||
     stripped === "salah" ||
     stripped === "menu tadi" ||
+    stripped === "lagi" ||
+    lower === "koreksi lagi" ||
+    lower === "koreksi lagi." ||
     lower === "koreksi meal tadi." ||
     lower === "koreksi meal tadi" ||
     lower === "koreksi meal" ||
@@ -223,8 +266,8 @@ export function parseMealCorrectionDetails(
     }
   }
 
-  // Pattern 3e: "daging sambalnya salah, itu cumi" / "dagingnya sebenarnya ayam"
-  const p5 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  // Pattern 3e: "daging sambalnya salah, itu cumi" / "dagingnya sebenarnya ayam" / "yang tadi ayam ternyata cumi"
+  const p5 = stripped.match(/^(?:yang\s+tadi\s+|tadi\s+)?([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya|ternyata)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
   if (p5) {
     const target = cleanFoodTerm(p5[1]);
     const replacement = cleanFoodTerm(p5[2]);
@@ -312,18 +355,33 @@ export function parseMealCorrectionDetails(
     };
   }
 
-  // 8. Ambiguous single food mention: ONLY if it's 1-2 words naming a component without portions or verbs (e.g. "ayamnya", "nasi putih")
+  // 8. Ambiguous single food mention: ONLY if it's 1-2 words naming a component without portions or verbs (e.g. "koreksi ayamnya", "ayamnya", "nasi putih")
   if (!/\b(?:cuma|hanya|setengah|separuh|seperempat|tidak|nggak|gak|batal|makan|gram|g|gr|potong|buah|butir|dan|sama|kcal|kalori)\b/i.test(stripped)) {
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length <= 2) {
-      const target = cleanFoodTerm(stripped);
-      if (target) {
-        return {
-          subtype: "MEAL_CORRECTION_GENERAL",
-          action: "general_clarification",
-          targetItem: target,
-          isAmbiguous: true
-        };
+      // Must not contain conversational non-food tokens (e.g. "halo", "mia", "hai", "gymbuddy", "tes")
+      const hasNonFoodToken = words.some(w => NON_FOOD_TOKENS.has(w.toLowerCase().replace(/[?!.,;:~]/g, "")));
+      if (!hasNonFoodToken) {
+        const target = cleanFoodTerm(stripped);
+        const hasExplicitCorrectionKeyword = /^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i.test(lower);
+        
+        // Either explicit keyword was used (e.g. "koreksi ayamnya"), OR target matches a known component in lastMeal
+        let isConfirmedFood = hasExplicitCorrectionKeyword;
+        if (!isConfirmedFood && lastMeal) {
+          const comps = Array.isArray(lastMeal.components) ? lastMeal.components : [];
+          const mealFoodName = String(lastMeal.foodName || "").toLowerCase();
+          const targetLow = target.toLowerCase();
+          isConfirmedFood = comps.some((c: any) => c.name.toLowerCase().includes(targetLow) || targetLow.includes(c.name.toLowerCase())) || mealFoodName.includes(targetLow);
+        }
+
+        if (target && isConfirmedFood) {
+          return {
+            subtype: "MEAL_CORRECTION_GENERAL",
+            action: "general_clarification",
+            targetItem: target,
+            isAmbiguous: true
+          };
+        }
       }
     }
   }
@@ -369,6 +427,16 @@ export function classifyUserIntent(
       intent: "ONBOARDING_GREETING",
       confidence: "high",
       reason: "User is introducing themselves after finishing onboarding"
+    };
+  }
+
+  // ── 2. GENERAL GREETINGS / BOT CHECK ──────────────────────────────────────
+  // Examples: "halo", "hai", "hi", "mia?", "max?", "halo gymbuddy", "halo mia", "pagi", "tes"
+  if (isGreeting(text)) {
+    return {
+      intent: "GREETING",
+      confidence: "high",
+      reason: "User sent a conversational greeting or coach check"
     };
   }
 
@@ -535,6 +603,23 @@ export function classifyUserIntent(
     };
   }
 
+  // ── 7. NUTRITION QUESTION ─────────────────────────────────────────────────
+  // Examples: "berapa protein ayam?", "kalori telur berapa", "berapa gram protein tempe"
+  const isNutritionQuestion =
+    Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan|serat)\b/i) &&
+            lower.match(/\b(?:apa|berapa|bagaimana|gimana|berapaan|bisa|kah|\?)\b/i)) ||
+    Boolean(lower.match(/^(?:berapa\s+(?:kalori|protein|karbo|lemak|gula|natrium)|berapaan\s+(?:kalori|protein))\b/i)) ||
+    Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
+
+  if (isNutritionQuestion) {
+    return {
+      intent: "NUTRITION_QUESTION",
+      confidence: "high",
+      reason: "User is asking for nutritional advice or food recommendations"
+    };
+  }
+
+  // ── 8. MEAL LOGGING ───────────────────────────────────────────────────────
   // e.g. "Tadi saya makan nasi ayam", "Makan siang ayam geprek", sends image
   const hasMealSignal =
     context.hasImage ||
@@ -549,20 +634,7 @@ export function classifyUserIntent(
     };
   }
 
-  // ── 7. NUTRITION QUESTION ─────────────────────────────────────────────────
-  const isNutritionQuestion =
-    Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan)\s+(?:apa|berapa|bagaimana|gimana)\b/i)) ||
-    Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
-
-  if (isNutritionQuestion) {
-    return {
-      intent: "NUTRITION_QUESTION",
-      confidence: "high",
-      reason: "User is asking for nutritional advice or food recommendations"
-    };
-  }
-
-  // ── 8. GENERAL GREETINGS / CHIT-CHAT ─────────────────────────────────────
+  // ── 9. GENERAL CHIT-CHAT FALLBACK ─────────────────────────────────────────
   const isGeneralGreeting = Boolean(
     lower.match(/^(?:halo|hai|hello|hi|pagi|selamat\s+pagi|siang|selamat\s+siang|malam|selamat\s+malam|tes|test|ping|assalamualaikum|oy|woi)\b/i)
   );
