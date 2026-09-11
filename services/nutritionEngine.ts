@@ -23,6 +23,7 @@ import {
   type DualConfidenceResult,
   type DatabaseMatchCandidate
 } from "./foodIdentityEngine";
+import { parseMealCorrectionDetails } from "./intentClassifier";
 
 export {
   resolveCanonicalFoodIdentity,
@@ -580,6 +581,26 @@ export const NUTRITION_DATABASE: FoodReference[] = [
     defaultServingGrams: 120,
     servingUnit: "1 porsi (~120g)",
     per100g: { calories: 210, protein: 15.0, carbs: 14.5, fat: 10.2, fiber: 0.6, sugar: 0.4, sodium: 340 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_cumi_sambal",
+    keywords: ["cumi sambal", "cumi balado", "sambal cumi", "cumi pedas", "cumi cabe ijo", "tumis cumi"],
+    normalizedName: "Cumi Sambal",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi sambal (~80g)",
+    per100g: { calories: 145, protein: 18.0, carbs: 4.5, fat: 6.5, fiber: 0.8, sugar: 1.2, sodium: 380 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_cumi_cooked",
+    keywords: ["cumi", "squid", "cumi goreng", "cumi rebus", "cumi bakar", "calamari", "olahan cumi"],
+    normalizedName: "Cumi (Squid)",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi (~80g)",
+    per100g: { calories: 135, protein: 17.5, carbs: 3.0, fat: 5.5, fiber: 0.0, sugar: 0.0, sodium: 310 },
     source: "TKPI"
   },
   {
@@ -2998,6 +3019,8 @@ export interface MealComponentItem {
 export interface MealCorrectionResult {
   isFood: boolean;
   isCorrection: boolean;
+  isAmbiguous?: boolean;
+  clarificationMessage?: string;
   foodName: string;
   correctedComponent: string;
   oldPortion: string;
@@ -3232,6 +3255,7 @@ export function applyTargetedMealCorrection(
   const isMia = (userDataObj?.persona || "mia").toLowerCase().includes("mia");
   const isLansia = addressing.ageGroup === "Lansia";
   const lower = (userText || "").toLowerCase();
+  const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
 
   const components = extractMealComponents(lastMeal);
   if (components.length === 0) {
@@ -3248,8 +3272,355 @@ export function applyTargetedMealCorrection(
     });
   }
 
-  // Strip correction command keywords from query
-  const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
+  // 1. Check structured correction details from Intent Classifier Gate
+  const details = parseMealCorrectionDetails(userText, lastMeal);
+
+  // ── BRANCH A: AMBIGUOUS / GENERAL CLARIFICATION ───────────────────────────
+  if (details && details.action === "general_clarification") {
+    let clarifyMsg = "";
+    let targetComp: MealComponentItem | undefined;
+
+    if (details.targetItem) {
+      const qTarget = details.targetItem.toLowerCase();
+      targetComp = components.find(c => !c.isRemoved && (c.name.toLowerCase().includes(qTarget) || qTarget.includes(c.name.toLowerCase())));
+    }
+
+    if (targetComp) {
+      const compLower = targetComp.name.toLowerCase();
+      if (compLower.includes("ayam")) {
+        clarifyMsg = isMia
+          ? "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau jenis ayamnya?"
+          : (isLansia
+              ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ayamnya, ${validatedAddr}? Misalnya porsi atau jumlah potongnya ya. 🌿`
+              : "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau cara masaknya? Kasih tahu gue ya! 💪");
+      } else if (compLower.includes("daging") || compLower.includes("sapi") || compLower.includes("ikan") || compLower.includes("tahu") || compLower.includes("tempe") || compLower.includes("telur")) {
+        clarifyMsg = isMia
+          ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, jumlah potongnya, atau jenisnya?`
+          : (isLansia
+              ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsinya ya. 🌿`
+              : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsi gramnya atau jumlah potongnya? Kasih tahu gue ya! 💪`);
+      } else if (compLower.includes("teh") || compLower.includes("kopi") || compLower.includes("minum") || compLower.includes("jus")) {
+        clarifyMsg = isMia
+          ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya manisnya/tanpa gula, porsi gelasnya, atau jenisnya?`
+          : (isLansia
+              ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya tanpa gula atau ukuran porsinya ya. 🌿`
+              : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya tanpa gula atau ukuran gelasnya? Kasih tahu gue ya! 💪`);
+      } else {
+        clarifyMsg = isMia
+          ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, takaran gramnya, atau jumlahnya?`
+          : (isLansia
+              ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsi makanannya ya. 🌿`
+              : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya atau gramnya? Kasih tahu gue ya! 💪`);
+      }
+    } else {
+      const isBareQuery = !cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan" || cleanQuery === "koreksi";
+      clarifyMsg = isBareQuery
+        ? (isMia
+            ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya ✨"
+            : (isLansia
+                ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? 🌿`
+                : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! 💪"))
+        : (isMia
+            ? "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? 😊"
+            : (isLansia
+                ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? 🌿`
+                : "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? 💪"));
+    }
+
+    return {
+      isFood: true,
+      isCorrection: false,
+      isAmbiguous: true,
+      clarificationMessage: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+      foodName: lastMeal.foodName,
+      correctedComponent: targetComp ? targetComp.name : "",
+      oldPortion: targetComp ? targetComp.portion : "",
+      newPortion: targetComp ? targetComp.portion : "",
+      calories: lastMeal.calories,
+      protein: lastMeal.protein,
+      carbs: lastMeal.carbs,
+      fat: lastMeal.fat,
+      fiber: lastMeal.fiber || 0,
+      sugar: (lastMeal as any).sugar || 0,
+      sodium: (lastMeal as any).sodium || 0,
+      portionEstimates: components.map(c => `• ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+      components,
+      coachComment: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+      confidenceLevel: 95
+    };
+  }
+
+  // ── BRANCH B: ITEM REPLACEMENT (MEAL_CORRECTION_ITEM) ─────────────────────
+  if (details && details.action === "replace_item" && details.replacementItem) {
+    const targetQuery = (details.targetItem || "").toLowerCase();
+    const replQuery = details.replacementItem.toLowerCase();
+
+    // 1. Locate target component in existing meal
+    let targetIdx = -1;
+    if (targetQuery && targetQuery !== "last_item") {
+      targetIdx = components.findIndex(c => !c.isRemoved && (c.name.toLowerCase().includes(targetQuery) || targetQuery.includes(c.name.toLowerCase())));
+      if (targetIdx === -1) {
+        // Word token match
+        const qWords = targetQuery.split(/\s+/).filter(w => w.length >= 3);
+        targetIdx = components.findIndex(c => {
+          if (c.isRemoved) return false;
+          const cLow = c.name.toLowerCase();
+          return qWords.some(w => cLow.includes(w));
+        });
+      }
+      if (targetIdx === -1) {
+        // Protein/category fallback match (e.g. user said "bukan ayam", but meal has "Daging Sambal")
+        const isProteinQuery = /(?:ayam|chicken|daging|sapi|beef|ikan|fish|telur|cumi|udang|seafood|tahu|tempe)/i.test(targetQuery);
+        if (isProteinQuery) {
+          targetIdx = components.findIndex(c => {
+            if (c.isRemoved) return false;
+            const cLow = c.name.toLowerCase();
+            return /(?:ayam|chicken|daging|sapi|beef|ikan|fish|telur|cumi|udang|seafood|tahu|tempe)/i.test(cLow);
+          });
+        }
+      }
+    }
+
+    if (targetIdx === -1) {
+      // Pick last non-staple/non-grain component, or last component
+      const nonGrains = components.map((c, i) => ({ c, i })).filter(({ c }) => !c.isRemoved && !c.name.toLowerCase().includes("nasi"));
+      if (nonGrains.length > 0) {
+        targetIdx = nonGrains[nonGrains.length - 1].i;
+      } else {
+        targetIdx = components.length - 1;
+      }
+    }
+
+    const targetComp = components[targetIdx];
+    const oldName = targetComp.name;
+    const oldNameLower = oldName.toLowerCase();
+
+    // 2. Resolve replacement canonical name
+    let resolvedReplacementName = details.replacementItem.trim();
+    if (replQuery === "cumi" && oldNameLower.includes("sambal")) {
+      resolvedReplacementName = "Cumi Sambal";
+    } else if (replQuery === "cumi" && oldNameLower.includes("balado")) {
+      resolvedReplacementName = "Cumi Balado";
+    } else if (replQuery === "cumi") {
+      resolvedReplacementName = "Cumi";
+    } else if (replQuery === "cumi sambal") {
+      resolvedReplacementName = "Cumi Sambal";
+    } else if (replQuery === "ayam") {
+      resolvedReplacementName = "Ayam";
+    } else if (replQuery === "daging" || replQuery === "daging sapi") {
+      resolvedReplacementName = "Daging Sapi";
+    } else {
+      resolvedReplacementName = resolvedReplacementName
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+
+    // 3. Preserve portion & recalculate nutrition for new item
+    const preservedPortion = targetComp.portion || "1 porsi";
+    const preservedWeight = targetComp.weightGrams || (preservedPortion.match(/(\d+)\s*g/i) ? parseInt(preservedPortion.match(/(\d+)\s*g/i)![1], 10) : undefined);
+    const nutrInput = preservedWeight ? `${resolvedReplacementName} ${preservedWeight}g` : `${resolvedReplacementName} ${preservedPortion}`;
+    const newNutr = calculateSingleItemNutrition(nutrInput);
+
+    targetComp.name = resolvedReplacementName;
+    targetComp.calories = Math.max(0, Math.round(newNutr.calories));
+    targetComp.protein = Math.max(0, Number(newNutr.protein.toFixed(1)));
+    targetComp.carbs = Math.max(0, Number(newNutr.carbs.toFixed(1)));
+    targetComp.fat = Math.max(0, Number(newNutr.fat.toFixed(1)));
+    targetComp.fiber = Math.max(0, Number((newNutr.fiber || 0).toFixed(1)));
+    targetComp.sugar = Math.max(0, Number((newNutr.sugar || 0).toFixed(1)));
+    targetComp.sodium = Math.max(0, Math.round(newNutr.sodium || 0));
+    targetComp.portion = preservedWeight ? `${preservedWeight}g` : preservedPortion;
+    targetComp.weightGrams = preservedWeight || (newNutr.estimated_weight_grams ? Number(newNutr.estimated_weight_grams) : undefined);
+    targetComp.isUpdated = true;
+
+    // 4. Calculate total nutrition strictly from active components
+    const activeComps = components.filter(c => !c.isRemoved);
+    const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+    const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+    const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+    const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+    const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+    const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+    const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+
+    const updatedFoodName = activeComps.map(c => c.name).join(", ");
+
+    const cleanPortionEstimates = activeComps.map(c => {
+      const badge = c.isUpdated ? " ← diperbarui" : "";
+      return `• ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+    });
+
+    const unchangedComps = activeComps.filter(c => c !== targetComp);
+    const unchangedText = unchangedComps.length > 0
+      ? `${unchangedComps.map(c => c.name).join(" dan ")} tetap.\n`
+      : "";
+
+    const coachComment = validateAndFormatCoachNote(
+      `Siap, aku koreksi ya 👍\n\n${oldName} → ${targetComp.name}\n\n${unchangedText}Aku sudah hitung ulang estimasi nutrisinya.`,
+      userDataObj
+    );
+
+    return {
+      isFood: true,
+      isCorrection: true,
+      foodName: updatedFoodName,
+      correctedComponent: oldName,
+      oldPortion: preservedPortion,
+      newPortion: targetComp.portion,
+      calories: updatedCalories,
+      protein: updatedProtein,
+      carbs: updatedCarbs,
+      fat: updatedFat,
+      fiber: updatedFiber,
+      sugar: updatedSugar,
+      sodium: updatedSodium,
+      portionEstimates: cleanPortionEstimates,
+      components: activeComps,
+      coachComment,
+      confidenceLevel: 95
+    };
+  }
+
+  // ── BRANCH C: SET COMPOSITION (MEAL_CORRECTION_GENERAL - EXPLICIT) ────────
+  if (details && details.action === "set_composition" && Array.isArray(details.compositionItems) && details.compositionItems.length > 0) {
+    const specifiedItems = details.compositionItems;
+    const keptComponentIndices = new Set<number>();
+    const newItemsToAdd: MealComponentItem[] = [];
+
+    for (const specItem of specifiedItems) {
+      const specLower = specItem.toLowerCase();
+      // Match existing component
+      const matchedIdx = components.findIndex((c, i) => !keptComponentIndices.has(i) && (c.name.toLowerCase().includes(specLower) || specLower.includes(c.name.toLowerCase())));
+      if (matchedIdx !== -1) {
+        keptComponentIndices.add(matchedIdx);
+      } else {
+        // Calculate nutrition for new item
+        const nutr = calculateSingleItemNutrition(specItem);
+        const titleName = specItem.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        newItemsToAdd.push({
+          name: titleName,
+          portion: nutr.serving_unit !== "-" ? nutr.serving_unit : "1 porsi",
+          calories: Math.max(0, Math.round(nutr.calories)),
+          protein: Math.max(0, Number(nutr.protein.toFixed(1))),
+          carbs: Math.max(0, Number(nutr.carbs.toFixed(1))),
+          fat: Math.max(0, Number(nutr.fat.toFixed(1))),
+          fiber: Math.max(0, Number((nutr.fiber || 0).toFixed(1))),
+          sugar: Math.max(0, Number((nutr.sugar || 0).toFixed(1))),
+          sodium: Math.max(0, Math.round(nutr.sodium || 0)),
+          isUpdated: true
+        });
+      }
+    }
+
+    // Mark components not in keptComponentIndices as removed
+    for (let i = 0; i < components.length; i++) {
+      if (!keptComponentIndices.has(i)) {
+        components[i].isRemoved = true;
+      }
+    }
+
+    // Append new items
+    for (const newItem of newItemsToAdd) {
+      components.push(newItem);
+    }
+
+    const activeComps = components.filter(c => !c.isRemoved);
+    const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+    const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+    const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+    const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+    const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+    const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+    const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+
+    const updatedFoodName = activeComps.map(c => c.name).join(", ");
+    const removedComps = components.filter(c => c.isRemoved);
+    const removedNote = removedComps.length > 0 ? ` (tanpa ${removedComps.map(c => c.name).join(" & ")})` : "";
+
+    const cleanPortionEstimates = activeComps.map(c => {
+      const badge = c.isUpdated ? " ← diperbarui" : "";
+      return `• ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+    });
+
+    const coachComment = validateAndFormatCoachNote(
+      `Siap, aku koreksi komposisi meal tadi ya 👍\n\nMeal sekarang: ${updatedFoodName}${removedNote}.\n\nAku sudah hitung ulang estimasi nutrisinya.`,
+      userDataObj
+    );
+
+    return {
+      isFood: true,
+      isCorrection: true,
+      foodName: updatedFoodName,
+      correctedComponent: "Komposisi Meal",
+      oldPortion: lastMeal.foodName,
+      newPortion: updatedFoodName,
+      calories: updatedCalories,
+      protein: updatedProtein,
+      carbs: updatedCarbs,
+      fat: updatedFat,
+      fiber: updatedFiber,
+      sugar: updatedSugar,
+      sodium: updatedSodium,
+      portionEstimates: cleanPortionEstimates,
+      components: activeComps,
+      coachComment,
+      confidenceLevel: 95
+    };
+  }
+
+  // ── BRANCH D: COMPONENT REMOVAL (MEAL_CORRECTION_COMPONENT) ───────────────
+  if (details && details.action === "remove_component" && details.targetItem) {
+    const qTarget = details.targetItem.toLowerCase();
+    const targetComp = components.find(c => !c.isRemoved && (c.name.toLowerCase().includes(qTarget) || qTarget.includes(c.name.toLowerCase())));
+    if (targetComp) {
+      targetComp.isRemoved = true;
+      targetComp.isUpdated = true;
+
+      const activeComps = components.filter(c => !c.isRemoved);
+      const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+      const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+      const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+      const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+      const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+      const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+      const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+
+      const updatedFoodName = activeComps.map(c => c.name).join(", ");
+      const cleanPortionEstimates = activeComps.map(c => {
+        const badge = c.isUpdated ? " ← diperbarui" : "";
+        return `• ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+      });
+
+      const coachComment = validateAndFormatCoachNote(
+        `Siap, aku koreksi ya 👍\n\n${targetComp.name} dihapus dari catatan meal tadi.\n\nAku sudah hitung ulang estimasi nutrisinya.`,
+        userDataObj
+      );
+
+      return {
+        isFood: true,
+        isCorrection: true,
+        foodName: updatedFoodName,
+        correctedComponent: targetComp.name,
+        oldPortion: targetComp.portion,
+        newPortion: "0 (dihapus)",
+        calories: updatedCalories,
+        protein: updatedProtein,
+        carbs: updatedCarbs,
+        fat: updatedFat,
+        fiber: updatedFiber,
+        sugar: updatedSugar,
+        sodium: updatedSodium,
+        portionEstimates: cleanPortionEstimates,
+        components: activeComps,
+        coachComment,
+        confidenceLevel: 95
+      };
+    }
+  }
+
+  // ── BRANCH E: PORTION / QUANTITY / METADATA & CLAUSE-BASED DISPATCH ────────
+  // If query is completely bare (e.g. "koreksi", "koreksi porsi", "ralat"), ask for clarification without modifying meal
 
   // If query is completely bare (e.g. "koreksi", "koreksi porsi", "ralat"), ask for clarification without modifying meal
   if (!cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan") {
@@ -3332,6 +3703,7 @@ export function applyTargetedMealCorrection(
       if (clause.includes("tempe") && compLower.includes("tempe")) matchCount += 5;
       if (clause.includes("telur") && compLower.includes("telur")) matchCount += 5;
       if (clause.includes("ikan") && compLower.includes("ikan")) matchCount += 5;
+      if (clause.includes("cumi") && compLower.includes("cumi")) matchCount += 5;
       if ((clause.includes("teh") || clause.includes("tea")) && (compLower.includes("teh") || compLower.includes("tea"))) matchCount += 5;
       if ((clause.includes("kopi") || clause.includes("coffee")) && compLower.includes("kopi")) matchCount += 5;
       if ((clause.includes("roti") || clause.includes("bread") || clause.includes("sub")) && (compLower.includes("roti") || compLower.includes("sub"))) matchCount += 5;
@@ -3345,13 +3717,41 @@ export function applyTargetedMealCorrection(
       }
     }
 
-    // If ambiguous or no keyword matched:
+    // SAFE GUARD: If ambiguous or no keyword matched:
+    // If only 1 active component exists, it's that one.
+    // Otherwise, DO NOT DEFAULT TO COMPONENT 0! Return targeted clarification.
     if (matchedIdx === -1) {
       const activeComps = components.filter(c => !c.isRemoved);
       if (activeComps.length === 1) {
         matchedIdx = components.findIndex(c => !c.isRemoved);
       } else {
-        matchedIdx = 0;
+        const generalClarify = isMia
+          ? "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? 😊"
+          : (isLansia
+              ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? 🌿`
+              : "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? 💪");
+
+        return {
+          isFood: true,
+          isCorrection: false,
+          isAmbiguous: true,
+          clarificationMessage: validateAndFormatCoachNote(generalClarify, userDataObj),
+          foodName: lastMeal.foodName,
+          correctedComponent: "",
+          oldPortion: "",
+          newPortion: "",
+          calories: lastMeal.calories,
+          protein: lastMeal.protein,
+          carbs: lastMeal.carbs,
+          fat: lastMeal.fat,
+          fiber: lastMeal.fiber || 0,
+          sugar: (lastMeal as any).sugar || 0,
+          sodium: (lastMeal as any).sodium || 0,
+          portionEstimates: components.map(c => `• ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+          components,
+          coachComment: validateAndFormatCoachNote(generalClarify, userDataObj),
+          confidenceLevel: 95
+        };
       }
     }
 
@@ -3372,8 +3772,7 @@ export function applyTargetedMealCorrection(
     const origCompSug = targetComp.sugar || 0;
     const origCompSod = targetComp.sodium || 0;
 
-    // 2. Identify operation on targetComp
-    // Operation A: ATTRIBUTE - WITHOUT SUGAR ("es tehnya tanpa gula", "es teh tawar", "less sugar")
+    // Operation A: ATTRIBUTE - WITHOUT SUGAR
     const isNoSugar = /\b(?:tanpa\s+gula|tidak\s+pakai\s+gula|gak\s+pakai\s+gula|tawar|no\s+sugar|less\s+sugar|bebas\s+gula|kurang\s+manis)\b/i.test(clause);
     if (isNoSugar) {
       const oldSug = origCompSug > 0 ? origCompSug : 18;
@@ -3397,8 +3796,8 @@ export function applyTargetedMealCorrection(
       continue;
     }
 
-    // Operation B: REMOVAL ("ternyata aku tidak makan tahunya", "nggak pake tahu", "tanpa tahu", "tahunya batal")
-    const isRemoval = /\b(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal\s+makan|nggak\s+jadi|gak\s+jadi|dihapus|hapus|tidak\s+jadi|nggak\s+pake|gak\s+pake|bukan)\b/i.test(clause);
+    // Operation B: REMOVAL
+    const isRemoval = /\b(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal\s+makan|nggak\s+jadi|gak\s+jadi|dihapus|hapus|tidak\s+jadi|nggak\s+pake|gak\s+pake)\b/i.test(clause);
     if (isRemoval) {
       totalDeltaCal -= origCompCal;
       totalDeltaProt -= origCompProt;
@@ -3415,7 +3814,7 @@ export function applyTargetedMealCorrection(
       continue;
     }
 
-    // Operation C: PORTION & QUANTITY CHANGE (Grams, Fractions, Pieces, or Specific Calories)
+    // Operation C: PORTION & QUANTITY CHANGE
     let ratio = 1.0;
     let targetNewPortion = targetComp.portion;
 
@@ -3469,8 +3868,6 @@ export function applyTargetedMealCorrection(
       targetNewPortion = `${count} potong`;
     } else {
       // AMBIGUOUS CORRECTION: User mentioned an item, but did NOT specify what should change.
-      // Rule: DO NOT GUESS. DO NOT ASSUME 1/2. DO NOT REUSE PREVIOUS VALUES.
-      // Ask what should be corrected, and apply NO changes yet!
       let clarifyMsg = "";
       const compLower = targetComp.name.toLowerCase();
 
@@ -3560,7 +3957,6 @@ export function applyTargetedMealCorrection(
   }
 
   // 3. Mathematical Delta Calculation:
-  // Corrected Meal Total = Original Meal Total − Original Corrected Item Nutrition + New Corrected Item Nutrition
   const correctedCalories = Math.max(0, Math.round(lastMeal.calories + totalDeltaCal));
   const correctedProtein = Math.max(0, Number((lastMeal.protein + totalDeltaProt).toFixed(1)));
   const correctedCarbs = Math.max(0, Number((lastMeal.carbs + totalDeltaCarb).toFixed(1)));
@@ -3570,7 +3966,6 @@ export function applyTargetedMealCorrection(
   const correctedSodium = Math.max(0, Math.round(((lastMeal as any).sodium || 0) + totalDeltaSod));
 
   // 4. Build portionEstimates array:
-  // Preserves 100% of unchanged items, marks updated items with " ← diperbarui", omits removed items.
   const cleanPortionEstimates = components
     .filter(c => !c.isRemoved)
     .map(c => {

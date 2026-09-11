@@ -171,35 +171,35 @@ const mockDailyTotals = {
 
 const formattedCard = formatNutritionCard(resRiceHalf, "Koreksi", mockUserDataMia as any, mockDailyTotals);
 
-// Check 1: Continuous separator line: ━━━━━━━━━━━━━━
-const hasContinuousSep = formattedCard.includes("━━━━━━━━━━━━━━");
-assert(hasContinuousSep, "Contains continuous single-line separator: ━━━━━━━━━━━━━━");
+// Check 1: Continuous separator line: --------------------------------------------------
+const hasContinuousSep = formattedCard.includes("--------------------------------------------------");
+assert(hasContinuousSep, "Contains continuous single-line separator: --------------------------------------------------");
 
 // Check 2: No broken separator characters on individual lines (e.g. single ━ followed by newline)
-const hasBrokenSeparators = /(?:^|\n)━(?:\n|$)/.test(formattedCard);
+const hasBrokenSeparators = /(?:^|\n)[━](?:\n|$)/.test(formattedCard);
 assert(!hasBrokenSeparators, "Zero broken separator characters (no single '━' lines)");
 
 // Check 3: Exact section order check
 const idxHeader = formattedCard.indexOf("🍽️");
-const idxRekap = formattedCard.indexOf("📊 *REKAP NUTRISI*");
+const idxRekap = formattedCard.indexOf("📊 *ESTIMASI NUTRISI*");
 const idxPorsi = formattedCard.indexOf("🍽️ *ESTIMASI PORSI*");
-const idxCoach = formattedCard.indexOf("🤖 *COACH MIA*");
 const idxStatus = formattedCard.indexOf("📈 *STATUS HARI INI*");
-const idxFooter = formattedCard.indexOf("⚙️");
+const idxCoach = formattedCard.indexOf("🤖 *COACH MIA*");
+const idxFooter = formattedCard.indexOf("Ketik *koreksi:");
 
-assert(idxHeader !== -1 && idxHeader < idxRekap, "Section Order: Header comes before Rekap Nutrisi");
-assert(idxRekap < idxPorsi, "Section Order: Rekap Nutrisi comes before Estimasi Porsi");
-assert(idxPorsi < idxCoach, "Section Order: Estimasi Porsi comes before Coach Section");
-assert(idxCoach < idxStatus, "Section Order: Coach Section comes before Status Hari Ini");
-assert(idxStatus < idxFooter, "Section Order: Status Hari Ini comes before Footer");
+assert(idxHeader !== -1 && idxHeader < idxRekap, "Section Order: Header comes before Estimasi Nutrisi");
+assert(idxRekap < idxPorsi, "Section Order: Estimasi Nutrisi comes before Estimasi Porsi");
+assert(idxPorsi < idxStatus, "Section Order: Estimasi Porsi comes before Status Hari Ini");
+assert(idxStatus < idxCoach, "Section Order: Status Hari Ini comes before Coach Section");
+assert(idxCoach < idxFooter, "Section Order: Coach Section comes before Footer");
 
 // ── GROUP 6: SANITIZE WHATSAPP RESPONSE SEPARATOR INTEGRITY ──
 console.log("\n▶ GROUP 6: Sanitizer Broken Separator Cleanup");
 
 const brokenSample = "Header\n\n━\n\n━\n\n━\n\nSection 1\n\n━━━━━\n\nSection 2";
 const sanitized = sanitizeWhatsAppResponse(brokenSample);
-assert(sanitized.includes("━━━━━━━━━━━━━━"), "Sanitizer collapses broken ━ lines into continuous ━━━━━━━━━━━━━━");
-assert(!/(?:^|\n)━(?:\n|$)/.test(sanitized), "Sanitizer eliminates isolated single ━ lines");
+assert(sanitized.includes("--------------------------------------------------"), "Sanitizer collapses broken ━ lines into continuous --------------------------------------------------");
+assert(!/(?:^|\n)[━](?:\n|$)/.test(sanitized), "Sanitizer eliminates isolated single ━ lines");
 
 // ── GROUP 7: ITEM-LEVEL DECOMPOSITION (Prompt Example 1) ──
 console.log("\n▶ GROUP 7: Compound Meal Decomposition into Individual Items");

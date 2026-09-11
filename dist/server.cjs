@@ -45140,6 +45140,46 @@ var INDONESIAN_FOOD_ONTOLOGY = [
       sodium: 340
     }
   },
+  // Cumi Sambal / Cumi Balado (Squid in Chili Sambal / Balado)
+  {
+    patterns: [/\b(?:cumi\s*(?:sambal|balado|pedas|cabe\s*ijo)|sambal\s*cumi|tumis\s*cumi)\b/i],
+    canonicalName: "Cumi Sambal",
+    concept: "Squid cooked in spicy chili sambal or balado sauce",
+    protein: "squid",
+    cookingMethod: "tumis",
+    category: "meal",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi sambal (~80g)",
+    fallbackNutrientPer100g: {
+      calories: 145,
+      protein: 18,
+      carbs: 4.5,
+      fat: 6.5,
+      fiber: 0.8,
+      sugar: 1.2,
+      sodium: 380
+    }
+  },
+  // Cumi (Cooked / boiled / grilled squid)
+  {
+    patterns: [/^(?:cumi|squid)$/i, /\b(?:cumi\s*(?:rebus|bakar|panggang|masak))\b/i],
+    canonicalName: "Cumi",
+    concept: "Cooked squid protein",
+    protein: "squid",
+    cookingMethod: "tumis",
+    category: "meal",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi (~80g)",
+    fallbackNutrientPer100g: {
+      calories: 135,
+      protein: 17.5,
+      carbs: 3,
+      fat: 5.5,
+      fiber: 0,
+      sugar: 0,
+      sodium: 310
+    }
+  },
   // Kerang Rebus (Boiled Shellfish / Clams with dipping sauce)
   {
     patterns: [/\b(?:kerang\s+rebus|boiled\s+(?:clams|shellfish))\b/i],
@@ -45550,6 +45590,10 @@ function resolveCanonicalFoodIdentity(rawText) {
     canonicalName = "Nasi Putih";
   } else if (lower === "telur" || lower === "telor") {
     canonicalName = "Telur";
+  } else if (lower === "cumi" || lower === "squid") {
+    canonicalName = "Cumi";
+  } else if (lower === "cumi sambal" || lower === "sambal cumi") {
+    canonicalName = "Cumi Sambal";
   }
   return {
     originalInput: clean2,
@@ -45678,6 +45722,365 @@ function calculateDualConfidence(identity, dbMatch) {
     criticalMismatch,
     requiresReview,
     warningMessage
+  };
+}
+
+// services/intentClassifier.ts
+function sanitizeTextForIntent(text) {
+  return text.replace(/\bgym\s*buddy\b/gi, "").replace(/\bgymbuddy\b/gi, "").trim();
+}
+function cleanFoodTerm(term) {
+  if (!term) return "";
+  let res = term.trim().replace(/^[,\.\s:;"']+|[,\.\s:;"']+$/g, "");
+  res = res.replace(/^(?:itu\s+|yang\s+tadi\s+|yang\s+|tadi\s+)/i, "");
+  res = res.replace(/\s+(?:aja|saja|doang|cuma|hanya)$/i, "");
+  if (res.toLowerCase().endsWith("nya") && res.length > 5) {
+    res = res.slice(0, -3);
+  }
+  return res.trim();
+}
+function parseMealCorrectionDetails(rawText, lastMeal) {
+  if (!rawText || typeof rawText !== "string") return null;
+  const cleanRaw = rawText.trim();
+  const lower = cleanRaw.toLowerCase();
+  const stripped = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "").trim();
+  if (!stripped || stripped === "meal" || stripped === "meal tadi" || stripped === "meal tadi." || stripped === "makanan" || stripped === "makanan tadi" || stripped === "porsi" || stripped === "porsi tadi" || stripped === "yang tadi salah" || stripped === "yang tadi salah." || stripped === "tadi salah" || stripped === "salah semua" || stripped === "salah" || stripped === "menu tadi" || lower === "koreksi meal tadi." || lower === "koreksi meal tadi" || lower === "koreksi meal" || lower === "yang tadi salah." || lower === "yang tadi salah") {
+    return {
+      subtype: "MEAL_CORRECTION_GENERAL",
+      action: "general_clarification",
+      isAmbiguous: true
+    };
+  }
+  const compMatch = stripped.match(/^(?:meal,?\s*itu|meal\s+tadi\s+isinya|isinya\s+(?:cuma|hanya)?|yang\s+ada\s+di\s+meal\s+tadi\s+cuma|meal\s+tadi\s+cuma|sebenarnya\s+cuma)\s+(.+)$/i) || lower.match(/(?:meal\s+tadi\s+isinya|yang\s+ada\s+di\s+meal\s+tadi\s+cuma|koreksi\s+meal,?\s*itu)\s+(.+)$/i);
+  if (compMatch) {
+    const rawItems = compMatch[1].split(/\s*(?:dan|sama|serta|&|\+|,)\s*/i).map((s) => cleanFoodTerm(s)).filter((s) => s.length >= 2 && !/^(?:dan|sama|cuma|hanya|aja|saja|doang|tanpa)$/i.test(s));
+    if (rawItems.length >= 2) {
+      return {
+        subtype: "MEAL_CORRECTION_GENERAL",
+        action: "set_composition",
+        compositionItems: rawItems
+      };
+    }
+  }
+  const p1 = stripped.match(/^(?:itu\s+|yang\s+tadi\s+)?([a-zA-Z0-9\s]+?)\s*,\s*bukan\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p1) {
+    const replacement = cleanFoodTerm(p1[1]);
+    const target = cleanFoodTerm(p1[2]);
+    if (replacement && target) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+  const p2 = stripped.match(/^(?:yang\s+tadi\s+)?bukan\s+([a-zA-Z0-9\s]+?)(?:,\s*|\s+)(?:tapi|melainkan|sebenarnya|harusnya|itu)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p2) {
+    const target = cleanFoodTerm(p2[1]);
+    const replacement = cleanFoodTerm(p2[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+  const p3 = stripped.match(/^bukan\s+([a-zA-Z0-9\s]+?)\s*,\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p3) {
+    const target = cleanFoodTerm(p3[1]);
+    const replacement = cleanFoodTerm(p3[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+  const p4 = stripped.match(/^(?:ubah|ganti)\s+([a-zA-Z0-9\s]+?)\s+(?:jadi|menjadi|ke|sama|dengan)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p4) {
+    const target = cleanFoodTerm(p4[1]);
+    const replacement = cleanFoodTerm(p4[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+  const p5 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p5) {
+    const target = cleanFoodTerm(p5[1]);
+    const replacement = cleanFoodTerm(p5[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+  const p6 = stripped.match(/^(?:yang\s+(?:tadi|terakhir)\s+(?:itu\s+)?|terakhir(?:nya)?\s+(?:itu\s+)?)([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p6 && !stripped.includes("bukan")) {
+    const replacement = cleanFoodTerm(p6[1]);
+    if (replacement && !/^(?:setengah|seperempat|sedikit|\d+)/i.test(replacement)) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: "last_item",
+        replacementItem: replacement
+      };
+    }
+  }
+  const r1 = stripped.match(/^(?:ternyata\s+)?(?:aku\s+|saya\s+|gue\s+)?(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal(?:\s+makan)?|hapus|dihapus|nggak\s+jadi|gak\s+jadi|tidak\s+jadi|nggak\s+pake|gak\s+pake)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  const r2 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tidak|nggak|gak|ngga)\s*(?:jadi|dimakan|pake|pakai)|batal|dihapus$/i);
+  if (r1 || r2) {
+    const target = cleanFoodTerm(r1 ? r1[1] : r2[1]);
+    if (target) {
+      return {
+        subtype: "MEAL_CORRECTION_COMPONENT",
+        action: "remove_component",
+        targetItem: target
+      };
+    }
+  }
+  if (/\b(?:tanpa\s+gula|tidak\s+pakai\s+gula|gak\s+pakai\s+gula|tawar|no\s+sugar|less\s+sugar|bebas\s+gula|kurang\s+manis)\b/i.test(stripped)) {
+    const targetMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tanpa|tawar|no\s+sugar|less\s+sugar)/i);
+    return {
+      subtype: "MEAL_CORRECTION_METADATA",
+      action: "modify_metadata",
+      targetItem: targetMatch ? cleanFoodTerm(targetMatch[1]) : "minuman"
+    };
+  }
+  const qtyMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:cuma|hanya|sebanyak|jadi)?\s*(\d+|satu|dua|tiga|empat|lima|setengah|separuh|1\/2)\s*(butir|potong|buah|slice|biji|mangkok|piring)[.]?$/i);
+  if (qtyMatch) {
+    const numMap = { satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, setengah: 0.5, separuh: 0.5, "1/2": 0.5 };
+    const rawVal = qtyMatch[2].toLowerCase();
+    const qty = numMap[rawVal] || parseFloat(rawVal);
+    const unit = qtyMatch[3];
+    return {
+      subtype: "MEAL_CORRECTION_QUANTITY",
+      action: "modify_quantity",
+      targetItem: cleanFoodTerm(qtyMatch[1]),
+      quantity: qty,
+      portionText: qty === 0.5 ? `1/2 ${unit}` : `${qty} ${unit}`
+    };
+  }
+  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram)|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4)[.]?$/i);
+  if (portMatch) {
+    const target = cleanFoodTerm(portMatch[1]);
+    const portionText = portMatch[2].trim();
+    const gramMatch = portionText.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i);
+    const weightGrams = gramMatch ? parseFloat(gramMatch[1].replace(",", ".")) : void 0;
+    return {
+      subtype: "MEAL_CORRECTION_PORTION",
+      action: "modify_portion",
+      targetItem: target,
+      portionText,
+      weightGrams
+    };
+  }
+  if (!/\b(?:cuma|hanya|setengah|separuh|seperempat|tidak|nggak|gak|batal|makan|gram|g|gr|potong|buah|butir|dan|sama|kcal|kalori)\b/i.test(stripped)) {
+    const words = stripped.split(/\s+/).filter(Boolean);
+    if (words.length <= 2) {
+      const target = cleanFoodTerm(stripped);
+      if (target) {
+        return {
+          subtype: "MEAL_CORRECTION_GENERAL",
+          action: "general_clarification",
+          targetItem: target,
+          isAmbiguous: true
+        };
+      }
+    }
+  }
+  return null;
+}
+function classifyUserIntent(rawText, context = {}) {
+  const text = (rawText || "").trim();
+  const lower = text.toLowerCase();
+  const sanitized = sanitizeTextForIntent(lower);
+  const isOnboardingHandshake = Boolean(
+    lower.match(/(?:halo|hello|hai|hi)\s+coach\s+(?:mia|max)/i) && lower.match(/(?:onboarding|baru\s+daftar|selesai\s+setup|akun\s+baru|siap\s+mulai)/i)
+  ) || Boolean(
+    lower.match(/(?:baru\s+(?:saja\s+)?(?:menyelesaikan|selesai)\s+onboarding)/i)
+  ) || Boolean(
+    lower.match(/(?:onboarding\s+di\s+gymbuddy)/i) && lower.match(/(?:siap\s+mulai|mulai\s+program)/i)
+  );
+  if (isOnboardingHandshake) {
+    return {
+      intent: "ONBOARDING_GREETING",
+      confidence: "high",
+      reason: "User is introducing themselves after finishing onboarding"
+    };
+  }
+  const weightRegex = /(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|tadi\s*nimbang|nimbang|weight)\s*(?:hari\s*ini|saat\s*ini|sekarang|skrg|terbaru|terkini|adalah|menjadi|jadi|di|=|:|udah|sudah)?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|kilo|kilogram)?\b/i;
+  const weightMatch = lower.match(weightRegex) || lower.match(/(?:sekarang|skrg|hari\s*ini|saat\s*ini)\s*(?:berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?)\s*(?:adalah|di|=|:|udah|sudah)?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|kilo|kilogram)?\b/i);
+  if (weightMatch) {
+    const val = parseFloat(weightMatch[1].replace(",", "."));
+    if (!isNaN(val) && val >= 30 && val <= 300) {
+      return {
+        intent: "WEIGHT_LOG",
+        confidence: "high",
+        reason: "User explicitly reported body weight update",
+        extractedDetails: { weightKg: val }
+      };
+    }
+  }
+  const isProgramConversation = Boolean(lower.match(/^(?:saya\s+)?(?:mau|ingin|siap)?\s*(?:mulai\s+)?program\s+(?:maintain|lose|gain|fat\s*loss|diet|bulking|sehat)/i)) || Boolean(lower.match(/\bprogram\s+(?:saya|aku)\s+(?:apa|bagaimana|gimana)\b/i)) || Boolean(lower.match(/^program\s+(?:saya|aku)\s+(?:maintain|lose|gain)/i));
+  if (isProgramConversation) {
+    return {
+      intent: "PROGRAM_QUESTION",
+      confidence: "high",
+      reason: "User is inquiring or stating their program, not reporting completed exercise"
+    };
+  }
+  const isWorkoutQuestion = Boolean(lower.match(/\b(?:jadwal|schedule)\s+(?:workout|latihan|olahraga|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:latihan|workout|olahraga)\s+(?:apa|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:menu|program)\s+(?:latihan|workout)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:latihan|workout|olahraga)\b/i)) || Boolean(lower.match(/\b(?:cara|bagaimana|gimana|tutorial|tips|panduan|tutor)\b/i) && lower.match(/\b(?:bench\s*press|squat|deadlift|push\s*up|pull\s*up|latihan)\b/i)) || lower.includes("?") && lower.match(/\b(?:latihan|workout|gym|olahraga)\b/i);
+  if (isWorkoutQuestion) {
+    return {
+      intent: "WORKOUT_QUESTION",
+      confidence: "high",
+      reason: "User is asking about workouts or schedules without claiming completion"
+    };
+  }
+  const hasExplicitLogCommand = Boolean(lower.match(/\b(?:catat|rekap|simpan|log|masukkan|tulis)\s+(?:workout|latihan|olahraga|sesi)/i));
+  const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis)\b/i));
+  const durationMatch = sanitized.match(/(\d+)\s*(?:menit|mins|min|jam|hours|hour)/i);
+  const durationMinutes = durationMatch ? durationMatch[0].includes("jam") || durationMatch[0].includes("hour") ? parseInt(durationMatch[1], 10) * 60 : parseInt(durationMatch[1], 10) : void 0;
+  const workoutKeywords = [
+    "gym",
+    "fitness",
+    "fitnes",
+    "angkat beban",
+    "latihan beban",
+    "berenang",
+    "renang",
+    "swimming",
+    "lari",
+    "running",
+    "jogging",
+    "joging",
+    "sprint",
+    "jalan kaki",
+    "walking",
+    "jalan santai",
+    "sepeda",
+    "bersepeda",
+    "cycling",
+    "gowes",
+    "elliptical",
+    "treadmill",
+    "hiit",
+    "plank",
+    "push up",
+    "push-up",
+    "sit up",
+    "sit-up",
+    "squat",
+    "badminton",
+    "futsal",
+    "sepak bola",
+    "basket",
+    "tenis",
+    "yoga",
+    "pilates",
+    "stretching",
+    "zumba",
+    "skipping",
+    "boxing"
+  ];
+  const matchedKeyword = workoutKeywords.find((kw) => {
+    const escaped = kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const regex = new RegExp(`\\b${escaped}\\b`, "i");
+    return regex.test(sanitized);
+  });
+  const isFutureIntent = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) && !hasCompletionSignal && !hasExplicitLogCommand;
+  if (isFutureIntent) {
+    return {
+      intent: "WORKOUT_QUESTION",
+      confidence: "medium",
+      reason: "User expressed future workout plan, not past completed workout"
+    };
+  }
+  if (hasExplicitLogCommand && (matchedKeyword || durationMinutes)) {
+    return {
+      intent: "WORKOUT_LOG",
+      confidence: "high",
+      reason: "User gave explicit command to log a workout",
+      extractedDetails: { durationMinutes, activityName: matchedKeyword }
+    };
+  }
+  if (hasCompletionSignal && matchedKeyword && durationMinutes) {
+    return {
+      intent: "WORKOUT_LOG",
+      confidence: "high",
+      reason: "User reported a completed workout with duration",
+      extractedDetails: { durationMinutes, activityName: matchedKeyword }
+    };
+  }
+  if (hasCompletionSignal && matchedKeyword) {
+    return {
+      intent: "WORKOUT_LOG",
+      confidence: "medium",
+      reason: "User reported a completed workout activity",
+      extractedDetails: { activityName: matchedKeyword }
+    };
+  }
+  if (hasCompletionSignal && sanitized.match(/\b(?:latihan|olahraga|workout)\b/i) && !matchedKeyword && !durationMinutes) {
+    return {
+      intent: "VAGUE_WORKOUT_NEEDS_CLARIFICATION",
+      confidence: "medium",
+      reason: "User indicated working out but provided no activity or duration details"
+    };
+  }
+  const correctionDetails = parseMealCorrectionDetails(rawText);
+  if (correctionDetails && (context.hasRecentMeal || lower.match(/^(?:koreksi|ralat|revisi|ganti\s+makanan|bukan\s+|itu\s+cumi)/i))) {
+    return {
+      intent: "MEAL_CORRECTION",
+      confidence: "high",
+      reason: `User requested meal correction (${correctionDetails.subtype}: ${correctionDetails.action})`,
+      extractedDetails: {
+        mealCorrection: correctionDetails
+      }
+    };
+  }
+  const hasMealSignal = context.hasImage || Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) || Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
+  if (hasMealSignal) {
+    return {
+      intent: "MEAL_LOG",
+      confidence: context.hasImage ? "high" : "medium",
+      reason: "User reported food intake or provided food photo"
+    };
+  }
+  const isNutritionQuestion = Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan)\s+(?:apa|berapa|bagaimana|gimana)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
+  if (isNutritionQuestion) {
+    return {
+      intent: "NUTRITION_QUESTION",
+      confidence: "high",
+      reason: "User is asking for nutritional advice or food recommendations"
+    };
+  }
+  const isGeneralGreeting = Boolean(
+    lower.match(/^(?:halo|hai|hello|hi|pagi|selamat\s+pagi|siang|selamat\s+siang|malam|selamat\s+malam|tes|test|ping|assalamualaikum|oy|woi)\b/i)
+  );
+  if (isGeneralGreeting) {
+    return {
+      intent: "GENERAL_CONVERSATION",
+      confidence: "high",
+      reason: "User is initiating standard conversational greeting"
+    };
+  }
+  return {
+    intent: "UNKNOWN",
+    confidence: "low",
+    reason: "General conversation or open query"
   };
 }
 
@@ -46061,6 +46464,26 @@ var NUTRITION_DATABASE = [
     defaultServingGrams: 120,
     servingUnit: "1 porsi (~120g)",
     per100g: { calories: 210, protein: 15, carbs: 14.5, fat: 10.2, fiber: 0.6, sugar: 0.4, sodium: 340 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_cumi_sambal",
+    keywords: ["cumi sambal", "cumi balado", "sambal cumi", "cumi pedas", "cumi cabe ijo", "tumis cumi"],
+    normalizedName: "Cumi Sambal",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi sambal (~80g)",
+    per100g: { calories: 145, protein: 18, carbs: 4.5, fat: 6.5, fiber: 0.8, sugar: 1.2, sodium: 380 },
+    source: "TKPI"
+  },
+  {
+    id: "tkpi_cumi_cooked",
+    keywords: ["cumi", "squid", "cumi goreng", "cumi rebus", "cumi bakar", "calamari", "olahan cumi"],
+    normalizedName: "Cumi (Squid)",
+    category: "protein",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi (~80g)",
+    per100g: { calories: 135, protein: 17.5, carbs: 3, fat: 5.5, fiber: 0, sugar: 0, sodium: 310 },
     source: "TKPI"
   },
   {
@@ -48073,6 +48496,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
   const isMia = (userDataObj?.persona || "mia").toLowerCase().includes("mia");
   const isLansia2 = addressing.ageGroup === "Lansia";
   const lower = (userText || "").toLowerCase();
+  const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
   const components = extractMealComponents(lastMeal);
   if (components.length === 0) {
     components.push({
@@ -48087,7 +48511,287 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       sodium: lastMeal.sodium || 0
     });
   }
-  const cleanQuery = lower.replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)(?:[,:\s]+|$)/i, "").trim();
+  const details = parseMealCorrectionDetails(userText, lastMeal);
+  if (details && details.action === "general_clarification") {
+    let clarifyMsg = "";
+    let targetComp;
+    if (details.targetItem) {
+      const qTarget = details.targetItem.toLowerCase();
+      targetComp = components.find((c) => !c.isRemoved && (c.name.toLowerCase().includes(qTarget) || qTarget.includes(c.name.toLowerCase())));
+    }
+    if (targetComp) {
+      const compLower = targetComp.name.toLowerCase();
+      if (compLower.includes("ayam")) {
+        clarifyMsg = isMia ? "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau jenis ayamnya?" : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ayamnya, ${validatedAddr}? Misalnya porsi atau jumlah potongnya ya. \u{1F33F}` : "Mau dikoreksi bagian apa dari ayamnya? Misalnya porsinya, jumlah potongnya, atau cara masaknya? Kasih tahu gue ya! \u{1F4AA}";
+      } else if (compLower.includes("daging") || compLower.includes("sapi") || compLower.includes("ikan") || compLower.includes("tahu") || compLower.includes("tempe") || compLower.includes("telur")) {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, jumlah potongnya, atau jenisnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsi gramnya atau jumlah potongnya? Kasih tahu gue ya! \u{1F4AA}`;
+      } else if (compLower.includes("teh") || compLower.includes("kopi") || compLower.includes("minum") || compLower.includes("jus")) {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya manisnya/tanpa gula, porsi gelasnya, atau jenisnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya tanpa gula atau ukuran porsinya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya tanpa gula atau ukuran gelasnya? Kasih tahu gue ya! \u{1F4AA}`;
+      } else {
+        clarifyMsg = isMia ? `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya, takaran gramnya, atau jumlahnya?` : isLansia2 ? `Mohon informasikan bagian apa yang ingin dikoreksi dari ${targetComp.name}, ${validatedAddr}? Misalnya porsi makanannya ya. \u{1F33F}` : `Mau dikoreksi bagian apa dari ${targetComp.name}? Misalnya porsinya atau gramnya? Kasih tahu gue ya! \u{1F4AA}`;
+      }
+    } else {
+      const isBareQuery = !cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan" || cleanQuery === "koreksi";
+      clarifyMsg = isBareQuery ? isMia ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya \u2728" : isLansia2 ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! \u{1F4AA}" : isMia ? "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? \u{1F60A}" : isLansia2 ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? \u{1F4AA}";
+    }
+    return {
+      isFood: true,
+      isCorrection: false,
+      isAmbiguous: true,
+      clarificationMessage: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+      foodName: lastMeal.foodName,
+      correctedComponent: targetComp ? targetComp.name : "",
+      oldPortion: targetComp ? targetComp.portion : "",
+      newPortion: targetComp ? targetComp.portion : "",
+      calories: lastMeal.calories,
+      protein: lastMeal.protein,
+      carbs: lastMeal.carbs,
+      fat: lastMeal.fat,
+      fiber: lastMeal.fiber || 0,
+      sugar: lastMeal.sugar || 0,
+      sodium: lastMeal.sodium || 0,
+      portionEstimates: components.map((c) => `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+      components,
+      coachComment: validateAndFormatCoachNote(clarifyMsg, userDataObj),
+      confidenceLevel: 95
+    };
+  }
+  if (details && details.action === "replace_item" && details.replacementItem) {
+    const targetQuery = (details.targetItem || "").toLowerCase();
+    const replQuery = details.replacementItem.toLowerCase();
+    let targetIdx = -1;
+    if (targetQuery && targetQuery !== "last_item") {
+      targetIdx = components.findIndex((c) => !c.isRemoved && (c.name.toLowerCase().includes(targetQuery) || targetQuery.includes(c.name.toLowerCase())));
+      if (targetIdx === -1) {
+        const qWords = targetQuery.split(/\s+/).filter((w) => w.length >= 3);
+        targetIdx = components.findIndex((c) => {
+          if (c.isRemoved) return false;
+          const cLow = c.name.toLowerCase();
+          return qWords.some((w) => cLow.includes(w));
+        });
+      }
+      if (targetIdx === -1) {
+        const isProteinQuery = /(?:ayam|chicken|daging|sapi|beef|ikan|fish|telur|cumi|udang|seafood|tahu|tempe)/i.test(targetQuery);
+        if (isProteinQuery) {
+          targetIdx = components.findIndex((c) => {
+            if (c.isRemoved) return false;
+            const cLow = c.name.toLowerCase();
+            return /(?:ayam|chicken|daging|sapi|beef|ikan|fish|telur|cumi|udang|seafood|tahu|tempe)/i.test(cLow);
+          });
+        }
+      }
+    }
+    if (targetIdx === -1) {
+      const nonGrains = components.map((c, i) => ({ c, i })).filter(({ c }) => !c.isRemoved && !c.name.toLowerCase().includes("nasi"));
+      if (nonGrains.length > 0) {
+        targetIdx = nonGrains[nonGrains.length - 1].i;
+      } else {
+        targetIdx = components.length - 1;
+      }
+    }
+    const targetComp = components[targetIdx];
+    const oldName = targetComp.name;
+    const oldNameLower = oldName.toLowerCase();
+    let resolvedReplacementName = details.replacementItem.trim();
+    if (replQuery === "cumi" && oldNameLower.includes("sambal")) {
+      resolvedReplacementName = "Cumi Sambal";
+    } else if (replQuery === "cumi" && oldNameLower.includes("balado")) {
+      resolvedReplacementName = "Cumi Balado";
+    } else if (replQuery === "cumi") {
+      resolvedReplacementName = "Cumi";
+    } else if (replQuery === "cumi sambal") {
+      resolvedReplacementName = "Cumi Sambal";
+    } else if (replQuery === "ayam") {
+      resolvedReplacementName = "Ayam";
+    } else if (replQuery === "daging" || replQuery === "daging sapi") {
+      resolvedReplacementName = "Daging Sapi";
+    } else {
+      resolvedReplacementName = resolvedReplacementName.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+    const preservedPortion = targetComp.portion || "1 porsi";
+    const preservedWeight = targetComp.weightGrams || (preservedPortion.match(/(\d+)\s*g/i) ? parseInt(preservedPortion.match(/(\d+)\s*g/i)[1], 10) : void 0);
+    const nutrInput = preservedWeight ? `${resolvedReplacementName} ${preservedWeight}g` : `${resolvedReplacementName} ${preservedPortion}`;
+    const newNutr = calculateSingleItemNutrition(nutrInput);
+    targetComp.name = resolvedReplacementName;
+    targetComp.calories = Math.max(0, Math.round(newNutr.calories));
+    targetComp.protein = Math.max(0, Number(newNutr.protein.toFixed(1)));
+    targetComp.carbs = Math.max(0, Number(newNutr.carbs.toFixed(1)));
+    targetComp.fat = Math.max(0, Number(newNutr.fat.toFixed(1)));
+    targetComp.fiber = Math.max(0, Number((newNutr.fiber || 0).toFixed(1)));
+    targetComp.sugar = Math.max(0, Number((newNutr.sugar || 0).toFixed(1)));
+    targetComp.sodium = Math.max(0, Math.round(newNutr.sodium || 0));
+    targetComp.portion = preservedWeight ? `${preservedWeight}g` : preservedPortion;
+    targetComp.weightGrams = preservedWeight || (newNutr.estimated_weight_grams ? Number(newNutr.estimated_weight_grams) : void 0);
+    targetComp.isUpdated = true;
+    const activeComps = components.filter((c) => !c.isRemoved);
+    const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+    const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+    const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+    const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+    const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+    const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+    const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+    const updatedFoodName = activeComps.map((c) => c.name).join(", ");
+    const cleanPortionEstimates2 = activeComps.map((c) => {
+      const badge = c.isUpdated ? " \u2190 diperbarui" : "";
+      return `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+    });
+    const unchangedComps = activeComps.filter((c) => c !== targetComp);
+    const unchangedText = unchangedComps.length > 0 ? `${unchangedComps.map((c) => c.name).join(" dan ")} tetap.
+` : "";
+    const coachComment2 = validateAndFormatCoachNote(
+      `Siap, aku koreksi ya \u{1F44D}
+
+${oldName} \u2192 ${targetComp.name}
+
+${unchangedText}Aku sudah hitung ulang estimasi nutrisinya.`,
+      userDataObj
+    );
+    return {
+      isFood: true,
+      isCorrection: true,
+      foodName: updatedFoodName,
+      correctedComponent: oldName,
+      oldPortion: preservedPortion,
+      newPortion: targetComp.portion,
+      calories: updatedCalories,
+      protein: updatedProtein,
+      carbs: updatedCarbs,
+      fat: updatedFat,
+      fiber: updatedFiber,
+      sugar: updatedSugar,
+      sodium: updatedSodium,
+      portionEstimates: cleanPortionEstimates2,
+      components: activeComps,
+      coachComment: coachComment2,
+      confidenceLevel: 95
+    };
+  }
+  if (details && details.action === "set_composition" && Array.isArray(details.compositionItems) && details.compositionItems.length > 0) {
+    const specifiedItems = details.compositionItems;
+    const keptComponentIndices = /* @__PURE__ */ new Set();
+    const newItemsToAdd = [];
+    for (const specItem of specifiedItems) {
+      const specLower = specItem.toLowerCase();
+      const matchedIdx = components.findIndex((c, i) => !keptComponentIndices.has(i) && (c.name.toLowerCase().includes(specLower) || specLower.includes(c.name.toLowerCase())));
+      if (matchedIdx !== -1) {
+        keptComponentIndices.add(matchedIdx);
+      } else {
+        const nutr = calculateSingleItemNutrition(specItem);
+        const titleName = specItem.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        newItemsToAdd.push({
+          name: titleName,
+          portion: nutr.serving_unit !== "-" ? nutr.serving_unit : "1 porsi",
+          calories: Math.max(0, Math.round(nutr.calories)),
+          protein: Math.max(0, Number(nutr.protein.toFixed(1))),
+          carbs: Math.max(0, Number(nutr.carbs.toFixed(1))),
+          fat: Math.max(0, Number(nutr.fat.toFixed(1))),
+          fiber: Math.max(0, Number((nutr.fiber || 0).toFixed(1))),
+          sugar: Math.max(0, Number((nutr.sugar || 0).toFixed(1))),
+          sodium: Math.max(0, Math.round(nutr.sodium || 0)),
+          isUpdated: true
+        });
+      }
+    }
+    for (let i = 0; i < components.length; i++) {
+      if (!keptComponentIndices.has(i)) {
+        components[i].isRemoved = true;
+      }
+    }
+    for (const newItem of newItemsToAdd) {
+      components.push(newItem);
+    }
+    const activeComps = components.filter((c) => !c.isRemoved);
+    const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+    const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+    const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+    const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+    const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+    const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+    const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+    const updatedFoodName = activeComps.map((c) => c.name).join(", ");
+    const removedComps = components.filter((c) => c.isRemoved);
+    const removedNote = removedComps.length > 0 ? ` (tanpa ${removedComps.map((c) => c.name).join(" & ")})` : "";
+    const cleanPortionEstimates2 = activeComps.map((c) => {
+      const badge = c.isUpdated ? " \u2190 diperbarui" : "";
+      return `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+    });
+    const coachComment2 = validateAndFormatCoachNote(
+      `Siap, aku koreksi komposisi meal tadi ya \u{1F44D}
+
+Meal sekarang: ${updatedFoodName}${removedNote}.
+
+Aku sudah hitung ulang estimasi nutrisinya.`,
+      userDataObj
+    );
+    return {
+      isFood: true,
+      isCorrection: true,
+      foodName: updatedFoodName,
+      correctedComponent: "Komposisi Meal",
+      oldPortion: lastMeal.foodName,
+      newPortion: updatedFoodName,
+      calories: updatedCalories,
+      protein: updatedProtein,
+      carbs: updatedCarbs,
+      fat: updatedFat,
+      fiber: updatedFiber,
+      sugar: updatedSugar,
+      sodium: updatedSodium,
+      portionEstimates: cleanPortionEstimates2,
+      components: activeComps,
+      coachComment: coachComment2,
+      confidenceLevel: 95
+    };
+  }
+  if (details && details.action === "remove_component" && details.targetItem) {
+    const qTarget = details.targetItem.toLowerCase();
+    const targetComp = components.find((c) => !c.isRemoved && (c.name.toLowerCase().includes(qTarget) || qTarget.includes(c.name.toLowerCase())));
+    if (targetComp) {
+      targetComp.isRemoved = true;
+      targetComp.isUpdated = true;
+      const activeComps = components.filter((c) => !c.isRemoved);
+      const updatedCalories = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + c.calories, 0)));
+      const updatedProtein = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.protein, 0).toFixed(1)));
+      const updatedCarbs = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.carbs, 0).toFixed(1)));
+      const updatedFat = Math.max(0, Number(activeComps.reduce((acc, c) => acc + c.fat, 0).toFixed(1)));
+      const updatedFiber = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.fiber || 0), 0).toFixed(1)));
+      const updatedSugar = Math.max(0, Number(activeComps.reduce((acc, c) => acc + (c.sugar || 0), 0).toFixed(1)));
+      const updatedSodium = Math.max(0, Math.round(activeComps.reduce((acc, c) => acc + (c.sodium || 0), 0)));
+      const updatedFoodName = activeComps.map((c) => c.name).join(", ");
+      const cleanPortionEstimates2 = activeComps.map((c) => {
+        const badge = c.isUpdated ? " \u2190 diperbarui" : "";
+        return `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
+      });
+      const coachComment2 = validateAndFormatCoachNote(
+        `Siap, aku koreksi ya \u{1F44D}
+
+${targetComp.name} dihapus dari catatan meal tadi.
+
+Aku sudah hitung ulang estimasi nutrisinya.`,
+        userDataObj
+      );
+      return {
+        isFood: true,
+        isCorrection: true,
+        foodName: updatedFoodName,
+        correctedComponent: targetComp.name,
+        oldPortion: targetComp.portion,
+        newPortion: "0 (dihapus)",
+        calories: updatedCalories,
+        protein: updatedProtein,
+        carbs: updatedCarbs,
+        fat: updatedFat,
+        fiber: updatedFiber,
+        sugar: updatedSugar,
+        sodium: updatedSodium,
+        portionEstimates: cleanPortionEstimates2,
+        components: activeComps,
+        coachComment: coachComment2,
+        confidenceLevel: 95
+      };
+    }
+  }
   if (!cleanQuery || cleanQuery === "porsi" || cleanQuery === "makanan" || cleanQuery === "makan") {
     const generalClarify = isMia ? "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau tanpa gula ya \u2728" : isLansia2 ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Mau koreksi makanan yang mana dan bagian apa yang ingin diubah? Misalnya porsi nasi setengah atau ayamnya 1 potong ya! \u{1F4AA}";
     return {
@@ -48150,6 +48854,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       if (clause.includes("tempe") && compLower.includes("tempe")) matchCount += 5;
       if (clause.includes("telur") && compLower.includes("telur")) matchCount += 5;
       if (clause.includes("ikan") && compLower.includes("ikan")) matchCount += 5;
+      if (clause.includes("cumi") && compLower.includes("cumi")) matchCount += 5;
       if ((clause.includes("teh") || clause.includes("tea")) && (compLower.includes("teh") || compLower.includes("tea"))) matchCount += 5;
       if ((clause.includes("kopi") || clause.includes("coffee")) && compLower.includes("kopi")) matchCount += 5;
       if ((clause.includes("roti") || clause.includes("bread") || clause.includes("sub")) && (compLower.includes("roti") || compLower.includes("sub"))) matchCount += 5;
@@ -48166,7 +48871,28 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       if (activeComps.length === 1) {
         matchedIdx = components.findIndex((c) => !c.isRemoved);
       } else {
-        matchedIdx = 0;
+        const generalClarify = isMia ? "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? \u{1F60A}" : isLansia2 ? `Mohon informasikan menu mana yang ingin dikoreksi dan bagian apa yang ingin diubah, ${validatedAddr}? \u{1F33F}` : "Bagian mana yang mau dikoreksi dari meal tadi? Makanan apa yang ingin diganti, atau ada porsi yang mau diubah? \u{1F4AA}";
+        return {
+          isFood: true,
+          isCorrection: false,
+          isAmbiguous: true,
+          clarificationMessage: validateAndFormatCoachNote(generalClarify, userDataObj),
+          foodName: lastMeal.foodName,
+          correctedComponent: "",
+          oldPortion: "",
+          newPortion: "",
+          calories: lastMeal.calories,
+          protein: lastMeal.protein,
+          carbs: lastMeal.carbs,
+          fat: lastMeal.fat,
+          fiber: lastMeal.fiber || 0,
+          sugar: lastMeal.sugar || 0,
+          sodium: lastMeal.sodium || 0,
+          portionEstimates: components.map((c) => `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)`),
+          components,
+          coachComment: validateAndFormatCoachNote(generalClarify, userDataObj),
+          confidenceLevel: 95
+        };
       }
     }
     const targetComp = components[matchedIdx];
@@ -48203,7 +48929,7 @@ function applyTargetedMealCorrection(lastMeal, userText, userData) {
       changeDescriptions.push(`${targetComp.name} diubah menjadi tanpa gula`);
       continue;
     }
-    const isRemoval = /\b(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal\s+makan|nggak\s+jadi|gak\s+jadi|dihapus|hapus|tidak\s+jadi|nggak\s+pake|gak\s+pake|bukan)\b/i.test(clause);
+    const isRemoval = /\b(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal\s+makan|nggak\s+jadi|gak\s+jadi|dihapus|hapus|tidak\s+jadi|nggak\s+pake|gak\s+pake)\b/i.test(clause);
     if (isRemoval) {
       totalDeltaCal -= origCompCal;
       totalDeltaProt -= origCompProt;
@@ -49338,180 +50064,6 @@ function isValidIndonesianMobile(phone) {
   if (!e164.startsWith("+628")) return false;
   const digitsAfterPrefix = e164.substring(4);
   return digitsAfterPrefix.length >= 7 && digitsAfterPrefix.length <= 13;
-}
-
-// services/intentClassifier.ts
-function sanitizeTextForIntent(text) {
-  return text.replace(/\bgym\s*buddy\b/gi, "").replace(/\bgymbuddy\b/gi, "").trim();
-}
-function classifyUserIntent(rawText, context = {}) {
-  const text = (rawText || "").trim();
-  const lower = text.toLowerCase();
-  const sanitized = sanitizeTextForIntent(lower);
-  const isOnboardingHandshake = Boolean(
-    lower.match(/(?:halo|hello|hai|hi)\s+coach\s+(?:mia|max)/i) && lower.match(/(?:onboarding|baru\s+daftar|selesai\s+setup|akun\s+baru|siap\s+mulai)/i)
-  ) || Boolean(
-    lower.match(/(?:baru\s+(?:saja\s+)?(?:menyelesaikan|selesai)\s+onboarding)/i)
-  ) || Boolean(
-    lower.match(/(?:onboarding\s+di\s+gymbuddy)/i) && lower.match(/(?:siap\s+mulai|mulai\s+program)/i)
-  );
-  if (isOnboardingHandshake) {
-    return {
-      intent: "ONBOARDING_GREETING",
-      confidence: "high",
-      reason: "User is introducing themselves after finishing onboarding"
-    };
-  }
-  const weightRegex = /(?:update\s+bb|lapor\s+bb|berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|timbangan(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|tadi\s*nimbang|nimbang|weight)\s*(?:hari\s*ini|saat\s*ini|sekarang|skrg|terbaru|terkini|adalah|menjadi|jadi|di|=|:|udah|sudah)?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|kilo|kilogram)?\b/i;
-  const weightMatch = lower.match(weightRegex) || lower.match(/(?:sekarang|skrg|hari\s*ini|saat\s*ini)\s*(?:berat\s*(?:badan)?(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?|bb(?:\s*(?:ku|mu|nya|saya|gue|gw|aku))?)\s*(?:adalah|di|=|:|udah|sudah)?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|kilo|kilogram)?\b/i);
-  if (weightMatch) {
-    const val = parseFloat(weightMatch[1].replace(",", "."));
-    if (!isNaN(val) && val >= 30 && val <= 300) {
-      return {
-        intent: "WEIGHT_LOG",
-        confidence: "high",
-        reason: "User explicitly reported body weight update",
-        extractedDetails: { weightKg: val }
-      };
-    }
-  }
-  const isProgramConversation = Boolean(lower.match(/^(?:saya\s+)?(?:mau|ingin|siap)?\s*(?:mulai\s+)?program\s+(?:maintain|lose|gain|fat\s*loss|diet|bulking|sehat)/i)) || Boolean(lower.match(/\bprogram\s+(?:saya|aku)\s+(?:apa|bagaimana|gimana)\b/i)) || Boolean(lower.match(/^program\s+(?:saya|aku)\s+(?:maintain|lose|gain)/i));
-  if (isProgramConversation) {
-    return {
-      intent: "PROGRAM_QUESTION",
-      confidence: "high",
-      reason: "User is inquiring or stating their program, not reporting completed exercise"
-    };
-  }
-  const isWorkoutQuestion = Boolean(lower.match(/\b(?:jadwal|schedule)\s+(?:workout|latihan|olahraga|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:latihan|workout|olahraga)\s+(?:apa|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:menu|program)\s+(?:latihan|workout)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:latihan|workout|olahraga)\b/i)) || Boolean(lower.match(/\b(?:cara|bagaimana|gimana|tutorial|tips|panduan|tutor)\b/i) && lower.match(/\b(?:bench\s*press|squat|deadlift|push\s*up|pull\s*up|latihan)\b/i)) || lower.includes("?") && lower.match(/\b(?:latihan|workout|gym|olahraga)\b/i);
-  if (isWorkoutQuestion) {
-    return {
-      intent: "WORKOUT_QUESTION",
-      confidence: "high",
-      reason: "User is asking about workouts or schedules without claiming completion"
-    };
-  }
-  const hasExplicitLogCommand = Boolean(lower.match(/\b(?:catat|rekap|simpan|log|masukkan|tulis)\s+(?:workout|latihan|olahraga|sesi)/i));
-  const hasCompletionSignal = Boolean(lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis)\b/i));
-  const durationMatch = sanitized.match(/(\d+)\s*(?:menit|mins|min|jam|hours|hour)/i);
-  const durationMinutes = durationMatch ? durationMatch[0].includes("jam") || durationMatch[0].includes("hour") ? parseInt(durationMatch[1], 10) * 60 : parseInt(durationMatch[1], 10) : void 0;
-  const workoutKeywords = [
-    "gym",
-    "fitness",
-    "fitnes",
-    "angkat beban",
-    "latihan beban",
-    "berenang",
-    "renang",
-    "swimming",
-    "lari",
-    "running",
-    "jogging",
-    "joging",
-    "sprint",
-    "jalan kaki",
-    "walking",
-    "jalan santai",
-    "sepeda",
-    "bersepeda",
-    "cycling",
-    "gowes",
-    "elliptical",
-    "treadmill",
-    "hiit",
-    "plank",
-    "push up",
-    "push-up",
-    "sit up",
-    "sit-up",
-    "squat",
-    "badminton",
-    "futsal",
-    "sepak bola",
-    "basket",
-    "tenis",
-    "yoga",
-    "pilates",
-    "stretching",
-    "zumba",
-    "skipping",
-    "boxing"
-  ];
-  const matchedKeyword = workoutKeywords.find((kw) => {
-    const escaped = kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-    const regex = new RegExp(`\\b${escaped}\\b`, "i");
-    return regex.test(sanitized);
-  });
-  const isFutureIntent = Boolean(lower.match(/\b(?:mau|akan|pengen|rencana|bakal|nanti|besok|lusa)\b/i)) && !hasCompletionSignal && !hasExplicitLogCommand;
-  if (isFutureIntent) {
-    return {
-      intent: "WORKOUT_QUESTION",
-      confidence: "medium",
-      reason: "User expressed future workout plan, not past completed workout"
-    };
-  }
-  if (hasExplicitLogCommand && (matchedKeyword || durationMinutes)) {
-    return {
-      intent: "WORKOUT_LOG",
-      confidence: "high",
-      reason: "User gave explicit command to log a workout",
-      extractedDetails: { durationMinutes, activityName: matchedKeyword }
-    };
-  }
-  if (hasCompletionSignal && matchedKeyword && durationMinutes) {
-    return {
-      intent: "WORKOUT_LOG",
-      confidence: "high",
-      reason: "User reported a completed workout with duration",
-      extractedDetails: { durationMinutes, activityName: matchedKeyword }
-    };
-  }
-  if (hasCompletionSignal && matchedKeyword) {
-    return {
-      intent: "WORKOUT_LOG",
-      confidence: "medium",
-      reason: "User reported a completed workout activity",
-      extractedDetails: { activityName: matchedKeyword }
-    };
-  }
-  if (hasCompletionSignal && sanitized.match(/\b(?:latihan|olahraga|workout)\b/i) && !matchedKeyword && !durationMinutes) {
-    return {
-      intent: "VAGUE_WORKOUT_NEEDS_CLARIFICATION",
-      confidence: "medium",
-      reason: "User indicated working out but provided no activity or duration details"
-    };
-  }
-  const hasMealSignal = context.hasImage || Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) || Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
-  if (hasMealSignal) {
-    return {
-      intent: "MEAL_LOG",
-      confidence: context.hasImage ? "high" : "medium",
-      reason: "User reported food intake or provided food photo"
-    };
-  }
-  const isNutritionQuestion = Boolean(lower.match(/\b(?:kalori|protein|karbo|lemak|gula|natrium|nutrisi|makanan)\s+(?:apa|berapa|bagaimana|gimana)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:makanan|menu|makan)\b/i));
-  if (isNutritionQuestion) {
-    return {
-      intent: "NUTRITION_QUESTION",
-      confidence: "high",
-      reason: "User is asking for nutritional advice or food recommendations"
-    };
-  }
-  const isGeneralGreeting = Boolean(
-    lower.match(/^(?:halo|hai|hello|hi|pagi|selamat\s+pagi|siang|selamat\s+siang|malam|selamat\s+malam|tes|test|ping|assalamualaikum|oy|woi)\b/i)
-  );
-  if (isGeneralGreeting) {
-    return {
-      intent: "GENERAL_CONVERSATION",
-      confidence: "high",
-      reason: "User is initiating standard conversational greeting"
-    };
-  }
-  return {
-    intent: "UNKNOWN",
-    confidence: "low",
-    reason: "General conversation or open query"
-  };
 }
 
 // services/cardGenerator.ts
@@ -53183,6 +53735,13 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
   if (detectDeleteMealIntent(userText)) {
     return false;
   }
+  const details = parseMealCorrectionDetails(userText);
+  if (details) {
+    if (hasRecentMeal) return true;
+    if (details.subtype !== "MEAL_CORRECTION_GENERAL" || userText.toLowerCase().includes("koreksi") || userText.toLowerCase().includes("ralat") || userText.toLowerCase().includes("revisi")) {
+      return true;
+    }
+  }
   const clean2 = userText.trim();
   const lower = clean2.toLowerCase();
   if (lower.startsWith("koreksi:") || lower.startsWith("koreksi ") || lower.startsWith("koreksi,") || lower.startsWith("koreksi.") || lower === "koreksi" || lower.startsWith("ralat:") || lower.startsWith("ralat ") || lower.startsWith("ralat,") || lower.startsWith("edit makanan") || lower.startsWith("ganti makanan") || lower.startsWith("ganti porsi") || lower.startsWith("revisi porsi") || lower.startsWith("ubah porsi")) {
@@ -53192,7 +53751,7 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
     return true;
   }
   if (hasRecentMeal) {
-    const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe";
+    const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe|cumi|squid|udang";
     const portionUnits = "\\d+(?:[\\.,]\\d+)?\\s*(?:g|gr|gram|ml|potong|slice|sdm|sendok|buah|porsi)?|setengah|separuh|seperempat|sedikit|tanpa|1\\/2|1\\/4";
     if (new RegExp(`^(?:yang\\s+)?(?:${foodKeywords})(?:\\s*sapi|\\s*ayam|\\s*goreng)?(?:nya)?\\s*(?:tadi)?\\s*(?:cuma|hanya|cuman|jadi|sebanyak)?\\s*(?:${portionUnits})\\s*(?:aja|saja|doang)?$`, "i").test(lower) || new RegExp(`^(?:yang\\s+)?([a-z\\s]+?)\\s*(?:nya\\s*)?(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^porsi\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:jadi|cuma|hanya|sebanyak)?\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^(?:ternyata|sebenarnya|sebetulnya)\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:cuma|hanya|cuman|jadi|sebanyak)`, "i").test(lower) || new RegExp(`^(?:ubah|ganti)\\s+([a-z\\s]+?)\\s*(?:jadi|ke|menjadi)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:nya)?\\s*(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak|diubah|ganti)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:\\s*sapi|\\s*ayam)?\\s*(${portionUnits})\\s*(?:aja|saja|cuma|doang)`, "i").test(lower)) {
       return true;
@@ -53230,11 +53789,12 @@ async function processMealCorrection(rawPhone, userText, userData, targetDateStr
     console.error("[processMealCorrection] Verification Failed: No valid log ID found on meal being corrected.");
     return null;
   }
+  const finalFoodName = parsedCorrection.foodName || lastMeal.foodName;
   const updatedMealRecord = {
     ...lastMeal,
     id: originalLogId,
     // CANONICAL GUARANTEE: Preserves exact original log ID
-    foodName: lastMeal.foodName,
+    foodName: finalFoodName,
     calories: updatedCalories,
     protein: updatedProtein,
     carbs: updatedCarbs,
@@ -53265,7 +53825,7 @@ async function processMealCorrection(rawPhone, userText, userData, targetDateStr
     ...parsedCorrection,
     isFood: true,
     isCorrection: true,
-    foodName: lastMeal.foodName,
+    foodName: finalFoodName,
     calories: updatedCalories,
     protein: updatedProtein,
     carbs: updatedCarbs,

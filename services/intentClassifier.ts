@@ -16,12 +16,40 @@ export type UserIntentType =
   | "WORKOUT_LOG"
   | "VAGUE_WORKOUT_NEEDS_CLARIFICATION"
   | "MEAL_LOG"
+  | "MEAL_CORRECTION"
   | "WEIGHT_LOG"
   | "BODY_MEASUREMENT_LOG"
   | "GOAL_UPDATE"
   | "PROFILE_UPDATE"
   | "NUTRITION_QUESTION"
   | "UNKNOWN";
+
+export type MealCorrectionSubtype =
+  | "MEAL_CORRECTION_ITEM"
+  | "MEAL_CORRECTION_PORTION"
+  | "MEAL_CORRECTION_QUANTITY"
+  | "MEAL_CORRECTION_COMPONENT"
+  | "MEAL_CORRECTION_METADATA"
+  | "MEAL_CORRECTION_GENERAL";
+
+export interface MealCorrectionDetails {
+  subtype: MealCorrectionSubtype;
+  action:
+    | "replace_item"
+    | "modify_portion"
+    | "modify_quantity"
+    | "remove_component"
+    | "modify_metadata"
+    | "set_composition"
+    | "general_clarification";
+  targetItem?: string;
+  replacementItem?: string;
+  portionText?: string;
+  weightGrams?: number;
+  quantity?: number;
+  compositionItems?: string[];
+  isAmbiguous?: boolean;
+}
 
 export interface IntentClassificationResult {
   intent: UserIntentType;
@@ -32,6 +60,7 @@ export interface IntentClassificationResult {
     activityName?: string;
     weightKg?: number;
     mealDescription?: string;
+    mealCorrection?: MealCorrectionDetails;
   };
 }
 
@@ -43,6 +72,263 @@ export function sanitizeTextForIntent(text: string): string {
     .replace(/\bgym\s*buddy\b/gi, "")
     .replace(/\bgymbuddy\b/gi, "")
     .trim();
+}
+
+/**
+ * Cleans a food term by stripping leading articles and trailing suffixes.
+ */
+export function cleanFoodTerm(term: string): string {
+  if (!term) return "";
+  let res = term.trim().replace(/^[,\.\s:;"']+|[,\.\s:;"']+$/g, "");
+  res = res.replace(/^(?:itu\s+|yang\s+tadi\s+|yang\s+|tadi\s+)/i, "");
+  res = res.replace(/\s+(?:aja|saja|doang|cuma|hanya)$/i, "");
+  if (res.toLowerCase().endsWith("nya") && res.length > 5) {
+    res = res.slice(0, -3);
+  }
+  return res.trim();
+}
+
+/**
+ * Parses user text for structured meal correction details across all supported subtypes:
+ * - MEAL_CORRECTION_ITEM (replacing an ingredient e.g. "itu cumi, bukan daging")
+ * - MEAL_CORRECTION_PORTION (portion/gram changes e.g. "nasinya cuma 100 gram")
+ * - MEAL_CORRECTION_QUANTITY (unit counts e.g. "telurnya dua butir")
+ * - MEAL_CORRECTION_COMPONENT (removing an item e.g. "telurnya nggak jadi")
+ * - MEAL_CORRECTION_METADATA (modifiers e.g. "es tehnya tanpa gula")
+ * - MEAL_CORRECTION_GENERAL (explicit composition e.g. "meal tadi isinya..." or ambiguous "koreksi meal tadi")
+ */
+export function parseMealCorrectionDetails(
+  rawText: string,
+  lastMeal?: any
+): MealCorrectionDetails | null {
+  if (!rawText || typeof rawText !== "string") return null;
+  const cleanRaw = rawText.trim();
+  const lower = cleanRaw.toLowerCase();
+
+  // Strip leading correction commands
+  const stripped = lower
+    .replace(/^(?:koreksi|ralat|revisi|edit\s+makanan|ganti\s+makanan)[:,\s]*/i, "")
+    .trim();
+
+  // 1. Bare / Generic ambiguity: "koreksi", "ralat", "koreksi meal tadi", "yang tadi salah"
+  if (
+    !stripped ||
+    stripped === "meal" ||
+    stripped === "meal tadi" ||
+    stripped === "meal tadi." ||
+    stripped === "makanan" ||
+    stripped === "makanan tadi" ||
+    stripped === "porsi" ||
+    stripped === "porsi tadi" ||
+    stripped === "yang tadi salah" ||
+    stripped === "yang tadi salah." ||
+    stripped === "tadi salah" ||
+    stripped === "salah semua" ||
+    stripped === "salah" ||
+    stripped === "menu tadi" ||
+    lower === "koreksi meal tadi." ||
+    lower === "koreksi meal tadi" ||
+    lower === "koreksi meal" ||
+    lower === "yang tadi salah." ||
+    lower === "yang tadi salah"
+  ) {
+    return {
+      subtype: "MEAL_CORRECTION_GENERAL",
+      action: "general_clarification",
+      isAmbiguous: true
+    };
+  }
+
+  // 2. Explicit Whole Composition:
+  // "koreksi meal, itu nasi putih dan cumi sambal"
+  // "Meal tadi isinya nasi putih sama cumi sambal."
+  // "Yang ada di meal tadi cuma nasi putih dan cumi sambal."
+  const compMatch =
+    stripped.match(/^(?:meal,?\s*itu|meal\s+tadi\s+isinya|isinya\s+(?:cuma|hanya)?|yang\s+ada\s+di\s+meal\s+tadi\s+cuma|meal\s+tadi\s+cuma|sebenarnya\s+cuma)\s+(.+)$/i) ||
+    lower.match(/(?:meal\s+tadi\s+isinya|yang\s+ada\s+di\s+meal\s+tadi\s+cuma|koreksi\s+meal,?\s*itu)\s+(.+)$/i);
+
+  if (compMatch) {
+    const rawItems = compMatch[1]
+      .split(/\s*(?:dan|sama|serta|&|\+|,)\s*/i)
+      .map(s => cleanFoodTerm(s))
+      .filter(s => s.length >= 2 && !/^(?:dan|sama|cuma|hanya|aja|saja|doang|tanpa)$/i.test(s));
+
+    if (rawItems.length >= 2) {
+      return {
+        subtype: "MEAL_CORRECTION_GENERAL",
+        action: "set_composition",
+        compositionItems: rawItems
+      };
+    }
+  }
+
+  // 3. Item Replacement (MEAL_CORRECTION_ITEM)
+  // Pattern 3a: "itu cumi, bukan daging sambal" / "cumi, bukan daging"
+  const p1 = stripped.match(/^(?:itu\s+|yang\s+tadi\s+)?([a-zA-Z0-9\s]+?)\s*,\s*bukan\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p1) {
+    const replacement = cleanFoodTerm(p1[1]);
+    const target = cleanFoodTerm(p1[2]);
+    if (replacement && target) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // Pattern 3b: "yang tadi bukan ayam, tapi cumi" / "bukan daging, itu cumi sambal" / "bukan daging tapi cumi"
+  const p2 = stripped.match(/^(?:yang\s+tadi\s+)?bukan\s+([a-zA-Z0-9\s]+?)(?:,\s*|\s+)(?:tapi|melainkan|sebenarnya|harusnya|itu)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p2) {
+    const target = cleanFoodTerm(p2[1]);
+    const replacement = cleanFoodTerm(p2[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // Pattern 3c: "bukan telur ceplok, telur orak-arik"
+  const p3 = stripped.match(/^bukan\s+([a-zA-Z0-9\s]+?)\s*,\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p3) {
+    const target = cleanFoodTerm(p3[1]);
+    const replacement = cleanFoodTerm(p3[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // Pattern 3d: "ganti daging sambal jadi cumi sambal" / "ubah daging jadi cumi"
+  const p4 = stripped.match(/^(?:ubah|ganti)\s+([a-zA-Z0-9\s]+?)\s+(?:jadi|menjadi|ke|sama|dengan)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p4) {
+    const target = cleanFoodTerm(p4[1]);
+    const replacement = cleanFoodTerm(p4[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // Pattern 3e: "daging sambalnya salah, itu cumi" / "dagingnya sebenarnya ayam"
+  const p5 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s+(?:salah|sebenarnya|sebetulnya|harusnya|harus\s*nya)\s*(?:itu|jadi|,)?\s*([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p5) {
+    const target = cleanFoodTerm(p5[1]);
+    const replacement = cleanFoodTerm(p5[2]);
+    if (target && replacement) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: target,
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // Pattern 3f: "yang terakhir itu cumi sambal" / "yang tadi itu cumi"
+  const p6 = stripped.match(/^(?:yang\s+(?:tadi|terakhir)\s+(?:itu\s+)?|terakhir(?:nya)?\s+(?:itu\s+)?)([a-zA-Z0-9\s]+?)[.]?$/i);
+  if (p6 && !stripped.includes("bukan")) {
+    const replacement = cleanFoodTerm(p6[1]);
+    if (replacement && !/^(?:setengah|seperempat|sedikit|\d+)/i.test(replacement)) {
+      return {
+        subtype: "MEAL_CORRECTION_ITEM",
+        action: "replace_item",
+        targetItem: "last_item",
+        replacementItem: replacement
+      };
+    }
+  }
+
+  // 4. Component Removal (MEAL_CORRECTION_COMPONENT)
+  // "telurnya nggak jadi", "tanpa tahu", "nggak pake sambal", "hapus telur", "ternyata aku tidak makan tahunya"
+  const r1 = stripped.match(/^(?:ternyata\s+)?(?:aku\s+|saya\s+|gue\s+)?(?:tidak\s+makan|nggak\s+makan|gak\s+makan|ngga\s+makan|tanpa|batal(?:\s+makan)?|hapus|dihapus|nggak\s+jadi|gak\s+jadi|tidak\s+jadi|nggak\s+pake|gak\s+pake)\s+([a-zA-Z0-9\s]+?)[.]?$/i);
+  const r2 = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tidak|nggak|gak|ngga)\s*(?:jadi|dimakan|pake|pakai)|batal|dihapus$/i);
+  if (r1 || r2) {
+    const target = cleanFoodTerm(r1 ? r1[1] : r2![1]);
+    if (target) {
+      return {
+        subtype: "MEAL_CORRECTION_COMPONENT",
+        action: "remove_component",
+        targetItem: target
+      };
+    }
+  }
+
+  // 5. Metadata (MEAL_CORRECTION_METADATA)
+  // "es tehnya tanpa gula", "es teh tawar"
+  if (/\b(?:tanpa\s+gula|tidak\s+pakai\s+gula|gak\s+pakai\s+gula|tawar|no\s+sugar|less\s+sugar|bebas\s+gula|kurang\s+manis)\b/i.test(stripped)) {
+    const targetMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tanpa|tawar|no\s+sugar|less\s+sugar)/i);
+    return {
+      subtype: "MEAL_CORRECTION_METADATA",
+      action: "modify_metadata",
+      targetItem: targetMatch ? cleanFoodTerm(targetMatch[1]) : "minuman"
+    };
+  }
+
+  // 6. Quantity (MEAL_CORRECTION_QUANTITY)
+  // "telurnya dua butir", "ayamnya 2 potong", "ayamnya cuma setengah potong"
+  const qtyMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:cuma|hanya|sebanyak|jadi)?\s*(\d+|satu|dua|tiga|empat|lima|setengah|separuh|1\/2)\s*(butir|potong|buah|slice|biji|mangkok|piring)[.]?$/i);
+  if (qtyMatch) {
+    const numMap: Record<string, number> = { satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, setengah: 0.5, separuh: 0.5, "1/2": 0.5 };
+    const rawVal = qtyMatch[2].toLowerCase();
+    const qty = numMap[rawVal] || parseFloat(rawVal);
+    const unit = qtyMatch[3];
+    return {
+      subtype: "MEAL_CORRECTION_QUANTITY",
+      action: "modify_quantity",
+      targetItem: cleanFoodTerm(qtyMatch[1]),
+      quantity: qty,
+      portionText: qty === 0.5 ? `1/2 ${unit}` : `${qty} ${unit}`
+    };
+  }
+
+  // 7. Portion (MEAL_CORRECTION_PORTION)
+  // "nasinya cuma 100 gram", "nasinya cuma setengah", "cuminya sekitar 150 gram"
+  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram)|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4)[.]?$/i);
+  if (portMatch) {
+    const target = cleanFoodTerm(portMatch[1]);
+    const portionText = portMatch[2].trim();
+    const gramMatch = portionText.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram)/i);
+    const weightGrams = gramMatch ? parseFloat(gramMatch[1].replace(",", ".")) : undefined;
+    return {
+      subtype: "MEAL_CORRECTION_PORTION",
+      action: "modify_portion",
+      targetItem: target,
+      portionText,
+      weightGrams
+    };
+  }
+
+  // 8. Ambiguous single food mention: ONLY if it's 1-2 words naming a component without portions or verbs (e.g. "ayamnya", "nasi putih")
+  if (!/\b(?:cuma|hanya|setengah|separuh|seperempat|tidak|nggak|gak|batal|makan|gram|g|gr|potong|buah|butir|dan|sama|kcal|kalori)\b/i.test(stripped)) {
+    const words = stripped.split(/\s+/).filter(Boolean);
+    if (words.length <= 2) {
+      const target = cleanFoodTerm(stripped);
+      if (target) {
+        return {
+          subtype: "MEAL_CORRECTION_GENERAL",
+          action: "general_clarification",
+          targetItem: target,
+          isAmbiguous: true
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -235,8 +521,20 @@ export function classifyUserIntent(
       reason: "User indicated working out but provided no activity or duration details"
     };
   }
+  // ── 6. MEAL CORRECTION & LOGGING ──────────────────────────────────────────
+  // Check for MEAL_CORRECTION first if recent meal exists or text has correction indicators
+  const correctionDetails = parseMealCorrectionDetails(rawText);
+  if (correctionDetails && (context.hasRecentMeal || lower.match(/^(?:koreksi|ralat|revisi|ganti\s+makanan|bukan\s+|itu\s+cumi)/i))) {
+    return {
+      intent: "MEAL_CORRECTION",
+      confidence: "high",
+      reason: `User requested meal correction (${correctionDetails.subtype}: ${correctionDetails.action})`,
+      extractedDetails: {
+        mealCorrection: correctionDetails
+      }
+    };
+  }
 
-  // ── 6. MEAL LOGGING ───────────────────────────────────────────────────────
   // e.g. "Tadi saya makan nasi ayam", "Makan siang ayam geprek", sends image
   const hasMealSignal =
     context.hasImage ||

@@ -210,6 +210,46 @@ export const INDONESIAN_FOOD_ONTOLOGY: IndonesianDishEntry[] = [
       sodium: 340
     }
   },
+  // Cumi Sambal / Cumi Balado (Squid in Chili Sambal / Balado)
+  {
+    patterns: [/\b(?:cumi\s*(?:sambal|balado|pedas|cabe\s*ijo)|sambal\s*cumi|tumis\s*cumi)\b/i],
+    canonicalName: "Cumi Sambal",
+    concept: "Squid cooked in spicy chili sambal or balado sauce",
+    protein: "squid",
+    cookingMethod: "tumis",
+    category: "meal",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi sambal (~80g)",
+    fallbackNutrientPer100g: {
+      calories: 145,
+      protein: 18.0,
+      carbs: 4.5,
+      fat: 6.5,
+      fiber: 0.8,
+      sugar: 1.2,
+      sodium: 380
+    }
+  },
+  // Cumi (Cooked / boiled / grilled squid)
+  {
+    patterns: [/^(?:cumi|squid)$/i, /\b(?:cumi\s*(?:rebus|bakar|panggang|masak))\b/i],
+    canonicalName: "Cumi",
+    concept: "Cooked squid protein",
+    protein: "squid",
+    cookingMethod: "tumis",
+    category: "meal",
+    defaultServingGrams: 80,
+    servingUnit: "1 porsi cumi (~80g)",
+    fallbackNutrientPer100g: {
+      calories: 135,
+      protein: 17.5,
+      carbs: 3.0,
+      fat: 5.5,
+      fiber: 0.0,
+      sugar: 0.0,
+      sodium: 310
+    }
+  },
   // Kerang Rebus (Boiled Shellfish / Clams with dipping sauce)
   {
     patterns: [/\b(?:kerang\s+rebus|boiled\s+(?:clams|shellfish))\b/i],
@@ -683,6 +723,10 @@ export function resolveCanonicalFoodIdentity(rawText: string): ResolvedFoodIdent
     canonicalName = "Nasi Putih";
   } else if (lower === "telur" || lower === "telor") {
     canonicalName = "Telur";
+  } else if (lower === "cumi" || lower === "squid") {
+    canonicalName = "Cumi";
+  } else if (lower === "cumi sambal" || lower === "sambal cumi") {
+    canonicalName = "Cumi Sambal";
   }
 
   return {

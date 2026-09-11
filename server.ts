@@ -119,6 +119,7 @@ import {
 import {
   classifyUserIntent,
   sanitizeTextForIntent,
+  parseMealCorrectionDetails,
   type IntentClassificationResult,
   type UserIntentType
 } from "./services/intentClassifier";
@@ -3140,10 +3141,24 @@ export function detectMealCorrectionIntent(userText: string, hasRecentMeal: bool
     return false;
   }
 
+  // 1. Check structured parser first
+  const details = parseMealCorrectionDetails(userText);
+  if (details) {
+    if (hasRecentMeal) return true;
+    if (
+      details.subtype !== "MEAL_CORRECTION_GENERAL" ||
+      userText.toLowerCase().includes("koreksi") ||
+      userText.toLowerCase().includes("ralat") ||
+      userText.toLowerCase().includes("revisi")
+    ) {
+      return true;
+    }
+  }
+
   const clean = userText.trim();
   const lower = clean.toLowerCase();
 
-  // 1. Explicit prefixes & commands
+  // 2. Explicit prefixes & commands
   if (
     lower.startsWith("koreksi:") ||
     lower.startsWith("koreksi ") ||
@@ -3166,9 +3181,9 @@ export function detectMealCorrectionIntent(userText: string, hasRecentMeal: bool
     return true;
   }
 
-  // 2. Natural language component updates when a recent meal exists
+  // 3. Natural language component updates when a recent meal exists
   if (hasRecentMeal) {
-    const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe";
+    const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe|cumi|squid|udang";
     const portionUnits = "\\d+(?:[\\.,]\\d+)?\\s*(?:g|gr|gram|ml|potong|slice|sdm|sendok|buah|porsi)?|setengah|separuh|seperempat|sedikit|tanpa|1\\/2|1\\/4";
 
     if (
@@ -3238,10 +3253,12 @@ export async function processMealCorrection(
     return null;
   }
 
+  const finalFoodName = parsedCorrection.foodName || lastMeal.foodName;
+
   const updatedMealRecord: MealLog = {
     ...lastMeal,
     id: originalLogId, // CANONICAL GUARANTEE: Preserves exact original log ID
-    foodName: lastMeal.foodName,
+    foodName: finalFoodName,
     calories: updatedCalories,
     protein: updatedProtein,
     carbs: updatedCarbs,
@@ -3276,7 +3293,7 @@ export async function processMealCorrection(
     ...parsedCorrection,
     isFood: true,
     isCorrection: true,
-    foodName: lastMeal.foodName,
+    foodName: finalFoodName,
     calories: updatedCalories,
     protein: updatedProtein,
     carbs: updatedCarbs,
