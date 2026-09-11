@@ -116,10 +116,18 @@ import {
   type ResolvedSubscription,
   type PlanEntitlements
 } from "./services/subscriptionEngine";
+import {
+  classifyUserIntent,
+  sanitizeTextForIntent,
+  type IntentClassificationResult,
+  type UserIntentType
+} from "./services/intentClassifier";
 
 export {
   getUserPlanCapabilities,
   classifyUserInput,
+  classifyUserIntent,
+  sanitizeTextForIntent,
   validatePlanContext,
   formatDashboardMacro,
   formatDashboardInteger,
@@ -4064,6 +4072,121 @@ function generateWelcomeMessages(userData: ReturnType<typeof calculateUserData>)
   return [fullGreeting];
 }
 
+/**
+ * Generates an onboarding handshake welcome response for new users connecting on WhatsApp.
+ * Welcomes the user warmly, acknowledges their program, provides clear instructions,
+ * and asks how they would like to begin.
+ * 
+ * CRITICAL: MUST NEVER log workouts, meals, or any fake data.
+ */
+export function generateOnboardingHandshakeResponse(userData: ReturnType<typeof calculateUserData>): string {
+  const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+  const coachName = isMia ? "Coach Mia" : "Coach Max";
+  const addressing = getValidatedUserAddressing(userData);
+  const name = addressing.validatedAddress || userData.name || "Sobat";
+  const goalTitle = userData.goalTitle || (
+    userData.goal === "lose"
+      ? "Menurunkan Berat Badan"
+      : userData.goal === "gain"
+      ? "Menaikkan Berat Badan"
+      : "Program Maintain / Gaya Hidup Sehat"
+  );
+  const targetCal = userData.targetCalories || 2000;
+  const targetProtein = userData.proteinGrams || 120;
+
+  if (isMia) {
+    return (
+      `Halo ${name}! Senang banget kamu sudah resmi terhubung di GymBuddy 🎉\n` +
+      `Aku *Coach Mia*, pelatih nutrisi & kebugaran pribadimu! ✨\n\n` +
+      `Program kamu: *${goalTitle}*\n` +
+      `🎯 Target Harian: *~${targetCal} kcal* (Protein: *~${targetProtein}g*)\n\n` +
+      `Di WhatsApp ini, kamu bisa langsung:\n` +
+      `📸 *Kirim foto makanan*: Aku akan analisis nutrisi, porsi & kalorinya otomatis.\n` +
+      `🏋️‍♂️ *Menu & Catat Latihan*: Tanyakan menu latihan hari ini, atau laporkan latihan yang selesai kamu lakukan (contoh: _"Saya baru selesai gym 45 menit"_).\n` +
+      `⚖️ *Update Berat Badan*: Ketik update berat badan kapan saja (contoh: _"Berat saya sekarang 72 kg"_).\n` +
+      `💬 *Tanya Jawab*: Konsultasi seputar nutrisi, diet, atau tips latihan kapan saja!\n\n` +
+      `Mau mulai dari mana hari ini, ${name}? Mau cek rekomendasi menu makan, jadwal latihan, atau ada yang ingin ditanyakan seputar programmu? 😊`
+    );
+  } else {
+    return (
+      `Halo ${name}! Selamat bergabung di GymBuddy bro! 💪\n` +
+      `Gue *Coach Max*, siap dampingi lo capai target kebugaran maksimal!\n\n` +
+      `Program lo: *${goalTitle}*\n` +
+      `🎯 Target Harian: *~${targetCal} kcal* (Protein: *~${targetProtein}g*)\n\n` +
+      `Cara pakai bot WhatsApp ini simpel banget:\n` +
+      `📸 *Foto Makanan*: Langsung kirim foto apa yang lo makan buat gue hitung kalorinya.\n` +
+      `🏋️‍♂️ *Latihan*: Minta jadwal workout hari ini atau lapor sesi yang beres lo lakuin (contoh: _"Saya baru selesai gym 45 menit"_).\n` +
+      `⚖️ *Lapor BB*: Update timbangan lo kapan saja (contoh: _"Berat saya sekarang 72 kg"_).\n` +
+      `💬 *Konsultasi*: Tanya teknik gerakan, suplemen, atau strategi program lo!\n\n` +
+      `Lo mau mulai dari mana sekarang, ${name}? Mau lihat jadwal latihan hari ini atau cek target nutrisi lo? 🔥`
+    );
+  }
+}
+
+/**
+ * Answers questions about the user's program/target without creating workout or meal logs.
+ */
+export function generateProgramQuestionResponse(userData: ReturnType<typeof calculateUserData>, userText: string): string {
+  const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+  const addressing = getValidatedUserAddressing(userData);
+  const name = addressing.validatedAddress || userData.name || "Sobat";
+  const goalTitle = userData.goalTitle || "Program Kebugaran";
+  const targetCal = userData.targetCalories || 2000;
+  const targetProtein = userData.proteinGrams || 120;
+  const targetCarbs = userData.carbGrams || 220;
+  const targetFat = userData.fatGrams || 55;
+
+  if (isMia) {
+    return (
+      `Hai ${name}! Ini gambaran ringkas program kamu di GymBuddy ✨\n\n` +
+      `📋 *Program*: ${goalTitle}\n` +
+      `🔥 *Target Kalori*: ~${targetCal} kcal / hari\n` +
+      `🥩 *Target Protein*: ~${targetProtein}g\n` +
+      `🍚 *Target Karbo*: ~${targetCarbs}g\n` +
+      `🥑 *Target Lemak*: ~${targetFat}g\n\n` +
+      `Program ini dirancang untuk menjaga metabolisme tetap optimal dan komposisi tubuh seimbang. Kamu bisa cek detail menu makanan sehat atau minta jadwal latihan kapan saja ya!\n\n` +
+      `Ketik *\"jadwal latihan hari ini\"* atau *\"rekomendasi makan\"* kalau mau langsung lanjut! 😊`
+    );
+  } else {
+    return (
+      `Yo ${name}! Ini ringkasan program lo di GymBuddy: 🔥\n\n` +
+      `📋 *Program*: ${goalTitle}\n` +
+      `🔥 *Target Kalori*: ~${targetCal} kcal / hari\n` +
+      `🥩 *Target Protein*: ~${targetProtein}g\n` +
+      `🍚 *Target Karbo*: ~${targetCarbs}g\n` +
+      `🥑 *Target Lemak*: ~${targetFat}g\n\n` +
+      `Fokus kita adalah konsistensi beban dan pemenuhan protein harian. Lo bisa langsung cek jadwal latihan hari ini atau konsultasi menu makan siang lo sekarang!\n\n` +
+      `Ketik *\"jadwal workout hari ini\"* atau *\"saran makan\"* buat gas langsung bro! 💪`
+    );
+  }
+}
+
+/**
+ * Handles vague workout mentions (e.g. "Saya baru latihan") by asking for clarification
+ * instead of fabricating exercises.
+ */
+export function generateVagueWorkoutClarificationResponse(userData: ReturnType<typeof calculateUserData>, userText: string): string {
+  const isMia = (userData.persona || "mia").toLowerCase().includes("mia");
+  const addressing = getValidatedUserAddressing(userData);
+  const name = addressing.validatedAddress || userData.name || "Sobat";
+
+  if (isMia) {
+    return (
+      `Hebat sudah aktif berolahraga hari ini, ${name}! 🎉\n\n` +
+      `Boleh kasih tahu aku jenis olahraganya apa dan berapa lama durasinya? ✨\n` +
+      `Contoh: _\"Saya baru selesai gym 45 menit\"_ atau _\"Tadi lari santai 30 menit\"_.\n\n` +
+      `Supaya bisa aku catat lengkap di Dashboard kamu ya! 💪`
+    );
+  } else {
+    return (
+      `Mantap udah kelar latihan bro, ${name}! 🔥\n\n` +
+      `Biar bisa gue masukin ke riwayat workout Dashboard, olahraganya apa dan berapa lama?\n` +
+      `Contoh: _\"Selesai gym 45 menit\"_ atau _\"Tadi sepedaan 40 menit\"_.\n\n` +
+      `Ketik aja di sini, langsung gue rekap! 💪`
+    );
+  }
+}
+
 function formatHistoricalFoodLog(
   userData: ReturnType<typeof calculateUserData>,
   dailyTotals: ReturnType<typeof getDailyTotals>,
@@ -4481,6 +4604,21 @@ export function handleAdditionalActivityLogging(
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   const lower = userText.toLowerCase().trim();
 
+  // Guard 0: Strict Intent Classification Gate
+  // Conversational introductions, onboarding greetings, and program queries must NEVER log workout
+  const classifiedIntent = classifyUserIntent(userText);
+  if (
+    classifiedIntent.intent === "ONBOARDING_GREETING" ||
+    classifiedIntent.intent === "GENERAL_CONVERSATION" ||
+    classifiedIntent.intent === "PROGRAM_QUESTION" ||
+    classifiedIntent.intent === "WORKOUT_QUESTION" ||
+    classifiedIntent.intent === "NUTRITION_QUESTION" ||
+    classifiedIntent.intent === "WEIGHT_LOG" ||
+    classifiedIntent.intent === "VAGUE_WORKOUT_NEEDS_CLARIFICATION"
+  ) {
+    return null;
+  }
+
   // Guard 1: Questions or tutorials / tips
   if (userText.includes("?") || lower.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i)) {
     return null;
@@ -4546,10 +4684,17 @@ export function handleAdditionalActivityLogging(
   const params = extractWorkoutParameters(userText);
   const isStrengthStructured = Boolean(params.sets || params.reps || params.weightKg);
 
-  // Match activity type
+  // Sanitize text: strip "gymbuddy" so brand name does not falsely trigger "gym"
+  const sanitized = sanitizeTextForIntent(lower);
+
+  // Match activity type using word boundary regex on sanitized text
   let matchedAct = null;
   for (const act of ADDITIONAL_ACTIVITY_MAP) {
-    if (act.keywords.some(k => lower.includes(k))) {
+    const hasWordMatch = act.keywords.some(k => {
+      const escaped = k.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+      return new RegExp(`\\b${escaped}\\b`, "i").test(sanitized);
+    });
+    if (hasWordMatch) {
       // If it matches gym/strength but user provided specific sets/reps/weight, let strength logging handle it
       if (act.keywords.includes("gym") && isStrengthStructured) {
         continue;
@@ -4561,8 +4706,10 @@ export function handleAdditionalActivityLogging(
 
   if (!matchedAct) return null;
 
-  // For generic activities, require an explicit completion signal OR specific duration/distance/sets
-  if (matchedAct.category === "general" && !hasCompletionSignal && !params.durationMinutes && !params.durationSeconds && !params.distanceKm && !isStrengthStructured) {
+  // STRICT SAFETY GUARD:
+  // Activity logging MUST have either an explicit completion signal OR specific duration/distance/sets
+  // NEVER invent or assume a workout session just because a keyword was mentioned!
+  if (!hasCompletionSignal && !params.durationMinutes && !params.durationSeconds && !params.distanceKm && !isStrengthStructured) {
     return null;
   }
 
@@ -4688,6 +4835,20 @@ export function handleWorkoutProgressLogging(
   const phone = normalizePhone(rawPhone);
   const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
   const lower = userText.toLowerCase().trim();
+
+  // Guard -1: Strict Intent Classification Gate
+  // Conversational greetings, onboarding handshakes, and program queries must NEVER log workout
+  const classifiedIntent = classifyUserIntent(userText);
+  if (
+    classifiedIntent.intent === "ONBOARDING_GREETING" ||
+    classifiedIntent.intent === "GENERAL_CONVERSATION" ||
+    classifiedIntent.intent === "PROGRAM_QUESTION" ||
+    classifiedIntent.intent === "WORKOUT_QUESTION" ||
+    classifiedIntent.intent === "NUTRITION_QUESTION" ||
+    classifiedIntent.intent === "WEIGHT_LOG"
+  ) {
+    return null;
+  }
 
   // Guard 0: Body weight update (e.g. "berat aku skrng 75kg", "bb 75", "update bb 70")
   if (matchPureWeightLog(userText)) {
@@ -4829,7 +4990,8 @@ export function handleWorkoutProgressLogging(
   }
 
   // Check if message indicates progress, reporting, or structured details
-  const hasWorkoutSignal = lower.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|aku melakukan|aku olahraga|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku|tadi)/i);
+  const sanitized = sanitizeTextForIntent(lower);
+  const hasWorkoutSignal = sanitized.match(/(?:sudah|udah|telah|selesai|beres|done|lapor|catat|aku latihan|aku workout|aku melakukan|aku olahraga|latihan\s+[a-z]+|main\s+[a-z]+|barusan|tadi\s+aku|tadi)/i);
   const hasStructure = Boolean(params.sets || params.reps || params.weightKg);
 
   if (!hasWorkoutSignal && !hasStructure) {
@@ -6044,7 +6206,13 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
       console.log(`[Account] Connected WhatsApp ${canonicalPhone} to user ${finalProfile.name} (Plan: ${finalProfile.plan || "free_trial"}) ✅`);
       const token = generateAuthToken({ userId: finalProfile.userId, phone: canonicalPhone });
-      return res.json({ success: true, user: finalProfile, order, token });
+      const botNumber = (
+        process.env.VITE_WHATSAPP_BOT_NUMBER ||
+        process.env.WHATSAPP_BOT_NUMBER ||
+        process.env.TWILIO_PHONE_NUMBER ||
+        "14155238886"
+      ).replace(/[^\d]/g, "");
+      return res.json({ success: true, user: finalProfile, order, token, botNumber });
     } finally {
       activeRegistrationLocks.delete(canonicalPhone);
     }
@@ -8347,7 +8515,15 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             return res.status(200).send("EVENT_RECEIVED");
           }
 
-          const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+          // Strict Intent Classification Gate
+          const classifiedIntent = classifyUserIntent(userText, {
+            hasImage: Boolean(imagePart),
+            userProfile
+          });
+          const isOnboardingHandshake = classifiedIntent.intent === "ONBOARDING_GREETING";
+
+          const isWelcomeMessage = isOnboardingHandshake ||
+                                   (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                    (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
           // If not in memory, check Firestore directly
@@ -8487,18 +8663,28 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           let responseMessages: string[] = [];
 
           if (isWelcomeMessage) {
-            const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
-            const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
-            let updatedProfileNeeded = false;
-            if (nameMatch) { userProfile.name = nameMatch[1].trim(); updatedProfileNeeded = true; }
-            if (targetMatch) { userProfile.goalTitle = targetMatch[1].trim(); updatedProfileNeeded = true; }
+            if (isOnboardingHandshake) {
+              const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([a-zA-Z0-9_\s]+?)(?:,|\.|\bbaru\b|\buntuk\b|\bsiap\b)/i);
+              if (nameMatch && nameMatch[1].trim() && (!userProfile.name || userProfile.name === "Member" || userProfile.name === "Member GymBuddy")) {
+                userProfile.name = nameMatch[1].trim();
+                saveUserProfile(from, userProfile);
+              }
+              const currentCalculated = calculateUserData(userProfile);
+              responseMessages = [generateOnboardingHandshakeResponse(currentCalculated)];
+            } else {
+              const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
+              const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
+              let updatedProfileNeeded = false;
+              if (nameMatch) { userProfile.name = nameMatch[1].trim(); updatedProfileNeeded = true; }
+              if (targetMatch) { userProfile.goalTitle = targetMatch[1].trim(); updatedProfileNeeded = true; }
 
-            if (updatedProfileNeeded) {
-              saveUserProfile(from, userProfile);
+              if (updatedProfileNeeded) {
+                saveUserProfile(from, userProfile);
+              }
+
+              const currentCalculated = calculateUserData(userProfile);
+              responseMessages = generateWelcomeMessages(currentCalculated);
             }
-
-            const currentCalculated = calculateUserData(userProfile);
-            responseMessages = generateWelcomeMessages(currentCalculated);
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
@@ -8591,6 +8777,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                   responseMessages = ["Profil kamu belum terdaftar di database. Silakan isi kuesioner terlebih dahulu!"];
                 }
               }
+            } else if (classifiedIntent.intent === "PROGRAM_QUESTION") {
+              responseMessages = [generateProgramQuestionResponse(userData, userText)];
+            } else if (classifiedIntent.intent === "VAGUE_WORKOUT_NEEDS_CLARIFICATION") {
+              responseMessages = [generateVagueWorkoutClarificationResponse(userData, userText)];
             } else if (handleWorkoutProgressLogging(from, userText, userData)) {
               if (!planCapabilities.canWorkout) {
                 responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
@@ -8973,7 +9163,15 @@ function escapeXml(unsafe: string): string {
         await sendWhatsAppAsync(rawFrom, loginAck, req.body?.To);
         return res.type("text/xml").send("<Response></Response>");
       }
-      const isWelcomeMessage = (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
+      // Strict Intent Classification Gate
+      const classifiedIntent = classifyUserIntent(userText, {
+        hasImage: Boolean(NumMedia && parseInt(NumMedia) > 0),
+        userProfile
+      });
+      const isOnboardingHandshake = classifiedIntent.intent === "ONBOARDING_GREETING";
+
+      const isWelcomeMessage = isOnboardingHandshake ||
+                               (lowerText.includes("gymbuddy") && (lowerText.includes("target harian") || lowerText.includes("target saya") || lowerText.includes("tolong kirimkan"))) ||
                                (lowerText.includes("nama saya") && lowerText.includes("target saya"));
 
       // ─── 1. IMMEDIATELY SEND SHORT COACH ACKNOWLEDGMENT MESSAGE ───
@@ -9238,70 +9436,81 @@ function escapeXml(unsafe: string): string {
           mediaUrlToSend = guide.mediaUrl;
         }
       } else if (isWelcomeMessage) {
-        const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
-        const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
-
-        let updatedProfileNeeded = false;
-        if (nameMatch && nameMatch[1].trim()) {
-          userProfile.name = nameMatch[1].trim();
-          updatedProfileNeeded = true;
-        }
-        if (targetMatch && targetMatch[1].trim()) {
-          const rawT = targetMatch[1].trim();
-          userProfile.goalTitle = rawT;
-          if (rawT.toLowerCase().includes("health") || rawT.toLowerCase().includes("sehat")) {
-            userProfile.goal = "health";
-            userProfile.goalTitle = "Gaya Hidup Sehat & Fit";
-          } else if (rawT.toLowerCase().includes("lose") || rawT.toLowerCase().includes("turun")) {
-            userProfile.goal = "lose";
-            userProfile.goalTitle = "Menurunkan Berat Badan";
-          } else if (rawT.toLowerCase().includes("gain") || rawT.toLowerCase().includes("naik")) {
-            userProfile.goal = "gain";
-            userProfile.goalTitle = "Menaikkan Berat Badan";
+        if (isOnboardingHandshake) {
+          const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([a-zA-Z0-9_\s]+?)(?:,|\.|\bbaru\b|\buntuk\b|\bsiap\b)/i);
+          if (nameMatch && nameMatch[1].trim() && (!userProfile.name || userProfile.name === "Member" || userProfile.name === "Member GymBuddy")) {
+            userProfile.name = nameMatch[1].trim();
           }
-          updatedProfileNeeded = true;
-        }
-
-        if (updatedProfileNeeded) {
-          saveUserProfile(normFrom, userProfile);
-        }
-
-        if (userProfile.hasReceivedWelcome) {
-          const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
-          const ageNum = Number(userProfile.age) || 25;
-          const isLansia = ageNum >= 60;
-          const cleanName = (userData.name || "Member").trim();
-          const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-
-          let shortWelcome = "";
-          if (userData.persona === "max") {
-            if (isLansia) {
-              const honorific = isFemale ? "Bu" : "Pak";
-              shortWelcome = `🔥 *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi Anda.\n\n` +
-                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau tanya panduan latihan? Kirim saja langsung di sini! 💪`;
-            } else if (isFemale) {
-              shortWelcome = `🔥 *HALO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi kamu!\n\n` +
-                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
-            } else {
-              shortWelcome = `🔥 *YO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi lo!\n\n` +
-                `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
-            }
-          } else {
-            if (isLansia) {
-              const honorific = isFemale ? "Bu" : "Pak";
-              shortWelcome = `✨ *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} di sini. 🥰\n\n` +
-                `Silakan kirim makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan kapan saja ya! 🌿`;
-            } else {
-              shortWelcome = `✨ *HALO ${cleanName.toUpperCase()}!* ${coachName} di sini! 🥰\n\n` +
-                `Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan? Silakan kirim kapan saja ya! 🌿`;
-            }
-          }
-          responseMessages = [shortWelcome];
-        } else {
           userProfile.hasReceivedWelcome = true;
           saveUserProfile(normFrom, userProfile);
           const currentCalculated = calculateUserData(userProfile);
-          responseMessages = generateWelcomeMessages(currentCalculated);
+          responseMessages = [generateOnboardingHandshakeResponse(currentCalculated)];
+        } else {
+          const nameMatch = userText.match(/(?:i am|saya|nama saya)\s+([^,!\.\n]+)/i);
+          const targetMatch = userText.match(/(?:my target is|target saya adalah|goal saya)\s+([^,!\.\n]+)/i);
+
+          let updatedProfileNeeded = false;
+          if (nameMatch && nameMatch[1].trim()) {
+            userProfile.name = nameMatch[1].trim();
+            updatedProfileNeeded = true;
+          }
+          if (targetMatch && targetMatch[1].trim()) {
+            const rawT = targetMatch[1].trim();
+            userProfile.goalTitle = rawT;
+            if (rawT.toLowerCase().includes("health") || rawT.toLowerCase().includes("sehat")) {
+              userProfile.goal = "health";
+              userProfile.goalTitle = "Gaya Hidup Sehat & Fit";
+            } else if (rawT.toLowerCase().includes("lose") || rawT.toLowerCase().includes("turun")) {
+              userProfile.goal = "lose";
+              userProfile.goalTitle = "Menurunkan Berat Badan";
+            } else if (rawT.toLowerCase().includes("gain") || rawT.toLowerCase().includes("naik")) {
+              userProfile.goal = "gain";
+              userProfile.goalTitle = "Menaikkan Berat Badan";
+            }
+            updatedProfileNeeded = true;
+          }
+
+          if (updatedProfileNeeded) {
+            saveUserProfile(normFrom, userProfile);
+          }
+
+          if (userProfile.hasReceivedWelcome) {
+            const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
+            const ageNum = Number(userProfile.age) || 25;
+            const isLansia = ageNum >= 60;
+            const cleanName = (userData.name || "Member").trim();
+            const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+
+            let shortWelcome = "";
+            if (userData.persona === "max") {
+              if (isLansia) {
+                const honorific = isFemale ? "Bu" : "Pak";
+                shortWelcome = `🔥 *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi Anda.\n\n` +
+                  `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau tanya panduan latihan? Kirim saja langsung di sini! 💪`;
+              } else if (isFemale) {
+                shortWelcome = `🔥 *HALO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi kamu!\n\n` +
+                  `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
+              } else {
+                shortWelcome = `🔥 *YO ${cleanName.toUpperCase()}!* ${coachName} siap mendampingi lo!\n\n` +
+                  `Mau catat makanan hari ini, lapor air minum, update BB ("update bb 72"), atau minta rekomendasi workout? Kirim aja langsung di sini! 💪`;
+              }
+            } else {
+              if (isLansia) {
+                const honorific = isFemale ? "Bu" : "Pak";
+                shortWelcome = `✨ *HALO ${honorific.toUpperCase()} ${cleanName.toUpperCase()}!* ${coachName} di sini. 🥰\n\n` +
+                  `Silakan kirim makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan kapan saja ya! 🌿`;
+              } else {
+                shortWelcome = `✨ *HALO ${cleanName.toUpperCase()}!* ${coachName} di sini! 🥰\n\n` +
+                  `Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau konsultasi latihan? Silakan kirim kapan saja ya! 🌿`;
+              }
+            }
+            responseMessages = [shortWelcome];
+          } else {
+            userProfile.hasReceivedWelcome = true;
+            saveUserProfile(normFrom, userProfile);
+            const currentCalculated = calculateUserData(userProfile);
+            responseMessages = generateWelcomeMessages(currentCalculated);
+          }
         }
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
@@ -9379,6 +9588,10 @@ function escapeXml(unsafe: string): string {
           }
         } else if (handleReminderCommand(userText, userProfile, normFrom, userData)) {
           responseMessages = handleReminderCommand(userText, userProfile, normFrom, userData)!;
+        } else if (classifiedIntent.intent === "PROGRAM_QUESTION") {
+          responseMessages = [generateProgramQuestionResponse(userData, userText)];
+        } else if (classifiedIntent.intent === "VAGUE_WORKOUT_NEEDS_CLARIFICATION") {
+          responseMessages = [generateVagueWorkoutClarificationResponse(userData, userText)];
         } else if (handleWorkoutProgressLogging(normFrom, userText, userData)) {
           if (!planCapabilities.canWorkout) {
             responseMessages = [validatePlanContext("latihan workout", false, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];

@@ -105,6 +105,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   const [orderId, setOrderId] = useState<string>("");
   const [snapToken, setSnapToken] = useState<string>("");
   const [snapRedirectUrl, setSnapRedirectUrl] = useState<string>("");
+  const [backendBotNumber, setBackendBotNumber] = useState<string>("");
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isPaymentPaid, setIsPaymentPaid] = useState(false);
@@ -577,6 +578,9 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       localStorage.setItem("gymbuddy_active_session", JSON.stringify(activeUser));
       if (res.token) {
         localStorage.setItem("gymbuddy_auth_token", res.token);
+      }
+      if ((res as any)?.botNumber) {
+        setBackendBotNumber((res as any).botNumber);
       }
 
       setIsConnectingWhatsApp(false);
@@ -2971,23 +2975,27 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
                   <div className="space-y-2">
                     <div className="text-xs font-['Inter'] font-extrabold text-[#25D366] uppercase tracking-widest">
-                      {isEN ? "PAYMENT VERIFIED" : "PEMBAYARAN TERVERIFIKASI"}
+                      {isEN ? "PAYMENT SUCCESSFUL" : "PEMBAYARAN BERHASIL"}
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
                       {isEN ? "Payment Successful! 🎉" : "Pembayaran Berhasil! 🎉"}
                     </h2>
                     <p className="text-neutral-300 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
                       {isEN
-                        ? `Thank you! Your payment for ${planTitle} has been verified.`
-                        : `Terima kasih! Pembayaran untuk ${planTitle} sebesar Rp ${grossAmount.toLocaleString('id-ID')} telah berhasil diverifikasi.`}
+                        ? `Your ${planTitle} plan is ready.`
+                        : `Paket ${planTitle} kamu sudah siap aktif.`}
                     </p>
                   </div>
 
                   {/* Status Card */}
                   <div className="bg-[#161C28] border border-neutral-800 rounded-2xl p-4 text-left space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-400">{isEN ? "Status" : "Status Pembayaran"}</span>
+                      <span className="text-neutral-400">{isEN ? "Payment Status" : "Status Pembayaran"}</span>
                       <span className="font-extrabold text-[#25D366] uppercase">✅ LUNAS / PAID</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-neutral-400">{isEN ? "Active Plan" : "Paket"}</span>
+                      <span className="font-extrabold text-[#D4FF00]">{planTitle}</span>
                     </div>
                     {orderId && (
                       <div className="flex items-center justify-between text-xs">
@@ -2996,20 +3004,23 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                       </div>
                     )}
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-400">{isEN ? "Coach" : "Pelatih Aktif"}</span>
+                      <span className="text-neutral-400">{isEN ? "Dedicated AI Coach" : "Pelatih Aktif"}</span>
                       <span className="font-bold text-white">{coachLabel}</span>
                     </div>
                   </div>
 
-                  {/* Final Step Guidance */}
-                  <div className="p-4 rounded-xl bg-[#111620] border border-[#D4FF00]/40 text-left space-y-1">
-                    <p className="text-xs font-extrabold text-[#D4FF00] uppercase tracking-wide">
-                      {isEN ? "Final Step: Connect WhatsApp" : "Langkah Terakhir: Hubungkan WhatsApp"}
-                    </p>
+                  {/* Activation Guidance */}
+                  <div className="p-4 rounded-xl bg-[#111620] border border-[#25D366]/30 text-left space-y-2">
+                    <div className="flex items-center gap-2">
+                      <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                      <p className="text-xs font-extrabold text-white uppercase tracking-wide">
+                        {isEN ? `Connect WhatsApp to start using ${coachLabel}` : `Hubungkan WhatsApp untuk mulai menggunakan ${coachLabel}`}
+                      </p>
+                    </div>
                     <p className="text-xs text-neutral-300 leading-relaxed">
                       {isEN
-                        ? `Connect your active WhatsApp number so ${coachLabel} can greet you and deliver your custom plan.`
-                        : `Hubungkan nomor WhatsApp aktifmu agar ${coachLabel} dapat langsung menyapa dan mengaktifkan bot pendampingmu.`}
+                        ? `WhatsApp is used to connect your GymBuddy account directly with your AI coach. You will be able to log meals with photos, ask workout questions, and get instant daily guidance.`
+                        : `WhatsApp digunakan untuk menghubungkan akun GymBuddy kamu dengan ${coachLabel}. Kamu bisa kirim foto makanan, tanya menu latihan, dan konsultasi kapan saja.`}
                     </p>
                   </div>
 
@@ -3022,7 +3033,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                       className="w-full py-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
                     >
                       <WhatsAppIcon className="w-5 h-5 text-white" />
-                      <span>{isEN ? "Connect WhatsApp Now →" : "Lanjut: Hubungkan WhatsApp Sekarang →"}</span>
+                      <span>{isEN ? "Connect WhatsApp →" : "Hubungkan WhatsApp →"}</span>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -3055,12 +3066,12 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
                   <div className="space-y-2">
                     <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
-                      {isEN ? "Connect Your WhatsApp" : "Hubungkan WhatsApp Kamu"}
+                      {isEN ? "Connect WhatsApp" : "Hubungkan WhatsApp"}
                     </h1>
                     <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
                       {isEN
-                        ? `Enter your active WhatsApp number so ${coachLabel} can instantly message you, track your meals, and answer your fitness questions.`
-                        : `Masukkan nomor WhatsApp aktifmu agar ${coachLabel} dapat langsung menyapamu, menganalisis foto makananmu, dan memandu latihanmu.`}
+                        ? `Enter the WhatsApp number you want to use to chat with ${coachLabel}.`
+                        : `Masukkan nomor WhatsApp yang ingin kamu gunakan untuk chat dengan ${coachLabel}.`}
                     </p>
                   </div>
 
@@ -3175,7 +3186,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                         <>
                           <WhatsAppIcon className="w-5 h-5 text-white" />
                           <span>
-                            {isEN ? "Activate & Connect to Coach →" : "Aktifkan & Hubungkan ke Coach →"}
+                            {isEN ? "Connect & Start Chat →" : "Hubungkan & Mulai Chat →"}
                           </span>
                         </>
                       )}
@@ -3194,12 +3205,18 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     ? "Free Trial 2 Hari"
                     : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist"));
 
-              // Generate custom wa.me URL
+              // Generate official GymBuddy AI bot destination URL (USER -> GYMBUDDY BOT)
               const e164 = normalizePhoneToE164(phone);
-              const customWaMsg = encodeURIComponent(
-                `Halo ${coachLabel}! Saya ${name || "Member"}, baru saja menyelesaikan onboarding di GymBuddy untuk program ${goal}. Saya siap mulai!`
-              );
-              const waBotUrl = `https://wa.me/6285156919826?text=${customWaMsg}`;
+              const botNumber = (
+                backendBotNumber ||
+                (typeof window !== "undefined" ? (import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER : "") ||
+                "14155238886"
+              ).replace(/[^\d]/g, "");
+
+              const goalDisplayName = goal === "lose" ? "fat loss" : (goal === "gain" ? "muscle gain" : "maintain");
+              const prefilledText = `Hello ${coachLabel}! Saya ${name || "Member"}, baru saja menyelesaikan onboarding di GymBuddy untuk program ${goalDisplayName}. Saya siap mulai.`;
+              const customWaMsg = encodeURIComponent(prefilledText);
+              const waBotUrl = `https://wa.me/${botNumber}?text=${customWaMsg}`;
 
               return (
                 <motion.div
