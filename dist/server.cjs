@@ -51168,10 +51168,14 @@ async function generateGeminiContent(prompt, imagePart) {
   }
   throw new Error("All Gemini models failed");
 }
+var MIDTRANS_SERVER_KEY = (process.env.MIDTRANS_SERVER_KEY || "SB-Mid-server-YNrlCVGdVDggjHhvMP_yW68w").trim();
+var MIDTRANS_CLIENT_KEY = (process.env.VITE_MIDTRANS_CLIENT_KEY || "SB-Mid-client-CAT2gMLueDV0amD7").trim();
+var isSandboxKey = MIDTRANS_SERVER_KEY.startsWith("SB-");
+var MIDTRANS_IS_PRODUCTION = !isSandboxKey && process.env.MIDTRANS_IS_PRODUCTION === "true";
 var snap = new import_midtrans_client.default.Snap({
-  isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
-  serverKey: process.env.MIDTRANS_SERVER_KEY || "dummy_server_key",
-  clientKey: process.env.VITE_MIDTRANS_CLIENT_KEY || "dummy_client_key"
+  isProduction: MIDTRANS_IS_PRODUCTION,
+  serverKey: MIDTRANS_SERVER_KEY,
+  clientKey: MIDTRANS_CLIENT_KEY
 });
 var WHATSAPP_TOKEN = (process.env.WHATSAPP_TOKEN || "").trim();
 var WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
@@ -56637,7 +56641,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
   });
   app.post("/api/midtrans/create-transaction", import_express.default.json(), async (req, res) => {
     try {
-      const { phone, plan = "advanced", activeService = "both", amount, customerName } = req.body;
+      const { phone, plan = "advanced", activeService = "both", amount, customerName, duration = "1m" } = req.body;
       const normPhone = normalizePhone(phone || "");
       if (!normPhone) {
         return res.status(400).json({ success: false, error: "Phone number is required for payment" });
@@ -56650,27 +56654,26 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           gross_amount: grossAmount
         },
         item_details: req.body.itemDetails || [{
-          id: `${plan.toUpperCase()}-${activeService.toUpperCase()}`,
+          id: `${plan.toUpperCase()}-${activeService.toUpperCase()}-${String(duration).toUpperCase()}`,
           price: grossAmount,
           quantity: 1,
-          name: `GymBuddy AI ${plan.toUpperCase()} Plan (${activeService})`
+          name: `GymBuddy AI ${plan.toUpperCase()} (${duration})`
         }],
         customer_details: req.body.customerDetails || {
           first_name: customerName || "Member GymBuddy",
           email: "member@gymbuddy.app",
           phone: normPhone
         },
-        // Bug #6 FIX: Add custom_fields so Midtrans webhook can identify user & plan
-        // These fields are returned back in the notification payload
+        // Custom fields for Midtrans webhook callback
         custom_field1: normPhone,
         // User phone (primary identifier)
         custom_field2: plan,
         // Subscription plan tier
-        custom_field3: activeService
-        // Active service (nutrition/coach/both)
+        custom_field3: `${activeService}:${duration}`
+        // Active service + duration
       };
       const transaction = await snap.createTransaction(parameter);
-      console.log(`[Midtrans] Created transaction ${orderId} for user ${normPhone}, plan: ${plan}, service: ${activeService}`);
+      console.log(`[Midtrans] Created transaction ${orderId} for user ${normPhone}, plan: ${plan}, service: ${activeService}, duration: ${duration}`);
       res.json({
         success: true,
         orderId,
@@ -56730,17 +56733,50 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
       const phone = body.custom_field1 || body.phone || (orderId.includes("_") ? orderId.split("_")[1] : "");
       const plan = body.custom_field2 || "premium";
-      const activeService = body.custom_field3 || "both";
+      const rawServiceField = body.custom_field3 || "both";
+      let activeService = rawServiceField;
+      let rawDuration = "1m";
+      if (rawServiceField.includes(":")) {
+        const parts = rawServiceField.split(":");
+        activeService = parts[0];
+        rawDuration = parts[1];
+      }
+      let canonicalDuration = "1_month";
+      let daysToAdd = 30;
+      if (rawDuration === "3m" || rawDuration === "3_months") {
+        canonicalDuration = "3_months";
+        daysToAdd = 90;
+      } else if (rawDuration === "6m" || rawDuration === "6_months") {
+        canonicalDuration = "6_months";
+        daysToAdd = 180;
+      } else if (rawDuration === "1y" || rawDuration === "1_year") {
+        canonicalDuration = "1_year";
+        daysToAdd = 365;
+      } else if (rawDuration === "lifetime" || plan === "lifetime") {
+        canonicalDuration = "lifetime";
+        daysToAdd = 0;
+      }
+      let canonicalPlan = "premium";
+      if (plan === "lifetime") {
+        canonicalPlan = "lifetime";
+        canonicalDuration = "lifetime";
+      } else if (plan === "nutritionist" || activeService === "nutrition") {
+        canonicalPlan = "nutritionist";
+      } else if (plan === "workout_coach" || activeService === "coach") {
+        canonicalPlan = "workout_coach";
+      } else {
+        canonicalPlan = "premium";
+      }
       if (isSuccess && phone) {
         const normPhone = normalizePhone(phone);
-        const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1e3);
+        const expiresAt = canonicalDuration === "lifetime" ? null : new Date(Date.now() + daysToAdd * 24 * 3600 * 1e3);
         await saveUserSubscription({
           userId: `usr_${normPhone}`,
           phone: normPhone,
-          plan: plan === "advanced" ? "advanced" : "premium",
+          plan: canonicalPlan === "nutritionist" || canonicalPlan === "workout_coach" ? "advanced" : canonicalPlan,
           activeService: activeService === "nutrition" || activeService === "coach" ? activeService : "both",
           status: "active",
-          billingDuration: "1m",
+          billingDuration: rawDuration,
           startedAt: /* @__PURE__ */ new Date(),
           expiresAt,
           midtransOrderId: orderId,
@@ -56748,33 +56784,35 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           paymentType,
           updatedAt: /* @__PURE__ */ new Date()
         });
-        const canonicalPlan = plan === "nutritionist" || activeService === "nutrition" ? "nutritionist" : plan === "workout_coach" || activeService === "coach" ? "workout_coach" : "premium";
-        const existingUser = dbData.users[normPhone] || getUserProfile(normPhone);
-        if (existingUser) {
-          const applied = applyCommercialPlan(existingUser, canonicalPlan, "1_month");
-          if (applied.success) {
-            dbData.users[normPhone] = {
-              ...applied.user,
-              subscription: {
-                plan: canonicalPlan,
-                activeService,
-                status: "active",
-                expiresAt: expiresAt.toISOString()
-              }
-            };
-            saveUserProfile(normPhone, dbData.users[normPhone]);
-            saveDb();
-          }
+        const existingUser = dbData.users[normPhone] || getUserProfile(normPhone) || {
+          phone: normPhone,
+          name: body.first_name || "Member GymBuddy",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        const applied = applyCommercialPlan(existingUser, canonicalPlan, canonicalDuration);
+        if (applied.success) {
+          dbData.users[normPhone] = {
+            ...applied.user,
+            subscription: {
+              plan: canonicalPlan,
+              activeService,
+              status: "active",
+              expiresAt: expiresAt ? expiresAt.toISOString() : null
+            }
+          };
+          saveUserProfile(normPhone, dbData.users[normPhone]);
+          saveDb();
         }
-        console.log(`[Midtrans] Activated ${canonicalPlan} subscription for ${normPhone} \u2705`);
+        console.log(`[Midtrans] Activated ${canonicalPlan} (${canonicalDuration}) subscription for ${normPhone} \u2705`);
         try {
           const displayName = getPlanDisplayName(canonicalPlan, "ID");
           const coachName = (existingUser?.persona || "mia").toLowerCase().includes("max") ? "Coach Max" : "Coach Mia";
+          const durationLabel = canonicalDuration === "lifetime" ? "LIFETIME (Akses Selamanya)" : canonicalDuration === "1_year" ? "1 Tahun" : canonicalDuration === "6_months" ? "6 Bulan" : canonicalDuration === "3_months" ? "3 Bulan" : "1 Bulan";
           const confirmMsg = `\u{1F389} *PEMBAYARAN BERHASIL!*
 --------------------------------------------------
 Terima kasih! Pembayaran untuk paket *${displayName}* sebesar Rp ${Number(grossAmount).toLocaleString("id-ID")} telah berhasil diverifikasi.
 
-\u2705 *Status Paket*: AKTIF (1 Bulan)
+\u2705 *Status Paket*: AKTIF (${durationLabel})
 \u2728 Seluruh fitur AI bimbingan dan pelacakan nutrisi & workout sudah terbuka penuh!
 
 --------------------------------------------------

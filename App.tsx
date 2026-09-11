@@ -618,6 +618,8 @@ export default function App() {
         {splashOverlay}
         <PricingPage
           language={language}
+          currentUser={currentUser}
+          userPhone={currentUser?.phone || ""}
           onBack={() => setIsPricingPage(false)}
           onLanguageChange={(lang) => setLanguage(lang)}
           onSelectPlanAndStart={(plan, feature) => {
@@ -1742,7 +1744,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         if (isLoggedIn) setViewMode("dashboard");
-                        else setIsAppOnboarding(true);
+                        else setIsPricingPage(true);
                       }}
                       className="w-full py-3.5 2xl:py-4 rounded-full font-black text-sm 2xl:text-base bg-[#D4FF00] text-black hover:bg-[#c4ec00] hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-[#D4FF00] focus:ring-offset-2 focus:ring-offset-black transition-all cursor-pointer shadow-lg shadow-[#D4FF00]/20"
                     >
