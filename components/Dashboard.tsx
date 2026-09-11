@@ -79,6 +79,15 @@ import {
 } from "../services/nutritionEngine";
 import { getApiBaseUrl, canonicalApiFetch, getJakartaDateStr } from "../utils/api";
 import {
+  PLAN_PRICING,
+  DURATIONS,
+  DURATION_LABELS,
+  getPrice,
+  mergePlans,
+  type PlanKey,
+  type DurationKey
+} from "../services/pricingConfig";
+import {
   classifyMealType,
   isSmartSnack,
   getMealTypeFromTimeWindow,
@@ -942,10 +951,62 @@ export default function Dashboard({
 
   const [showUpgradePlanModal, setShowUpgradePlanModal] = useState(false);
   const [upgradeTargetFeature, setUpgradeTargetFeature] = useState<"nutrition" | "workout" | "both">("workout");
+  const [upgradeSelectedDuration, setUpgradeSelectedDuration] = useState<DurationKey>("3_months");
+  const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false);
+  const [upgradeOrderError, setUpgradeOrderError] = useState<string | null>(null);
 
   const handleOpenUpgradeModal = (feature: "nutrition" | "workout" | "both") => {
     setUpgradeTargetFeature(feature);
+    setUpgradeSelectedDuration("3_months");
+    setUpgradeOrderError(null);
     setShowUpgradePlanModal(true);
+  };
+
+  /** Real Midtrans checkout for existing users adding a new coach */
+  const handleUpgradeCheckout = async () => {
+    setIsProcessingUpgrade(true);
+    setUpgradeOrderError(null);
+    try {
+      // Determine which plan is being ADDED (not what the user already has)
+      const purchasePlan: PlanKey =
+        upgradeTargetFeature === "nutrition" ? "nutritionist" : "workout_coach";
+      const amount = getPrice(purchasePlan, upgradeSelectedDuration);
+      const API_BASE_URL = getApiBaseUrl();
+
+      const res = await fetch(`${API_BASE_URL}/api/orders/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: activeUser.userId,
+          plan: purchasePlan,
+          billingPeriod: upgradeSelectedDuration,
+          amount,
+          customerName: activeUser.name || "Member GymBuddy"
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!data?.success) throw new Error(data?.error || "Gagal membuat pesanan upgrade");
+
+      const { token, redirectUrl } = data;
+      setShowUpgradePlanModal(false);
+
+      if (token && (window as any).snap) {
+        (window as any).snap.pay(token, {
+          onSuccess: () => window.location.reload(),
+          onPending: () => window.location.reload(),
+          onError: (err: any) => console.error("[Upgrade] Snap error:", err),
+          onClose: () => setIsProcessingUpgrade(false)
+        });
+      } else if (redirectUrl) {
+        window.location.href = redirectUrl;
+      } else {
+        throw new Error("Midtrans token tidak tersedia");
+      }
+    } catch (err: any) {
+      setUpgradeOrderError(err.message || "Gagal memproses upgrade. Silakan coba lagi.");
+    } finally {
+      setIsProcessingUpgrade(false);
+    }
   };
 
   const handleSelectDemoUser = (userKey: "alex" | "mia" | "both") => {
@@ -1212,12 +1273,35 @@ export default function Dashboard({
     const phone = activeUser?.phone || activeUser?.normalizedPhone;
     if (!phone) return;
     const hp = activeUser?.healthProfile;
-    const isCompleted = Boolean(hp?.isCompleted);
+    // isCompleted is true if:
+    //   (a) healthProfile.isCompleted was set (new users after the onboarding fix), OR
+    //   (b) dob + healthStatus were captured as flat fields (existing users pre-fix), OR
+    //   (c) onboarding was completed and a DOB was recorded
+    const isCompleted =
+      Boolean(hp?.isCompleted) ||
+      Boolean(activeUser?.dob && activeUser?.healthStatus) ||
+      Boolean(activeUser?.onboardingCompleted && activeUser?.dob);
     const dismissed = sessionStorage.getItem(`gymbuddy_health_modal_dismissed_${phone}`);
     if (!isCompleted && !dismissed) {
       setShowHealthProfileModal(true);
     }
-  }, [activeUser?.phone, activeUser?.healthProfile?.isCompleted]);
+  }, [activeUser?.phone, activeUser?.healthProfile?.isCompleted, activeUser?.dob, activeUser?.healthStatus, activeUser?.onboardingCompleted]);
+
+
+  // Defense-in-depth: also suppress modal if onboarding already captured health data
+  // via flat fields (dob + healthStatus present means the user answered during onboarding).
+  const _hp = activeUser?.healthProfile;
+  const _isHealthCompleted =
+    Boolean(_hp?.isCompleted) ||
+    Boolean(activeUser?.dob && activeUser?.healthStatus) ||
+    Boolean(activeUser?.onboardingCompleted && activeUser?.dob);
+  // Re-hide modal if health data was found after re-render
+  useEffect(() => {
+    if (_isHealthCompleted && showHealthProfileModal) {
+      setShowHealthProfileModal(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_isHealthCompleted]);
 
   const handleHealthDobChange = (newDob: string) => {
     setHealthDob(newDob);
@@ -9353,42 +9437,99 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                 </div>
               )}
 
-              {/* Action Buttons */}
+              {/* Duration Selector */}
               <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-neutral-300">
+                    {isEN ? "Choose Billing Period:" : "Pilih Periode Langganan:"}
+                  </span>
+                  <span className="text-[11px] text-neutral-400">
+                    {DURATION_LABELS[upgradeSelectedDuration]?.[isEN ? "en" : "id"]}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {DURATIONS.map((dur) => {
+                    const priceEntry = PLAN_PRICING[upgradeTargetFeature === "nutrition" ? "nutritionist" : "workout_coach"]?.[dur];
+                    const isSelected = upgradeSelectedDuration === dur;
+                    return (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => setUpgradeSelectedDuration(dur)}
+                        className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center relative ${
+                          isSelected
+                            ? upgradeTargetFeature === "nutrition"
+                              ? "bg-emerald-500/20 border-emerald-500 text-white"
+                              : "bg-[#D4FF00]/20 border-[#D4FF00] text-white"
+                            : "bg-[#141414] border-white/[0.08] text-neutral-400 hover:text-white hover:border-white/20"
+                        }`}
+                      >
+                        {priceEntry?.savingLabel && (
+                          <span className="absolute -top-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-xs">
+                            {priceEntry.savingLabel}
+                          </span>
+                        )}
+                        <span className="text-[11px] font-black">{DURATION_LABELS[dur]?.[isEN ? "en" : "id"]}</span>
+                        <span className="text-xs font-bold text-white mt-0.5">{priceEntry?.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Order Summary / Plan transition */}
+              <div className="p-3 bg-black/40 border border-white/[0.08] rounded-2xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] text-neutral-400 uppercase font-black tracking-wider block">
+                    {isEN ? "Access After Upgrade" : "Akses Setelah Upgrade"}
+                  </span>
+                  <span className="font-bold text-white flex items-center gap-1.5 mt-0.5">
+                    <span>✨ {isEN ? "All-Access (Workout + Nutrition)" : "All-Access (Workout + Nutrition)"}</span>
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-neutral-400 uppercase font-black tracking-wider block">
+                    {isEN ? "Total Payment" : "Total Bayar"}
+                  </span>
+                  <span className="text-sm font-black text-[#D4FF00]">
+                    {PLAN_PRICING[upgradeTargetFeature === "nutrition" ? "nutritionist" : "workout_coach"]?.[upgradeSelectedDuration]?.label || "Rp 249rb"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Error Message if any */}
+              {upgradeOrderError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+                  <AlertTriangle size={16} className="shrink-0" />
+                  <span>{upgradeOrderError}</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    // Activate demo user / plan switch for testing
-                    if (upgradeTargetFeature === "nutrition") {
-                      handleSelectDemoUser("alex");
-                    } else {
-                      handleSelectDemoUser("mia");
-                    }
-                    setShowUpgradePlanModal(false);
-                  }}
-                  className={`w-full py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
+                  disabled={isProcessingUpgrade}
+                  onClick={handleUpgradeCheckout}
+                  className={`w-full py-3.5 rounded-2xl font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     upgradeTargetFeature === "nutrition"
                       ? "bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 text-black shadow-emerald-500/25"
                       : "bg-gradient-to-r from-[#D4FF00] to-lime-400 hover:from-[#c2ea00] text-black shadow-[#D4FF00]/25"
                   }`}
                 >
-                  <Sparkles size={16} />
-                  <span>
-                    {upgradeTargetFeature === "nutrition"
-                      ? (isEN ? "Switch to Nutritionist Plan (Demo)" : "Aktifkan Paket Nutritionist (Demo)")
-                      : (isEN ? "Switch to Workout Coach Plan (Demo)" : "Aktifkan Paket Workout Coach (Demo)")}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSelectDemoUser("both");
-                    setShowUpgradePlanModal(false);
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-[#181818] hover:bg-[#222222] border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <span>🌟 {isEN ? "Unlock All-Access (Both Plans)" : "Buka Akses Penuh (Kedua Paket)"}</span>
+                  {isProcessingUpgrade ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin" />
+                      <span>{isEN ? "Processing Order..." : "Memproses Pesanan..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      <span>
+                        {isEN ? "Proceed to Payment via Midtrans" : "Lanjut ke Pembayaran via Midtrans"}
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

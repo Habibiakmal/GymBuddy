@@ -50233,6 +50233,78 @@ function isValidIndonesianMobile(phone) {
   return digitsAfterPrefix.length >= 7 && digitsAfterPrefix.length <= 13;
 }
 
+// services/pricingConfig.ts
+var PLAN_PRICING = {
+  nutritionist: {
+    "3_months": {
+      idr: 249e3,
+      label: "Rp 249rb",
+      durationMonths: 3
+    },
+    "6_months": {
+      idr: 449e3,
+      label: "Rp 449rb",
+      durationMonths: 6,
+      savingLabel: "Hemat ~16%"
+    },
+    "1_year": {
+      idr: 749e3,
+      label: "Rp 749rb",
+      durationMonths: 12,
+      savingLabel: "Paling Hemat ~30%"
+    }
+  },
+  workout_coach: {
+    "3_months": {
+      idr: 249e3,
+      label: "Rp 249rb",
+      durationMonths: 3
+    },
+    "6_months": {
+      idr: 449e3,
+      label: "Rp 449rb",
+      durationMonths: 6,
+      savingLabel: "Hemat ~16%"
+    },
+    "1_year": {
+      idr: 749e3,
+      label: "Rp 749rb",
+      durationMonths: 12,
+      savingLabel: "Paling Hemat ~30%"
+    }
+  },
+  both: {
+    "3_months": {
+      idr: 399e3,
+      label: "Rp 399rb",
+      durationMonths: 3
+    },
+    "6_months": {
+      idr: 699e3,
+      label: "Rp 699rb",
+      durationMonths: 6,
+      savingLabel: "Hemat ~20%"
+    },
+    "1_year": {
+      idr: 1199e3,
+      label: "Rp 1.199rb",
+      durationMonths: 12,
+      savingLabel: "Paling Hemat ~33%"
+    }
+  }
+};
+function getPrice(plan, duration) {
+  return PLAN_PRICING[plan]?.[duration]?.idr ?? 0;
+}
+function normalizeDuration(raw) {
+  if (!raw) return null;
+  const s = raw.toLowerCase().trim();
+  if (s === "3_months" || s === "3m") return "3_months";
+  if (s === "6_months" || s === "6m") return "6_months";
+  if (s === "1_year" || s === "1y") return "1_year";
+  return null;
+}
+
 // services/conversationStateManager.ts
 var activeTasks = /* @__PURE__ */ new Map();
 var DEFAULT_TASK_TTL_MS = 10 * 60 * 1e3;
@@ -51323,15 +51395,15 @@ function requireEntitlementMiddleware(requiredCapability) {
     next();
   };
 }
-function verifyMidtransSignature(orderId, statusCode, grossAmount, incomingSignature, serverKey) {
-  if (!orderId || !statusCode || !grossAmount || !incomingSignature || !serverKey) {
+function verifyMidtransSignature(orderId2, statusCode, grossAmount, incomingSignature, serverKey) {
+  if (!orderId2 || !statusCode || !grossAmount || !incomingSignature || !serverKey) {
     return false;
   }
   const cleanAmount = Number(grossAmount).toFixed(2);
   const candidatePayloads = [
-    `${orderId}${statusCode}${grossAmount}${serverKey}`,
-    `${orderId}${statusCode}${cleanAmount}${serverKey}`,
-    `${orderId}${statusCode}${Math.round(Number(grossAmount))}${serverKey}`
+    `${orderId2}${statusCode}${grossAmount}${serverKey}`,
+    `${orderId2}${statusCode}${cleanAmount}${serverKey}`,
+    `${orderId2}${statusCode}${Math.round(Number(grossAmount))}${serverKey}`
   ];
   for (const payload of candidatePayloads) {
     const hash = import_crypto.default.createHash("sha512").update(payload).digest("hex");
@@ -56098,11 +56170,42 @@ async function createExpressApp(options = {}) {
         return res.status(400).json({ success: false, error: "profile_required", message: "Data profil onboarding wajib dikirimkan." });
       }
       const userId = requestedUserId || profile.userId || `usr_ob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const rawDob = profile.dob || "";
+      let derivedAge = null;
+      if (rawDob && /^\d{4}-\d{2}-\d{2}$/.test(rawDob)) {
+        const d = new Date(rawDob);
+        if (!isNaN(d.getTime())) {
+          const today = /* @__PURE__ */ new Date();
+          let calc = today.getFullYear() - d.getFullYear();
+          const m = today.getMonth() - d.getMonth();
+          if (m < 0 || m === 0 && today.getDate() < d.getDate()) calc--;
+          if (calc >= 1 && calc <= 130) derivedAge = calc;
+        }
+      } else if (profile.age !== void 0 && profile.age !== null && Number(profile.age) > 0) {
+        derivedAge = Number(profile.age);
+      }
+      const onboardingConditions = Array.isArray(profile.healthConditions) ? profile.healthConditions : [];
+      const onboardingHealthStatus = profile.healthStatus || (onboardingConditions.length > 0 ? "has_condition" : void 0);
+      const hasRealHealthData = Boolean(
+        rawDob || derivedAge !== null || onboardingHealthStatus
+      );
+      const synthesizedHealthProfile = hasRealHealthData ? {
+        dob: rawDob || null,
+        age: derivedAge,
+        hasCondition: onboardingHealthStatus || "no_condition",
+        conditions: onboardingConditions,
+        otherCondition: profile.otherCondition || "",
+        isCompleted: true,
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        source: "onboarding"
+      } : profile.healthProfile ?? null;
       const pendingProfile = {
         ...profile,
         userId,
+        age: derivedAge !== null ? derivedAge : profile.age ?? null,
         userState: "onboarding_complete",
         onboardingCompleted: true,
+        healthProfile: synthesizedHealthProfile,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       if (!dbData.pendingProfiles) dbData.pendingProfiles = {};
@@ -56148,11 +56251,11 @@ async function createExpressApp(options = {}) {
         planType = "both";
         resolvedService = "both";
       }
-      const orderId = `GB-ORD-${effectiveUserId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}-${Date.now()}`;
+      const orderId2 = `GB-ORD-${effectiveUserId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}-${Date.now()}`;
       if (!dbData.orders) dbData.orders = {};
       if (normalizedPlan === "free") {
         const order2 = {
-          orderId,
+          orderId: orderId2,
           userId: effectiveUserId,
           nickname: pendingProfile.name || customerName || "Member GymBuddy",
           selectedPlan: "free",
@@ -56170,26 +56273,27 @@ async function createExpressApp(options = {}) {
           whatsappNumber: null,
           createdTimestamp: (/* @__PURE__ */ new Date()).toISOString()
         };
-        dbData.orders[orderId] = order2;
+        dbData.orders[orderId2] = order2;
         saveDb();
-        console.log(`[Orders] Created Free Trial order ${orderId} for ${effectiveUserId} \u2705`);
-        return res.json({ success: true, orderId, order: order2 });
+        console.log(`[Orders] Created Free Trial order ${orderId2} for ${effectiveUserId} \u2705`);
+        return res.json({ success: true, orderId: orderId2, order: order2 });
       }
-      let grossAmount = Number(amount);
+      const rawDuration = req.body.billingPeriod || req.body.duration;
+      const canonicalDuration = normalizeDuration(rawDuration) || "3_months";
+      const canonicalPlanKey = normalizedPlan === "both" ? "both" : normalizedPlan;
+      const durationMonths = PLAN_PRICING[canonicalPlanKey]?.[canonicalDuration]?.durationMonths || 3;
+      const canonicalAmount = getPrice(canonicalPlanKey, canonicalDuration);
+      let grossAmount = canonicalAmount > 0 ? canonicalAmount : Number(amount);
       if (!grossAmount || grossAmount <= 0) {
-        if (normalizedPlan === "both") {
-          grossAmount = 149e3;
-        } else {
-          grossAmount = 89e3;
-        }
+        grossAmount = canonicalPlanKey === "both" ? 399e3 : 249e3;
       }
       const parameter = {
         transaction_details: {
-          order_id: orderId,
+          order_id: orderId2,
           gross_amount: grossAmount
         },
         item_details: [{
-          id: `${normalizedPlan.toUpperCase()}-${String(duration).toUpperCase()}`,
+          id: `${normalizedPlan.toUpperCase()}-${String(canonicalDuration).toUpperCase()}`,
           price: grossAmount,
           quantity: 1,
           name: `GymBuddy AI ${normalizedPlan === "both" ? "Both (Nutritionist + Workout Coach)" : normalizedPlan === "workout_coach" ? "AI Workout Coach" : "AI Nutritionist"}`
@@ -56201,12 +56305,12 @@ async function createExpressApp(options = {}) {
         },
         custom_field1: effectiveUserId,
         custom_field2: normalizedPlan === "both" ? "premium" : normalizedPlan,
-        custom_field3: `${resolvedService}:${duration}`
+        custom_field3: `${resolvedService}:${canonicalDuration}`
       };
       let transaction;
       try {
         transaction = await snap.createTransaction(parameter);
-        console.log(`[Orders] Created Snap transaction for order ${orderId}, amount: ${grossAmount}, token: ${transaction.token} \u2705`);
+        console.log(`[Orders] Created Snap transaction for order ${orderId2}, amount: ${grossAmount}, token: ${transaction.token} \u2705`);
       } catch (snapErr) {
         console.warn(`[Orders] Snap createTransaction network/auth error (${snapErr?.message}), generating fallback token`);
         transaction = {
@@ -56215,7 +56319,7 @@ async function createExpressApp(options = {}) {
         };
       }
       const order = {
-        orderId,
+        orderId: orderId2,
         userId: effectiveUserId,
         nickname: pendingProfile.name || customerName || "Member GymBuddy",
         selectedPlan: normalizedPlan,
@@ -56227,7 +56331,8 @@ async function createExpressApp(options = {}) {
         amount: grossAmount,
         status: "pending",
         userState: "payment_pending",
-        billingPeriod: duration,
+        billingPeriod: canonicalDuration,
+        durationMonths,
         paymentStatus: "pending",
         subscriptionStatus: "pending_payment",
         whatsappNumber: null,
@@ -56235,11 +56340,11 @@ async function createExpressApp(options = {}) {
         midtransRedirectUrl: transaction.redirect_url,
         createdTimestamp: (/* @__PURE__ */ new Date()).toISOString()
       };
-      dbData.orders[orderId] = order;
+      dbData.orders[orderId2] = order;
       saveDb();
       return res.json({
         success: true,
-        orderId,
+        orderId: orderId2,
         order,
         token: transaction.token,
         redirectUrl: transaction.redirect_url
@@ -56250,8 +56355,8 @@ async function createExpressApp(options = {}) {
     }
   });
   app.get("/api/orders/:orderId", (req, res) => {
-    const { orderId } = req.params;
-    const order = dbData.orders ? dbData.orders[orderId] : null;
+    const { orderId: orderId2 } = req.params;
+    const order = dbData.orders ? dbData.orders[orderId2] : null;
     if (!order) {
       return res.status(404).json({ success: false, error: "order_not_found", message: "Pesanan tidak ditemukan." });
     }
@@ -56259,8 +56364,8 @@ async function createExpressApp(options = {}) {
   });
   app.post("/api/orders/:orderId/retry", import_express.default.json(), async (req, res) => {
     try {
-      const { orderId } = req.params;
-      const order = dbData.orders ? dbData.orders[orderId] : null;
+      const { orderId: orderId2 } = req.params;
+      const order = dbData.orders ? dbData.orders[orderId2] : null;
       if (!order) {
         return res.status(404).json({ success: false, error: "order_not_found" });
       }
@@ -56293,10 +56398,10 @@ async function createExpressApp(options = {}) {
       order.midtransToken = transaction.token;
       order.midtransRedirectUrl = transaction.redirect_url;
       order.lastRetryTimestamp = (/* @__PURE__ */ new Date()).toISOString();
-      dbData.orders[orderId] = order;
+      dbData.orders[orderId2] = order;
       dbData.orders[retryTxId] = order;
       saveDb();
-      console.log(`[Orders] Generated retry token for order ${orderId} (txId: ${retryTxId}) \u2705`);
+      console.log(`[Orders] Generated retry token for order ${orderId2} (txId: ${retryTxId}) \u2705`);
       return res.json({
         success: true,
         order,
@@ -56309,7 +56414,7 @@ async function createExpressApp(options = {}) {
     }
   });
   app.post("/api/account/connect-whatsapp", import_express.default.json(), async (req, res) => {
-    const { userId, orderId, phone } = req.body;
+    const { userId, orderId: orderId2, phone } = req.body;
     if (!phone) {
       return res.status(400).json({ success: false, error: "valid_phone_required", message: "Nomor WhatsApp wajib diisi." });
     }
@@ -56347,7 +56452,7 @@ async function createExpressApp(options = {}) {
           allergies: ["none"]
         };
       }
-      const order = orderId && dbData.orders ? dbData.orders[orderId] : null;
+      const order = orderId2 && dbData.orders ? dbData.orders[orderId2] : null;
       let finalProfile = {
         ...baseProfile,
         userId: `usr_${localPhone}`,
@@ -56357,6 +56462,38 @@ async function createExpressApp(options = {}) {
         onboardingCompleted: true,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
+      if (!finalProfile.healthProfile?.isCompleted) {
+        const bridgeDob = finalProfile.dob || "";
+        let bridgeAge = null;
+        if (bridgeDob && /^\d{4}-\d{2}-\d{2}$/.test(bridgeDob)) {
+          const d = new Date(bridgeDob);
+          if (!isNaN(d.getTime())) {
+            const today = /* @__PURE__ */ new Date();
+            let calc = today.getFullYear() - d.getFullYear();
+            const m = today.getMonth() - d.getMonth();
+            if (m < 0 || m === 0 && today.getDate() < d.getDate()) calc--;
+            if (calc >= 1 && calc <= 130) bridgeAge = calc;
+          }
+        } else if (finalProfile.age !== void 0 && finalProfile.age !== null && Number(finalProfile.age) > 0) {
+          bridgeAge = Number(finalProfile.age);
+        }
+        const bridgeConds = Array.isArray(finalProfile.healthConditions) ? finalProfile.healthConditions : [];
+        const bridgeStatus = finalProfile.healthStatus || (bridgeConds.length > 0 ? "has_condition" : void 0);
+        const hasRealData = Boolean(bridgeDob || bridgeAge !== null || bridgeStatus);
+        if (hasRealData) {
+          finalProfile.healthProfile = {
+            dob: bridgeDob || null,
+            age: bridgeAge,
+            hasCondition: bridgeStatus || "no_condition",
+            conditions: bridgeConds,
+            otherCondition: finalProfile.otherCondition || "",
+            isCompleted: true,
+            completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            source: "onboarding_bridge"
+          };
+          if (bridgeAge !== null) finalProfile.age = bridgeAge;
+        }
+      }
       if (order && order.paymentStatus === "paid") {
         const canonicalPlan = order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both" ? "premium" : order.selectedPlan === "workout_coach" || order.activeService === "coach" ? "workout_coach" : "nutritionist";
         const canonicalDuration = order.billingPeriod === "lifetime" ? "lifetime" : order.billingPeriod === "1y" ? "1_year" : order.billingPeriod === "6m" ? "6_months" : order.billingPeriod === "3m" ? "3_months" : "1_month";
@@ -56516,11 +56653,19 @@ async function createExpressApp(options = {}) {
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
     const sub = getUserSubscription(user);
+    const firestoreSub = await getUserSubscription2(normPhone).catch(() => null);
+    const billingPeriod = firestoreSub?.billingDuration || user?.planDuration || sub?.planDuration || "3_months";
+    const durationMonths = billingPeriod === "1_year" || billingPeriod === "1y" ? 12 : billingPeriod === "6_months" || billingPeriod === "6m" ? 6 : 3;
     res.json({
       success: true,
       phone: normPhone,
       plan: sub.plan,
       planDuration: sub.planDuration,
+      billingPeriod,
+      durationMonths,
+      amount: firestoreSub?.grossAmount || null,
+      startDate: sub.planStartedAt,
+      endDate: sub.planExpiresAt,
       planStartedAt: sub.planStartedAt,
       planExpiresAt: sub.planExpiresAt,
       hasUsedTrial: sub.hasUsedTrial,
@@ -58144,8 +58289,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (!normPhone) {
         return res.status(400).json({ success: false, error: "Phone number is required for payment" });
       }
-      const orderId = `GYMBUDDY-${normPhone}-${Date.now()}-${Math.floor(Math.random() * 1e3)}`;
-      const grossAmount = Number(amount) || (plan === "premium" ? 139e3 : 79e3);
+      const canonicalDur = normalizeDuration(duration) || "3_months";
+      const canonicalPl = plan === "premium" || plan === "both" ? "both" : activeService === "nutrition" ? "nutritionist" : "workout_coach";
+      const expectedAmount = getPrice(canonicalPl, canonicalDur);
+      const grossAmount = expectedAmount > 0 ? expectedAmount : Number(amount) || (canonicalPl === "both" ? 399e3 : 249e3);
       const parameter = {
         transaction_details: {
           order_id: orderId,
@@ -58193,12 +58340,12 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     try {
       const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
       const body = req.body || {};
-      const orderId = body.order_id || "";
+      const orderId2 = body.order_id || "";
       const statusCode = body.status_code;
       const grossAmount = body.gross_amount;
       const signatureKey = body.signature_key;
-      console.log(`[Midtrans Webhook] Received notification payload for order: "${orderId}"`);
-      const isTestPing = !orderId || orderId.toLowerCase().includes("test") || orderId.toLowerCase().includes("dummy") || orderId.toLowerCase().includes("sample") || Boolean(body.test);
+      console.log(`[Midtrans Webhook] Received notification payload for order: "${orderId2}"`);
+      const isTestPing = !orderId2 || orderId2.toLowerCase().includes("test") || orderId2.toLowerCase().includes("dummy") || orderId2.toLowerCase().includes("sample") || Boolean(body.test);
       if (isTestPing) {
         console.log(`[Midtrans Webhook] Test notification ping verified from Midtrans Dashboard. Returning 200 OK \u2705`);
         return res.status(200).json({
@@ -58207,9 +58354,9 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         });
       }
       if (serverKey && signatureKey) {
-        const isValidSignature = verifyMidtransSignature(orderId, statusCode, grossAmount, signatureKey, serverKey);
+        const isValidSignature = verifyMidtransSignature(orderId2, statusCode, grossAmount, signatureKey, serverKey);
         if (!isValidSignature) {
-          console.error(`[Midtrans Webhook] Invalid signature rejected for order ${orderId}`);
+          console.error(`[Midtrans Webhook] Invalid signature rejected for order ${orderId2}`);
           return res.status(403).json({ error: "Invalid signature" });
         }
       }
@@ -58226,18 +58373,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       } catch (snapErr) {
         console.warn(`[Midtrans Webhook] snap.transaction.notification status check note: ${snapErr?.message || snapErr}. Using webhook payload directly.`);
       }
-      console.log(`[Midtrans] Order ${orderId} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
+      console.log(`[Midtrans] Order ${orderId2} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
       const isSuccess = transactionStatus === "settlement" || transactionStatus === "capture" && fraudStatus === "accept";
       const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
       let phone = body.phone || "";
       if (!phone && body.custom_field1 && !body.custom_field1.startsWith("usr_")) {
         phone = body.custom_field1;
       }
-      if (!phone && (orderId.includes("_") && !orderId.startsWith("GB-ORD-") && !orderId.startsWith("GB-RETRY-"))) {
-        phone = orderId.split("_")[1];
+      if (!phone && (orderId2.includes("_") && !orderId2.startsWith("GB-ORD-") && !orderId2.startsWith("GB-RETRY-"))) {
+        phone = orderId2.split("_")[1];
       }
-      if (dbData.orders && dbData.orders[orderId]) {
-        const ord = dbData.orders[orderId];
+      if (dbData.orders && dbData.orders[orderId2]) {
+        const ord = dbData.orders[orderId2];
         ord.paymentStatus = isSuccess ? "paid" : isFailed ? "failed" : "pending";
         ord.status = isSuccess ? "paid" : transactionStatus === "expire" ? "expired" : isFailed ? "failed" : "pending";
         ord.userState = isSuccess ? "payment_paid" : transactionStatus === "expire" ? "payment_expired" : isFailed ? "payment_failed" : "payment_pending";
@@ -58298,8 +58445,8 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       if (isSuccess && phone) {
         const normPhone = normalizePhone(phone);
         const existingSub = await getUserSubscription2(normPhone);
-        if (existingSub && existingSub.midtransOrderId === orderId && existingSub.status === "active") {
-          console.log(`[Midtrans Webhook] Order ${orderId} already processed and active for ${normPhone}. Returning 200 OK (Idempotent) \u2705`);
+        if (existingSub && existingSub.midtransOrderId === orderId2 && existingSub.status === "active") {
+          console.log(`[Midtrans Webhook] Order ${orderId2} already processed and active for ${normPhone}. Returning 200 OK (Idempotent) \u2705`);
           return res.status(200).send("OK");
         }
         const expiresAt = canonicalDuration === "lifetime" ? null : new Date(Date.now() + daysToAdd * 24 * 3600 * 1e3);
@@ -58312,7 +58459,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           billingDuration: rawDuration,
           startedAt: /* @__PURE__ */ new Date(),
           expiresAt,
-          midtransOrderId: orderId,
+          midtransOrderId: orderId2,
           grossAmount: Number(grossAmount),
           paymentType,
           updatedAt: /* @__PURE__ */ new Date()
@@ -58322,13 +58469,20 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           name: body.first_name || "Member GymBuddy",
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         };
-        const applied = applyCommercialPlan(existingUser, canonicalPlan, canonicalDuration);
+        const existingSubPlan = existingUser.subscription?.plan || existingUser.subscriptionTier;
+        let finalPlan = canonicalPlan;
+        let finalService = activeService;
+        if (existingSubPlan === "workout_coach" && canonicalPlan === "nutritionist" || existingSubPlan === "nutritionist" && canonicalPlan === "workout_coach" || existingSubPlan === "both" || existingSubPlan === "premium" || canonicalPlan === "premium") {
+          finalPlan = "premium";
+          finalService = "both";
+        }
+        const applied = applyCommercialPlan(existingUser, finalPlan, canonicalDuration);
         if (applied.success) {
           dbData.users[normPhone] = {
             ...applied.user,
             subscription: {
-              plan: canonicalPlan,
-              activeService,
+              plan: finalPlan,
+              activeService: finalService,
               status: "active",
               expiresAt: expiresAt ? expiresAt.toISOString() : null
             }
@@ -58336,7 +58490,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           saveUserProfile(normPhone, dbData.users[normPhone]);
           saveDb();
         }
-        console.log(`[Midtrans] Activated ${canonicalPlan} (${canonicalDuration}) subscription for ${normPhone} \u2705`);
+        console.log(`[Midtrans] Activated ${finalPlan} (${canonicalDuration}) subscription for ${normPhone} \u2705`);
         try {
           const displayName = getPlanDisplayName(canonicalPlan, "ID");
           const coachName = (existingUser?.persona || "mia").toLowerCase().includes("max") ? "Coach Max" : "Coach Mia";

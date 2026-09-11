@@ -32,6 +32,14 @@ import {
   RefreshCw
 } from "lucide-react";
 import { normalizePhoneToE164 } from "../services/phoneNormalizer";
+import {
+  PLAN_PRICING,
+  DURATIONS,
+  DURATION_LABELS,
+  getPrice,
+  type PlanKey,
+  type DurationKey
+} from "../services/pricingConfig";
 
 // WhatsApp Icon component
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -249,6 +257,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   // Plan Selection ('free_trial' | 'advanced' | 'premium')
   const [selectedPlan, setSelectedPlan] = useState<"free_trial" | "advanced" | "premium">("free_trial");
   const [selectedFeature, setSelectedFeature] = useState<"nutrition" | "coach" | null>("coach");
+  const [selectedDuration, setSelectedDuration] = useState<DurationKey>("3_months");
 
   // Phone Delivery
   const [phone, setPhone] = useState("");
@@ -270,14 +279,24 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       ];
 
   // Create Order for Free or Paid Plan
-  const handleCreateOrder = async (targetPlan: "free_trial" | "advanced" | "premium", targetFeature: "coach" | "nutrition" | null) => {
+  const handleCreateOrder = async (
+    targetPlan: "free_trial" | "advanced" | "premium",
+    targetFeature: "coach" | "nutrition" | null,
+    targetDuration: DurationKey = selectedDuration
+  ) => {
     setIsCreatingOrder(true);
     setPaymentError(null);
 
     const isFree = targetPlan === "free_trial";
-    const planParam = isFree ? "free" : (targetPlan === "premium" ? "both" : (targetFeature === "coach" ? "workout_coach" : "nutritionist"));
+    const canonicalPlan: PlanKey =
+      isFree || targetPlan === "premium"
+        ? "both"
+        : targetFeature === "nutrition"
+        ? "nutritionist"
+        : "workout_coach";
+    const planParam = isFree ? "free" : canonicalPlan;
     const serviceParam = isFree ? "both" : (targetPlan === "premium" ? "both" : (targetFeature || "coach"));
-    const amountParam = isFree ? 0 : (targetPlan === "premium" ? 149000 : 89000);
+    const amountParam = isFree ? 0 : getPrice(canonicalPlan, targetDuration);
 
     try {
       const res = await canonicalApiFetch<{ success: boolean; order?: any; token?: string; redirectUrl?: string; error?: string }>(
@@ -289,7 +308,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
             plan: planParam,
             activeService: serviceParam,
             amount: amountParam,
-            duration: "1m",
+            billingPeriod: isFree ? "free_trial" : targetDuration,
+            duration: targetDuration,
             customerName: name || "Member GymBuddy"
           })
         }
@@ -2648,7 +2668,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     </div>
                   </div>
 
-                  {/* OPTION 2: ADVANCED PLAN (1 SPESIALIS: Rp 89.000 / bln) */}
+                  {/* OPTION 2: ADVANCED PLAN (1 SPESIALIS: Mulai Rp 249rb) */}
                   <div
                     className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all ${
                       selectedPlan === "advanced"
@@ -2671,7 +2691,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                             {isEN ? "AI Coach (Single Specialist)" : "AI Coach (1 Spesialis)"}
                           </h3>
                           <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
-                            Rp 89rb / bln
+                            {isEN ? "From Rp 249k (3 Mos)" : "Mulai Rp 249rb (3 Bln)"}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-neutral-300 mt-1">
@@ -2739,7 +2759,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     )}
                   </div>
 
-                  {/* OPTION 3: BOTH (ALL-ACCESS: Rp 149.000 / bln) */}
+                  {/* OPTION 3: BOTH (ALL-ACCESS: Mulai Rp 399rb) */}
                   <div
                     onClick={() => {
                       setSelectedPlan("premium");
@@ -2760,7 +2780,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                             {isEN ? "Both: Nutritionist + Workout Coach" : "Both: Nutritionist + Workout Coach"}
                           </h3>
                           <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
-                            Rp 149rb / bln • PALING POPULER
+                            {isEN ? "From Rp 399k • MOST POPULAR" : "Mulai Rp 399rb • PALING POPULER"}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-neutral-300 mt-1.5 leading-relaxed">
@@ -2776,6 +2796,49 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                       </div>
                     </div>
                   </div>
+
+                  {/* DURATION SELECTOR (Shown when a paid plan is selected) */}
+                  {selectedPlan !== "free_trial" && (
+                    <div className="space-y-2.5 pt-2 border-t border-neutral-800">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-neutral-300">
+                          {isEN ? "Choose Billing Period:" : "Pilih Periode Langganan:"}
+                        </span>
+                        <span className="text-[11px] text-neutral-400">
+                          {DURATION_LABELS[selectedDuration]?.[isEN ? "en" : "id"]}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {DURATIONS.map((dur) => {
+                          const curPlanKey: PlanKey = selectedPlan === "premium"
+                            ? "both"
+                            : (selectedFeature === "nutrition" ? "nutritionist" : "workout_coach");
+                          const entry = PLAN_PRICING[curPlanKey]?.[dur];
+                          const isSelected = selectedDuration === dur;
+                          return (
+                            <button
+                              key={dur}
+                              type="button"
+                              onClick={() => setSelectedDuration(dur)}
+                              className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center relative ${
+                                isSelected
+                                  ? "bg-[#D4FF00]/15 border-[#D4FF00] text-white shadow-sm"
+                                  : "bg-[#161B22] border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-white"
+                              }`}
+                            >
+                              {entry?.savingLabel && (
+                                <span className="absolute -top-2.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-xs">
+                                  {entry.savingLabel}
+                                </span>
+                              )}
+                              <span className="text-xs font-black">{DURATION_LABELS[dur]?.[isEN ? "en" : "id"]}</span>
+                              <span className="text-xs font-bold text-white mt-0.5">{entry?.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Error Banner if Any */}
@@ -2791,7 +2854,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleCreateOrder(selectedPlan, selectedFeature)}
+                    onClick={() => handleCreateOrder(selectedPlan, selectedFeature, selectedDuration)}
                     disabled={isCreatingOrder}
                     className="w-full py-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
                   >
@@ -2805,9 +2868,15 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                         <span>
                           {selectedPlan === "free_trial"
                             ? (isEN ? "Start 2-Day Free Trial (Rp 0) →" : "Mulai Uji Coba Gratis 2 Hari (Rp 0) →")
-                            : selectedPlan === "premium"
-                            ? (isEN ? "Continue to Checkout (Rp 149.000) →" : "Lanjut ke Pembayaran (Rp 149.000) →")
-                            : (isEN ? "Continue to Checkout (Rp 89.000) →" : "Lanjut ke Pembayaran (Rp 89.000) →")}
+                            : (() => {
+                                const curPlanKey: PlanKey = selectedPlan === "premium"
+                                  ? "both"
+                                  : (selectedFeature === "nutrition" ? "nutritionist" : "workout_coach");
+                                const curPrice = PLAN_PRICING[curPlanKey]?.[selectedDuration]?.label || "";
+                                return isEN
+                                  ? `Continue to Checkout (${curPrice}) →`
+                                  : `Lanjut ke Pembayaran (${curPrice}) →`;
+                              })()}
                         </span>
                         <ChevronRight size={20} className="stroke-[3]" />
                       </>
@@ -2819,11 +2888,15 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
             {/* STEP 14: ORDER SUMMARY & MIDTRANS SNAP CHECKOUT (PAID PLANS) */}
             {step === 14 && (() => {
+              const curPlanKey: PlanKey = selectedPlan === "premium"
+                ? "both"
+                : (selectedFeature === "nutrition" ? "nutritionist" : "workout_coach");
               const planTitle = selectedPlan === "premium"
                 ? "Both: Nutritionist + Workout Coach"
                 : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist");
-              const grossAmount = selectedPlan === "premium" ? 149000 : 89000;
+              const grossAmount = getPrice(curPlanKey, selectedDuration);
               const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
+              const durationLabel = DURATION_LABELS[selectedDuration]?.[isEN ? "en" : "id"] || "3 Bulan";
 
               return (
                 <motion.div
@@ -2866,7 +2939,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
                     <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
                       <span className="text-xs text-neutral-400 font-bold uppercase">{isEN ? "Billing Period" : "Periode Langganan"}</span>
-                      <span className="text-xs sm:text-sm font-medium text-neutral-300">{isEN ? "1 Month (Flexible)" : "1 Bulan (Bulanan Fleksibel)"}</span>
+                      <span className="text-xs sm:text-sm font-medium text-neutral-300">{durationLabel}</span>
                     </div>
 
                     {orderId && (

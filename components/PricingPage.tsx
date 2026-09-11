@@ -23,6 +23,7 @@ import {
   PhoneCall
 } from "lucide-react";
 import { canonicalApiFetch, getApiBaseUrl, getWhatsAppDestinationUrl, openWhatsAppSafely } from "../utils/api";
+import { PLAN_PRICING } from "../services/pricingConfig";
 
 interface PricingPageProps {
   language: "EN" | "ID";
@@ -41,7 +42,7 @@ export default function PricingPage({
   currentUser,
   userPhone,
 }: PricingPageProps) {
-  const [selectedDuration, setSelectedDuration] = useState<"1m" | "3m" | "6m" | "1y" | "lifetime">("1m");
+  const [selectedDuration, setSelectedDuration] = useState<"1m" | "3m" | "6m" | "1y" | "lifetime">("3m");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // Midtrans Payment States
@@ -100,33 +101,33 @@ export default function PricingPage({
     },
     "3m": {
       label: isEN ? "3 Months" : "3 Bulan",
-      singleIDR: "Rp 249rb", singleUSD: "$16",
-      premiumIDR: "Rp 399rb", premiumUSD: "$26",
-      singleAmount: 249000,
-      premiumAmount: 399000,
+      singleIDR: PLAN_PRICING.nutritionist["3_months"].label, singleUSD: "$16",
+      premiumIDR: PLAN_PRICING.both["3_months"].label, premiumUSD: "$26",
+      singleAmount: PLAN_PRICING.nutritionist["3_months"].idr,
+      premiumAmount: PLAN_PRICING.both["3_months"].idr,
       periodText: isEN ? "/3 months" : "/3 bulan",
       subNote: isEN ? "Save ~7% to 11% vs monthly" : "Hemat 7% - 11% dibanding bulanan",
       badge: isEN ? "Save ~11%" : "Hemat ~11%"
     },
     "6m": {
       label: isEN ? "6 Months" : "6 Bulan",
-      singleIDR: "Rp 449rb", singleUSD: "$29",
-      premiumIDR: "Rp 699rb", premiumUSD: "$45",
-      singleAmount: 449000,
-      premiumAmount: 699000,
+      singleIDR: PLAN_PRICING.nutritionist["6_months"].label, singleUSD: "$29",
+      premiumIDR: PLAN_PRICING.both["6_months"].label, premiumUSD: "$45",
+      singleAmount: PLAN_PRICING.nutritionist["6_months"].idr,
+      premiumAmount: PLAN_PRICING.both["6_months"].idr,
       periodText: isEN ? "/6 months" : "/6 bulan",
       subNote: isEN ? "Save ~16% to 22% vs monthly" : "Hemat 16% - 22% dibanding bulanan",
-      badge: isEN ? "Save 22%" : "Hemat 22%"
+      badge: isEN ? "Save 22%" : (PLAN_PRICING.nutritionist["6_months"].savingLabel || "Hemat 22%")
     },
     "1y": {
       label: isEN ? "1 Year" : "1 Tahun",
-      singleIDR: "Rp 749rb", singleUSD: "$49",
-      premiumIDR: "Rp 1.199rb", premiumUSD: "$79",
-      singleAmount: 749000,
-      premiumAmount: 1199000,
+      singleIDR: PLAN_PRICING.nutritionist["1_year"].label, singleUSD: "$49",
+      premiumIDR: PLAN_PRICING.both["1_year"].label, premiumUSD: "$79",
+      singleAmount: PLAN_PRICING.nutritionist["1_year"].idr,
+      premiumAmount: PLAN_PRICING.both["1_year"].idr,
       periodText: isEN ? "/year" : "/tahun",
       subNote: isEN ? "Save ~30% to 33% (Best Value)" : "Hemat 30% - 33% (Paling Laris)",
-      badge: isEN ? "Best Value (Save ~33%)" : "Paling Hemat ~33%"
+      badge: isEN ? "Best Value (Save ~33%)" : (PLAN_PRICING.both["1_year"].savingLabel || "Paling Hemat ~33%")
     },
     "lifetime": {
       label: isEN ? "Lifetime" : "Lifetime",

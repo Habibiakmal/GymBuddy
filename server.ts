@@ -117,6 +117,15 @@ import {
   type PlanEntitlements
 } from "./services/subscriptionEngine";
 import {
+  PLAN_PRICING,
+  getPrice,
+  normalizeDuration,
+  normalizePlan,
+  mergePlans,
+  type PlanKey,
+  type DurationKey
+} from "./services/pricingConfig";
+import {
   classifyUserIntent,
   sanitizeTextForIntent,
   parseMealCorrectionDetails,
@@ -5922,11 +5931,54 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
       const userId = requestedUserId || profile.userId || `usr_ob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
+      // Derive age from DOB when available; never fabricate a default age.
+      const rawDob = profile.dob || "";
+      let derivedAge: number | null = null;
+      if (rawDob && /^\d{4}-\d{2}-\d{2}$/.test(rawDob)) {
+        const d = new Date(rawDob);
+        if (!isNaN(d.getTime())) {
+          const today = new Date();
+          let calc = today.getFullYear() - d.getFullYear();
+          const m = today.getMonth() - d.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < d.getDate())) calc--;
+          if (calc >= 1 && calc <= 130) derivedAge = calc;
+        }
+      } else if (profile.age !== undefined && profile.age !== null && Number(profile.age) > 0) {
+        derivedAge = Number(profile.age);
+      }
+      // null means genuinely unknown — do not substitute a fake value.
+
+      // Synthesize healthProfile sub-object from flat onboarding fields so the
+      // Dashboard modal check (healthProfile.isCompleted) does not re-prompt the user.
+      // isCompleted is true only when the user provided real health data during onboarding.
+      const onboardingConditions: string[] = Array.isArray(profile.healthConditions)
+        ? profile.healthConditions
+        : [];
+      const onboardingHealthStatus: string | undefined =
+        profile.healthStatus || (onboardingConditions.length > 0 ? "has_condition" : undefined);
+      const hasRealHealthData = Boolean(
+        rawDob || (derivedAge !== null) || onboardingHealthStatus
+      );
+      const synthesizedHealthProfile = hasRealHealthData
+        ? {
+            dob: rawDob || null,
+            age: derivedAge,
+            hasCondition: onboardingHealthStatus || "no_condition",
+            conditions: onboardingConditions,
+            otherCondition: profile.otherCondition || "",
+            isCompleted: true,
+            completedAt: new Date().toISOString(),
+            source: "onboarding"
+          }
+        : (profile.healthProfile ?? null);
+
       const pendingProfile = {
         ...profile,
         userId,
+        age: derivedAge !== null ? derivedAge : (profile.age ?? null),
         userState: "onboarding_complete",
         onboardingCompleted: true,
+        healthProfile: synthesizedHealthProfile,
         updatedAt: new Date().toISOString()
       };
 
@@ -6012,13 +6064,16 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       }
 
       // Paid Plans: Midtrans Snap Integration
-      let grossAmount = Number(amount);
+      const rawDuration = req.body.billingPeriod || req.body.duration;
+      const canonicalDuration: DurationKey = normalizeDuration(rawDuration) || "3_months";
+      const canonicalPlanKey: PlanKey = normalizedPlan === "both" ? "both" : normalizedPlan;
+      const durationMonths = PLAN_PRICING[canonicalPlanKey]?.[canonicalDuration]?.durationMonths || 3;
+
+      // Price lookup from canonical config
+      const canonicalAmount = getPrice(canonicalPlanKey, canonicalDuration);
+      let grossAmount = canonicalAmount > 0 ? canonicalAmount : Number(amount);
       if (!grossAmount || grossAmount <= 0) {
-        if (normalizedPlan === "both") {
-          grossAmount = 149000;
-        } else {
-          grossAmount = 89000;
-        }
+        grossAmount = canonicalPlanKey === "both" ? 399000 : 249000;
       }
 
       const parameter = {
@@ -6027,7 +6082,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
           gross_amount: grossAmount,
         },
         item_details: [{
-          id: `${normalizedPlan.toUpperCase()}-${String(duration).toUpperCase()}`,
+          id: `${normalizedPlan.toUpperCase()}-${String(canonicalDuration).toUpperCase()}`,
           price: grossAmount,
           quantity: 1,
           name: `GymBuddy AI ${normalizedPlan === "both" ? "Both (Nutritionist + Workout Coach)" : (normalizedPlan === "workout_coach" ? "AI Workout Coach" : "AI Nutritionist")}`
@@ -6039,7 +6094,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         },
         custom_field1: effectiveUserId,
         custom_field2: normalizedPlan === "both" ? "premium" : normalizedPlan,
-        custom_field3: `${resolvedService}:${duration}`
+        custom_field3: `${resolvedService}:${canonicalDuration}`
       };
 
       let transaction: { token: string; redirect_url: string };
@@ -6067,7 +6122,8 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         amount: grossAmount,
         status: "pending",
         userState: "payment_pending",
-        billingPeriod: duration,
+        billingPeriod: canonicalDuration,
+        durationMonths,
         paymentStatus: "pending",
         subscriptionStatus: "pending_payment",
         whatsappNumber: null,
@@ -6210,7 +6266,7 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
       const order = orderId && dbData.orders ? dbData.orders[orderId] : null;
 
-      let finalProfile = {
+      let finalProfile: any = {
         ...baseProfile,
         userId: `usr_${localPhone}`,
         phone: canonicalPhone,
@@ -6219,6 +6275,48 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         onboardingCompleted: true,
         updatedAt: new Date().toISOString()
       };
+
+      // Bridge: if the pending profile had flat onboarding health fields but no
+      // healthProfile sub-object (or isCompleted is not set), synthesize it now.
+      // This prevents the Dashboard from prompting the user again for data they
+      // already provided during onboarding.
+      // Age rule: DOB → derived; explicit age → used; both missing → null (never fabricated).
+      if (!finalProfile.healthProfile?.isCompleted) {
+        const bridgeDob = finalProfile.dob || "";
+        let bridgeAge: number | null = null;
+        if (bridgeDob && /^\d{4}-\d{2}-\d{2}$/.test(bridgeDob)) {
+          const d = new Date(bridgeDob);
+          if (!isNaN(d.getTime())) {
+            const today = new Date();
+            let calc = today.getFullYear() - d.getFullYear();
+            const m = today.getMonth() - d.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < d.getDate())) calc--;
+            if (calc >= 1 && calc <= 130) bridgeAge = calc;
+          }
+        } else if (finalProfile.age !== undefined && finalProfile.age !== null && Number(finalProfile.age) > 0) {
+          bridgeAge = Number(finalProfile.age);
+        }
+        // null = genuinely unknown; do not substitute a fake value.
+        const bridgeConds: string[] = Array.isArray(finalProfile.healthConditions)
+          ? finalProfile.healthConditions
+          : [];
+        const bridgeStatus: string | undefined =
+          finalProfile.healthStatus || (bridgeConds.length > 0 ? "has_condition" : undefined);
+        const hasRealData = Boolean(bridgeDob || (bridgeAge !== null) || bridgeStatus);
+        if (hasRealData) {
+          finalProfile.healthProfile = {
+            dob: bridgeDob || null,
+            age: bridgeAge,
+            hasCondition: bridgeStatus || "no_condition",
+            conditions: bridgeConds,
+            otherCondition: finalProfile.otherCondition || "",
+            isCompleted: true,
+            completedAt: new Date().toISOString(),
+            source: "onboarding_bridge"
+          };
+          if (bridgeAge !== null) finalProfile.age = bridgeAge;
+        }
+      }
 
       if (order && order.paymentStatus === "paid") {
         const canonicalPlan = (order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both")
@@ -6399,11 +6497,20 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
     const sub = getUserSubscription(user);
+    const firestoreSub = await getFirestoreSubscription(normPhone).catch(() => null);
+    const billingPeriod = firestoreSub?.billingDuration || user?.planDuration || sub?.planDuration || "3_months";
+    const durationMonths = billingPeriod === "1_year" || billingPeriod === "1y" ? 12 : (billingPeriod === "6_months" || billingPeriod === "6m" ? 6 : 3);
+
     res.json({
       success: true,
       phone: normPhone,
       plan: sub.plan,
       planDuration: sub.planDuration,
+      billingPeriod,
+      durationMonths,
+      amount: firestoreSub?.grossAmount || null,
+      startDate: sub.planStartedAt,
+      endDate: sub.planExpiresAt,
       planStartedAt: sub.planStartedAt,
       planExpiresAt: sub.planExpiresAt,
       hasUsedTrial: sub.hasUsedTrial,
@@ -8298,8 +8405,10 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
         return res.status(400).json({ success: false, error: "Phone number is required for payment" });
       }
       
-      const orderId = `GYMBUDDY-${normPhone}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const grossAmount = Number(amount) || (plan === "premium" ? 139000 : 79000);
+      const canonicalDur = normalizeDuration(duration) || "3_months";
+      const canonicalPl: PlanKey = plan === "premium" || plan === "both" ? "both" : (activeService === "nutrition" ? "nutritionist" : "workout_coach");
+      const expectedAmount = getPrice(canonicalPl, canonicalDur);
+      const grossAmount = expectedAmount > 0 ? expectedAmount : (Number(amount) || (canonicalPl === "both" ? 399000 : 249000));
 
       const parameter = {
         transaction_details: {
@@ -8510,13 +8619,40 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           name: body.first_name || "Member GymBuddy",
           createdAt: new Date().toISOString()
         };
-        const applied = applyCommercialPlan(existingUser, canonicalPlan, canonicalDuration);
+
+        // Merge logic: workout_coach + nutritionist -> premium (both)
+        const existingSubPlan = existingUser.subscription?.plan || existingUser.subscriptionTier;
+        let finalPlan: CanonicalPlan = canonicalPlan;
+        let finalService = activeService;
+        if (
+          (existingSubPlan === "workout_coach" && canonicalPlan === "nutritionist") ||
+          (existingSubPlan === "nutritionist" && canonicalPlan === "workout_coach") ||
+          existingSubPlan === "both" ||
+          existingSubPlan === "premium" ||
+          canonicalPlan === "premium"
+        ) {
+          finalPlan = "premium";
+          finalService = "both";
+        }
+
+        // ============================================================
+        // ⚠️  TODO: SUBSCRIPTION EXPIRY MERGE (PENDING BUSINESS DECISION)
+        // ============================================================
+        // Open Question Q2: When a single-specialist subscriber adds the second specialist,
+        // how should expiry be handled?
+        //   Option A: Extend remaining days of existing sub by new duration
+        //   Option B: Reset both to new duration from today (current implementation)
+        //   Option C: Track independent expiry per feature
+        // Currently implementing Option B pending business confirmation.
+        // ============================================================
+
+        const applied = applyCommercialPlan(existingUser, finalPlan, canonicalDuration);
         if (applied.success) {
           dbData.users[normPhone] = {
             ...applied.user,
             subscription: {
-              plan: canonicalPlan,
-              activeService,
+              plan: finalPlan,
+              activeService: finalService,
               status: "active",
               expiresAt: expiresAt ? expiresAt.toISOString() : null
             }
@@ -8524,7 +8660,7 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           saveUserProfile(normPhone, dbData.users[normPhone]);
           saveDb();
         }
-        console.log(`[Midtrans] Activated ${canonicalPlan} (${canonicalDuration}) subscription for ${normPhone} ✅`);
+        console.log(`[Midtrans] Activated ${finalPlan} (${canonicalDuration}) subscription for ${normPhone} ✅`);
 
         // Send WhatsApp confirmation notification
         try {
