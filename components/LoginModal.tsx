@@ -418,31 +418,13 @@ export default function LoginModal({
       foundProfile = await tryFetchProfile(API_BASE_URL);
     }
 
-    // 3. Try LocalStorage fallback
-    if (!foundProfile) {
-      try {
-        for (const p of phoneVariations) {
-          const stored = localStorage.getItem(`gymbuddy_user_${p}`);
-          if (stored) {
-            foundProfile = JSON.parse(stored);
-            break;
-          }
-        }
-        if (!foundProfile) {
-          const storedActive = localStorage.getItem("gymbuddy_active_session") || localStorage.getItem("gymbuddy_last_user");
-          if (storedActive) {
-            foundProfile = JSON.parse(storedActive);
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 4. Strict DB check: If user profile is not found in database or local storage, REJECT login!
+    // 3. Strict DB check: User must genuinely exist on the backend.
+    // Zero localStorage resurrection for deleted or non-existent accounts!
     if (!foundProfile) {
       setErrorMsg(
         isEN
-          ? "This WhatsApp number is not registered yet. Please start by completing the onboarding first."
-          : "Nomor WhatsApp ini belum terdaftar. Silakan daftar dan isi data tubuh kamu melalui kuesioner onboarding terlebih dahulu."
+          ? "This WhatsApp number is not registered or has been deleted. Please register via onboarding."
+          : "Nomor WhatsApp ini belum terdaftar atau telah dihapus. Silakan daftar melalui kuesioner onboarding terlebih dahulu."
       );
       setLoading(false);
       return;

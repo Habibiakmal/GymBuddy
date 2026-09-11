@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
-import { findUserByPhoneOrId, getUserSubscription } from "./db";
+import { findUserByPhoneOrId, getUserSubscription, isAccountDeleted } from "./db";
 
 const JWT_SECRET = process.env.JWT_SECRET || "gymbuddy_production_jwt_secret_key_2026_fitness";
 const JWT_EXPIRES_IN = "30d";
@@ -49,6 +49,13 @@ export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPay
   // 1. Try GymBuddy JWT token
   const payload = verifyAuthToken(token);
   if (payload) {
+    if (await isAccountDeleted(payload.phone) || (payload.userId && await isAccountDeleted(payload.userId))) {
+      return res.status(401).json({
+        success: false,
+        error: "account_deleted",
+        message: "Akun ini telah dihapus. Sesi Anda tidak lagi berlaku."
+      });
+    }
     req.user = payload;
     return next();
   }
@@ -59,6 +66,13 @@ export async function requireAuthMiddleware(req: Request & { user?: AuthTokenPay
       const decodedFirebase = await admin.auth().verifyIdToken(token);
       if (decodedFirebase) {
         const phone = decodedFirebase.phone_number || decodedFirebase.uid;
+        if (await isAccountDeleted(phone) || await isAccountDeleted(decodedFirebase.uid)) {
+          return res.status(401).json({
+            success: false,
+            error: "account_deleted",
+            message: "Akun ini telah dihapus. Sesi Anda tidak lagi berlaku."
+          });
+        }
         const user = await findUserByPhoneOrId(phone);
         req.user = {
           userId: decodedFirebase.uid,

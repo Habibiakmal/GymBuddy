@@ -139,13 +139,15 @@ export default function App() {
               headers: { "Accept": "application/json" }
             }).catch(() => null);
 
-            if (res && res.status === 404) {
-              console.warn("[SessionGuard] User no longer exists on server database. Purging stale local session...");
+            if (res && (res.status === 404 || res.status === 401 || res.status === 403)) {
+              console.warn("[SessionGuard] User no longer active or deleted on server database. Purging stale local session...");
               Object.keys(localStorage).forEach((key) => {
                 if (key.startsWith("gymbuddy")) {
                   localStorage.removeItem(key);
                 }
               });
+              sessionStorage.clear();
+              document.cookie = "gymbuddy_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
               setCurrentUser(null);
               setIsLoggedIn(false);
               setViewMode("landing");

@@ -440,10 +440,146 @@ export async function deleteUserDocument(phone: string): Promise<void> {
     try {
       const db = await getDatabase();
       if (db) {
-        await db.collection("users").deleteMany({ $or: [{ phone }, { phone: clean }, { userId: `usr_${clean}` }] });
+        const idFilter = {
+          $or: [
+            { phone: { $in: variations } },
+            { userId: { $in: variations.map(v => v.startsWith("usr_") ? v : `usr_${v}`) } }
+          ]
+        };
+        await Promise.all([
+          db.collection("users").deleteMany(idFilter),
+          db.collection("subscriptions").deleteMany(idFilter),
+          db.collection("foodLogs").deleteMany(idFilter),
+          db.collection("waterLogs").deleteMany(idFilter),
+          db.collection("workoutLogs").deleteMany(idFilter)
+        ]);
+        console.log(`[MongoDB] Cascade deleted user documents for ${phone} ✅`);
       }
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn("[MongoDB] deleteUser warning:", e?.message || e);
+    }
   }
+}
+
+// ============================================================
+// TOMBSTONE & REVOCATION STORE
+// Tracks permanently deleted identities to block login & revoke tokens
+// ============================================================
+
+export interface DeletedAccountEntry {
+  phone: string;
+  canonicalPhone: string;
+  userId?: string;
+  deletedAt: number;
+}
+
+export const deletedAccountsMap = new Map<string, DeletedAccountEntry>();
+
+export async function markAccountDeleted(phone: string, userId?: string): Promise<void> {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+  const now = Date.now();
+
+  const variations = Array.from(new Set([
+    phone, normPhone, altPhone, cleanPhone, canonicalPhone,
+    `usr_${phone}`, `usr_${normPhone}`, `usr_${altPhone}`, `usr_${cleanPhone}`,
+    userId || `usr_${normPhone}`
+  ])).filter(Boolean);
+
+  for (const v of variations) {
+    deletedAccountsMap.set(v, { phone: normPhone, canonicalPhone, userId, deletedAt: now });
+  }
+
+  // Persist tombstone to Firestore if available
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("deletedAccounts").doc(canonicalPhone).set({
+        phone: normPhone,
+        canonicalPhone,
+        userId: userId || `usr_${normPhone}`,
+        deletedAt: new Date(now)
+      }, { merge: true });
+    }
+  } catch (e) {}
+
+  // Persist tombstone to MongoDB if enabled
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("deletedAccounts").updateOne(
+        { canonicalPhone },
+        { $set: { phone: normPhone, canonicalPhone, userId: userId || `usr_${normPhone}`, deletedAt: new Date(now) } },
+        { upsert: true }
+      );
+    }
+  } catch (e) {}
+}
+
+export async function isAccountDeleted(identifier: string): Promise<boolean> {
+  if (!identifier) return false;
+  const cleanPhone = identifier.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+
+  const variations = Array.from(new Set([identifier, normPhone, altPhone, cleanPhone, canonicalPhone, `usr_${normPhone}`, `usr_${cleanPhone}`])).filter(Boolean);
+
+  for (const v of variations) {
+    if (deletedAccountsMap.has(v)) return true;
+  }
+
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      const doc = await firestore.collection("deletedAccounts").doc(canonicalPhone).get();
+      if (doc.exists) {
+        deletedAccountsMap.set(canonicalPhone, { phone: normPhone, canonicalPhone, deletedAt: Date.now() });
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection("deletedAccounts").findOne({ canonicalPhone });
+      if (found) {
+        deletedAccountsMap.set(canonicalPhone, { phone: normPhone, canonicalPhone, deletedAt: Date.now() });
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+export async function clearAccountDeletedTombstone(phone: string): Promise<void> {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : (cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone);
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+
+  const variations = Array.from(new Set([phone, normPhone, altPhone, cleanPhone, canonicalPhone, `usr_${normPhone}`])).filter(Boolean);
+  for (const v of variations) {
+    deletedAccountsMap.delete(v);
+  }
+
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("deletedAccounts").doc(canonicalPhone).delete();
+    }
+  } catch (e) {}
+
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("deletedAccounts").deleteOne({ canonicalPhone });
+    }
+  } catch (e) {}
 }
 
 export async function saveUserDocument(doc: Partial<UserDocument> & { phone: string }): Promise<void> {

@@ -674,6 +674,9 @@ import {
   findUserByPhoneOrId,
   saveUserDocument,
   deleteUserDocument,
+  markAccountDeleted,
+  isAccountDeleted,
+  clearAccountDeletedTombstone,
   getUserSubscription as getFirestoreSubscription,
   saveUserSubscription as saveFirestoreSubscription,
   getFoodLogsForDate,
@@ -5422,6 +5425,17 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       }
 
       const normalized = normalizePhone(phone);
+      const canonical = normalizePhoneToE164(phone);
+
+      // Strict rejection if account was permanently deleted
+      if (await isAccountDeleted(phone) || (canonical && await isAccountDeleted(canonical)) || (normalized && await isAccountDeleted(normalized))) {
+        return res.status(403).json({
+          success: false,
+          error: "account_deleted",
+          message: "Akun ini telah dihapus secara permanen. Silakan daftar kembali melalui kuesioner onboarding jika ingin membuat akun baru."
+        });
+      }
+
       const user = (await findUserByPhoneOrId(normalized)) || getUserProfile(normalized);
 
       if (!user) {
@@ -5495,6 +5509,20 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
       const cleanedPhone = phone.replace(/\D/g, "");
       const normPhone = normalizePhoneToLocal(canonicalPhone);
       const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : (normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone);
+
+      // Strict rejection if account was permanently deleted
+      if (
+        await isAccountDeleted(phone) ||
+        (canonicalPhone && await isAccountDeleted(canonicalPhone)) ||
+        (normPhone && await isAccountDeleted(normPhone)) ||
+        (altPhone && await isAccountDeleted(altPhone))
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "account_deleted",
+          message: "Akun ini telah dihapus secara permanen. Silakan daftar kembali melalui kuesioner onboarding jika ingin membuat akun baru."
+        });
+      }
 
       let user = (await findUserByPhoneOrId(canonicalPhone)) ||
                  (await findUserByPhoneOrId(normPhone)) ||
@@ -6318,6 +6346,14 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         }
       }
 
+      // If this phone was previously marked as deleted, untombstone it now that a new registration is genuinely completed
+      if (canonicalPhone) {
+        await clearAccountDeletedTombstone(canonicalPhone);
+      }
+      if (localPhone) {
+        await clearAccountDeletedTombstone(localPhone);
+      }
+
       if (order && order.paymentStatus === "paid") {
         const canonicalPlan = (order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both")
           ? "premium"
@@ -6426,8 +6462,51 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
 
   // Get user profile endpoint
   app.get("/api/user/:phone", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    if (req.headers.authorization) {
+      return requireAuthMiddleware(req as any, res, async () => {
+        const rawParam = req.params.phone;
+        const phone = normalizePhone(rawParam);
+        const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+        const canonical = normalizePhoneToE164(rawParam);
+
+        if (await isAccountDeleted(phone) || (canonical && await isAccountDeleted(canonical)) || await isAccountDeleted(rawParam)) {
+          return res.status(404).json({ success: false, error: "User profile not found in database", deleted: true });
+        }
+
+        const user = getUserProfile(phone) || getUserProfile(altPhone) || (await findUserByPhoneOrId(phone));
+        if (!user) {
+          return res.status(404).json({ error: "User profile not found in database" });
+        }
+        const calculated = calculateUserData(user);
+        const sub = getUserSubscription(user);
+        const streak = getStreakCount(phone);
+        const waterCups = getWaterCups(phone);
+        const history = dbData.weeklyProgress[phone] || dbData.weeklyProgress[altPhone] || [];
+        return res.json({
+          ...user,
+          ...calculated,
+          user: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
+          profile: { ...user, ...calculated, subscription: sub, entitlements: sub.entitlements },
+          userData: calculated,
+          calculated,
+          subscription: sub,
+          entitlements: sub.entitlements,
+          history,
+          streak,
+          waterCups
+        });
+      });
+    }
+
+    const rawParam = req.params.phone;
+    const phone = normalizePhone(rawParam);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const canonical = normalizePhoneToE164(rawParam);
+
+    if (await isAccountDeleted(phone) || (canonical && await isAccountDeleted(canonical)) || await isAccountDeleted(rawParam)) {
+      return res.status(404).json({ success: false, error: "User profile not found in database", deleted: true });
+    }
+
     const user = getUserProfile(phone) || getUserProfile(altPhone) || (await findUserByPhoneOrId(phone));
     if (!user) {
       return res.status(404).json({ error: "User profile not found in database" });
@@ -6797,39 +6876,35 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const canonicalPhone = "+62" + phone.replace(/^0/, "");
     console.log(`[DELETE Account] Permanently wiping user: ${phone} (${rawPhone})`);
 
-    // 1. Delete from Server Memory & memCache
-    delete dbData.users[phone];
-    delete dbData.users[altPhone];
-    delete dbData.users[rawPhone];
-    delete dbData.users[`usr_${phone}`];
-    delete dbData.users[`usr_${altPhone}`];
-
-    delete dbData.weeklyProgress[phone];
-    delete dbData.weeklyProgress[altPhone];
-    delete dbData.weeklyProgress[rawPhone];
-
-    await deleteUserDocument(phone);
-    await deleteUserDocument(altPhone);
-    await deleteUserDocument(rawPhone);
-    await deleteUserDocument(`usr_${phone}`);
-    await deleteUserDocument(`usr_${altPhone}`);
-
     const variations = Array.from(new Set([
-      phone, altPhone, rawPhone,
+      phone, altPhone, rawPhone, canonicalPhone,
       `0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `+62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
-      `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`,
+      `usr_${phone}`, `usr_${altPhone}`, `usr_${rawPhone}`, `usr_${canonicalPhone}`,
       `usr_0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `usr_62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`
     ])).filter(Boolean);
 
+    // 1. Delete from Server Memory & memCache
+    for (const v of variations) {
+      delete dbData.users[v];
+      delete dbData.weeklyProgress[v];
+      if (dbData.pendingProfiles) delete dbData.pendingProfiles[v];
+    }
+
+    await deleteUserDocument(phone);
+    await deleteUserDocument(altPhone);
+    await deleteUserDocument(rawPhone);
+    await deleteUserDocument(canonicalPhone);
+
     // Delete all daily logs for this user
     Object.keys(dbData.dailyLogs).forEach(key => {
       const keyPrefix = key.split("_")[0];
-      if (variations.includes(keyPrefix) || variations.some(v => key.includes(v))) {
+      if (variations.includes(keyPrefix) || variations.some(v => key.startsWith(v + "_") || key === v)) {
         delete dbData.dailyLogs[key];
       }
     });
@@ -6841,14 +6916,46 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     // Delete all water logs for this user
     Object.keys(dbData.waterLogs).forEach(key => {
       const keyPrefix = key.split("_")[0];
-      if (variations.includes(keyPrefix) || variations.some(v => key.includes(v))) {
+      if (variations.includes(keyPrefix) || variations.some(v => key.startsWith(v + "_") || key === v)) {
         delete dbData.waterLogs[key];
       }
     });
 
+    // 2. Anonymize transaction / order history (retain financial records, scrub PII)
+    if (dbData.orders) {
+      for (const ord of Object.values(dbData.orders)) {
+        if (
+          variations.includes(ord.phone) ||
+          variations.includes(ord.whatsappNumber) ||
+          variations.includes(ord.userId) ||
+          (ord.phone && variations.some(v => ord.phone.includes(v)))
+        ) {
+          ord.nickname = "Deleted User";
+          ord.customerName = "Deleted User";
+          ord.phone = "DELETED";
+          ord.whatsappNumber = null;
+          ord.userId = "usr_deleted";
+          ord.midtransToken = null;
+          ord.midtransRedirectUrl = null;
+        }
+      }
+    }
+
+    // 3. Purge active conversation tasks & memory
+    for (const v of variations) {
+      clearActiveTask(v);
+    }
+
+    // 4. Purge pending login sessions
+    for (const [sId, sess] of authPendingSessions.entries()) {
+      if (variations.includes(sess.phone) || variations.includes(sess.normPhone) || variations.includes(sess.altPhone) || variations.includes(sess.canonicalPhone)) {
+        authPendingSessions.delete(sId);
+      }
+    }
+
     saveDb();
 
-    // 2. Delete from Firestore Collections
+    // 5. Delete from Firestore Collections
     const firestore = getFirestore();
     if (firestore) {
       try {
@@ -6871,6 +6978,9 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
           wSnap1.forEach(d => batch.delete(d.ref));
           const wSnap2 = await firestore.collection("waterLogs").where("userId", "==", v).get();
           wSnap2.forEach(d => batch.delete(d.ref));
+
+          const wrkSnap = await firestore.collection("workoutLogs").where("phone", "==", v).get();
+          wrkSnap.forEach(d => batch.delete(d.ref));
         }
 
         await batch.commit();
@@ -6879,6 +6989,12 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
         console.warn("[Firestore] User delete warning:", fErr?.message || fErr);
       }
     }
+
+    // 6. Record tombstone in persistent revoked/deleted accounts store
+    await markAccountDeleted(phone, (req as any).user?.userId || `usr_${phone}`);
+
+    // 7. Invalidate server auth cookies
+    res.clearCookie("gymbuddy_token", { path: "/" });
 
     res.json({
       success: true,
@@ -7048,7 +7164,14 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
   });
 
   app.get("/api/user-profile/:phone", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawParam = req.params.phone;
+    const phone = normalizePhone(rawParam);
+    const canonical = normalizePhoneToE164(rawParam);
+
+    if (await isAccountDeleted(phone) || (canonical && await isAccountDeleted(canonical)) || await isAccountDeleted(rawParam)) {
+      return res.status(404).json({ success: false, error: "Profile not found", deleted: true });
+    }
+
     const profile = (await findUserByPhoneOrId(phone)) || getUserProfile(phone);
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });

@@ -45503,28 +45503,28 @@ var BRAND_PRODUCT_REGISTRY = [
   }
 ];
 function resolveCanonicalFoodIdentity(rawText) {
-  const clean2 = (rawText || "").trim();
-  const lower = clean2.toLowerCase();
+  const clean = (rawText || "").trim();
+  const lower = clean.toLowerCase();
   const cleanWaterText = lower.replace(/(?:\d+(?:[.,]\d+)?\s*(?:ml|liter|litre|l\b|gelas|cup|cups|botol)|\b(?:gelas|cup|cups|botol)\b)/gi, "").replace(/\s+/g, " ").trim();
   const isPureWater = /^(?:air\s*putih|air\s*mineral|air\s*aqua|air\s*biasa|plain\s*water|mineral\s*water|water|air)$/i.test(cleanWaterText) && !/(?:kopi|coffee|teh|tea|susu|milk|jus|juice|boba|cola|soda|sirup|syrup|lemon|jeruk|buah|manis)/i.test(lower);
   let explicitGrams;
   let explicitMl;
-  const gMatch = clean2.match(/(\d+(?:[.,]\d+)?)\s*(?:gram|gr|g)\b/i);
+  const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:gram|gr|g)\b/i);
   if (gMatch) {
     explicitGrams = parseFloat(gMatch[1].replace(",", "."));
   }
-  const mlMatch = clean2.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l)\b/i);
+  const mlMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l)\b/i);
   if (mlMatch) {
     let val = parseFloat(mlMatch[1].replace(",", "."));
-    if (/liter|l\b/i.test(clean2) && val < 10) val *= 1e3;
+    if (/liter|l\b/i.test(clean) && val < 10) val *= 1e3;
     explicitMl = val;
   }
   for (const entry of BRAND_PRODUCT_REGISTRY) {
     for (const pat of entry.patterns) {
       if (pat.test(lower)) {
         let resolvedName = entry.canonicalDisplayName;
-        if (clean2.length > entry.brand.length) {
-          const cleanUser = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+        if (clean.length > entry.brand.length) {
+          const cleanUser = clean.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
           if (entry.canonicalDisplayName.toLowerCase().includes("chips") && !cleanUser.toLowerCase().includes("chips")) {
             resolvedName = `${cleanUser} (Chips)`;
           } else {
@@ -45533,7 +45533,7 @@ function resolveCanonicalFoodIdentity(rawText) {
         }
         const targetGrams2 = explicitGrams || entry.defaultServingGrams;
         return {
-          originalInput: clean2,
+          originalInput: clean,
           resolvedFoodName: resolvedName,
           canonicalConcept: entry.canonicalDisplayName,
           semanticCategory: entry.category,
@@ -45556,12 +45556,12 @@ function resolveCanonicalFoodIdentity(rawText) {
     for (const pat of entry.patterns) {
       if (pat.test(lower)) {
         let resolvedName = entry.canonicalName;
-        if (clean2.length > 3) {
-          resolvedName = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+        if (clean.length > 3) {
+          resolvedName = clean.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
         }
         const targetGrams2 = explicitGrams || entry.defaultServingGrams;
         return {
-          originalInput: clean2,
+          originalInput: clean,
           resolvedFoodName: resolvedName,
           canonicalConcept: entry.canonicalName,
           semanticCategory: entry.category,
@@ -45581,7 +45581,7 @@ function resolveCanonicalFoodIdentity(rawText) {
   }
   const isBeverageCategory = /\b(?:susu|milk|latte|cappuccino|smoothie|shake|jus|juice|kopi|coffee|teh|tea|boba|soda|cola|drink|minuman)\b/i.test(lower);
   const isSnackCategory = !isBeverageCategory && /\b(?:chocolate|cokelat|coklat|candy|permen|wafer|cookies|kukis|biskuit|chips|keripik|snack|crackers|krekers|popcorn|kacang|nuts|almond|yogurt|buah|fruit|pisang|apel)\b/i.test(lower);
-  const cleanDisplay = clean2.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/^(?:aku|saya|gue|gw)\s+(?:makan|santap|ngemil|minum|catat)?\s*/i, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim() || "Estimasi Makanan";
+  const cleanDisplay = clean.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/^(?:aku|saya|gue|gw)\s+(?:makan|santap|ngemil|minum|catat)?\s*/i, "").replace(/\b\w/g, (c) => c.toUpperCase()).trim() || "Estimasi Makanan";
   const semanticCategory = isSnackCategory ? "snack" : isBeverageCategory ? "beverage" : isPureWater ? "beverage" : "meal";
   const recordType = isPureWater ? "hydration" : "meal";
   const defaultGrams = isSnackCategory ? 40 : isBeverageCategory ? 250 : 150;
@@ -45602,7 +45602,7 @@ function resolveCanonicalFoodIdentity(rawText) {
     canonicalName = "Cumi Sambal";
   }
   return {
-    originalInput: clean2,
+    originalInput: clean,
     resolvedFoodName: canonicalName,
     canonicalConcept: canonicalName,
     semanticCategory,
@@ -45798,7 +45798,7 @@ var NON_FOOD_TOKENS = /* @__PURE__ */ new Set([
 ]);
 function isGreeting(text) {
   if (!text || typeof text !== "string") return false;
-  const clean2 = text.trim().toLowerCase().replace(/[?!.,;:~]/g, "");
+  const clean = text.trim().toLowerCase().replace(/[?!.,;:~]/g, "");
   const exactGreetings = /* @__PURE__ */ new Set([
     "halo",
     "hai",
@@ -45819,9 +45819,9 @@ function isGreeting(text) {
     "oy",
     "woi"
   ]);
-  if (exactGreetings.has(clean2)) return true;
+  if (exactGreetings.has(clean)) return true;
   return Boolean(
-    clean2.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) || clean2.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) || clean2.match(/^(?:halo|hai|hello|hi)\s+semua$/i) || clean2 === "assalamu'alaikum" || clean2 === "assalamualaikum wr wb" || clean2 === "assalamu alaikum"
+    clean.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) || clean.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) || clean.match(/^(?:halo|hai|hello|hi)\s+semua$/i) || clean === "assalamu'alaikum" || clean === "assalamualaikum wr wb" || clean === "assalamu alaikum"
   );
 }
 function cleanFoodTerm(term) {
@@ -48293,12 +48293,12 @@ function makeSugarProgressBar(current, limit = 50, length = 10) {
 }
 function cleanSingleFoodItemName(raw) {
   if (!raw || typeof raw !== "string") return "";
-  let clean2 = raw.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/(?:^|\s+)~?\d+\s*k?cal(?:\s+|$)/gi, " ").replace(/(?:^|\s+)(?:diperbarui|koreksi|updated|baru)(?:\s+|$)/gi, " ").trim();
-  clean2 = clean2.replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "").replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "").replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin)\s+/i, "").replace(/^(?:makan|santap|ngemil|minum|catat|log)\s+/i, "").replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "").replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "").replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "").trim();
-  clean2 = clean2.replace(/^\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)\s+(?:dari\s+|nya\s+)?/i, "").replace(/\s+\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)(?:\s+(?:saja|aja|doang))?$/i, "").replace(/\s*:\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices).*$/i, "").replace(/\s*\(\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices|kcal).*?\)/gi, "").trim();
-  if (!clean2) return "";
-  clean2 = clean2.replace(/^(?:dan|serta|pake|pakai|sama|dengan)\s+/i, "").trim();
-  const lower = clean2.toLowerCase();
+  let clean = raw.replace(/^[🍽️🥜🥗🥘🍛🍗🥩🍳🥤🍪🥪🍞🍕🍔🌮🍜🍲✨\-\*•\d\.\s\(\)]+/, "").replace(/(?:^|\s+)~?\d+\s*k?cal(?:\s+|$)/gi, " ").replace(/(?:^|\s+)(?:diperbarui|koreksi|updated|baru)(?:\s+|$)/gi, " ").trim();
+  clean = clean.replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "").replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "").replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin)\s+/i, "").replace(/^(?:makan|santap|ngemil|minum|catat|log)\s+/i, "").replace(/^(?:dan|serta|pake|pakai|dengan|sama|plus|\+)\s+/i, "").replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "").replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "").trim();
+  clean = clean.replace(/^\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)\s+(?:dari\s+|nya\s+)?/i, "").replace(/\s+\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices)(?:\s+(?:saja|aja|doang))?$/i, "").replace(/\s*:\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices).*$/i, "").replace(/\s*\(\s*\d+(?:[.,]\d+)?\s*(?:piring|mangkok|mangkuk|porsi|potong|lembar|butir|buah|gelas|cup|cups|botol|bungkus|gram|gr|g|ml|l|liter|ons|slice|slices|kcal).*?\)/gi, "").trim();
+  if (!clean) return "";
+  clean = clean.replace(/^(?:dan|serta|pake|pakai|sama|dengan)\s+/i, "").trim();
+  const lower = clean.toLowerCase();
   if (lower === "nasi" || lower === "nasi putih") return "Nasi Putih";
   if (lower === "ayam" || lower === "daging ayam") return "Ayam";
   if (lower === "telur" || lower === "telor") return "Telur";
@@ -48306,7 +48306,7 @@ function cleanSingleFoodItemName(raw) {
   if (lower.includes("iced coffee") && (lower.includes("cream foam") || lower.includes("float"))) {
     return "Iced Coffee dengan Cream Foam / Cream Float";
   }
-  return clean2.split(/\s+/).map((word) => {
+  return clean.split(/\s+/).map((word) => {
     if (word.includes("/")) {
       return word.split("/").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" / ");
     }
@@ -48327,18 +48327,18 @@ function formatFoodItemsToTitle(items) {
 }
 function extractDetectedFoodItems(text) {
   if (!text || typeof text !== "string") return [];
-  let clean2 = text.trim();
-  clean2 = clean2.replace(/^(?:halo\s+|hai\s+|coach\s+(?:mia|max),?\s*|tolong\s+catat,?\s*|catat\s+makan,?\s*)/i, "").replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "").replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin|hari\s+ini)\s+/i, "").replace(/^(?:makan|santap|ngemil|minum|sarapan|lunch|dinner|snack)\s+/i, "").replace(/^(?:pake|pakai|dengan|sama)\s+/i, "").replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "").replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "").trim();
-  if (!clean2) return [];
-  const lower = clean2.toLowerCase();
+  let clean = text.trim();
+  clean = clean.replace(/^(?:halo\s+|hai\s+|coach\s+(?:mia|max),?\s*|tolong\s+catat,?\s*|catat\s+makan,?\s*)/i, "").replace(/^(?:aku|saya|gue|gw|kami|kita)\s+/i, "").replace(/^(?:tadi\s+(?:pagi|siang|sore|malam)|kemarin\s+(?:pagi|siang|sore|malam)|tadi|kemarin|hari\s+ini)\s+/i, "").replace(/^(?:makan|santap|ngemil|minum|sarapan|lunch|dinner|snack)\s+/i, "").replace(/^(?:pake|pakai|dengan|sama)\s+/i, "").replace(/(?:\s+(?:untuk|buat)\s+(?:sarapan|lunch|dinner|snack|makan\s+siang|makan\s+malam|pagi|siang|malam))$/i, "").replace(/(?:\s+(?:tadi\s+siang|tadi\s+pagi|tadi\s+malam|siang\s+ini|pagi\s+ini|malam\s+ini))$/i, "").trim();
+  if (!clean) return [];
+  const lower = clean.toLowerCase();
   if (lower.startsWith("sandwich") || lower.startsWith("sub sandwich") || lower.startsWith("burger") || lower.startsWith("pizza") || lower.startsWith("nasi padang") || lower.startsWith("nasi uduk") || lower.startsWith("nasi kuning") || lower.startsWith("nasi liwet") || lower.startsWith("nasi kebuli") || lower.startsWith("nasi briyani") || lower.startsWith("nasi hainan") || lower.startsWith("nasi goreng") || lower.startsWith("mie goreng") || lower.startsWith("mie ayam") || lower.startsWith("kwetiau") || lower.startsWith("bihun") || lower.startsWith("soto") || lower.startsWith("bakso") || lower.startsWith("ayam geprek") || lower.startsWith("ayam penyet") || lower.startsWith("ayam bakar") || lower.startsWith("ayam goreng") || lower.startsWith("sate") || lower.startsWith("pisang goreng") || lower.startsWith("iced coffee") || lower.startsWith("es kopi")) {
-    if (clean2.includes(",") || clean2.includes("&") || /\s+serta\s+|\s+plus\s+|\s*\+\s*/i.test(clean2)) {
-      const parts = clean2.split(/(?:,|\s*&\s*|\s+serta\s+|\s+plus\s+|\s*\+\s*)/i);
+    if (clean.includes(",") || clean.includes("&") || /\s+serta\s+|\s+plus\s+|\s*\+\s*/i.test(clean)) {
+      const parts = clean.split(/(?:,|\s*&\s*|\s+serta\s+|\s+plus\s+|\s*\+\s*)/i);
       return parts.map((p) => cleanSingleFoodItemName(p)).filter(Boolean);
     }
-    return [cleanSingleFoodItemName(clean2)];
+    return [cleanSingleFoodItemName(clean)];
   }
-  const rawParts = clean2.split(/(?:,|\s*&\s*|\s+dan\s+|\s+serta\s+|\s+pake\s+|\s+pakai\s+|\s+plus\s+|\s*\+\s*|\s+sama\s+|\s+dengan\s+)/i);
+  const rawParts = clean.split(/(?:,|\s*&\s*|\s+dan\s+|\s+serta\s+|\s+pake\s+|\s+pakai\s+|\s+plus\s+|\s*\+\s*|\s+sama\s+|\s+dengan\s+)/i);
   const items = [];
   for (const part of rawParts) {
     const cleanedItem = cleanSingleFoodItemName(part);
@@ -48346,7 +48346,7 @@ function extractDetectedFoodItems(text) {
       items.push(cleanedItem);
     }
   }
-  return items.length > 0 ? items : [cleanSingleFoodItemName(clean2) || "Estimasi Makanan"];
+  return items.length > 0 ? items : [cleanSingleFoodItemName(clean) || "Estimasi Makanan"];
 }
 function generateCanonicalMealTitle(input, fallbackText) {
   if (Array.isArray(input)) {
@@ -50454,9 +50454,9 @@ function getFirestore() {
 }
 function getPhoneVariations(input) {
   if (!input) return [];
-  const clean2 = input.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean = input.replace(/[^\d+a-zA-Z_]/g, "");
   const digits = input.replace(/\D/g, "");
-  const variations = /* @__PURE__ */ new Set([input, clean2]);
+  const variations = /* @__PURE__ */ new Set([input, clean]);
   if (digits) {
     variations.add(digits);
     if (digits.startsWith("0")) {
@@ -51012,7 +51012,7 @@ var memCache = {
 };
 var firestoreAuthFailed = false;
 async function findUserByPhoneOrId(identifier) {
-  const clean2 = identifier.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean = identifier.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (!firestoreAuthFailed && getFirestore()) {
       const firestoreUser = await findUserInFirestore(identifier);
@@ -51028,14 +51028,14 @@ async function findUserByPhoneOrId(identifier) {
     const db = await getDatabase();
     if (db) {
       const found = await db.collection("users").findOne({
-        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean2 }]
+        $or: [{ userId: identifier }, { phone: identifier }, { phone: clean }]
       });
       if (found) return found;
     }
   } catch (e) {
     console.warn("[MongoDB] findUser fallback note:", e?.message || e);
   }
-  return memCache.users.get(identifier) || memCache.users.get(clean2) || memCache.users.get(`usr_${clean2}`) || null;
+  return memCache.users.get(identifier) || memCache.users.get(clean) || memCache.users.get(`usr_${clean}`) || null;
 }
 async function deleteUserDocument(phone) {
   const cleanPhone = phone.replace(/\D/g, "");
@@ -51073,10 +51073,128 @@ async function deleteUserDocument(phone) {
     try {
       const db = await getDatabase();
       if (db) {
-        await db.collection("users").deleteMany({ $or: [{ phone }, { phone: clean }, { userId: `usr_${clean}` }] });
+        const idFilter = {
+          $or: [
+            { phone: { $in: variations } },
+            { userId: { $in: variations.map((v) => v.startsWith("usr_") ? v : `usr_${v}`) } }
+          ]
+        };
+        await Promise.all([
+          db.collection("users").deleteMany(idFilter),
+          db.collection("subscriptions").deleteMany(idFilter),
+          db.collection("foodLogs").deleteMany(idFilter),
+          db.collection("waterLogs").deleteMany(idFilter),
+          db.collection("workoutLogs").deleteMany(idFilter)
+        ]);
+        console.log(`[MongoDB] Cascade deleted user documents for ${phone} \u2705`);
       }
     } catch (e) {
+      console.warn("[MongoDB] deleteUser warning:", e?.message || e);
     }
+  }
+}
+var deletedAccountsMap = /* @__PURE__ */ new Map();
+async function markAccountDeleted(phone, userId) {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+  const now = Date.now();
+  const variations = Array.from(/* @__PURE__ */ new Set([
+    phone,
+    normPhone,
+    altPhone,
+    cleanPhone,
+    canonicalPhone,
+    `usr_${phone}`,
+    `usr_${normPhone}`,
+    `usr_${altPhone}`,
+    `usr_${cleanPhone}`,
+    userId || `usr_${normPhone}`
+  ])).filter(Boolean);
+  for (const v of variations) {
+    deletedAccountsMap.set(v, { phone: normPhone, canonicalPhone, userId, deletedAt: now });
+  }
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("deletedAccounts").doc(canonicalPhone).set({
+        phone: normPhone,
+        canonicalPhone,
+        userId: userId || `usr_${normPhone}`,
+        deletedAt: new Date(now)
+      }, { merge: true });
+    }
+  } catch (e) {
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("deletedAccounts").updateOne(
+        { canonicalPhone },
+        { $set: { phone: normPhone, canonicalPhone, userId: userId || `usr_${normPhone}`, deletedAt: new Date(now) } },
+        { upsert: true }
+      );
+    }
+  } catch (e) {
+  }
+}
+async function isAccountDeleted(identifier) {
+  if (!identifier) return false;
+  const cleanPhone = identifier.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+  const variations = Array.from(/* @__PURE__ */ new Set([identifier, normPhone, altPhone, cleanPhone, canonicalPhone, `usr_${normPhone}`, `usr_${cleanPhone}`])).filter(Boolean);
+  for (const v of variations) {
+    if (deletedAccountsMap.has(v)) return true;
+  }
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      const doc = await firestore.collection("deletedAccounts").doc(canonicalPhone).get();
+      if (doc.exists) {
+        deletedAccountsMap.set(canonicalPhone, { phone: normPhone, canonicalPhone, deletedAt: Date.now() });
+        return true;
+      }
+    }
+  } catch (e) {
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      const found = await db.collection("deletedAccounts").findOne({ canonicalPhone });
+      if (found) {
+        deletedAccountsMap.set(canonicalPhone, { phone: normPhone, canonicalPhone, deletedAt: Date.now() });
+        return true;
+      }
+    }
+  } catch (e) {
+  }
+  return false;
+}
+async function clearAccountDeletedTombstone(phone) {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const normPhone = cleanPhone.startsWith("62") ? "0" + cleanPhone.substring(2) : cleanPhone.startsWith("8") ? "0" + cleanPhone : cleanPhone;
+  const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone;
+  const canonicalPhone = "+62" + normPhone.replace(/^0/, "");
+  const variations = Array.from(/* @__PURE__ */ new Set([phone, normPhone, altPhone, cleanPhone, canonicalPhone, `usr_${normPhone}`])).filter(Boolean);
+  for (const v of variations) {
+    deletedAccountsMap.delete(v);
+  }
+  try {
+    const firestore = getFirestore();
+    if (firestore) {
+      await firestore.collection("deletedAccounts").doc(canonicalPhone).delete();
+    }
+  } catch (e) {
+  }
+  try {
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("deletedAccounts").deleteOne({ canonicalPhone });
+    }
+  } catch (e) {
   }
 }
 async function saveUserDocument(doc) {
@@ -51119,7 +51237,7 @@ async function saveUserDocument(doc) {
   }
 }
 async function getUserSubscription2(userIdOrPhone) {
-  const clean2 = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
+  const clean = userIdOrPhone.replace(/[^\d+a-zA-Z_]/g, "");
   try {
     if (getFirestore()) {
       const firestoreSub = await getSubscriptionFromFirestore(userIdOrPhone);
@@ -51139,7 +51257,7 @@ async function getUserSubscription2(userIdOrPhone) {
   } catch (e) {
     console.warn("[MongoDB] getSubscription fallback note:", e?.message || e);
   }
-  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean2) || null;
+  return memCache.subscriptions.get(userIdOrPhone) || memCache.subscriptions.get(clean) || null;
 }
 async function saveUserSubscription(doc) {
   memCache.subscriptions.set(doc.phone, doc);
@@ -51172,8 +51290,8 @@ async function saveUserSubscription(doc) {
   }
 }
 async function getFoodLogsForDate(phone, date) {
-  const clean2 = phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean2}_${date}`;
+  const clean = phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${date}`;
   try {
     if (getFirestore()) {
       const firestoreLogs = await getFoodLogsFromFirestore(phone, date);
@@ -51197,8 +51315,8 @@ async function getFoodLogsForDate(phone, date) {
   return memCache.foodLogs.get(cacheKey) || [];
 }
 async function insertFoodLog(doc) {
-  const clean2 = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
-  const cacheKey = `${clean2}_${doc.date}`;
+  const clean = doc.phone.replace(/[^\d+a-zA-Z_]/g, "");
+  const cacheKey = `${clean}_${doc.date}`;
   const existing = memCache.foodLogs.get(cacheKey) || [];
   const idx = existing.findIndex((m) => String(m.id) === String(doc.id));
   if (idx >= 0) {
@@ -51209,8 +51327,8 @@ async function insertFoodLog(doc) {
     existing.push(doc);
     memCache.foodLogs.set(cacheKey, existing);
   }
-  const altClean = clean2.startsWith("0") ? "62" + clean2.substring(1) : clean2.startsWith("62") ? "0" + clean2.substring(2) : clean2;
-  if (altClean !== clean2) {
+  const altClean = clean.startsWith("0") ? "62" + clean.substring(1) : clean.startsWith("62") ? "0" + clean.substring(2) : clean;
+  if (altClean !== clean) {
     const altCacheKey = `${altClean}_${doc.date}`;
     const altExisting = memCache.foodLogs.get(altCacheKey) || [];
     const altIdx = altExisting.findIndex((m) => String(m.id) === String(doc.id));
@@ -51327,6 +51445,13 @@ async function requireAuthMiddleware(req, res, next) {
   const token = authHeader.split(" ")[1];
   const payload = verifyAuthToken(token);
   if (payload) {
+    if (await isAccountDeleted(payload.phone) || payload.userId && await isAccountDeleted(payload.userId)) {
+      return res.status(401).json({
+        success: false,
+        error: "account_deleted",
+        message: "Akun ini telah dihapus. Sesi Anda tidak lagi berlaku."
+      });
+    }
     req.user = payload;
     return next();
   }
@@ -51335,6 +51460,13 @@ async function requireAuthMiddleware(req, res, next) {
       const decodedFirebase = await import_firebase_admin2.default.auth().verifyIdToken(token);
       if (decodedFirebase) {
         const phone = decodedFirebase.phone_number || decodedFirebase.uid;
+        if (await isAccountDeleted(phone) || await isAccountDeleted(decodedFirebase.uid)) {
+          return res.status(401).json({
+            success: false,
+            error: "account_deleted",
+            message: "Akun ini telah dihapus. Sesi Anda tidak lagi berlaku."
+          });
+        }
         const user = await findUserByPhoneOrId(phone);
         req.user = {
           userId: decodedFirebase.uid,
@@ -53838,8 +53970,8 @@ function addMealLog(rawPhone, meal, targetDateStr) {
 }
 function detectDeleteMealIntent(userText) {
   if (!userText || typeof userText !== "string") return null;
-  const clean2 = userText.trim();
-  const lower = clean2.toLowerCase();
+  const clean = userText.trim();
+  const lower = clean.toLowerCase();
   if (lower.includes("hapus akun") || lower.includes("reset akun") || lower.includes("hapus data saya") || lower.includes("reset data")) {
     return null;
   }
@@ -54064,12 +54196,12 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
       return true;
     }
   }
-  const clean2 = userText.trim();
-  const lower = clean2.toLowerCase();
+  const clean = userText.trim();
+  const lower = clean.toLowerCase();
   if (lower.startsWith("koreksi:") || lower.startsWith("koreksi ") || lower.startsWith("koreksi,") || lower.startsWith("koreksi.") || lower === "koreksi" || lower.startsWith("ralat:") || lower.startsWith("ralat ") || lower.startsWith("ralat,") || lower.startsWith("edit makanan") || lower.startsWith("ganti makanan") || lower.startsWith("ganti porsi") || lower.startsWith("revisi porsi") || lower.startsWith("ubah porsi")) {
     return true;
   }
-  if (/(?:^|\s)(?:koreksi|ralat|revisi)(?:[,:\s]|$)/i.test(clean2)) {
+  if (/(?:^|\s)(?:koreksi|ralat|revisi)(?:[,:\s]|$)/i.test(clean)) {
     return true;
   }
   if (hasRecentMeal) {
@@ -55070,10 +55202,10 @@ ${exercises}
 "${comment}"`;
 }
 function formatRepsCompact(targetReps, targetSets) {
-  let clean2 = targetReps.trim();
-  clean2 = clean2.replace(/^[0-9]+\s*Set[s]?\s*x\s*/i, `${targetSets} \xD7 `);
-  clean2 = clean2.replace(/\bSecs\b/gi, "detik").replace(/\bDetik\b/gi, "detik").replace(/\bReps\b/gi, "reps").replace(/\bMins\b/gi, "menit").replace(/\bMenit\b/gi, "menit");
-  return clean2;
+  let clean = targetReps.trim();
+  clean = clean.replace(/^[0-9]+\s*Set[s]?\s*x\s*/i, `${targetSets} \xD7 `);
+  clean = clean.replace(/\bSecs\b/gi, "detik").replace(/\bDetik\b/gi, "detik").replace(/\bReps\b/gi, "reps").replace(/\bMins\b/gi, "menit").replace(/\bMenit\b/gi, "menit");
+  return clean;
 }
 function generateWeeklyWorkoutSchedule(userData) {
   return generatePersonalizedWeeklyWorkoutPlan(userData);
@@ -55733,6 +55865,14 @@ async function createExpressApp(options = {}) {
         return res.status(400).json({ success: false, error: "Nomor WhatsApp wajib diisi." });
       }
       const normalized = normalizePhone(phone);
+      const canonical = normalizePhoneToE164(phone);
+      if (await isAccountDeleted(phone) || canonical && await isAccountDeleted(canonical) || normalized && await isAccountDeleted(normalized)) {
+        return res.status(403).json({
+          success: false,
+          error: "account_deleted",
+          message: "Akun ini telah dihapus secara permanen. Silakan daftar kembali melalui kuesioner onboarding jika ingin membuat akun baru."
+        });
+      }
       const user = await findUserByPhoneOrId(normalized) || getUserProfile(normalized);
       if (!user) {
         return res.status(404).json({ success: false, error: "Akun belum terdaftar. Silakan daftar terlebih dahulu." });
@@ -55792,6 +55932,13 @@ async function createExpressApp(options = {}) {
       const cleanedPhone = phone.replace(/\D/g, "");
       const normPhone = normalizePhoneToLocal(canonicalPhone);
       const altPhone = normPhone.startsWith("0") ? "62" + normPhone.substring(1) : normPhone.startsWith("62") ? "0" + normPhone.substring(2) : normPhone;
+      if (await isAccountDeleted(phone) || canonicalPhone && await isAccountDeleted(canonicalPhone) || normPhone && await isAccountDeleted(normPhone) || altPhone && await isAccountDeleted(altPhone)) {
+        return res.status(403).json({
+          success: false,
+          error: "account_deleted",
+          message: "Akun ini telah dihapus secara permanen. Silakan daftar kembali melalui kuesioner onboarding jika ingin membuat akun baru."
+        });
+      }
       let user = await findUserByPhoneOrId(canonicalPhone) || await findUserByPhoneOrId(normPhone) || getUserProfile(normPhone) || await findUserByPhoneOrId(altPhone) || getUserProfile(altPhone);
       if (!user && (normPhone === "08111111111" || altPhone === "62811111111" || cleanedPhone === "08111111111" || cleanedPhone === "62811111111" || canonicalPhone === "+62811111111")) {
         user = {
@@ -56494,6 +56641,12 @@ async function createExpressApp(options = {}) {
           if (bridgeAge !== null) finalProfile.age = bridgeAge;
         }
       }
+      if (canonicalPhone) {
+        await clearAccountDeletedTombstone(canonicalPhone);
+      }
+      if (localPhone) {
+        await clearAccountDeletedTombstone(localPhone);
+      }
       if (order && order.paymentStatus === "paid") {
         const canonicalPlan = order.selectedPlan === "both" || order.plan === "both" || order.plan === "premium" || order.activeService === "both" ? "premium" : order.selectedPlan === "workout_coach" || order.activeService === "coach" ? "workout_coach" : "nutritionist";
         const canonicalDuration = order.billingPeriod === "lifetime" ? "lifetime" : order.billingPeriod === "1y" ? "1_year" : order.billingPeriod === "6m" ? "6_months" : order.billingPeriod === "3m" ? "3_months" : "1_month";
@@ -56586,8 +56739,46 @@ async function createExpressApp(options = {}) {
     }
   });
   app.get("/api/user/:phone", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    if (req.headers.authorization) {
+      return requireAuthMiddleware(req, res, async () => {
+        const rawParam2 = req.params.phone;
+        const phone2 = normalizePhone(rawParam2);
+        const altPhone2 = phone2.startsWith("0") ? "62" + phone2.substring(1) : phone2.startsWith("62") ? "0" + phone2.substring(2) : phone2;
+        const canonical2 = normalizePhoneToE164(rawParam2);
+        if (await isAccountDeleted(phone2) || canonical2 && await isAccountDeleted(canonical2) || await isAccountDeleted(rawParam2)) {
+          return res.status(404).json({ success: false, error: "User profile not found in database", deleted: true });
+        }
+        const user2 = getUserProfile(phone2) || getUserProfile(altPhone2) || await findUserByPhoneOrId(phone2);
+        if (!user2) {
+          return res.status(404).json({ error: "User profile not found in database" });
+        }
+        const calculated2 = calculateUserData(user2);
+        const sub2 = getUserSubscription(user2);
+        const streak2 = getStreakCount(phone2);
+        const waterCups2 = getWaterCups(phone2);
+        const history2 = dbData.weeklyProgress[phone2] || dbData.weeklyProgress[altPhone2] || [];
+        return res.json({
+          ...user2,
+          ...calculated2,
+          user: { ...user2, ...calculated2, subscription: sub2, entitlements: sub2.entitlements },
+          profile: { ...user2, ...calculated2, subscription: sub2, entitlements: sub2.entitlements },
+          userData: calculated2,
+          calculated: calculated2,
+          subscription: sub2,
+          entitlements: sub2.entitlements,
+          history: history2,
+          streak: streak2,
+          waterCups: waterCups2
+        });
+      });
+    }
+    const rawParam = req.params.phone;
+    const phone = normalizePhone(rawParam);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const canonical = normalizePhoneToE164(rawParam);
+    if (await isAccountDeleted(phone) || canonical && await isAccountDeleted(canonical) || await isAccountDeleted(rawParam)) {
+      return res.status(404).json({ success: false, error: "User profile not found in database", deleted: true });
+    }
     const user = getUserProfile(phone) || getUserProfile(altPhone) || await findUserByPhoneOrId(phone);
     if (!user) {
       return res.status(404).json({ error: "User profile not found in database" });
@@ -56916,36 +57107,35 @@ async function createExpressApp(options = {}) {
     const rawPhone = req.params.phone;
     const phone = normalizePhone(rawPhone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const canonicalPhone = "+62" + phone.replace(/^0/, "");
     console.log(`[DELETE Account] Permanently wiping user: ${phone} (${rawPhone})`);
-    delete dbData.users[phone];
-    delete dbData.users[altPhone];
-    delete dbData.users[rawPhone];
-    delete dbData.users[`usr_${phone}`];
-    delete dbData.users[`usr_${altPhone}`];
-    delete dbData.weeklyProgress[phone];
-    delete dbData.weeklyProgress[altPhone];
-    delete dbData.weeklyProgress[rawPhone];
-    await deleteUserDocument(phone);
-    await deleteUserDocument(altPhone);
-    await deleteUserDocument(rawPhone);
-    await deleteUserDocument(`usr_${phone}`);
-    await deleteUserDocument(`usr_${altPhone}`);
     const variations = Array.from(/* @__PURE__ */ new Set([
       phone,
       altPhone,
       rawPhone,
+      canonicalPhone,
       `0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `+62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `usr_${phone}`,
       `usr_${altPhone}`,
       `usr_${rawPhone}`,
+      `usr_${canonicalPhone}`,
       `usr_0${phone.replace(/^\+?62/, "").replace(/^0/, "")}`,
       `usr_62${phone.replace(/^\+?62/, "").replace(/^0/, "")}`
     ])).filter(Boolean);
+    for (const v of variations) {
+      delete dbData.users[v];
+      delete dbData.weeklyProgress[v];
+      if (dbData.pendingProfiles) delete dbData.pendingProfiles[v];
+    }
+    await deleteUserDocument(phone);
+    await deleteUserDocument(altPhone);
+    await deleteUserDocument(rawPhone);
+    await deleteUserDocument(canonicalPhone);
     Object.keys(dbData.dailyLogs).forEach((key) => {
       const keyPrefix = key.split("_")[0];
-      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
+      if (variations.includes(keyPrefix) || variations.some((v) => key.startsWith(v + "_") || key === v)) {
         delete dbData.dailyLogs[key];
       }
     });
@@ -56955,10 +57145,31 @@ async function createExpressApp(options = {}) {
     }
     Object.keys(dbData.waterLogs).forEach((key) => {
       const keyPrefix = key.split("_")[0];
-      if (variations.includes(keyPrefix) || variations.some((v) => key.includes(v))) {
+      if (variations.includes(keyPrefix) || variations.some((v) => key.startsWith(v + "_") || key === v)) {
         delete dbData.waterLogs[key];
       }
     });
+    if (dbData.orders) {
+      for (const ord of Object.values(dbData.orders)) {
+        if (variations.includes(ord.phone) || variations.includes(ord.whatsappNumber) || variations.includes(ord.userId) || ord.phone && variations.some((v) => ord.phone.includes(v))) {
+          ord.nickname = "Deleted User";
+          ord.customerName = "Deleted User";
+          ord.phone = "DELETED";
+          ord.whatsappNumber = null;
+          ord.userId = "usr_deleted";
+          ord.midtransToken = null;
+          ord.midtransRedirectUrl = null;
+        }
+      }
+    }
+    for (const v of variations) {
+      clearActiveTask(v);
+    }
+    for (const [sId, sess] of authPendingSessions.entries()) {
+      if (variations.includes(sess.phone) || variations.includes(sess.normPhone) || variations.includes(sess.altPhone) || variations.includes(sess.canonicalPhone)) {
+        authPendingSessions.delete(sId);
+      }
+    }
     saveDb();
     const firestore = getFirestore();
     if (firestore) {
@@ -56977,6 +57188,8 @@ async function createExpressApp(options = {}) {
           wSnap1.forEach((d) => batch.delete(d.ref));
           const wSnap2 = await firestore.collection("waterLogs").where("userId", "==", v).get();
           wSnap2.forEach((d) => batch.delete(d.ref));
+          const wrkSnap = await firestore.collection("workoutLogs").where("phone", "==", v).get();
+          wrkSnap.forEach((d) => batch.delete(d.ref));
         }
         await batch.commit();
         console.log(`[Firestore] User ${phone} and all related documents permanently wiped \u2705`);
@@ -56984,6 +57197,8 @@ async function createExpressApp(options = {}) {
         console.warn("[Firestore] User delete warning:", fErr?.message || fErr);
       }
     }
+    await markAccountDeleted(phone, req.user?.userId || `usr_${phone}`);
+    res.clearCookie("gymbuddy_token", { path: "/" });
     res.json({
       success: true,
       message: `Akun dan seluruh data untuk ${phone} berhasil dihapus permanen dari database.`,
@@ -57118,7 +57333,12 @@ async function createExpressApp(options = {}) {
     }
   });
   app.get("/api/user-profile/:phone", async (req, res) => {
-    const phone = normalizePhone(req.params.phone);
+    const rawParam = req.params.phone;
+    const phone = normalizePhone(rawParam);
+    const canonical = normalizePhoneToE164(rawParam);
+    if (await isAccountDeleted(phone) || canonical && await isAccountDeleted(canonical) || await isAccountDeleted(rawParam)) {
+      return res.status(404).json({ success: false, error: "Profile not found", deleted: true });
+    }
     const profile = await findUserByPhoneOrId(phone) || getUserProfile(phone);
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });

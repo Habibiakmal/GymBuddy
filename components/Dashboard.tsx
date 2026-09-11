@@ -3322,22 +3322,43 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   const handleDeleteAccount = async () => {
-    if (!window.confirm(lang === "EN" ? "Are you sure you want to delete all account data?" : "Apakah Anda yakin ingin menghapus akun dan semua data harian Anda?")) return;
-    const normPhone = normalizePhone(activeUser.phone || "");
-    const API_BASE_URL = "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+    if (!window.confirm(lang === "EN" ? "Are you sure you want to delete your account and all data permanently? This action cannot be undone." : "Apakah Anda yakin ingin menghapus akun dan semua data Anda secara permanen? Tindakan ini tidak dapat dibatalkan.")) return;
+    const phone = activeUser?.phone || activeUser?.normalizedPhone || "";
+    const normPhone = normalizePhone(phone);
+    if (!normPhone) {
+      alert(lang === "EN" ? "Phone number not found." : "Nomor WhatsApp tidak ditemukan.");
+      return;
+    }
+
     try {
-      if (normPhone) {
-        await fetch(`/api/user/${normPhone}`, { method: "DELETE" }).catch(() => {});
-        await fetch(`${API_BASE_URL}/api/user/${normPhone}`, { method: "DELETE" }).catch(() => {});
+      // Use canonicalApiFetch so auth Bearer token and headers are included
+      const res = await canonicalApiFetch<{ success: boolean; error?: string; message?: string }>(
+        `/api/user/${normPhone}`,
+        { method: "DELETE" }
+      );
+
+      if (!res || !res.success) {
+        throw new Error(res?.error || res?.message || (lang === "EN" ? "Failed to delete account on server." : "Gagal menghapus akun di server."));
       }
-    } catch (e) {}
+    } catch (e: any) {
+      console.error("[Dashboard] Delete account error:", e);
+      alert(lang === "EN" ? `Account deletion failed: ${e?.message || e}` : `Gagal menghapus akun: ${e?.message || e}`);
+      return;
+    }
+
+    // Only purge client storage and log out if the server confirmed deletion
     try {
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith("gymbuddy")) {
           localStorage.removeItem(key);
         }
       });
+      sessionStorage.clear();
+      // Purge auth cookie
+      document.cookie = "gymbuddy_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     } catch (e) {}
+
+    alert(lang === "EN" ? "Your account and all associated data have been permanently deleted." : "Akun dan semua data Anda telah berhasil dihapus secara permanen.");
     if (onResetData) onResetData();
     else onLogout();
   };
