@@ -10,6 +10,7 @@ export const generalRateLimiter = rateLimit({
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   skip: (req: Request) => req.path.includes("webhook") || req.path.includes("health"),
   message: {
     success: false,
@@ -27,6 +28,7 @@ export const aiRateLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   message: {
     success: false,
     error: "AI analysis is processing quickly! Please wait a few seconds before submitting another request."
@@ -42,6 +44,7 @@ export const authRateLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   skip: (req: Request) => req.path.includes("login-status") || req.path.includes("login-cancel") || req.path.includes("login-verify-otp"),
   message: {
     success: false,

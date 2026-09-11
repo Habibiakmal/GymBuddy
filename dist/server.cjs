@@ -50649,6 +50649,7 @@ var generalRateLimiter = (0, import_express_rate_limit.default)({
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   skip: (req) => req.path.includes("webhook") || req.path.includes("health"),
   message: {
     success: false,
@@ -50660,6 +50661,7 @@ var aiRateLimiter = (0, import_express_rate_limit.default)({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   message: {
     success: false,
     error: "AI analysis is processing quickly! Please wait a few seconds before submitting another request."
@@ -50670,6 +50672,7 @@ var authRateLimiter = (0, import_express_rate_limit.default)({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   skip: (req) => req.path.includes("login-status") || req.path.includes("login-cancel") || req.path.includes("login-verify-otp"),
   message: {
     success: false,
@@ -51245,7 +51248,9 @@ var dbData = {
   users: {},
   dailyLogs: {},
   weeklyProgress: {},
-  waterLogs: {}
+  waterLogs: {},
+  orders: {},
+  pendingProfiles: {}
 };
 function getLocalDateStr(d = /* @__PURE__ */ new Date()) {
   try {
@@ -51352,6 +51357,12 @@ async function loadFromFirestore() {
       if (doc.waterLogs) {
         dbData.waterLogs = { ...doc.waterLogs, ...dbData.waterLogs };
       }
+      if (doc.orders) {
+        dbData.orders = { ...doc.orders, ...dbData.orders };
+      }
+      if (doc.pendingProfiles) {
+        dbData.pendingProfiles = { ...doc.pendingProfiles, ...dbData.pendingProfiles };
+      }
       hasLoaded = true;
     }
     try {
@@ -51457,6 +51468,8 @@ async function initDb() {
       if (!dbData.dailyLogs) dbData.dailyLogs = {};
       if (!dbData.weeklyProgress) dbData.weeklyProgress = {};
       if (!dbData.waterLogs) dbData.waterLogs = {};
+      if (!dbData.orders) dbData.orders = {};
+      if (!dbData.pendingProfiles) dbData.pendingProfiles = {};
       console.log(`Database loaded: ${Object.keys(dbData.users).length} registered users.`);
     } catch (e) {
       console.error("Error reading db.json, starting fresh", e);
@@ -54953,6 +54966,333 @@ async function createExpressApp(options = {}) {
       activeRegistrationLocks.delete(canonicalPhone);
     }
   });
+  app.post("/api/onboarding/profile", import_express.default.json(), async (req, res) => {
+    try {
+      const profile = req.body.profile || (req.body.name ? req.body : null);
+      const requestedUserId = req.body.userId || profile && profile.userId;
+      if (!profile) {
+        return res.status(400).json({ success: false, error: "profile_required", message: "Data profil onboarding wajib dikirimkan." });
+      }
+      const userId = requestedUserId || profile.userId || `usr_ob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const pendingProfile = {
+        ...profile,
+        userId,
+        userState: "onboarding_complete",
+        onboardingCompleted: true,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (!dbData.pendingProfiles) dbData.pendingProfiles = {};
+      dbData.pendingProfiles[userId] = pendingProfile;
+      saveDb();
+      console.log(`[Onboarding Profile] Saved pre-payment profile for userId: ${userId} (${pendingProfile.name || "Anonymous"}) \u2705`);
+      res.json({
+        success: true,
+        userId,
+        userState: "onboarding_complete",
+        profile: pendingProfile
+      });
+    } catch (err) {
+      console.error("[Onboarding Profile] Error:", err);
+      res.status(500).json({ success: false, error: err.message || "Failed to save profile" });
+    }
+  });
+  app.post("/api/orders/create", import_express.default.json(), async (req, res) => {
+    try {
+      const { userId, plan, activeService, feature, duration = "1m", amount, customerName } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: "user_id_required", message: "User ID diperlukan untuk membuat pesanan." });
+      }
+      const pendingProfile = dbData.pendingProfiles && dbData.pendingProfiles[userId] || dbData.users && dbData.users[userId] || {};
+      const rawPlan = (plan || "free").toLowerCase();
+      let normalizedPlan = "free";
+      let planType = "free";
+      let resolvedService = activeService || feature || "both";
+      if (rawPlan === "free" || rawPlan === "free_trial") {
+        normalizedPlan = "free";
+        planType = "free";
+      } else if (rawPlan === "nutritionist" || rawPlan === "advanced" && (resolvedService === "nutrition" || resolvedService === "nutritionist")) {
+        normalizedPlan = "nutritionist";
+        planType = "single";
+        resolvedService = "nutrition";
+      } else if (rawPlan === "workout_coach" || rawPlan === "coach" || rawPlan === "advanced" && (resolvedService === "coach" || resolvedService === "workout")) {
+        normalizedPlan = "workout_coach";
+        planType = "single";
+        resolvedService = "coach";
+      } else {
+        normalizedPlan = "both";
+        planType = "both";
+        resolvedService = "both";
+      }
+      const orderId = `GB-ORD-${userId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 16)}-${Date.now()}`;
+      if (!dbData.orders) dbData.orders = {};
+      if (normalizedPlan === "free") {
+        const order2 = {
+          orderId,
+          userId,
+          nickname: pendingProfile.name || customerName || "Member GymBuddy",
+          selectedPlan: "free",
+          plan: "free_trial",
+          planType: "free",
+          activeService: "both",
+          feature: "both",
+          price: 0,
+          amount: 0,
+          status: "paid",
+          userState: "plan_selected",
+          billingPeriod: "2_days",
+          paymentStatus: "free",
+          subscriptionStatus: "pending_whatsapp",
+          whatsappNumber: null,
+          createdTimestamp: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        dbData.orders[orderId] = order2;
+        saveDb();
+        console.log(`[Orders] Created Free Trial order ${orderId} for ${userId} \u2705`);
+        return res.json({ success: true, order: order2 });
+      }
+      let grossAmount = Number(amount);
+      if (!grossAmount || grossAmount <= 0) {
+        if (normalizedPlan === "both") {
+          grossAmount = 149e3;
+        } else {
+          grossAmount = 89e3;
+        }
+      }
+      const parameter = {
+        transaction_details: {
+          order_id: orderId,
+          gross_amount: grossAmount
+        },
+        item_details: [{
+          id: `${normalizedPlan.toUpperCase()}-${String(duration).toUpperCase()}`,
+          price: grossAmount,
+          quantity: 1,
+          name: `GymBuddy AI ${normalizedPlan === "both" ? "Both (Nutritionist + Workout Coach)" : normalizedPlan === "workout_coach" ? "AI Workout Coach" : "AI Nutritionist"}`
+        }],
+        customer_details: {
+          first_name: pendingProfile.name || customerName || "Member GymBuddy",
+          email: "member@gymbuddy.app",
+          phone: "08111111111"
+        },
+        custom_field1: userId,
+        custom_field2: normalizedPlan === "both" ? "premium" : normalizedPlan,
+        custom_field3: `${resolvedService}:${duration}`
+      };
+      const transaction = await snap.createTransaction(parameter);
+      console.log(`[Orders] Created Snap transaction for order ${orderId}, amount: ${grossAmount}, token: ${transaction.token} \u2705`);
+      const order = {
+        orderId,
+        userId,
+        nickname: pendingProfile.name || customerName || "Member GymBuddy",
+        selectedPlan: normalizedPlan,
+        plan: normalizedPlan === "both" ? "premium" : "advanced",
+        planType,
+        activeService: resolvedService,
+        feature: resolvedService,
+        price: grossAmount,
+        amount: grossAmount,
+        status: "pending",
+        userState: "payment_pending",
+        billingPeriod: duration,
+        paymentStatus: "pending",
+        subscriptionStatus: "pending_payment",
+        whatsappNumber: null,
+        midtransToken: transaction.token,
+        midtransRedirectUrl: transaction.redirect_url,
+        createdTimestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      dbData.orders[orderId] = order;
+      saveDb();
+      return res.json({
+        success: true,
+        order,
+        token: transaction.token,
+        redirectUrl: transaction.redirect_url
+      });
+    } catch (err) {
+      console.error("[Orders] Create order error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to create order" });
+    }
+  });
+  app.get("/api/orders/:orderId", (req, res) => {
+    const { orderId } = req.params;
+    const order = dbData.orders ? dbData.orders[orderId] : null;
+    if (!order) {
+      return res.status(404).json({ success: false, error: "order_not_found", message: "Pesanan tidak ditemukan." });
+    }
+    return res.json({ success: true, order });
+  });
+  app.post("/api/orders/:orderId/retry", import_express.default.json(), async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const order = dbData.orders ? dbData.orders[orderId] : null;
+      if (!order) {
+        return res.status(404).json({ success: false, error: "order_not_found" });
+      }
+      const retryTxId = `GB-RETRY-${order.userId.replace(/[^a-zA-Z0-9]/g, "").substring(0, 12)}-${Date.now()}`;
+      const parameter = {
+        transaction_details: {
+          order_id: retryTxId,
+          gross_amount: order.price
+        },
+        item_details: [{
+          id: `${order.selectedPlan.toUpperCase()}-${String(order.billingPeriod || "1M").toUpperCase()}`,
+          price: order.price,
+          quantity: 1,
+          name: `GymBuddy AI ${order.selectedPlan === "both" ? "Both (Nutritionist + Workout Coach)" : order.selectedPlan === "workout_coach" ? "AI Workout Coach" : "AI Nutritionist"}`
+        }],
+        customer_details: {
+          first_name: order.nickname || "Member GymBuddy",
+          email: "member@gymbuddy.app",
+          phone: "08111111111"
+        },
+        custom_field1: order.userId,
+        custom_field2: order.selectedPlan === "both" ? "premium" : order.selectedPlan,
+        custom_field3: `${order.activeService || "both"}:${order.billingPeriod || "1m"}`
+      };
+      const transaction = await snap.createTransaction(parameter);
+      order.paymentStatus = "pending";
+      order.status = "pending";
+      order.userState = "payment_pending";
+      order.amount = order.price;
+      order.midtransToken = transaction.token;
+      order.midtransRedirectUrl = transaction.redirect_url;
+      order.lastRetryTimestamp = (/* @__PURE__ */ new Date()).toISOString();
+      dbData.orders[orderId] = order;
+      dbData.orders[retryTxId] = order;
+      saveDb();
+      console.log(`[Orders] Generated retry token for order ${orderId} (txId: ${retryTxId}) \u2705`);
+      return res.json({
+        success: true,
+        order,
+        token: transaction.token,
+        redirectUrl: transaction.redirect_url
+      });
+    } catch (err) {
+      console.error("[Orders] Retry order error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to retry payment" });
+    }
+  });
+  app.post("/api/account/connect-whatsapp", import_express.default.json(), async (req, res) => {
+    const { userId, orderId, phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: "valid_phone_required", message: "Nomor WhatsApp wajib diisi." });
+    }
+    const canonicalPhone = normalizePhoneToE164(phone);
+    if (!canonicalPhone) {
+      return res.status(400).json({ success: false, error: "valid_phone_required", message: "Format nomor WhatsApp tidak valid. Gunakan awalan 08 atau 62." });
+    }
+    const localPhone = normalizePhoneToLocal(canonicalPhone);
+    if (activeRegistrationLocks.has(canonicalPhone)) {
+      return res.status(409).json({
+        success: false,
+        error: "account_already_exists",
+        message: "Pendaftaran untuk nomor ini sedang diproses. Silakan coba login."
+      });
+    }
+    activeRegistrationLocks.add(canonicalPhone);
+    try {
+      let baseProfile = dbData.pendingProfiles && dbData.pendingProfiles[userId] || dbData.users && dbData.users[userId] || req.body.profileFallback || null;
+      if (!baseProfile) {
+        baseProfile = await getUserProfileFromFirestore(userId);
+      }
+      if (!baseProfile) {
+        baseProfile = {
+          name: "Member GymBuddy",
+          gender: "pria",
+          weight: 70,
+          targetWeight: 65,
+          height: 170,
+          age: 25,
+          goal: "lose",
+          goalTitle: "Menurunkan Berat Badan",
+          activityLevel: "moderate",
+          persona: "max",
+          injuries: ["none"],
+          allergies: ["none"]
+        };
+      }
+      const order = orderId && dbData.orders ? dbData.orders[orderId] : null;
+      let finalProfile = {
+        ...baseProfile,
+        userId: `usr_${localPhone}`,
+        phone: canonicalPhone,
+        normalizedPhone: canonicalPhone,
+        userState: "active",
+        onboardingCompleted: true,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (order && (order.paymentStatus === "paid" || order.planType !== "free")) {
+        const canonicalPlan = order.selectedPlan === "both" ? "premium" : order.selectedPlan === "workout_coach" ? "workout_coach" : "nutritionist";
+        const canonicalDuration = order.billingPeriod === "lifetime" ? "lifetime" : order.billingPeriod === "1y" ? "1_year" : order.billingPeriod === "6m" ? "6_months" : order.billingPeriod === "3m" ? "3_months" : "1_month";
+        const applied = applyCommercialPlan(finalProfile, canonicalPlan, canonicalDuration);
+        if (applied.success) {
+          finalProfile = applied.user;
+        }
+        order.subscriptionStatus = "active";
+        order.userState = "active";
+        order.whatsappNumber = canonicalPhone;
+        finalProfile.subscription = {
+          status: "active",
+          plan: canonicalPlan,
+          duration: canonicalDuration,
+          expiresAt: finalProfile.planExpiresAt || null
+        };
+      } else if (order && order.planType === "free") {
+        const trialGrant = grantTrialToUser(finalProfile);
+        if (trialGrant.success) {
+          finalProfile = trialGrant.user;
+        }
+        order.subscriptionStatus = "active";
+        order.userState = "active";
+        order.whatsappNumber = canonicalPhone;
+        finalProfile.subscription = {
+          status: "trial",
+          plan: "trial",
+          duration: "2_days",
+          expiresAt: finalProfile.planExpiresAt || finalProfile.trialExpiresAt || null
+        };
+      } else {
+        const trialGrant = grantTrialToUser(finalProfile);
+        if (trialGrant.success) {
+          finalProfile = trialGrant.user;
+        }
+        if (order) {
+          order.whatsappNumber = canonicalPhone;
+          order.userState = "active";
+        }
+        finalProfile.subscription = {
+          status: "trial",
+          plan: "trial",
+          duration: "2_days",
+          expiresAt: finalProfile.planExpiresAt || finalProfile.trialExpiresAt || null
+        };
+      }
+      saveUserProfile(canonicalPhone, finalProfile);
+      saveUserProfile(localPhone, finalProfile);
+      if (userId) {
+        saveUserProfile(userId, finalProfile);
+      }
+      saveDb();
+      try {
+        await saveUserDocument({
+          userId: finalProfile.userId,
+          phone: canonicalPhone,
+          normalizedPhone: canonicalPhone,
+          ...finalProfile,
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+        await saveAppDataToFirestore(dbData);
+      } catch (fErr) {
+        console.warn("[Firestore] connect-whatsapp sync note:", fErr?.message || fErr);
+      }
+      console.log(`[Account] Connected WhatsApp ${canonicalPhone} to user ${finalProfile.name} (Plan: ${finalProfile.plan || "free_trial"}) \u2705`);
+      const token = generateAuthToken({ userId: finalProfile.userId, phone: canonicalPhone });
+      return res.json({ success: true, user: finalProfile, order, token });
+    } finally {
+      activeRegistrationLocks.delete(canonicalPhone);
+    }
+  });
   app.get("/api/user/:phone", async (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
@@ -56731,7 +57071,30 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       console.log(`[Midtrans] Order ${orderId} status: ${transactionStatus}, fraud: ${fraudStatus}, payment: ${paymentType}`);
       const isSuccess = transactionStatus === "settlement" || transactionStatus === "capture" && fraudStatus === "accept";
       const isFailed = transactionStatus === "cancel" || transactionStatus === "deny" || transactionStatus === "expire";
-      const phone = body.custom_field1 || body.phone || (orderId.includes("_") ? orderId.split("_")[1] : "");
+      let phone = body.phone || "";
+      if (!phone && body.custom_field1 && !body.custom_field1.startsWith("usr_")) {
+        phone = body.custom_field1;
+      }
+      if (!phone && (orderId.includes("_") && !orderId.startsWith("GB-ORD-") && !orderId.startsWith("GB-RETRY-"))) {
+        phone = orderId.split("_")[1];
+      }
+      if (dbData.orders && dbData.orders[orderId]) {
+        const ord = dbData.orders[orderId];
+        ord.paymentStatus = isSuccess ? "paid" : isFailed ? "failed" : "pending";
+        ord.status = isSuccess ? "paid" : transactionStatus === "expire" ? "expired" : isFailed ? "failed" : "pending";
+        ord.userState = isSuccess ? "payment_paid" : transactionStatus === "expire" ? "payment_expired" : isFailed ? "payment_failed" : "payment_pending";
+        if (isSuccess) {
+          ord.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+          if (ord.whatsappNumber) {
+            ord.subscriptionStatus = "active";
+            ord.userState = "active";
+            if (!phone) phone = ord.whatsappNumber;
+          } else {
+            ord.subscriptionStatus = "pending_whatsapp";
+          }
+        }
+        saveDb();
+      }
       const plan = body.custom_field2 || "premium";
       const rawServiceField = body.custom_field3 || "both";
       let activeService = rawServiceField;

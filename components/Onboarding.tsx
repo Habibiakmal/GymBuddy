@@ -82,7 +82,7 @@ interface OnboardingProps {
 export default function Onboarding({ language = "EN", onComplete, onOpenLogin }: OnboardingProps) {
   const isEN = language === "EN";
   const [step, setStep] = useState(1);
-  const totalSteps = 12;
+  const totalSteps = 11;
 
   // Existing Account & Phone Verification States
   const [existingAccountDetected, setExistingAccountDetected] = useState(false);
@@ -90,6 +90,51 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   const [phoneCheckError, setPhoneCheckError] = useState<string | null>(null);
   const [isSubmittingFinalOnboarding, setIsSubmittingFinalOnboarding] = useState(false);
   const [finalOnboardingError, setFinalOnboardingError] = useState<string | null>(null);
+
+  // Pending User ID, Order & Payment States
+  const [pendingUserId, setPendingUserId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("gymbuddy_pending_profile");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.userId) return parsed.userId;
+      }
+    } catch (e) {}
+    return `usr_ob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  });
+  const [orderId, setOrderId] = useState<string>("");
+  const [snapToken, setSnapToken] = useState<string>("");
+  const [snapRedirectUrl, setSnapRedirectUrl] = useState<string>("");
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isPaymentPaid, setIsPaymentPaid] = useState(false);
+  const [isConnectingWhatsApp, setIsConnectingWhatsApp] = useState(false);
+  const [connectWhatsAppError, setConnectWhatsAppError] = useState<string | null>(null);
+  const [commitmentLevel, setCommitmentLevel] = useState("15min");
+
+  // Restore pending onboarding progress from localStorage if available
+  useEffect(() => {
+    try {
+      const savedProfileStr = localStorage.getItem("gymbuddy_pending_profile");
+      if (savedProfileStr) {
+        const p = JSON.parse(savedProfileStr);
+        if (p.name) setName(p.name);
+        if (p.goal) setGoal(p.goal);
+        if (p.gender) setGender(p.gender);
+        if (p.weight) setWeight(String(p.weight));
+        if (p.targetWeight) setUserTargetWeight(String(p.targetWeight));
+        if (p.height) setHeight(String(p.height));
+        if (p.age) setAge(String(p.age));
+        if (p.dob) setDob(p.dob);
+        if (p.injuries && Array.isArray(p.injuries)) setInjuries(p.injuries);
+        if (p.allergies && Array.isArray(p.allergies)) setAllergies(p.allergies);
+        if (p.equipment) setEquipment(p.equipment);
+        if (p.persona) setPersona(p.persona);
+        if (p.commitmentLevel) setCommitmentLevel(p.commitmentLevel);
+        if (p.userId) setPendingUserId(p.userId);
+      }
+    } catch (e) {}
+  }, []);
 
   // Form States
   const [name, setName] = useState("");
@@ -223,159 +268,323 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
         "Menyiapkan Integrasi Asisten WhatsApp GymBuddy..."
       ];
 
-  // Auto progression on step 13 (Loading) to step 14 (Success)
-  useEffect(() => {
-    if (step === 13) {
-      const saveProfile = async () => {
-        let computedGoalTitle = "Gaya Hidup Sehat & Fit";
-        
-        const hM = (Number(height) || 170) / 100;
-        const currentW = Number(weight) || 65;
-        const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
-        const aiRecommendedW = Math.min(currentW - 2, Math.max(45, bmiIdealW));
+  // Create Order for Free or Paid Plan
+  const handleCreateOrder = async (targetPlan: "free_trial" | "advanced" | "premium", targetFeature: "coach" | "nutrition" | null) => {
+    setIsCreatingOrder(true);
+    setPaymentError(null);
 
-        let computedTargetWeight = Number(userTargetWeight) || currentW;
-        if (goal === "lose") {
-          computedGoalTitle = "Menurunkan Berat Badan";
-          if (!userTargetWeight) computedTargetWeight = aiRecommendedW;
-        } else if (goal === "gain") {
-          computedGoalTitle = "Menaikkan Berat Badan";
-          if (!userTargetWeight) computedTargetWeight = currentW + 5;
-        } else if (goal === "health" || goal === "maintain") {
-          computedGoalTitle = "Gaya Hidup Sehat & Fit";
-          computedTargetWeight = currentW;
+    const isFree = targetPlan === "free_trial";
+    const planParam = isFree ? "free" : (targetPlan === "premium" ? "both" : (targetFeature === "coach" ? "workout_coach" : "nutritionist"));
+    const serviceParam = isFree ? "both" : (targetPlan === "premium" ? "both" : (targetFeature || "coach"));
+    const amountParam = isFree ? 0 : (targetPlan === "premium" ? 149000 : 89000);
+
+    try {
+      const res = await canonicalApiFetch<{ success: boolean; order?: any; token?: string; redirectUrl?: string; error?: string }>(
+        "/api/orders/create",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            userId: pendingUserId,
+            plan: planParam,
+            activeService: serviceParam,
+            amount: amountParam,
+            duration: "1m",
+            customerName: name || "Member GymBuddy"
+          })
         }
+      );
 
-        const activeService = (selectedPlan === "premium" || selectedPlan === "free_trial") 
-          ? "both" 
-          : (selectedFeature === "coach" ? "workout" : "nutritionist");
+      if (!res || !res.success || !res.order) {
+        throw new Error(res?.error || "Gagal membuat pesanan");
+      }
 
-        const userObj = {
-          name,
-          goal,
-          goalTitle: computedGoalTitle,
-          goalEvent,
-          goalSecondary,
-          emotionalVision,
-          gender,
-          weight: Number(weight) || 65,
-          startWeight: Number(weight) || 65,
-          targetWeight: computedTargetWeight,
-          aiRecommendedTargetWeight: aiRecommendedW,
-          height: Number(height) || 165,
-          age: Number(age) || 25,
-          dob,
-          healthProfile: {
-            dob,
-            age: Number(age) || 25,
-            hasCondition: healthStatus,
-            conditions: healthStatus === "has_condition" ? healthConditions : [],
-            otherCondition: healthStatus === "has_condition" ? otherCondition : "",
-            isCompleted: true,
-            completedAt: new Date().toISOString()
-          },
-          activityLevel,
-          experience,
-          satisfaction,
-          challenges,
-          injuries,
-          customInjury,
-          allergies: allergies.length > 0 ? allergies : ["none"],
-          equipment,
-          persona,
-          plan: selectedPlan,
-          feature: selectedFeature,
-          activeService,
-          phone
-        };
+      setOrderId(res.order.orderId);
+      if (res.token) setSnapToken(res.token);
+      if (res.redirectUrl) setSnapRedirectUrl(res.redirectUrl);
+      localStorage.setItem("gymbuddy_pending_order", JSON.stringify(res.order));
 
-        try {
-          const cleaned = phone.replace(/\D/g, '');
-          const norm = cleaned.startsWith('62') ? '0' + cleaned.substring(2) : (cleaned.startsWith('8') ? '0' + cleaned : cleaned);
-          localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(userObj));
-          localStorage.setItem("gymbuddy_last_user", JSON.stringify(userObj));
-          localStorage.setItem("gymbuddy_active_session", JSON.stringify(userObj));
-        } catch (e) {}
-      };
-      saveProfile();
+      setIsCreatingOrder(false);
 
-      const interval = setInterval(() => {
-        setLoadingMsgIdx((prev) => (prev + 1) % loadingMsgs.length);
-      }, 1400);
-
-      const timeout = setTimeout(() => {
-        setStep(14);
-      }, 5000);
-
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
+      if (isFree) {
+        setStep(16); // Direct to connect WhatsApp for Free Trial
+      } else {
+        setStep(14); // Direct to Order Summary / Checkout for Paid
+      }
+    } catch (err: any) {
+      console.error("[Onboarding] Order creation failed:", err);
+      setIsCreatingOrder(false);
+      setPaymentError(err.message || "Gagal memproses pesanan. Silakan coba kembali.");
     }
-  }, [step, phone, name, goal, goalEvent, goalSecondary, emotionalVision, gender, weight, height, age, dob, healthStatus, healthConditions, otherCondition, activityLevel, experience, satisfaction, challenges, persona, selectedPlan, selectedFeature]);
+  };
 
-  const handlePhoneSubmit = async (phoneOverride?: string) => {
-    const rawToUse = (typeof phoneOverride === "string" ? phoneOverride : phone).trim();
-    const rawClean = rawToUse.replace(/\D/g, "");
-    if (!rawClean) return;
+  // Launch Midtrans Snap Payment Gateway
+  const triggerSnapPayment = (tokenOverride?: string) => {
+    const token = tokenOverride || snapToken;
+    setPaymentError(null);
 
-    const canonicalPhone = normalizePhoneToE164(rawToUse);
-    if (!canonicalPhone) {
-      setPhoneCheckError(isEN ? "Invalid WhatsApp phone number format." : "Format nomor WhatsApp tidak valid.");
+    if (!token) {
+      setPaymentError(isEN ? "Payment session expired. Please retry." : "Sesi pembayaran telah kedaluwarsa. Silakan klik coba bayar lagi.");
       return;
     }
 
-    setIsCheckingPhone(true);
-    setPhoneCheckError(null);
+    if ((window as any).snap && typeof (window as any).snap.pay === "function") {
+      (window as any).snap.pay(token, {
+        onSuccess: (result: any) => {
+          console.log("[Midtrans Snap] Payment success:", result);
+          setIsPaymentPaid(true);
+          setStep(15);
+        },
+        onPending: (result: any) => {
+          console.log("[Midtrans Snap] Payment pending:", result);
+          setIsPaymentPaid(true);
+          setStep(15);
+        },
+        onError: (result: any) => {
+          console.warn("[Midtrans Snap] Payment error:", result);
+          setPaymentError(isEN ? "Payment was cancelled or failed. You can retry anytime." : "Pembayaran gagal atau dibatalkan. Kamu bisa mencoba bayar lagi kapan saja.");
+        },
+        onClose: () => {
+          console.log("[Midtrans Snap] Closed by customer.");
+        }
+      });
+    } else if (snapRedirectUrl) {
+      window.location.href = snapRedirectUrl;
+    } else {
+      setPaymentError(isEN ? "Payment gateway is loading. Please wait a moment." : "Payment gateway sedang dimuat. Mohon tunggu beberapa saat...");
+    }
+  };
+
+  // Retry failed/expired payment
+  const handleRetryPayment = async () => {
+    if (!orderId) return;
+    setIsCreatingOrder(true);
+    setPaymentError(null);
+    try {
+      const res = await canonicalApiFetch<{ success: boolean; order?: any; token?: string; redirectUrl?: string; error?: string }>(
+        `/api/orders/${orderId}/retry`,
+        { method: "POST" }
+      );
+      if (res && res.success && res.token) {
+        setSnapToken(res.token);
+        if (res.redirectUrl) setSnapRedirectUrl(res.redirectUrl);
+        setIsCreatingOrder(false);
+        triggerSnapPayment(res.token);
+      } else {
+        throw new Error(res?.error || "Gagal memperbarui transaksi.");
+      }
+    } catch (e: any) {
+      setIsCreatingOrder(false);
+      setPaymentError(e.message || "Gagal mengulang pembayaran.");
+    }
+  };
+
+  // Save profile and advance to Step 13 (Plan Selection)
+  const handleSaveProfileAndContinue = async () => {
+    setIsCreatingOrder(true);
+    const userW = Number(weight) || 65;
+    const userH = Number(height) || 170;
+    const userA = Number(age) || 25;
+    const userG = gender || "pria";
+    const userGoal = goal || "lose";
+    const hM = userH / 100;
+    const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+    const recW = Math.min(userW - 2, Math.max(45, bmiIdealW));
+    let targetW = Number(userTargetWeight) || userW;
+    if (userGoal === "lose" && !userTargetWeight) targetW = recW;
+    else if (userGoal === "gain" && !userTargetWeight) targetW = userW + 5;
+
+    const bmr = userG === "wanita"
+      ? 10 * userW + 6.25 * userH - 5 * userA - 161
+      : 10 * userW + 6.25 * userH - 5 * userA + 5;
+    const actMultipliers: Record<string, number> = { sedentary: 1.2, light: 1.375, moderate: 1.55, heavy: 1.725 };
+    const tdee = Math.round(bmr * (actMultipliers[activityLevel] || 1.375));
+    let targetCal = tdee;
+    if (userGoal === "lose") targetCal = Math.max(1200, Math.round(tdee - 500));
+    else if (userGoal === "gain") targetCal = Math.round(tdee + 400);
+
+    const proteinGram = Math.round((targetCal * 0.30) / 4);
+    const carbsGram = Math.round((targetCal * 0.45) / 4);
+    const fatGram = Math.round((targetCal * 0.25) / 9);
+
+    const profileObj = {
+      userId: pendingUserId,
+      name: name || "Member",
+      goal,
+      goalTitle: goal === "lose" ? "Menurunkan Berat Badan" : (goal === "gain" ? "Menaikkan Berat Badan" : "Gaya Hidup Sehat & Fit"),
+      goalEvent,
+      goalSecondary,
+      emotionalVision,
+      gender,
+      weight: userW,
+      startWeight: userW,
+      targetWeight: targetW,
+      aiRecommendedTargetWeight: recW,
+      height: userH,
+      age: userA,
+      dob: dob || "",
+      healthStatus,
+      healthConditions,
+      otherCondition,
+      activityLevel,
+      experience,
+      satisfaction,
+      challenges,
+      injuries,
+      customInjury,
+      allergies: allergies.length > 0 ? allergies : ["none"],
+      equipment,
+      persona,
+      commitmentLevel,
+      targetCalories: targetCal,
+      dailyTargetCalories: targetCal,
+      proteinGrams: proteinGram,
+      dailyTargetProtein: proteinGram,
+      carbGrams: carbsGram,
+      dailyTargetCarbs: carbsGram,
+      fatGrams: fatGram,
+      dailyTargetFat: fatGram,
+      fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
+      activeService: selectedPlan === "premium" ? "both" : (selectedFeature || "coach"),
+      onboardingCompleted: true
+    };
 
     try {
-      const API_BASE_URL = getApiBaseUrl();
-      const checkUrl = API_BASE_URL ? `${API_BASE_URL}/api/auth/check-phone` : "/api/auth/check-phone";
-      let res = await fetch(checkUrl, {
+      localStorage.setItem("gymbuddy_pending_profile", JSON.stringify(profileObj));
+      await canonicalApiFetch("/api/onboarding/profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ phone: canonicalPhone })
-      }).catch(() => null);
+        body: JSON.stringify({ userId: pendingUserId, profile: profileObj })
+      });
+    } catch (e) {
+      console.warn("[Onboarding] Note saving profile:", e);
+    } finally {
+      setIsCreatingOrder(false);
+      setStep(13);
+    }
+  };
 
-      if ((!res || !res.ok || res.headers.get("content-type")?.includes("text/html")) && API_BASE_URL && checkUrl !== `${API_BASE_URL}/api/auth/check-phone`) {
-        res = await fetch(`${API_BASE_URL}/api/auth/check-phone`, {
+  // Connect WhatsApp Number to Profile & Order
+  const handleConnectWhatsApp = async () => {
+    const rawToUse = phone.trim();
+    const canonicalPhone = normalizePhoneToE164(rawToUse);
+
+    if (!canonicalPhone) {
+      setConnectWhatsAppError(isEN ? "Valid WhatsApp phone number is required." : "Nomor WhatsApp yang valid wajib diisi.");
+      return;
+    }
+
+    setIsConnectingWhatsApp(true);
+    setConnectWhatsAppError(null);
+
+    const userW = Number(weight) || 65;
+    const userH = Number(height) || 170;
+    const userA = Number(age) || 25;
+    const userG = gender || "pria";
+    const userGoal = goal || "lose";
+    const hM = userH / 100;
+    const bmiIdealW = Math.round(22 * hM * hM * 2) / 2;
+    const recW = Math.min(userW - 2, Math.max(45, bmiIdealW));
+    let targetW = Number(userTargetWeight) || userW;
+    if (userGoal === "lose" && !userTargetWeight) targetW = recW;
+    else if (userGoal === "gain" && !userTargetWeight) targetW = userW + 5;
+
+    const bmr = userG === "wanita"
+      ? 10 * userW + 6.25 * userH - 5 * userA - 161
+      : 10 * userW + 6.25 * userH - 5 * userA + 5;
+    const actMultipliers: Record<string, number> = { sedentary: 1.2, light: 1.375, moderate: 1.55, heavy: 1.725 };
+    const tdee = Math.round(bmr * (actMultipliers[activityLevel] || 1.375));
+    let targetCal = tdee;
+    if (userGoal === "lose") targetCal = Math.max(1200, Math.round(tdee - 500));
+    else if (userGoal === "gain") targetCal = Math.round(tdee + 400);
+
+    const proteinGram = Math.round((targetCal * 0.30) / 4);
+    const carbsGram = Math.round((targetCal * 0.45) / 4);
+    const fatGram = Math.round((targetCal * 0.25) / 9);
+
+    const fullProfile = {
+      userId: pendingUserId,
+      name: name || "Member",
+      goal,
+      goalTitle: goal === "lose" ? "Menurunkan Berat Badan" : (goal === "gain" ? "Menaikkan Berat Badan" : "Gaya Hidup Sehat & Fit"),
+      goalEvent,
+      goalSecondary,
+      emotionalVision,
+      gender,
+      weight: userW,
+      startWeight: userW,
+      targetWeight: targetW,
+      aiRecommendedTargetWeight: recW,
+      height: userH,
+      age: userA,
+      dob: dob || "",
+      healthStatus,
+      healthConditions,
+      otherCondition,
+      activityLevel,
+      experience,
+      satisfaction,
+      challenges,
+      injuries,
+      customInjury,
+      allergies: allergies.length > 0 ? allergies : ["none"],
+      equipment,
+      persona,
+      commitmentLevel,
+      selectedPlan,
+      selectedFeature,
+      targetCalories: targetCal,
+      dailyTargetCalories: targetCal,
+      proteinGrams: proteinGram,
+      dailyTargetProtein: proteinGram,
+      carbGrams: carbsGram,
+      dailyTargetCarbs: carbsGram,
+      fatGrams: fatGram,
+      dailyTargetFat: fatGram,
+      fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
+      activeService: selectedPlan === "premium" ? "both" : (selectedFeature || "coach"),
+      onboardingCompleted: true
+    };
+
+    try {
+      const res = await canonicalApiFetch<{ success: boolean; user?: any; order?: any; token?: string; error?: string }>(
+        "/api/account/connect-whatsapp",
+        {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ phone: canonicalPhone })
-        }).catch(() => null);
-      }
-
-      if (!res || !res.ok || !res.headers.get("content-type")?.includes("application/json")) {
-        setPhoneCheckError(
-          isEN
-            ? "Could not verify account status with server. Please check your connection and try again."
-            : "Gagal memverifikasi status akun ke server. Periksa koneksi dan coba lagi."
-        );
-        setIsCheckingPhone(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (data && data.exists) {
-        // EXISTING ACCOUNT DETECTED:
-        // Do NOT start onboarding, do NOT overwrite existing profile, do NOT purge onboarding state.
-        // Abandon/isolate this onboarding attempt.
-        setExistingAccountDetected(true);
-        setIsCheckingPhone(false);
-        return;
-      }
-
-      // Safe to proceed for new user
-      setExistingAccountDetected(false);
-      setIsCheckingPhone(false);
-      setStep((p) => Math.min(p + 1, 14));
-    } catch (err: any) {
-      setPhoneCheckError(
-        isEN
-          ? "Verification failed. Please check your connection and try again."
-          : "Verifikasi gagal. Periksa koneksi dan coba lagi."
+          body: JSON.stringify({
+            userId: pendingUserId,
+            orderId: orderId || undefined,
+            phone: canonicalPhone,
+            profileFallback: fullProfile
+          })
+        }
       );
-      setIsCheckingPhone(false);
+
+      if (!res || !res.success || !res.user) {
+        if (res?.error === "account_already_exists") {
+          setExistingAccountDetected(true);
+          setIsConnectingWhatsApp(false);
+          return;
+        }
+        throw new Error(res?.error || "Gagal menghubungkan nomor WhatsApp");
+      }
+
+      const activeUser = res.user;
+      const cleaned = canonicalPhone.replace(/\D/g, "");
+      const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : cleaned;
+
+      localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(activeUser));
+      localStorage.setItem(`gymbuddy_user_${canonicalPhone}`, JSON.stringify(activeUser));
+      localStorage.setItem("gymbuddy_last_user", JSON.stringify(activeUser));
+      localStorage.setItem("gymbuddy_active_session", JSON.stringify(activeUser));
+      if (res.token) {
+        localStorage.setItem("gymbuddy_auth_token", res.token);
+      }
+
+      setIsConnectingWhatsApp(false);
+      setStep(17);
+    } catch (err: any) {
+      console.error("[Onboarding] Connect WhatsApp error:", err);
+      setIsConnectingWhatsApp(false);
+      setConnectWhatsAppError(err.message || "Gagal menghubungkan WhatsApp. Silakan coba lagi.");
     }
   };
 
@@ -384,14 +593,28 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       setDobError(true);
       return;
     }
-    // When phone is submitted / phone verification is initiated:
-    if (step === 12) {
-      handlePhoneSubmit();
+    setStep((p) => Math.min(p + 1, 17));
+  };
+
+  const handlePrev = () => {
+    if (step === 16 && selectedPlan !== "free_trial") {
+      setStep(15);
       return;
     }
-    setStep((p) => Math.min(p + 1, 14));
+    if (step === 16 && selectedPlan === "free_trial") {
+      setStep(13);
+      return;
+    }
+    if (step === 15) {
+      setStep(14);
+      return;
+    }
+    if (step === 14) {
+      setStep(13);
+      return;
+    }
+    setStep((p) => Math.max(p - 1, 1));
   };
-  const handlePrev = () => setStep((p) => Math.max(p - 1, 1));
 
   const toggleSecondaryGoal = (id: string) => {
     setGoalSecondary((prev) =>
@@ -475,12 +698,16 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       case 4: return emotionalVision !== "";
       case 5: return true; // Analysis 1 screen
       case 6: return weight !== "" && height !== "" && age !== "" && dob.trim() !== "";
-      case 7: return activityLevel !== "" && experience !== "" && satisfaction !== "";
+      case 7: return activityLevel !== "";
       case 8: return challenges.length > 0;
       case 9: return true; // Analysis 2 screen
-      case 10: return true; // Persona selection has defaults
-      case 11: return selectedPlan === "free_trial" || selectedPlan === "premium" || (selectedPlan === "advanced" && selectedFeature !== null);
-      case 12: return validateWhatsAppPhone(phone).isValid;
+      case 10: return persona !== "";
+      case 11: return true; // Commitment screen has default
+      case 12: return true; // Analysis summary roadmap
+      case 13: return selectedPlan !== undefined;
+      case 14: return true; // Order summary
+      case 15: return true; // Payment success
+      case 16: return validateWhatsAppPhone(phone).isValid;
       default: return true;
     }
   };
@@ -718,7 +945,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
         <div className="relative z-10 flex flex-col flex-grow max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 md:py-12">
 
         {/* Header Navigation & Progress Bar */}
-        {step <= 12 && (
+        {step <= 11 ? (
           <header className="flex items-center justify-between mb-8 sm:mb-10 shrink-0">
             <button
               onClick={step === 1 ? onComplete : handlePrev}
@@ -747,6 +974,33 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
             <span className="text-xs font-['Inter'] font-bold text-neutral-500">
               {step}/{totalSteps}
             </span>
+          </header>
+        ) : (
+          <header className="flex items-center justify-between mb-6 sm:mb-8 shrink-0">
+            {step < 17 && (
+              <button
+                onClick={handlePrev}
+                className="p-2 -ml-2 text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-['Inter'] font-bold tracking-wider uppercase"
+              >
+                <ArrowLeft size={16} />
+                <span>{isEN ? "Back" : "Kembali"}</span>
+              </button>
+            )}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="px-2.5 py-1 rounded-full bg-[#161C28] border border-neutral-800 text-[11px] font-bold text-[#D4FF00]">
+                {step === 12
+                  ? (isEN ? "Step 1 of 4 • Analysis" : "Tahap 1/4 • Analisis AI")
+                  : step === 13
+                  ? (isEN ? "Step 2 of 4 • Plan Selection" : "Tahap 2/4 • Pilih Paket")
+                  : step === 14
+                  ? (isEN ? "Step 3 of 4 • Checkout" : "Tahap 3/4 • Pembayaran")
+                  : step === 15
+                  ? (isEN ? "Payment Verified" : "Pembayaran Berhasil")
+                  : step === 16
+                  ? (isEN ? "Step 4 of 4 • WhatsApp" : "Tahap 4/4 • Hubungkan WhatsApp")
+                  : (isEN ? "Account Active" : "Akun Aktif")}
+              </span>
+            </div>
           </header>
         )}
 
@@ -2014,367 +2268,85 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               </motion.div>
             )}
 
-            {/* STEP 11: PLAN SELECTION */}
+            {/* STEP 11: COACH COMMITMENT & TIME ALLOCATION */}
             {step === 11 && (
               <motion.div
                 key="step11"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="flex flex-col h-full"
+                className="space-y-6 sm:space-y-8 text-left"
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-[#161B22] flex items-center justify-center text-[#D4FF3D] border border-neutral-800">
-                    <Check size={20} />
+                <div className="space-y-2">
+                  <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
+                    {isEN ? "Step 11 — Daily Commitment" : "Langkah 11 — Komitmen Waktu"}
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
-                    {isEN ? "Select Your Plan" : "Pilih Paket Kamu"}
-                  </h2>
+                  <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                    {isEN ? "How Much Time Can You Dedicate Daily?" : "Berapa Waktu Harian yang Bisa Kamu Luangkan?"}
+                  </h1>
+                  <p className="text-neutral-400 text-xs sm:text-sm">
+                    {isEN
+                      ? `Coach ${(persona || 'max').toLowerCase().includes('mia') ? 'Mia' : 'Max'} will calibrate meal tracking and workout intervals based on your actual availability.`
+                      : `Coach ${(persona || 'max').toLowerCase().includes('mia') ? 'Mia' : 'Max'} akan menyesuaikan intensitas tracking nutrisi dan jadwal latihan sesuai waktu luangmu.`}
+                  </p>
                 </div>
-                <p className="text-sm sm:text-base text-neutral-400 mb-6 max-w-lg">
-                  {isEN
-                    ? "Start with a 2-day free trial or select a full plan tailored to your fitness goals."
-                    : "Mulai dengan uji coba gratis 2 hari atau pilih paket penuh sesuai kebutuhan kebugaranmu."}
-                </p>
 
-                <div className="space-y-3.5 max-w-2xl flex-grow">
-                  {/* Option 1: 2-Day Free Trial */}
-                  <button
-                    onClick={() => {
-                      setSelectedPlan("free_trial");
-                      setSelectedFeature(null);
-                    }}
-                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
-                      selectedPlan === "free_trial"
-                        ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
-                            selectedPlan === "free_trial" ? "text-[#D4FF3D]" : "text-white"
-                          }`}>
-                            {isEN ? "2-Day Free Trial" : "Uji Coba Gratis 2 Hari"}
-                          </h3>
-                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
-                            FREE $0
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-                          {isEN
-                            ? "Full access to both AI Workout Coach & Nutritionist for 48 hours. No credit card required."
-                            : "Akses penuh 2 AI (Workout & Nutrisi) selama 48 jam tanpa bayar sama sekali."}
-                        </p>
-                      </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selectedPlan === "free_trial" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
-                      }`}>
-                        {selectedPlan === "free_trial" && <Check size={14} className="text-black stroke-[3]" />}
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Option 2: Advanced Plan ($5 / Rp 79.000) */}
-                  <div
-                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all ${
-                      selectedPlan === "advanced"
-                        ? "bg-[#161B22] border-[#D4FF3D]"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
-                    }`}
-                  >
-                    <button
-                      onClick={() => {
-                        setSelectedPlan("advanced");
-                        if (!selectedFeature) setSelectedFeature("coach");
-                      }}
-                      className="w-full flex items-start justify-between text-left cursor-pointer"
+                <div className="space-y-3">
+                  {[
+                    {
+                      id: "5min",
+                      title: isEN ? "5 Minutes / day (Quick & Practical)" : "5 Menit / hari (Cepat & Praktis)",
+                      desc: isEN ? "Snap meal photos, instant calorie tracking, no hassle" : "Foto makanan langsung beres, analisis kalori instan tanpa ribet"
+                    },
+                    {
+                      id: "15min",
+                      title: isEN ? "15 Minutes / day (Balanced — Recommended)" : "15 Menit / hari (Seimbang — Rekomendasi)",
+                      desc: isEN ? "Optimal for consistent macro deficit/surplus & posture guidance" : "Optimal untuk konsistensi defisit/surplus kalori & panduan gerakan"
+                    },
+                    {
+                      id: "30min",
+                      title: isEN ? "30+ Minutes / day (Intensive & Proactive)" : "30+ Menit / hari (Intensif & Proaktif)",
+                      desc: isEN ? "Structured gym workout split, weekly adjustments & ambitious targets" : "Jadwal workout gym terstruktur, evaluasi mingguan & target ambisius"
+                    }
+                  ].map((com) => (
+                    <OptionCard
+                      key={com.id}
+                      selected={commitmentLevel === com.id}
+                      onClick={() => setCommitmentLevel(com.id)}
+                      className="flex items-center justify-between"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
-                            selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
-                          }`}>
-                            Advanced Plan
-                          </h3>
-                          <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
-                            {isEN ? "$6 / mo" : "Rp 89rb / bln"}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-                          {isEN ? "Focus 100% on 1 feature of your choice" : "Fokus 100% pada 1 fitur pilihanmu"}
-                        </p>
+                      <div className="pr-2">
+                        <div className="text-sm sm:text-base font-bold text-white mb-0.5">{com.title}</div>
+                        <div className="text-xs text-neutral-400 leading-relaxed">{com.desc}</div>
                       </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selectedPlan === "advanced" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                        commitmentLevel === com.id ? "bg-[#D4FF00] border-[#D4FF00]" : "border-neutral-700"
                       }`}>
-                        {selectedPlan === "advanced" && <Check size={14} className="text-black stroke-[3]" />}
+                        {commitmentLevel === com.id && <Check size={12} className="text-black stroke-[3]" />}
                       </div>
-                    </button>
-
-                    {/* Sub-selection for Advanced */}
-                    {selectedPlan === "advanced" && (
-                      <div className="mt-4 space-y-2 pt-3 border-t border-neutral-800">
-                        <p className="text-xs font-bold text-neutral-300">
-                          {isEN ? "Select 1 feature to activate:" : "Pilih 1 fitur spesialisasi yang diaktifkan:"}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFeature("coach");
-                            }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                              selectedFeature === "coach"
-                                ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                                : "bg-black/40 border-transparent hover:border-neutral-700"
-                            }`}
-                          >
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                              selectedFeature === "coach" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
-                            }`}>
-                              <Activity size={16} />
-                            </div>
-                            <div className="text-left">
-                              <p className={`font-bold text-xs ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Workout Coach</p>
-                              <p className="text-[10px] text-neutral-500">{isEN ? "Form check & workout split" : "Koreksi postur & jadwal gym"}</p>
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFeature("nutrition");
-                            }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                              selectedFeature === "nutrition"
-                                ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                                : "bg-black/40 border-transparent hover:border-neutral-700"
-                            }`}
-                          >
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                              selectedFeature === "nutrition" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
-                            }`}>
-                              <Leaf size={16} />
-                            </div>
-                            <div className="text-left">
-                              <p className={`font-bold text-xs ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>AI Nutritionist</p>
-                              <p className="text-[10px] text-neutral-500">{isEN ? "Meal logging & macro targets" : "Hitung kalori & foto makanan"}</p>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Option 3: Premium Plan ($10 / Rp 149.000) */}
-                  <button
-                    onClick={() => {
-                      setSelectedPlan("premium");
-                      setSelectedFeature(null);
-                    }}
-                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
-                      selectedPlan === "premium"
-                        ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
-                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
-                            selectedPlan === "premium" ? "text-[#D4FF3D]" : "text-white"
-                          }`}>
-                            {isEN ? "Premium Plan (All-Access)" : "Paket Premium (All-Access)"}
-                          </h3>
-                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
-                            {isEN ? "$10 / mo" : "Rp 149rb / bln"}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-                          {isEN
-                            ? "Both AIs (Nutritionist + Workout Coach), Gemini Pro Vision & Visual Infographic Poster Generation."
-                            : "2 AI Sekaligus (Nutrisi + Workout Coach), Presisi Tinggi Gemini Pro & Generasi Poster Visual Gym."}
-                        </p>
-                      </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        selectedPlan === "premium" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
-                      }`}>
-                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
-                      </div>
-                    </div>
-                  </button>
+                    </OptionCard>
+                  ))}
                 </div>
-              </motion.div>
-            )}
 
-            {/* STEP 12: PHONE NUMBER & WHATSAPP DELIVERY */}
-            {step === 12 && (() => {
-              const phoneVal = validateWhatsAppPhone(phone);
-              return (
-                <motion.div
-                  key="step12"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="space-y-6 sm:space-y-8"
-                >
-                  <div className="space-y-2">
-                    <div className="text-xs font-['Inter'] font-bold text-[#25D366] uppercase tracking-widest flex items-center gap-1.5">
-                      <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
-                      <span>{isEN ? "Final Step" : "Langkah Terakhir"}</span>
-                    </div>
-                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
-                      {isEN ? "WhatsApp Plan Delivery Number" : "Nomor WhatsApp Pengiriman Rencana"}
-                    </h1>
-                    <p className="text-neutral-400 text-sm">
-                      {isEN
-                        ? "Your nutrition targets & personal analysis plan will be sent directly by the GymBuddy Assistant to your WhatsApp."
-                        : "Rencana target nutrisi & analisis personal akan dikirimkan langsung oleh Asisten GymBuddy ke WhatsApp Anda."}
+                {/* Coach Selected Reassurance Card */}
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-[#161C28] border border-neutral-800">
+                  <div className="w-10 h-10 rounded-full bg-[#D4FF00]/15 border border-[#D4FF00]/30 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-5 h-5 text-[#D4FF00]" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">
+                      {isEN ? `Coach ${(persona || 'max').toLowerCase().includes('mia') ? 'Mia' : 'Max'} is Ready` : `Didampingi oleh Coach ${(persona || 'max').toLowerCase().includes('mia') ? 'Mia' : 'Max'}`}
+                    </p>
+                    <p className="text-[11px] text-neutral-400">
+                      {isEN ? "Profile questions completed. Next: review your AI calculated targets." : "Data kuesioner lengkap. Selanjutnya: lihat hasil analisis AI dan target tubuhmu."}
                     </p>
                   </div>
-
-                  <div className="space-y-2.5">
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                        <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
-                        <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => {
-                          let val = e.target.value.replace(/\D/g, "");
-                          if (val.startsWith("62")) val = val.substring(2);
-                          else if (val.startsWith("0")) val = val.substring(1);
-                          setPhone(val);
-                          setPhoneCheckError(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && phoneVal.isValid && !isCheckingPhone) {
-                            e.preventDefault();
-                            handlePhoneSubmit();
-                          }
-                        }}
-                        placeholder="81234567890"
-                        autoFocus
-                        className={`w-full bg-[#111620] border rounded-xl pl-24 pr-12 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none transition-colors ${
-                          phone.length === 0
-                            ? "border-neutral-800 focus:border-[#25D366]"
-                            : phoneVal.isValid
-                            ? "border-[#25D366] bg-[#111620]"
-                            : "border-amber-500/60 focus:border-amber-500"
-                        }`}
-                      />
-                      {phone.length > 0 && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          {phoneVal.isValid ? (
-                            <div className="w-6 h-6 rounded-full bg-[#25D366]/20 border border-[#25D366] flex items-center justify-center">
-                              <Check className="w-3.5 h-3.5 text-[#25D366]" strokeWidth={3} />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-xs font-bold">
-                              !
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Realtime Phone Validation Feedback Badge */}
-                    {phone.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 ${
-                          phoneVal.isValid
-                            ? "bg-[#25D366]/10 border-[#25D366]/30 text-[#25D366]"
-                            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{phoneVal.isValid ? "✅" : "⚠️"}</span>
-                          <span>{phoneVal.message}</span>
-                        </div>
-                        {phoneVal.operator && (
-                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white shrink-0">
-                            {phoneVal.operator}
-                          </span>
-                        )}
-                      </motion.div>
-                    )}
-
-                    {/* Phone Check Error / Retry Banner */}
-                    {phoneCheckError && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 font-bold flex items-center justify-between gap-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <AlertCircle size={16} className="text-red-400 shrink-0" />
-                          <span>{phoneCheckError}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handlePhoneSubmit()}
-                          className="text-[11px] underline text-white font-bold hover:text-red-300 shrink-0 cursor-pointer"
-                        >
-                          {isEN ? "Retry" : "Coba lagi"}
-                        </button>
-                      </motion.div>
-                    )}
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
-                    <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
-                    <span>
-                      {isEN
-                        ? "Privacy guaranteed. Your number is only used for personal report delivery & nutrition guidance."
-                        : "Kerahasiaan terjamin. Nomor Anda hanya digunakan untuk pengiriman laporan personal & panduan nutrisi."}
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })()}
-
-            {/* STEP 13: PLAN GENERATION LOADER */}
-            {step === 13 && (
-              <motion.div
-                key="step13"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center text-center space-y-8 min-h-[45vh]"
-              >
-                <div className="w-16 h-16 border-4 border-neutral-800 border-t-[#D4FF00] rounded-full animate-spin"></div>
-
-                <div className="space-y-3 max-w-sm">
-                  <h2 className="text-2xl font-['Archivo_Black'] text-white">
-                    {isEN ? "Crafting Your Personal Plan" : "Menyusun Rencana Personal"}
-                  </h2>
-                  <div className="h-6">
-                    <AnimatePresence mode="wait">
-                      <motion.p
-                        key={loadingMsgIdx}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="text-neutral-400 font-medium text-xs sm:text-sm"
-                      >
-                        {loadingMsgs[loadingMsgIdx]}
-                      </motion.p>
-                    </AnimatePresence>
-                  </div>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 14: FINAL ONBOARDING TRANSITION SCREEN */}
-            {step === 14 && (() => {
+            {/* STEP 12: AI ANALYSIS & TARGETS ROADMAP */}
+            {step === 12 && (() => {
               const userW = Number(weight) || 65;
               const userH = Number(height) || 170;
               const userA = Number(age) || 25;
@@ -2398,7 +2370,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                 sedentary: 1.2,
                 light: 1.375,
                 moderate: 1.55,
-                active: 1.725
+                heavy: 1.725
               };
               const tdee = Math.round(bmr * (actMultipliers[userAct] || 1.375));
 
@@ -2416,14 +2388,22 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
               const isMaintain = targetW === userW || userGoal === "maintain" || userGoal === "health";
               const estWeeks = isMaintain ? 12 : (isWeightLoss ? Math.max(2, Math.ceil(weightDiffKg / 0.75)) : Math.max(4, Math.ceil(weightDiffKg / 0.35)));
 
+              const targetDateObj = new Date(Date.now() + Math.max(8, estWeeks || 12) * 7 * 86400000);
+              const targetDateFormatted = new Intl.DateTimeFormat(isEN ? "en-US" : "id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+              }).format(targetDateObj);
+
               return (
                 <motion.div
-                  key="step14"
+                  key="step12"
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
                   className="space-y-5 max-w-md mx-auto text-left pb-6"
                 >
-                  {/* 1. Onboarding Completion Badge at Top */}
+                  {/* Onboarding Completion Badge */}
                   <div className="flex items-center gap-3 bg-[#161C28] border border-[#25D366]/40 p-3.5 rounded-2xl shadow-md">
                     <div className="w-10 h-10 rounded-xl bg-[#25D366]/20 border border-[#25D366]/40 flex items-center justify-center shrink-0">
                       <Check className="w-5 h-5 text-[#25D366]" strokeWidth={3} />
@@ -2438,19 +2418,19 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     </div>
                   </div>
 
-                  {/* 2. Strong Headline & Supporting Text */}
+                  {/* Headline */}
                   <div className="space-y-2 pt-1">
                     <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
-                      {isEN ? "Let’s build your nutrition plan!" : "Mari buat rencana nutrisimu!"}
+                      {isEN ? "Let’s build your fitness roadmap!" : "Mari buat rencana nutrisi & latihanmu!"}
                     </h1>
                     <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
                       {isEN
-                        ? "In just 3 minutes, you’ll discover your daily calorie needs and get an estimate of how long it may take to reach your ideal weight."
-                        : "Hanya dalam 3 menit, kamu akan menemukan kebutuhan kalori harianmu dan estimasi waktu untuk mencapai berat badan idealmu."}
+                        ? "Here are your daily calorie and macronutrient targets calculated by AI based on your body biometrics."
+                        : "Berikut adalah estimasi target kalori dan makronutrisi harian hasil kalkulasi AI berdasarkan data tubuhmu."}
                     </p>
                   </div>
 
-                  {/* 3. Locked Calorie Target Summary */}
+                  {/* Locked Calorie Target Summary */}
                   <div className="bg-gradient-to-br from-[#1F2B14] via-[#161B22] to-[#111620] border-2 border-[#D4FF00] rounded-2xl p-4 sm:p-5 space-y-3 relative overflow-hidden shadow-[0_0_30px_rgba(212,255,0,0.15)]">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
@@ -2477,100 +2457,79 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     </p>
                   </div>
 
-                  {/* 4. Proyeksi Progres Graph Card (Matching Screenshot 2) */}
-                  {(() => {
-                    const targetDateObj = new Date(Date.now() + Math.max(8, estWeeks || 12) * 7 * 86400000);
-                    const targetDateFormatted = new Intl.DateTimeFormat(isEN ? "en-US" : "id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric"
-                    }).format(targetDateObj);
+                  {/* Progress Projection Graph Card */}
+                  <div className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight font-['Archivo_Black']">
+                        {isEN ? "Progress Projection" : "Proyeksi Progres"}
+                      </h3>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30">
+                        ~{estWeeks} {isEN ? "Weeks" : "Minggu"}
+                      </span>
+                    </div>
 
-                    return (
-                      <div className="bg-[#111620] border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md relative overflow-hidden">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight font-['Archivo_Black']">
-                            {isEN ? "Progress Projection" : "Proyeksi progres"}
-                          </h3>
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30">
-                            ~{estWeeks} {isEN ? "Weeks" : "Minggu"}
-                          </span>
-                        </div>
-
-                        {/* Visual Trajectory Graph */}
-                        <div className="relative pt-8 pb-2">
-                          {/* Start Weight Tag (Left) */}
-                          <div
-                            className="absolute left-2 px-2.5 py-1 rounded-lg bg-neutral-800/90 border border-neutral-700 text-white font-extrabold text-xs shadow-xs transition-all"
-                            style={{
-                              top: isMaintain ? "12px" : isWeightLoss ? "0px" : "36px"
-                            }}
-                          >
-                            {userW} kg
-                          </div>
-
-                          {/* Target Weight Pill (Highlight Badge above/at target dot) */}
-                          <div
-                            className="absolute px-3.5 py-1 rounded-xl bg-[#25D366] text-white font-['Archivo_Black'] text-xs sm:text-sm shadow-lg shadow-[#25D366]/30 -translate-x-1/2 z-10 flex items-center gap-1 transition-all"
-                            style={{
-                              left: isMaintain ? "52%" : "68%",
-                              top: isMaintain ? "12px" : isWeightLoss ? "36px" : "0px"
-                            }}
-                          >
-                            <span>{targetW} kg</span>
-                          </div>
-
-                          {/* Smooth Bezier Trajectory SVG Curve */}
-                          <svg className="w-full h-24 overflow-visible" viewBox="0 0 340 75" fill="none">
-                            {/* Horizontal Guideline Dashes */}
-                            <line x1="0" y1="18" x2="340" y2="18" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
-                            <line x1="0" y1="40" x2="340" y2="40" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
-                            <line x1="0" y1="62" x2="340" y2="62" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
-
-                            {/* Curve Trajectories by Goal */}
-                            {isWeightGain ? (
-                              <>
-                                <path d="M 20,56 C 85,56 145,20 220,20 L 320,20" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
-                                <circle cx="20" cy="56" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="220" cy="20" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
-                              </>
-                            ) : isWeightLoss ? (
-                              <>
-                                <path d="M 20,20 C 85,20 145,56 220,56 L 320,56" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
-                                <circle cx="20" cy="20" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="220" cy="56" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
-                              </>
-                            ) : (
-                              <>
-                                <path d="M 20,40 L 320,40" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
-                                <circle cx="20" cy="40" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
-                                <circle cx="180" cy="40" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
-                              </>
-                            )}
-                          </svg>
-
-                          {/* Goal Label text */}
-                          <div className="text-right pr-3 pt-1">
-                            <span className="text-xs sm:text-sm font-bold text-[#25D366]">
-                              {isWeightLoss
-                                ? (isEN ? `Weight Loss (-${weightDiffKg} kg)` : `Turun berat badan (-${weightDiffKg} kg)`)
-                                : isWeightGain
-                                ? (isEN ? `Muscle Gain (+${weightDiffKg} kg)` : `Naik massa otot (+${weightDiffKg} kg)`)
-                                : (isEN ? `Maintain weight (Stable at ${userW} kg)` : `Jaga berat badan (Stabil di ${userW} kg)`)}
-                            </span>
-                          </div>
-
-                          {/* Timeline Dates at Bottom */}
-                          <div className="flex items-center justify-between text-xs font-bold text-neutral-400 pt-2.5 border-t border-neutral-800/80">
-                            <span className="pl-1 text-neutral-400">{isEN ? "Today" : "Hari ini"}</span>
-                            <span className="pr-3 text-neutral-300 font-semibold">{targetDateFormatted}</span>
-                          </div>
-                        </div>
+                    <div className="relative pt-8 pb-2">
+                      <div
+                        className="absolute left-2 px-2.5 py-1 rounded-lg bg-neutral-800/90 border border-neutral-700 text-white font-extrabold text-xs shadow-xs transition-all"
+                        style={{ top: isMaintain ? "12px" : isWeightLoss ? "0px" : "36px" }}
+                      >
+                        {userW} kg
                       </div>
-                    );
-                  })()}
 
-                  {/* 5. Compact Macro Summary */}
+                      <div
+                        className="absolute px-3.5 py-1 rounded-xl bg-[#25D366] text-white font-['Archivo_Black'] text-xs sm:text-sm shadow-lg shadow-[#25D366]/30 -translate-x-1/2 z-10 flex items-center gap-1 transition-all"
+                        style={{
+                          left: isMaintain ? "52%" : "68%",
+                          top: isMaintain ? "12px" : isWeightLoss ? "36px" : "0px"
+                        }}
+                      >
+                        <span>{targetW} kg</span>
+                      </div>
+
+                      <svg className="w-full h-24 overflow-visible" viewBox="0 0 340 75" fill="none">
+                        <line x1="0" y1="18" x2="340" y2="18" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                        <line x1="0" y1="40" x2="340" y2="40" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+                        <line x1="0" y1="62" x2="340" y2="62" stroke="#1C2433" strokeDasharray="4 4" strokeWidth="1" />
+
+                        {isWeightGain ? (
+                          <>
+                            <path d="M 20,56 C 85,56 145,20 220,20 L 320,20" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                            <circle cx="20" cy="56" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                            <circle cx="220" cy="20" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                          </>
+                        ) : isWeightLoss ? (
+                          <>
+                            <path d="M 20,20 C 85,20 145,56 220,56 L 320,56" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                            <circle cx="20" cy="20" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                            <circle cx="220" cy="56" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                          </>
+                        ) : (
+                          <>
+                            <path d="M 20,40 L 320,40" fill="none" stroke="#25D366" strokeWidth="5" strokeLinecap="round" />
+                            <circle cx="20" cy="40" r="5" fill="#111620" stroke="#94A3B8" strokeWidth="3" />
+                            <circle cx="180" cy="40" r="6" fill="#ffffff" stroke="#25D366" strokeWidth="4" />
+                          </>
+                        )}
+                      </svg>
+
+                      <div className="text-right pr-3 pt-1">
+                        <span className="text-xs sm:text-sm font-bold text-[#25D366]">
+                          {isWeightLoss
+                            ? (isEN ? `Weight Loss (-${weightDiffKg} kg)` : `Turun berat badan (-${weightDiffKg} kg)`)
+                            : isWeightGain
+                            ? (isEN ? `Muscle Gain (+${weightDiffKg} kg)` : `Naik massa otot (+${weightDiffKg} kg)`)
+                            : (isEN ? `Maintain weight (Stable at ${userW} kg)` : `Jaga berat badan (Stabil di ${userW} kg)`)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs font-bold text-neutral-400 pt-2.5 border-t border-neutral-800/80">
+                        <span className="pl-1 text-neutral-400">{isEN ? "Today" : "Hari ini"}</span>
+                        <span className="pr-3 text-neutral-300 font-semibold">{targetDateFormatted}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Macro Summary */}
                   <div className="space-y-2">
                     <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
                       {isEN ? "Estimated Daily Macros" : "Estimasi Makronutrisi Harian"}
@@ -2596,213 +2555,733 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     </div>
                   </div>
 
-                  {/* 6. Prominent "Lanjut" CTA Button - Launches WhatsApp & Navigates to Dashboard */}
+                  {/* Primary Button to Advance to Plan Selection */}
                   <div className="pt-3">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                       onClick={async () => {
-                        const cleaned = phone.replace(/\D/g, "");
-                        const norm = cleaned.startsWith("62") ? "0" + cleaned.substring(2) : (cleaned.startsWith("8") ? "0" + cleaned : cleaned);
-                        const canonicalPhone = normalizePhoneToE164(phone) || (norm ? `+62${norm}` : phone);
-
-                        const finalUserObj = {
-                          name: name || "Member",
-                          goal,
-                          goalTitle: goal === "lose" ? "Menurunkan Berat Badan" : (goal === "gain" ? "Menaikkan Berat Badan" : "Gaya Hidup Sehat & Fit"),
-                          goalEvent,
-                          goalSecondary,
-                          emotionalVision,
-                          gender,
-                          weight: userW,
-                          startWeight: userW,
-                          targetWeight: targetW,
-                          aiRecommendedTargetWeight: recW,
-                          height: Number(height) || 170,
-                          age: userA,
-                          dob: dob || "",
-                          healthStatus,
-                          healthConditions,
-                          otherCondition,
-                          activityLevel,
-                          experience,
-                          satisfaction,
-                          challenges,
-                          injuries,
-                          customInjury,
-                          allergies: allergies.length > 0 ? allergies : ["none"],
-                          equipment,
-                          persona,
-                          selectedPlan,
-                          selectedFeature,
-                          phone: canonicalPhone,
-                          normalizedPhone: canonicalPhone,
-                          targetCalories: targetCal,
-                          dailyTargetCalories: targetCal,
-                          proteinGrams: proteinGram,
-                          dailyTargetProtein: proteinGram,
-                          carbGrams: carbsGram,
-                          dailyTargetCarbs: carbsGram,
-                          fatGrams: fatGram,
-                          dailyTargetFat: fatGram,
-                          fiberGrams: Math.max(20, Math.min(38, Math.round(targetCal / 75))),
-                          activeService: "both",
-                          onboardingCompleted: true
-                        };
-
-                        if (isSubmittingFinalOnboarding) return;
-                        setIsSubmittingFinalOnboarding(true);
-                        setFinalOnboardingError(null);
-
-                        // Validate required biometrics & phone
-                        if (!canonicalPhone) {
-                          setFinalOnboardingError(
-                            isEN ? "Valid WhatsApp phone number is required." : "Nomor WhatsApp yang valid diperlukan."
-                          );
-                          setIsSubmittingFinalOnboarding(false);
-                          return;
-                        }
-
-                        // Save locally first so session state is immediately guaranteed
-                        try {
-                          Object.keys(localStorage).forEach((key) => {
-                            if (
-                              key.startsWith(`gymbuddy_meals_${norm}`) ||
-                              key.startsWith(`gymbuddy_meals_${canonicalPhone}`) ||
-                              key.startsWith(`gymbuddy_exercises_${norm}`) ||
-                              key.startsWith(`gymbuddy_weight_history_${norm}`) ||
-                              key.startsWith(`gymbuddy_water_${norm}`) ||
-                              key.startsWith(`gymbuddy_feel_${norm}`)
-                            ) {
-                              localStorage.removeItem(key);
-                            }
-                          });
-
-                          localStorage.setItem(`gymbuddy_user_${norm}`, JSON.stringify(finalUserObj));
-                          localStorage.setItem(`gymbuddy_user_${canonicalPhone}`, JSON.stringify(finalUserObj));
-                          localStorage.setItem("gymbuddy_last_user", JSON.stringify(finalUserObj));
-                          localStorage.setItem("gymbuddy_active_session", JSON.stringify(finalUserObj));
-                        } catch (e) {}
-
-                        // Persist onboarding to backend
-                        try {
-                          const onboardData = await canonicalApiFetch<{ success: boolean; profile?: any; error?: string }>("/api/onboarding", {
-                            method: "POST",
-                            body: JSON.stringify({ phone: canonicalPhone, profile: finalUserObj })
-                          });
-
-                          if (!onboardData || !onboardData.success) {
-                            throw new Error(onboardData?.error || "Onboarding save failed");
-                          }
-                        } catch (err: any) {
-                          const errMsg = String(err?.message || err);
-                          if (errMsg.includes("already_exists") || err?.status === 409) {
-                            setExistingAccountDetected(true);
-                            setStep(12);
-                            setIsSubmittingFinalOnboarding(false);
-                            return;
-                          }
-                          console.warn("[Onboarding] Note persisting profile to backend:", err);
-                        }
-
-                        // If user chose a paid plan (advanced or premium), trigger Midtrans Snap payment
-                        if (selectedPlan === "advanced" || selectedPlan === "premium") {
-                          const amount = selectedPlan === "premium" ? 149000 : 89000;
-                          const service = selectedPlan === "premium" ? "both" : (selectedFeature || "coach");
-                          try {
-                            const txRes = await canonicalApiFetch<{ success: boolean; token?: string; redirect_url?: string }>(
-                              "/api/midtrans/create-transaction",
-                              {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  phone: canonicalPhone,
-                                  plan: selectedPlan,
-                                  activeService: service,
-                                  amount,
-                                  duration: "1m",
-                                  customerName: name || "Member GymBuddy"
-                                })
-                              }
-                            );
-                            if (txRes && txRes.success && txRes.token) {
-                              setIsSubmittingFinalOnboarding(false);
-                              if ((window as any).snap && typeof (window as any).snap.pay === "function") {
-                                (window as any).snap.pay(txRes.token, {
-                                  onSuccess: () => {
-                                    const waUrl = getWhatsAppDestinationUrl(`Halo GymBuddy 👋 Saya sudah menyelesaikan pembayaran paket ${selectedPlan}`);
-                                    openWhatsAppSafely(waUrl);
-                                    if (onComplete) onComplete();
-                                  },
-                                  onPending: () => {
-                                    const waUrl = getWhatsAppDestinationUrl("Halo GymBuddy 👋");
-                                    openWhatsAppSafely(waUrl);
-                                    if (onComplete) onComplete();
-                                  },
-                                  onError: () => {
-                                    alert(isEN ? "Payment failed. Please try again from Pricing page." : "Pembayaran gagal. Silakan coba kembali dari halaman Harga.");
-                                    if (onComplete) onComplete();
-                                  },
-                                  onClose: () => {
-                                    if (onComplete) onComplete();
-                                  }
-                                });
-                                return;
-                              } else if (txRes.redirect_url) {
-                                window.location.href = txRes.redirect_url;
-                                return;
-                              }
-                            }
-                          } catch (payErr) {
-                            console.error("[Onboarding] Payment init note:", payErr);
-                          }
-                        }
-
-                        // Free trial or fallback: Launch official GymBuddy WhatsApp bot
-                        try {
-                          const waUrl = getWhatsAppDestinationUrl("Halo GymBuddy 👋");
-                          openWhatsAppSafely(waUrl);
-                        } catch (e) {
-                          console.error("Failed to launch WhatsApp:", e);
-                        }
-
-                        // Complete onboarding and enter dashboard
-                        if (onComplete) {
-                          onComplete();
-                        }
-                      }}
-                      disabled={isSubmittingFinalOnboarding}
-                      className={`w-full py-4 bg-[#D4FF00] text-black font-['Archivo_Black'] text-lg uppercase tracking-wide rounded-xl shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:bg-[#c4f000] transition-all flex items-center justify-center gap-2 ${
-                        isSubmittingFinalOnboarding ? "opacity-75 cursor-not-allowed" : "cursor-pointer"
-                      }`}
+                      onClick={handleSaveProfileAndContinue}
+                      disabled={isCreatingOrder}
+                      className="w-full py-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
                     >
-                      {isSubmittingFinalOnboarding ? (
+                      {isCreatingOrder ? (
                         <>
-                          <RefreshCw size={22} className="animate-spin stroke-[3]" />
-                          <span>{isEN ? "Saving Plan..." : "Menyimpan Rencana..."}</span>
+                          <RefreshCw size={18} className="animate-spin" />
+                          <span>{isEN ? "Preparing Plans..." : "Menyiapkan Pilihan Paket..."}</span>
                         </>
                       ) : (
                         <>
-                          <span>
-                            {selectedPlan === "free_trial"
-                              ? (isEN ? "Start Free Trial" : "Mulai Uji Coba Gratis")
-                              : (isEN ? "Proceed to Midtrans Payment" : "Lanjut ke Pembayaran Midtrans")}
-                          </span>
-                          <ChevronRight size={22} className="stroke-[3]" />
+                          <span>{isEN ? "Continue: Select Coaching Plan →" : "Lanjut: Pilih Paket Coaching →"}</span>
+                          <ChevronRight size={20} className="stroke-[3]" />
                         </>
                       )}
                     </motion.button>
-                    {finalOnboardingError && (
-                      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs text-center flex items-center justify-center gap-2 mt-3">
-                        <AlertCircle size={16} />
-                        <span>{finalOnboardingError}</span>
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               );
             })()}
 
+            {/* STEP 13: PLAN SELECTION */}
+            {step === 13 && (
+              <motion.div
+                key="step13"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-5 max-w-xl mx-auto text-left pb-6"
+              >
+                <div className="space-y-2">
+                  <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
+                    {isEN ? "Step 2 of 4 — Plan Selection" : "Tahap 2/4 — Pilih Paket Coaching"}
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
+                    {isEN ? "Select Your GymBuddy Plan" : "Pilih Paket Coaching Kamu"}
+                  </h2>
+                  <p className="text-sm text-neutral-400 max-w-lg">
+                    {isEN
+                      ? "Start with a 2-day free trial or select a full plan tailored to your fitness goals."
+                      : "Mulai dengan uji coba gratis 2 hari atau pilih paket penuh untuk pendampingan maksimal."}
+                  </p>
+                </div>
 
+                <div className="space-y-3.5 pt-1">
+                  {/* OPTION 1: 2-DAY FREE TRIAL */}
+                  <div
+                    onClick={() => {
+                      setSelectedPlan("free_trial");
+                      setSelectedFeature(null);
+                    }}
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                      selectedPlan === "free_trial"
+                        ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "free_trial" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "2-Day Free Trial" : "Uji Coba Gratis 2 Hari"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            FREE Rp 0
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-300 mt-1 leading-relaxed">
+                          {isEN
+                            ? "Full access to both AI Workout Coach & Nutritionist for 48 hours. No credit card required."
+                            : "Akses penuh 2 AI (Workout & Nutrisi) selama 48 jam tanpa bayar sama sekali. Tanpa kartu kredit."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
+                        selectedPlan === "free_trial" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "free_trial" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* OPTION 2: ADVANCED PLAN (1 SPESIALIS: Rp 89.000 / bln) */}
+                  <div
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all ${
+                      selectedPlan === "advanced"
+                        ? "bg-[#161B22] border-[#D4FF3D]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <div
+                      onClick={() => {
+                        setSelectedPlan("advanced");
+                        if (!selectedFeature) setSelectedFeature("coach");
+                      }}
+                      className="w-full flex items-start justify-between text-left cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "advanced" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "AI Coach (Single Specialist)" : "AI Coach (1 Spesialis)"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-neutral-800 text-white text-[11px] font-bold border border-neutral-700">
+                            Rp 89rb / bln
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-300 mt-1">
+                          {isEN ? "Focus 100% on 1 feature of your choice:" : "Fokus 100% pada 1 fitur pilihan spesialisasi:"}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
+                        selectedPlan === "advanced" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "advanced" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+
+                    {/* Sub-selection for Advanced */}
+                    {selectedPlan === "advanced" && (
+                      <div className="mt-4 space-y-2 pt-3 border-t border-neutral-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFeature("coach");
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                              selectedFeature === "coach"
+                                ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
+                                : "bg-black/40 border-neutral-800 hover:border-neutral-700"
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                              selectedFeature === "coach" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
+                            }`}>
+                              <Activity size={16} />
+                            </div>
+                            <div className="text-left">
+                              <p className={`font-bold text-xs ${selectedFeature === "coach" ? "text-[#D4FF3D]" : "text-white"}`}>AI Workout Coach</p>
+                              <p className="text-[10px] text-neutral-400">{isEN ? "Form check & gym split" : "Koreksi postur & jadwal gym"}</p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFeature("nutrition");
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                              selectedFeature === "nutrition"
+                                ? "bg-[#D4FF3D]/10 border-[#D4FF3D]"
+                                : "bg-black/40 border-neutral-800 hover:border-neutral-700"
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                              selectedFeature === "nutrition" ? "bg-[#D4FF3D] text-black" : "bg-neutral-800 text-white"
+                            }`}>
+                              <Leaf size={16} />
+                            </div>
+                            <div className="text-left">
+                              <p className={`font-bold text-xs ${selectedFeature === "nutrition" ? "text-[#D4FF3D]" : "text-white"}`}>AI Nutritionist</p>
+                              <p className="text-[10px] text-neutral-400">{isEN ? "Meal photo calorie tracking" : "Hitung kalori & foto makanan"}</p>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OPTION 3: BOTH (ALL-ACCESS: Rp 149.000 / bln) */}
+                  <div
+                    onClick={() => {
+                      setSelectedPlan("premium");
+                      setSelectedFeature(null);
+                    }}
+                    className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden ${
+                      selectedPlan === "premium"
+                        ? "bg-gradient-to-br from-[#1C2514] via-[#161B22] to-[#111620] border-[#D4FF00] shadow-[0_0_25px_rgba(212,255,0,0.15)]"
+                        : "bg-[#161B22] border-neutral-800 hover:border-neutral-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`font-['Archivo_Black'] text-base sm:text-lg uppercase ${
+                            selectedPlan === "premium" ? "text-[#D4FF3D]" : "text-white"
+                          }`}>
+                            {isEN ? "Both: Nutritionist + Workout Coach" : "Both: Nutritionist + Workout Coach"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#D4FF00] text-black text-[10px] font-extrabold uppercase">
+                            Rp 149rb / bln • PALING POPULER
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-300 mt-1.5 leading-relaxed">
+                          {isEN
+                            ? "Both AIs simultaneously (Nutritionist + Workout Coach), Gemini Pro Vision & High Precision Visual Posters."
+                            : "2 AI Sekaligus (Nutrisi + Workout Coach), Presisi Tinggi Gemini Pro & Generasi Poster Visual Kemajuan Gym."}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
+                        selectedPlan === "premium" ? "border-[#D4FF3D] bg-[#D4FF3D]" : "border-neutral-600"
+                      }`}>
+                        {selectedPlan === "premium" && <Check size={14} className="text-black stroke-[3]" />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Banner if Any */}
+                {paymentError && (
+                  <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
+
+                {/* Action CTA Button */}
+                <div className="pt-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleCreateOrder(selectedPlan, selectedFeature)}
+                    disabled={isCreatingOrder}
+                    className="w-full py-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                  >
+                    {isCreatingOrder ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin" />
+                        <span>{isEN ? "Processing Order..." : "Memproses Pesanan..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {selectedPlan === "free_trial"
+                            ? (isEN ? "Start 2-Day Free Trial (Rp 0) →" : "Mulai Uji Coba Gratis 2 Hari (Rp 0) →")
+                            : selectedPlan === "premium"
+                            ? (isEN ? "Continue to Checkout (Rp 149.000) →" : "Lanjut ke Pembayaran (Rp 149.000) →")
+                            : (isEN ? "Continue to Checkout (Rp 89.000) →" : "Lanjut ke Pembayaran (Rp 89.000) →")}
+                        </span>
+                        <ChevronRight size={20} className="stroke-[3]" />
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* STEP 14: ORDER SUMMARY & MIDTRANS SNAP CHECKOUT (PAID PLANS) */}
+            {step === 14 && (() => {
+              const planTitle = selectedPlan === "premium"
+                ? "Both: Nutritionist + Workout Coach"
+                : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist");
+              const grossAmount = selectedPlan === "premium" ? 149000 : 89000;
+              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
+
+              return (
+                <motion.div
+                  key="step14"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-5 max-w-md mx-auto text-left pb-6"
+                >
+                  <div className="space-y-2">
+                    <div className="text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-widest">
+                      {isEN ? "Step 3 of 4 — Order & Payment" : "Tahap 3/4 — Ringkasan & Pembayaran"}
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] uppercase text-white">
+                      {isEN ? "Order Summary" : "Ringkasan Pesanan"}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-neutral-400">
+                      {isEN
+                        ? "Please complete your payment via Midtrans to unlock full access to your personalized AI coach."
+                        : "Selesaikan pembayaran melalui Midtrans untuk membuka akses penuh ke pelatih AI pribadimu."}
+                    </p>
+                  </div>
+
+                  {/* Order Details Card */}
+                  <div className="bg-[#111620] border border-neutral-800 rounded-2xl p-5 space-y-4 shadow-lg">
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                      <span className="text-xs text-neutral-400 font-bold uppercase">{isEN ? "Member Name" : "Nama Member"}</span>
+                      <span className="text-sm font-bold text-white">{name || "Member GymBuddy"}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                      <span className="text-xs text-neutral-400 font-bold uppercase">{isEN ? "Selected Plan" : "Paket Terpilih"}</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-[#D4FF00] text-right">{planTitle}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                      <span className="text-xs text-neutral-400 font-bold uppercase">{isEN ? "Dedicated Coach" : "Pelatih AI"}</span>
+                      <span className="text-xs sm:text-sm font-bold text-white">{coachLabel}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                      <span className="text-xs text-neutral-400 font-bold uppercase">{isEN ? "Billing Period" : "Periode Langganan"}</span>
+                      <span className="text-xs sm:text-sm font-medium text-neutral-300">{isEN ? "1 Month (Flexible)" : "1 Bulan (Bulanan Fleksibel)"}</span>
+                    </div>
+
+                    {orderId && (
+                      <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                        <span className="text-xs text-neutral-500 font-bold uppercase">Order ID</span>
+                        <span className="text-[11px] font-mono text-neutral-400">{orderId}</span>
+                      </div>
+                    )}
+
+                    <div className="pt-1 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs text-neutral-400">
+                        <span>{isEN ? "Subtotal" : "Harga Paket"}</span>
+                        <span>Rp {grossAmount.toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-neutral-400">
+                        <span>{isEN ? "Service Fee" : "Biaya Layanan"}</span>
+                        <span className="text-[#25D366] font-bold">Rp 0 (FREE)</span>
+                      </div>
+                      <div className="flex items-center justify-between text-base font-['Archivo_Black'] text-white pt-2 border-t border-neutral-800">
+                        <span>{isEN ? "Total Payment" : "Total Pembayaran"}</span>
+                        <span className="text-[#D4FF00]">Rp {grossAmount.toLocaleString("id-ID")}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Included Features List */}
+                  <div className="p-4 rounded-xl bg-[#161C28] border border-neutral-800/80 space-y-2 text-xs text-neutral-300">
+                    <p className="font-bold text-white flex items-center gap-1.5 text-xs">
+                      <CheckCircle2 size={15} className="text-[#D4FF00]" />
+                      <span>{isEN ? "What's Included in Your Plan:" : "Fitur yang Langsung Kamu Dapatkan:"}</span>
+                    </p>
+                    <ul className="space-y-1.5 pl-5 list-disc text-neutral-400 text-[11px]">
+                      <li>{isEN ? "Instant 24/7 AI chat via WhatsApp" : "Akses interaksi 24/7 via WhatsApp tanpa antri"}</li>
+                      <li>{isEN ? "Vision AI meal analysis from photos" : "Foto makanan langsung terdeteksi kalori & makronya"}</li>
+                      <li>{isEN ? "Personalized workout routine respecting your injuries" : "Jadwal workout menyesuaikan alat gym & catatan cedera"}</li>
+                    </ul>
+                  </div>
+
+                  {/* Payment Error & Retry Notice */}
+                  {paymentError && (
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                      <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                        <AlertCircle size={16} className="shrink-0" />
+                        <span>{paymentError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetryPayment}
+                        className="w-full py-2.5 rounded-xl bg-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:bg-amber-400"
+                      >
+                        <RefreshCw size={14} />
+                        <span>{isEN ? "Retry Payment" : "Coba Bayar Lagi"}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Primary "Pay Now" Button */}
+                  <div className="pt-2 space-y-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => triggerSnapPayment()}
+                      className="w-full py-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                    >
+                      <Lock size={18} />
+                      <span>{isEN ? "Pay Now via Midtrans Snap" : "Bayar Sekarang (Midtrans)"}</span>
+                    </motion.button>
+
+                    <button
+                      type="button"
+                      onClick={() => setStep(13)}
+                      className="w-full py-2.5 text-xs text-neutral-400 hover:text-white font-bold transition-colors cursor-pointer text-center"
+                    >
+                      ← {isEN ? "Change Selected Plan" : "Ubah Pilihan Paket"}
+                    </button>
+                  </div>
+
+                  {/* Midtrans Trust Badge */}
+                  <div className="p-3 bg-[#111620] border border-neutral-800/60 rounded-xl text-center text-[10px] text-neutral-500 space-y-1">
+                    <p className="font-bold text-neutral-400">🛡️ Pembayaran Resmi & Terverifikasi Otomatis</p>
+                    <p>Mendukung GoPay, QRIS, BCA/Mandiri/BRI Virtual Account, dan Kartu Kredit.</p>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* STEP 15: PAYMENT SUCCESS CONFIRMATION (PAID PLANS) */}
+            {step === 15 && (() => {
+              const planTitle = selectedPlan === "premium"
+                ? "Both: Nutritionist + Workout Coach"
+                : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist");
+              const grossAmount = selectedPlan === "premium" ? 149000 : 89000;
+              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
+
+              return (
+                <motion.div
+                  key="step15"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="space-y-6 max-w-md mx-auto text-center pb-6"
+                >
+                  {/* Glowing Green Success Badge */}
+                  <div className="w-20 h-20 rounded-3xl bg-[#25D366]/20 border-2 border-[#25D366] flex items-center justify-center mx-auto text-[#25D366] shadow-[0_0_40px_rgba(37,211,102,0.3)]">
+                    <Check size={40} strokeWidth={3} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-xs font-['Inter'] font-extrabold text-[#25D366] uppercase tracking-widest">
+                      {isEN ? "PAYMENT VERIFIED" : "PEMBAYARAN TERVERIFIKASI"}
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
+                      {isEN ? "Payment Successful! 🎉" : "Pembayaran Berhasil! 🎉"}
+                    </h2>
+                    <p className="text-neutral-300 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
+                      {isEN
+                        ? `Thank you! Your payment for ${planTitle} has been verified.`
+                        : `Terima kasih! Pembayaran untuk ${planTitle} sebesar Rp ${grossAmount.toLocaleString('id-ID')} telah berhasil diverifikasi.`}
+                    </p>
+                  </div>
+
+                  {/* Status Card */}
+                  <div className="bg-[#161C28] border border-neutral-800 rounded-2xl p-4 text-left space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-neutral-400">{isEN ? "Status" : "Status Pembayaran"}</span>
+                      <span className="font-extrabold text-[#25D366] uppercase">✅ LUNAS / PAID</span>
+                    </div>
+                    {orderId && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-neutral-400">Order ID</span>
+                        <span className="font-mono text-neutral-300">{orderId}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-neutral-400">{isEN ? "Coach" : "Pelatih Aktif"}</span>
+                      <span className="font-bold text-white">{coachLabel}</span>
+                    </div>
+                  </div>
+
+                  {/* Final Step Guidance */}
+                  <div className="p-4 rounded-xl bg-[#111620] border border-[#D4FF00]/40 text-left space-y-1">
+                    <p className="text-xs font-extrabold text-[#D4FF00] uppercase tracking-wide">
+                      {isEN ? "Final Step: Connect WhatsApp" : "Langkah Terakhir: Hubungkan WhatsApp"}
+                    </p>
+                    <p className="text-xs text-neutral-300 leading-relaxed">
+                      {isEN
+                        ? `Connect your active WhatsApp number so ${coachLabel} can greet you and deliver your custom plan.`
+                        : `Hubungkan nomor WhatsApp aktifmu agar ${coachLabel} dapat langsung menyapa dan mengaktifkan bot pendampingmu.`}
+                    </p>
+                  </div>
+
+                  {/* CTA to Connect WhatsApp */}
+                  <div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setStep(16)}
+                      className="w-full py-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-98"
+                    >
+                      <WhatsAppIcon className="w-5 h-5 text-white" />
+                      <span>{isEN ? "Connect WhatsApp Now →" : "Lanjut: Hubungkan WhatsApp Sekarang →"}</span>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* STEP 16: CONNECT WHATSAPP NUMBER (FOR BOTH FREE & PAID) */}
+            {step === 16 && (() => {
+              const phoneVal = validateWhatsAppPhone(phone);
+              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
+              const isPaid = selectedPlan !== "free_trial";
+
+              return (
+                <motion.div
+                  key="step16"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6 max-w-md mx-auto text-left pb-6"
+                >
+                  {/* Status Pill */}
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161C28] border border-neutral-800 text-xs">
+                    <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                    <span className="font-bold text-white">
+                      {isPaid
+                        ? (isEN ? "✅ Payment Verified — Ready to Connect" : "✅ Pembayaran Terverifikasi — Siap Terhubung")
+                        : (isEN ? "✨ 2-Day Free Trial — Ready to Activate" : "✨ Uji Coba Gratis 2 Hari — Siap Aktif")}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] tracking-tight leading-tight text-white">
+                      {isEN ? "Connect Your WhatsApp" : "Hubungkan WhatsApp Kamu"}
+                    </h1>
+                    <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed">
+                      {isEN
+                        ? `Enter your active WhatsApp number so ${coachLabel} can instantly message you, track your meals, and answer your fitness questions.`
+                        : `Masukkan nomor WhatsApp aktifmu agar ${coachLabel} dapat langsung menyapamu, menganalisis foto makananmu, dan memandu latihanmu.`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                        <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
+                        <span className="text-base font-bold text-white border-r border-neutral-700 pr-3">+62</span>
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, "");
+                          if (val.startsWith("62")) val = val.substring(2);
+                          else if (val.startsWith("0")) val = val.substring(1);
+                          setPhone(val);
+                          setConnectWhatsAppError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && phoneVal.isValid && !isConnectingWhatsApp) {
+                            e.preventDefault();
+                            handleConnectWhatsApp();
+                          }
+                        }}
+                        placeholder="812 3456 7890"
+                        autoFocus
+                        className={`w-full bg-[#111620] border rounded-xl pl-24 pr-12 py-4 text-lg font-bold text-white placeholder:text-neutral-600 focus:outline-none transition-colors ${
+                          phone.length === 0
+                            ? "border-neutral-800 focus:border-[#25D366]"
+                            : phoneVal.isValid
+                            ? "border-[#25D366] bg-[#111620]"
+                            : "border-amber-500/60 focus:border-amber-500"
+                        }`}
+                      />
+                      {phone.length > 0 && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                          {phoneVal.isValid ? (
+                            <div className="w-6 h-6 rounded-full bg-[#25D366]/20 border border-[#25D366] flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 text-[#25D366]" strokeWidth={3} />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-xs font-bold">
+                              !
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Realtime Phone Feedback */}
+                    {phone.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 ${
+                          phoneVal.isValid
+                            ? "bg-[#25D366]/10 border-[#25D366]/30 text-[#25D366]"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{phoneVal.isValid ? "✅" : "⚠️"}</span>
+                          <span>{phoneVal.message}</span>
+                        </div>
+                        {phoneVal.operator && (
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white shrink-0">
+                            {phoneVal.operator}
+                          </span>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* Error Banner */}
+                    {connectWhatsAppError && (
+                      <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+                        <AlertCircle size={16} className="shrink-0" />
+                        <span>{connectWhatsAppError}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Privacy Notice */}
+                  <div className="p-4 rounded-xl bg-[#111620] border border-neutral-800 flex items-start gap-3 text-xs text-neutral-400">
+                    <ShieldCheck className="w-5 h-5 text-[#25D366] shrink-0 mt-0.5" />
+                    <span>
+                      {isEN
+                        ? "Your phone number is strictly used for your AI coaching sessions on WhatsApp. We will never send spam."
+                        : "Nomor WhatsApp hanya digunakan untuk komunikasi coaching oleh pelatih AI GymBuddy. Privasi terjaga 100%."}
+                    </span>
+                  </div>
+
+                  {/* Connect WhatsApp CTA Button */}
+                  <div className="pt-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleConnectWhatsApp}
+                      disabled={!phoneVal.isValid || isConnectingWhatsApp}
+                      className={`w-full py-4 rounded-xl font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 ${
+                        phoneVal.isValid && !isConnectingWhatsApp
+                          ? "bg-[#25D366] hover:bg-[#20bd5a] text-white cursor-pointer"
+                          : "bg-[#111620] text-neutral-600 border border-neutral-800 cursor-not-allowed"
+                      }`}
+                    >
+                      {isConnectingWhatsApp ? (
+                        <>
+                          <RefreshCw size={18} className="animate-spin" />
+                          <span>{isEN ? "Connecting WhatsApp..." : "Menghubungkan WhatsApp..."}</span>
+                        </>
+                      ) : (
+                        <>
+                          <WhatsAppIcon className="w-5 h-5 text-white" />
+                          <span>
+                            {isEN ? "Activate & Connect to Coach →" : "Aktifkan & Hubungkan ke Coach →"}
+                          </span>
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* STEP 17: ACCOUNT ACTIVATED & DUAL LAUNCH */}
+            {step === 17 && (() => {
+              const coachLabel = (persona || "max").toLowerCase().includes("mia") ? "Coach Mia" : "Coach Max";
+              const planTitle = selectedPlan === "premium"
+                ? "Both: Nutritionist + Workout Coach"
+                : (selectedPlan === "free_trial"
+                    ? "Free Trial 2 Hari"
+                    : (selectedFeature === "nutrition" ? "AI Nutritionist Specialist" : "AI Workout Coach Specialist"));
+
+              // Generate custom wa.me URL
+              const e164 = normalizePhoneToE164(phone);
+              const customWaMsg = encodeURIComponent(
+                `Halo ${coachLabel}! Saya ${name || "Member"}, baru saja menyelesaikan onboarding di GymBuddy untuk program ${goal}. Saya siap mulai!`
+              );
+              const waBotUrl = `https://wa.me/6285156919826?text=${customWaMsg}`;
+
+              return (
+                <motion.div
+                  key="step17"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="space-y-6 max-w-md mx-auto text-center pb-6"
+                >
+                  {/* Glowing Success Badge */}
+                  <div className="w-20 h-20 rounded-3xl bg-[#D4FF00]/20 border-2 border-[#D4FF00] flex items-center justify-center mx-auto text-[#D4FF00] shadow-[0_0_40px_rgba(212,255,0,0.25)]">
+                    <Sparkles size={38} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-xs font-['Inter'] font-extrabold text-[#D4FF00] uppercase tracking-widest">
+                      {isEN ? "ACCOUNT ACTIVATED" : "AKUN RESMI DIAKTIFKAN"}
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-['Archivo_Black'] text-white">
+                      {isEN ? `Welcome, ${name || "Champion"}!` : `Selamat Bergabung, ${name || "Juara"}!`}
+                    </h1>
+                    <p className="text-neutral-300 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
+                      {isEN
+                        ? `Your personalized program is active with ${coachLabel}. You can now start chatting on WhatsApp or explore your web dashboard!`
+                        : `Program latihan & nutrisimu telah aktif bersama ${coachLabel}. Kamu bisa langsung chat di WhatsApp atau jelajahi web dashboard!`}
+                    </p>
+                  </div>
+
+                  {/* Account Summary Card */}
+                  <div className="bg-[#161C28] border border-neutral-800 rounded-2xl p-4 text-left space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-400">{isEN ? "Active Plan" : "Paket Aktif"}</span>
+                      <span className="font-extrabold text-[#D4FF00]">{planTitle}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-400">{isEN ? "Dedicated AI Coach" : "Pelatih AI"}</span>
+                      <span className="font-bold text-white">{coachLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-400">{isEN ? "Connected WhatsApp" : "Nomor WhatsApp"}</span>
+                      <span className="font-mono text-[#25D366] font-bold">+{e164 || phone}</span>
+                    </div>
+                    {orderId && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-400">Order ID</span>
+                        <span className="font-mono text-neutral-400 text-[11px]">{orderId}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dual Launch Actions */}
+                  <div className="space-y-3 pt-2">
+                    {/* Primary Button: Open WhatsApp Bot */}
+                    <motion.a
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      href={waBotUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-base uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_25px_rgba(37,211,102,0.3)] active:scale-98"
+                    >
+                      <WhatsAppIcon className="w-5 h-5 text-white" />
+                      <span>{isEN ? "Start Chatting on WhatsApp →" : "Mulai Chat di WhatsApp →"}</span>
+                    </motion.a>
+
+                    {/* Secondary Button: Enter Web Dashboard */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onComplete) {
+                          onComplete();
+                        }
+                      }}
+                      className="w-full py-3.5 rounded-xl bg-[#111620] hover:bg-neutral-800 border border-neutral-700 text-white font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>{isEN ? "Open Web Dashboard" : "Buka Web Dashboard"}</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })()}
           </AnimatePresence>
         </main>
 
@@ -2865,8 +3344,8 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
           )}
         </AnimatePresence>
 
-        {/* FOOTER CTA BUTTON FOR PROGRESSION */}
-        {step <= 12 && (
+        {/* FOOTER CTA BUTTON FOR PROGRESSION (STEPS 1 TO 11) */}
+        {step <= 11 && (
           <div className="absolute bottom-0 inset-x-0 p-4 sm:p-6 bg-gradient-to-t from-[#111111] via-[#111111]/95 to-transparent pb-6 sm:pb-8 z-30 pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
               <button
@@ -2888,7 +3367,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                     <span>
                       {step === 5 || step === 9
                         ? (isEN ? "Continue to Next Stage →" : "Lanjut ke Tahap Berikutnya →")
-                        : step === 12
+                        : step === 11
                         ? (isEN ? "Generate My Nutrition Plan →" : "Buat Rencana Nutrisi Saya →")
                         : (isEN ? "Continue" : "Lanjut")}
                     </span>
