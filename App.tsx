@@ -1549,7 +1549,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         if (isLoggedIn) setViewMode("dashboard");
-                        else setIsAppOnboarding(true);
+                        else setIsPricingPage(true);
                       }}
                       className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-500 transition-all cursor-pointer"
                     >
@@ -1640,7 +1640,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         if (isLoggedIn) setViewMode("dashboard");
-                        else setIsAppOnboarding(true);
+                        else setIsPricingPage(true);
                       }}
                       className="w-full py-3.5 2xl:py-4 rounded-full font-bold text-sm 2xl:text-base bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-500 transition-all cursor-pointer"
                     >

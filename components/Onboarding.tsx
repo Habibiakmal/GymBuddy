@@ -93,6 +93,28 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
 
   // Form States
   const [name, setName] = useState("");
+
+  // Load Midtrans Snap SDK on mount
+  useEffect(() => {
+    const clientKey =
+      (import.meta as any).env?.VITE_MIDTRANS_CLIENT_KEY ||
+      "SB-Mid-client-CAT2gMLueDV0amD7";
+    const isSandboxKey = clientKey.startsWith("SB-");
+    const isProduction =
+      !isSandboxKey && (import.meta as any).env?.VITE_MIDTRANS_IS_PRODUCTION === "true";
+
+    const snapSrc = isProduction
+      ? "https://app.midtrans.com/snap/snap.js"
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+
+    if (!document.querySelector(`script[src="${snapSrc}"]`)) {
+      const script = document.createElement("script");
+      script.src = snapSrc;
+      script.setAttribute("data-client-key", clientKey);
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
   const [goal, setGoal] = useState<"maintain" | "lose" | "gain" | "health">("maintain");
   const [goalEvent, setGoalEvent] = useState("daily");
   const [goalSecondary, setGoalSecondary] = useState<string[]>(["portion_control"]);
@@ -2683,7 +2705,59 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                           console.warn("[Onboarding] Note persisting profile to backend:", err);
                         }
 
-                        // Launch official GymBuddy WhatsApp bot (NEVER sandbox) safely across mobile & desktop
+                        // If user chose a paid plan (advanced or premium), trigger Midtrans Snap payment
+                        if (selectedPlan === "advanced" || selectedPlan === "premium") {
+                          const amount = selectedPlan === "premium" ? 149000 : 89000;
+                          const service = selectedPlan === "premium" ? "both" : (selectedFeature || "coach");
+                          try {
+                            const txRes = await canonicalApiFetch<{ success: boolean; token?: string; redirect_url?: string }>(
+                              "/api/midtrans/create-transaction",
+                              {
+                                method: "POST",
+                                body: JSON.stringify({
+                                  phone: canonicalPhone,
+                                  plan: selectedPlan,
+                                  activeService: service,
+                                  amount,
+                                  duration: "1m",
+                                  customerName: name || "Member GymBuddy"
+                                })
+                              }
+                            );
+                            if (txRes && txRes.success && txRes.token) {
+                              setIsSubmittingFinalOnboarding(false);
+                              if ((window as any).snap && typeof (window as any).snap.pay === "function") {
+                                (window as any).snap.pay(txRes.token, {
+                                  onSuccess: () => {
+                                    const waUrl = getWhatsAppDestinationUrl(`Halo GymBuddy 👋 Saya sudah menyelesaikan pembayaran paket ${selectedPlan}`);
+                                    openWhatsAppSafely(waUrl);
+                                    if (onComplete) onComplete();
+                                  },
+                                  onPending: () => {
+                                    const waUrl = getWhatsAppDestinationUrl("Halo GymBuddy 👋");
+                                    openWhatsAppSafely(waUrl);
+                                    if (onComplete) onComplete();
+                                  },
+                                  onError: () => {
+                                    alert(isEN ? "Payment failed. Please try again from Pricing page." : "Pembayaran gagal. Silakan coba kembali dari halaman Harga.");
+                                    if (onComplete) onComplete();
+                                  },
+                                  onClose: () => {
+                                    if (onComplete) onComplete();
+                                  }
+                                });
+                                return;
+                              } else if (txRes.redirect_url) {
+                                window.location.href = txRes.redirect_url;
+                                return;
+                              }
+                            }
+                          } catch (payErr) {
+                            console.error("[Onboarding] Payment init note:", payErr);
+                          }
+                        }
+
+                        // Free trial or fallback: Launch official GymBuddy WhatsApp bot
                         try {
                           const waUrl = getWhatsAppDestinationUrl("Halo GymBuddy 👋");
                           openWhatsAppSafely(waUrl);
@@ -2708,7 +2782,11 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                         </>
                       ) : (
                         <>
-                          <span>{isEN ? "Continue" : "Lanjut"}</span>
+                          <span>
+                            {selectedPlan === "free_trial"
+                              ? (isEN ? "Start Free Trial" : "Mulai Uji Coba Gratis")
+                              : (isEN ? "Proceed to Midtrans Payment" : "Lanjut ke Pembayaran Midtrans")}
+                          </span>
                           <ChevronRight size={22} className="stroke-[3]" />
                         </>
                       )}

@@ -262,12 +262,10 @@ export default function PricingPage({
               console.log("[Midtrans] Customer closed the payment modal.");
             }
           });
+        } else if (res.redirect_url) {
+          window.location.href = res.redirect_url;
         } else {
-          alert(
-            isEN
-              ? "Payment gateway is loading. Please click again in 2 seconds."
-              : "Gateway pembayaran sedang disiapkan. Silakan klik sekali lagi dalam 2 detik."
-          );
+          window.location.href = `https://app.sandbox.midtrans.com/snap/v4/redirection/${res.token}`;
         }
       } else {
         throw new Error(res?.error || "Gagal membuat transaksi pembayaran");
