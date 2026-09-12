@@ -1742,3 +1742,108 @@ export function calculateNextWorkoutAdaptation(
     rationale: "Konsistensimu sangat baik! Pertahankan pola latihan dan eksekusi teknik ini di sesi berikutnya."
   };
 }
+
+// ─── 11. IMMUTABLE COMPLETED WORKOUT ACTIVITY MODEL ─────────────────────────
+
+export interface CompletedExerciseRecord {
+  id: string;
+  name: string;
+  targetSets: number;
+  completedSets: number;
+  targetReps: string;
+  status: "completed" | "partial" | "skipped";
+}
+
+export interface CompletedWorkoutActivity {
+  activityId: string;
+  workoutId: string; // matches plan.id
+  completedAt: string; // ISO 8601 string
+  date: string; // YYYY-MM-DD
+  dayName: string;
+  workoutTitle: string;
+  plannedDuration: number;
+  actualDurationSeconds: number;
+  actualDurationMinutes: number;
+  completedSets: number;
+  totalSets: number;
+  completionPercentage: number;
+  difficultyFeedback: PerceivedDifficulty;
+  difficultyLabel?: string;
+  exercises: CompletedExerciseRecord[];
+  nextAdaptation?: {
+    recommendation: string;
+    adjustmentSummary: string;
+    rationale: string;
+  };
+  phone?: string;
+}
+
+/**
+ * Creates a stable, idempotent CompletedWorkoutActivity record.
+ */
+export function createCompletedWorkoutRecord(
+  session: WorkoutSessionState,
+  plan: WorkoutPlan,
+  actualDurationSeconds: number,
+  difficulty: PerceivedDifficulty,
+  nextAdaptation?: any,
+  phone?: string
+): CompletedWorkoutActivity {
+  const normPhone = phone ? phone.replace(/\D/g, "") : "anonymous";
+  const now = new Date();
+  const dateStr = plan.date || now.toISOString().split("T")[0];
+  const allPlanExercises = plan.cardio ? [...plan.mainExercises, plan.cardio] : plan.mainExercises;
+
+  // Build stable exercise records
+  const exercises: CompletedExerciseRecord[] = allPlanExercises.map((pEx, idx) => {
+    const sEx = (session.exercises || []).find(
+      e => e.exerciseId === pEx.exerciseId || e.name.toLowerCase() === pEx.name.toLowerCase()
+    );
+    const completedSets = sEx ? sEx.completedSets : (pEx.targetSets || 1);
+    const targetSets = pEx.targetSets || 1;
+    let status: "completed" | "partial" | "skipped" = "completed";
+    if (completedSets === 0) status = "skipped";
+    else if (completedSets < targetSets) status = "partial";
+
+    return {
+      id: pEx.exerciseId || `ex-${idx + 1}`,
+      name: pEx.name,
+      targetSets,
+      completedSets,
+      targetReps: pEx.targetReps || "10-12 Reps",
+      status
+    };
+  });
+
+  const completedSets = session.completedSets > 0 
+    ? session.completedSets 
+    : exercises.reduce((sum, e) => sum + e.completedSets, 0);
+  const totalSets = session.totalSets > 0 
+    ? session.totalSets 
+    : exercises.reduce((sum, e) => sum + e.targetSets, 0);
+  const completionPercentage = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 100;
+
+  // Stable activity ID based on date, phone, planId (deterministic, prevents duplicate entries)
+  const activityId = `act_${normPhone}_${dateStr}_${plan.id}`;
+
+  return {
+    activityId,
+    workoutId: plan.id,
+    completedAt: now.toISOString(),
+    date: dateStr,
+    dayName: plan.dayName || "Hari Ini",
+    workoutTitle: plan.focus || "Latihan Harian",
+    plannedDuration: plan.targetDuration,
+    actualDurationSeconds,
+    actualDurationMinutes: Math.max(1, Math.round(actualDurationSeconds / 60)),
+    completedSets,
+    totalSets,
+    completionPercentage,
+    difficultyFeedback: difficulty,
+    difficultyLabel: difficulty === "easy" ? "Mudah" : difficulty === "hard" ? "Berat" : difficulty === "very_hard" ? "Sangat Berat" : "Pas / Optimal",
+    exercises,
+    nextAdaptation,
+    phone: normPhone
+  };
+}
+

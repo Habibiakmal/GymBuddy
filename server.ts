@@ -8588,6 +8588,56 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
     });
   });
 
+  // REST API: Get/Update Immutable Completed Workout History (Cross-Device & Reload Safe)
+  app.get("/api/user/:phone/workout-history", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const histKey = `gymbuddy_workout_history_${phone}`;
+    const altHistKey = `gymbuddy_workout_history_${altPhone}`;
+    const history = dbData.dailyLogs[histKey] || dbData.dailyLogs[altHistKey] || [];
+    res.json({ success: true, phone, history });
+  });
+
+  app.post("/api/user/:phone/workout-history", express.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : (phone.startsWith("62") ? "0" + phone.substring(2) : phone);
+    const activity = req.body?.activity || req.body;
+    if (!activity || (!activity.activityId && !activity.workoutId)) {
+      return res.status(400).json({ success: false, error: "Invalid workout activity data" });
+    }
+
+    const histKey = `gymbuddy_workout_history_${phone}`;
+    const altHistKey = `gymbuddy_workout_history_${altPhone}`;
+    let history: any[] = dbData.dailyLogs[histKey] || dbData.dailyLogs[altHistKey] || [];
+    if (!Array.isArray(history)) history = [];
+
+    // Idempotency: Check if an activity with the same activityId or (date + workoutId) already exists
+    const existingIndex = history.findIndex(
+      (h: any) => h.activityId === activity.activityId || (h.date === activity.date && h.workoutId === activity.workoutId)
+    );
+
+    if (existingIndex >= 0) {
+      // Update in place if newer, but do not create duplicate
+      history[existingIndex] = {
+        ...history[existingIndex],
+        ...activity,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      // Prepend newest at the start
+      history.unshift(activity);
+    }
+
+    // Keep up to 60 historical sessions
+    history = history.slice(0, 60);
+
+    dbData.dailyLogs[histKey] = history;
+    dbData.dailyLogs[altHistKey] = history;
+    saveDb();
+
+    res.json({ success: true, phone, activity, totalHistory: history.length });
+  });
+
   // REST API: Get/Update Additional Activities specifically
   app.get("/api/user/:phone/activities", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);

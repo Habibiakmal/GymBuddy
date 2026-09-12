@@ -26,6 +26,7 @@ import {
   Check,
   Clock,
   Coffee,
+  Utensils,
   Bell,
   Globe,
   Layers,
@@ -83,7 +84,8 @@ import {
   shortenWorkoutPlan,
   adjustWorkoutPlanDuration,
   type WorkoutPlan,
-  type WorkoutDuration
+  type WorkoutDuration,
+  type CompletedWorkoutActivity
 } from "../services/workoutEngine";
 import { getApiBaseUrl, canonicalApiFetch, getJakartaDateStr } from "../utils/api";
 import {
@@ -1896,6 +1898,17 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   });
 
   const [activities, setActivities] = useState<AdditionalActivity[]>([]);
+  const [completedWorkouts, setCompletedWorkouts] = useState<CompletedWorkoutActivity[]>(() => {
+    try {
+      const _norm = normalizePhone(safeUser.phone || safeUser.normalizedPhone || "");
+      const saved = _norm ? localStorage.getItem(`gymbuddy_completed_workouts_${_norm}`) : null;
+      const fallback = localStorage.getItem("gymbuddy_completed_workouts");
+      const list = saved ? JSON.parse(saved) : (fallback ? JSON.parse(fallback) : []);
+      if (Array.isArray(list)) return list;
+    } catch {}
+    return [];
+  });
+  const lastWorkoutActivity = completedWorkouts.length > 0 ? completedWorkouts[0] : null;
   const [activeWorkoutDetail, setActiveWorkoutDetail] = useState<WorkoutExercise | null>(null);
   const [showExerciseExplorerModal, setShowExerciseExplorerModal] = useState(false);
   const [explorerSearch, setExplorerSearch] = useState("");
@@ -1974,37 +1987,47 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       : adjusted.mainExercises;
 
     // Preserve already completed sets & exercises so progress is NEVER lost
-    setExercises(prev => {
-      return allAdjusted.map((ex, idx) => {
-        const existing = prev.find(
-          p => p.name.toLowerCase() === ex.name.toLowerCase() || p.id === ex.exerciseId
-        );
-        if (existing && existing.completedSets > 0) {
-          const completedSets = Math.min(existing.completedSets, ex.targetSets || 1);
-          const setsState = Array(ex.targetSets || 1)
-            .fill(false)
-            .map((_, sIdx) => sIdx < completedSets);
-          return {
-            id: existing.id || `adj-${idx + 1}`,
-            name: ex.name,
-            targetSets: ex.targetSets || 1,
-            completedSets,
-            setsState,
-            targetReps: ex.targetReps,
-            status: completedSets >= (ex.targetSets || 1) ? ("completed" as const) : ("in_progress" as const)
-          };
-        }
+    const todayHistory = completedWorkouts.find(w => w.date === selectedDate);
+    const updatedExercises = allAdjusted.map((ex, idx) => {
+      const existingInPrev = exercises.find(
+        p => p.name.toLowerCase() === ex.name.toLowerCase() || p.id === ex.exerciseId
+      );
+      const existingInHistory = todayHistory?.exercises?.find(
+        h => h.name.toLowerCase() === ex.name.toLowerCase() || h.id === ex.exerciseId
+      );
+
+      const historySets = existingInHistory?.completedSets || 0;
+      const prevSets = existingInPrev?.completedSets || 0;
+      const bestCompleted = Math.max(prevSets, historySets);
+
+      if (bestCompleted > 0) {
+        const completedSets = Math.min(bestCompleted, ex.targetSets || 1);
+        const setsState = Array(ex.targetSets || 1)
+          .fill(false)
+          .map((_, sIdx) => sIdx < completedSets);
         return {
-          id: `adj-${idx + 1}`,
+          id: existingInPrev?.id || existingInHistory?.id || `adj-${idx + 1}`,
           name: ex.name,
           targetSets: ex.targetSets || 1,
-          completedSets: 0,
-          setsState: Array(ex.targetSets || 1).fill(false),
+          completedSets,
+          setsState,
           targetReps: ex.targetReps,
-          status: "not_started" as const
+          status: completedSets >= (ex.targetSets || 1) ? ("completed" as const) : ("in_progress" as const)
         };
-      });
+      }
+      return {
+        id: `adj-${idx + 1}`,
+        name: ex.name,
+        targetSets: ex.targetSets || 1,
+        completedSets: 0,
+        setsState: Array(ex.targetSets || 1).fill(false),
+        targetReps: ex.targetReps,
+        status: "not_started" as const
+      };
     });
+
+    setExercises(updatedExercises);
+    saveExercisesState(updatedExercises);
 
     // Also sync and preserve progress in active session storage
     try {
@@ -2692,6 +2715,19 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
               if (Array.isArray(data.activities)) {
                 setActivities(data.activities);
               }
+            }
+          })
+          .catch(() => {});
+
+        // Query server for immutable completed workout history (cross-device sync & reload persistence)
+        fetch(`${API_BASE_URL}/api/user/${_normPhone}/workout-history`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data && Array.isArray(data.history)) {
+              setCompletedWorkouts(data.history);
+              try {
+                localStorage.setItem(`gymbuddy_completed_workouts_${_normPhone}`, JSON.stringify(data.history));
+              } catch {}
             }
           })
           .catch(() => {});
@@ -3497,14 +3533,14 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       </AnimatePresence>
 
       {/* FLOATING SIDEBAR PANEL (DESKTOP ONLY - NEVER ON MOBILE) */}
-      <aside className="hidden lg:flex w-72 bg-[#151515] text-white p-6 flex-col justify-between shrink-0 rounded-3xl border border-white/[0.08] shadow-xl min-h-[92vh]">
-        <div className="space-y-6">
-          {/* GymBuddy Logo & App Title */}
-          <div className="flex items-center justify-between">
+      <aside className="hidden lg:flex w-72 bg-[#151515] text-white p-5 flex-col justify-between shrink-0 rounded-3xl border border-white/[0.08] shadow-2xl min-h-[92vh]">
+        <div className="space-y-5">
+          {/* 1. Brand & Language Switcher */}
+          <div className="flex items-center justify-between px-1">
             <GymBuddyLogo size={32} showText textClassName="text-xl text-white font-extrabold tracking-tight" />
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#181818] border border-white/[0.08] text-xs font-black text-slate-300 hover:text-white cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#181818] border border-white/[0.08] text-xs font-black text-slate-300 hover:text-white cursor-pointer transition-colors"
             >
               <Globe size={12} className="text-slate-400" />
               <span className={lang === "ID" ? "text-[#D4FF00] font-bold" : "text-slate-500"}>ID</span>
@@ -3513,132 +3549,227 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             </button>
           </div>
 
-          {/* User Profile Card */}
-          <div className="bg-[#181818] border border-white/[0.08] rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-lg shadow-sm">
+          {/* 2. User Profile Card Context */}
+          <div className="bg-[#181818] border border-white/[0.08] rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#D4FF00] text-black font-black flex items-center justify-center text-base shadow-sm shrink-0">
               {activeUser.name ? activeUser.name.charAt(0).toUpperCase() : "U"}
             </div>
-            <div className="overflow-hidden">
+            <div className="overflow-hidden min-w-0">
               <h3 className="font-extrabold text-sm text-white truncate">{activeUser.name || "Member"}</h3>
-              <span className="text-xs font-semibold text-[#D4FF00] block">{coachName} Member</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-[#D4FF00] inline-block" />
+                <span className="text-[11px] font-semibold text-[#D4FF00] truncate">{coachName} Active</span>
+              </div>
             </div>
           </div>
 
-          {/* Navigation Pill List */}
-          <nav className="space-y-2">
-            <button className="w-full px-4 py-3 rounded-2xl bg-[#D4FF00] text-black font-black text-sm flex items-center justify-between transition-all cursor-pointer shadow-md">
-              <div className="flex items-center gap-3">
-                <BarChart2 size={18} />
-                <span>Dashboard</span>
-              </div>
-              <ChevronRight size={16} />
-            </button>
+          {/* 3. PRIMARY NAVIGATION */}
+          <div className="space-y-1">
+            <span className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-neutral-500 block mb-1">
+              {isEN ? "Main Navigation" : "Menu Utama"}
+            </span>
 
+            {/* Destination 1: Dashboard / Home */}
             <button
-              onClick={() => setShowWatchConnectModal(true)}
-              className="w-full px-4 py-3 rounded-2xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-extrabold text-sm flex items-center justify-between transition-all cursor-pointer group shadow-sm"
+              onClick={() => setActiveTab("home")}
+              className={`w-full px-3.5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer ${
+                activeTab === "home"
+                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/15"
+                  : "text-neutral-300 hover:text-white hover:bg-neutral-800/60"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <Watch size={18} className="text-[#D4FF00] group-hover:text-black" />
-                <span>{isEN ? "Connect Apple Watch" : "Hubungkan Apple Watch"}</span>
+                <BarChart2 size={18} className={activeTab === "home" ? "stroke-[2.5]" : "text-neutral-400"} />
+                <span>{isEN ? "Dashboard" : "Dashboard"}</span>
               </div>
-              <ChevronRight size={16} />
+              {activeTab === "home" && <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-black/15 text-black">Aktif</span>}
             </button>
 
+            {/* Destination 2: Workouts */}
             <button
-              onClick={() => setShowNotifSettingsModal(true)}
-              className="w-full px-4 py-2.5 rounded-2xl bg-[#181818] hover:bg-slate-800 border border-white/[0.08] text-neutral-400 hover:text-white text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer"
+              onClick={() => setActiveTab("workouts")}
+              className={`w-full px-3.5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer ${
+                activeTab === "workouts"
+                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/15"
+                  : "text-neutral-300 hover:text-white hover:bg-neutral-800/60"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <Bell size={16} className="text-[#D4FF00]" />
-                <span>{isEN ? "Notifications & Scheduler" : "Notifikasi & Scheduler"}</span>
+                <Dumbbell size={18} className={activeTab === "workouts" ? "stroke-[2.5]" : "text-neutral-400"} />
+                <span>{isEN ? "Workouts" : "Latihan Gym"}</span>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                notifSettings.permissionGranted
-                  ? "bg-[#D4FF00]/20 text-[#D4FF00]"
-                  : "bg-neutral-800 text-neutral-500"
-              }`}>
-                {notifSettings.permissionGranted ? (isEN ? "ACTIVE" : "AKTIF") : "OFF"}
-              </span>
+              {activeTab === "workouts" ? (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-black/15 text-black">Aktif</span>
+              ) : (
+                <span className="text-[10px] font-bold text-neutral-500">{activeWorkoutPlan.targetDuration}m</span>
+              )}
             </button>
 
+            {/* Destination 3: Nutrition */}
             <button
-              onClick={() => setShowHealthProfileModal(true)}
-              className="w-full px-4 py-2.5 rounded-2xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs"
+              onClick={() => {
+                if (activeTab !== "home") setActiveTab("home");
+                setTimeout(() => {
+                  const el = document.getElementById("nutrition_bento") || document.querySelector('[key="nutrition_bento"]');
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 100);
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-between text-neutral-300 hover:text-white hover:bg-neutral-800/60 transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3">
-                <HeartPulse size={16} className="text-[#D4FF00] group-hover:text-black transition-colors" />
-                <span>{isEN ? "Health Profile" : "Profil Kesehatan"}</span>
+                <Utensils size={18} className="text-neutral-400" />
+                <span>{isEN ? "Nutrition" : "Nutrisi & Kalori"}</span>
               </div>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/10 text-neutral-300 group-hover:bg-black/20 group-hover:text-black">
-                {activeUser.healthProfile?.conditions && activeUser.healthProfile.conditions.length > 0
-                  ? `${activeUser.healthProfile.conditions.length} ${isEN ? "Conditions" : "Kondisi"}`
-                  : (activeUser.healthProfile?.isCompleted ? (isEN ? "Healthy" : "Sehat") : (isEN ? "Setup" : "Atur"))}
-              </span>
+              <ChevronRight size={14} className="text-neutral-600" />
             </button>
 
+            {/* Destination 4: Progress / History */}
             <button
-              onClick={() => setShowLayoutModal(true)}
-              className="w-full px-4 py-2.5 rounded-2xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 text-xs font-bold flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs"
+              onClick={() => setActiveTab("progress")}
+              className={`w-full px-3.5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer ${
+                activeTab === "progress"
+                  ? "bg-[#D4FF00] text-black shadow-md shadow-[#D4FF00]/15"
+                  : "text-neutral-300 hover:text-white hover:bg-neutral-800/60"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <LayoutGrid size={16} className="text-[#D4FF00] group-hover:text-black transition-colors" />
-                <span>{isEN ? "Customize Layout" : "Atur Tata Letak Card"}</span>
+                <TrendingUp size={18} className={activeTab === "progress" ? "stroke-[2.5]" : "text-neutral-400"} />
+                <span>{isEN ? "Progress & Analytics" : "Progres & Histori"}</span>
               </div>
-              <Sliders size={14} className="text-neutral-500 group-hover:text-black transition-colors" />
+              {activeTab === "progress" && <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-black/15 text-black">Aktif</span>}
             </button>
+          </div>
 
-            <button
-              onClick={onBackToHome}
-              className="w-full px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-[#181818] font-bold text-sm flex items-center gap-3 transition-all cursor-pointer"
-            >
-              <ArrowLeft size={18} />
-              <span>{t.landingPage}</span>
-            </button>
+          {/* 4. COACH & INTEGRATIONS */}
+          <div className="space-y-1 pt-2 border-t border-white/[0.06]">
+            <span className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-neutral-500 block mb-1">
+              {isEN ? "Coach & Connections" : "Koneksi & Asisten"}
+            </span>
 
+            {/* WhatsApp AI Coach Action */}
             <a
               href={`https://wa.me/${(import.meta as any).env?.VITE_WHATSAPP_BOT_NUMBER || "14155238886"}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full px-4 py-3 rounded-2xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366] hover:text-black font-extrabold text-sm flex items-center gap-3 transition-all cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/25 text-[#25D366] font-extrabold text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer group"
             >
-              <MessageSquare size={18} />
-              <span>WhatsApp AI Coach</span>
+              <div className="flex items-center gap-3">
+                <MessageSquare size={17} />
+                <span>WhatsApp AI Coach</span>
+              </div>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#25D366]/20 text-[#25D366]">
+                24/7
+              </span>
             </a>
-          </nav>
-        </div>
 
-        {/* Sidebar Bottom CTA & Account Actions */}
-        <div className="pt-6 space-y-3">
-          <div className="bg-[#181818] border border-white/[0.08] rounded-2xl p-4 space-y-2 text-center">
-            <span className="text-xs font-bold text-slate-400 uppercase">{t.mainGoalTitle}</span>
-            <p className="text-sm font-extrabold text-white">{goalTitle}</p>
-            <div className="pt-1 flex justify-center">
-              <button
-                onClick={() => setShowUpdateWeightModal(true)}
-                className="px-3 py-1 rounded-full bg-[#D4FF00] text-black text-xs font-extrabold hover:bg-[#c4ec00] transition-all cursor-pointer"
-              >
-                {t.updateWeightTitle}
-              </button>
-            </div>
+            {/* Apple Watch Integration Trigger */}
+            <button
+              onClick={() => setShowWatchConnectModal(true)}
+              className="w-full px-3.5 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800/60 font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Watch size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Connect Apple Watch" : "Hubungkan Apple Watch"}</span>
+              </div>
+              <span className="text-[10px] font-semibold text-neutral-500">Magic Link</span>
+            </button>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          {/* 5. SETTINGS & PREFERENCES */}
+          <div className="space-y-1 pt-2 border-t border-white/[0.06]">
+            <span className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-neutral-500 block mb-1">
+              {isEN ? "Settings & Preferences" : "Pengaturan"}
+            </span>
+
+            {/* Profil Kesehatan */}
             <button
-              onClick={handleDeleteAccount}
-              className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer"
+              onClick={() => setShowHealthProfileModal(true)}
+              className="w-full px-3.5 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800/60 font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
             >
-              <Trash2 size={13} />
-              <span>{t.removeAccount}</span>
+              <div className="flex items-center gap-3">
+                <HeartPulse size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Health Profile" : "Profil Kesehatan"}</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
+                {activeUser.healthProfile?.conditions && activeUser.healthProfile.conditions.length > 0
+                  ? `${activeUser.healthProfile.conditions.length} ${isEN ? "Cond." : "Kondisi"}`
+                  : (activeUser.healthProfile?.isCompleted ? (isEN ? "Healthy" : "Sehat") : (isEN ? "Setup" : "Atur"))}
+              </span>
             </button>
 
+            {/* Notifikasi & Scheduler */}
             <button
-              onClick={onLogout}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#181818] transition-colors cursor-pointer"
-              title={t.logout}
+              onClick={() => setShowNotifSettingsModal(true)}
+              className="w-full px-3.5 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800/60 font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
             >
-              <LogOut size={18} />
+              <div className="flex items-center gap-3">
+                <Bell size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Notifications & Scheduler" : "Notifikasi & Pengingat"}</span>
+              </div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                notifSettings.permissionGranted
+                  ? "bg-[#D4FF00]/15 text-[#D4FF00]"
+                  : "bg-neutral-800 text-neutral-500"
+              }`}>
+                {notifSettings.permissionGranted ? (isEN ? "ON" : "AKTIF") : "OFF"}
+              </span>
             </button>
+
+            {/* Layout Customizer */}
+            <button
+              onClick={() => setShowLayoutModal(true)}
+              className="w-full px-3.5 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-800/60 font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <LayoutGrid size={16} className="text-[#D4FF00]" />
+                <span>{isEN ? "Customize Layout" : "Tata Letak Card"}</span>
+              </div>
+              <Sliders size={13} className="text-neutral-500" />
+            </button>
+          </div>
+        </div>
+
+        {/* 6. Sidebar Bottom Account & Utility Actions */}
+        <div className="pt-4 space-y-3 border-t border-white/[0.08]">
+          <div className="bg-[#181818] border border-white/[0.06] rounded-xl p-3 flex items-center justify-between">
+            <div className="min-w-0 pr-2">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase block">{t.mainGoalTitle}</span>
+              <p className="text-xs font-extrabold text-white truncate">{goalTitle}</p>
+            </div>
+            <button
+              onClick={() => setShowUpdateWeightModal(true)}
+              className="px-2.5 py-1 rounded-lg bg-[#D4FF00] text-black text-[11px] font-black hover:bg-[#c4ec00] transition-all cursor-pointer shrink-0"
+            >
+              {t.updateWeightTitle}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between px-1 text-xs">
+            <button
+              onClick={onBackToHome}
+              className="text-neutral-400 hover:text-white font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={14} />
+              <span>{t.landingPage}</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDeleteAccount}
+                className="text-neutral-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                title={t.removeAccount}
+              >
+                <Trash2 size={14} />
+              </button>
+
+              <button
+                onClick={onLogout}
+                className="text-neutral-400 hover:text-white p-1.5 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer"
+                title={t.logout}
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -4323,6 +4454,37 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </div>
                         </div>
                       </div>
+
+                      {/* LAST COMPLETED ACTIVITY / AKTIVITAS TERAKHIR (Immutable record, preserved across preference changes) */}
+                      {lastWorkoutActivity && (
+                        <div className="p-3.5 bg-[#141B26] border border-emerald-500/35 rounded-2xl space-y-2 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">
+                                {isEN ? "Last Activity" : "Aktivitas Terakhir"}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-neutral-400">
+                              {lastWorkoutActivity.dayName}, {lastWorkoutActivity.date}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <h4 className="font-extrabold text-xs sm:text-sm text-white truncate">
+                                {lastWorkoutActivity.workoutTitle}
+                              </h4>
+                              <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                                ⏱️ {lastWorkoutActivity.plannedDuration} Min Planned ({lastWorkoutActivity.actualDurationMinutes}m Real) • {lastWorkoutActivity.completedSets}/{lastWorkoutActivity.totalSets} Sets ({lastWorkoutActivity.completionPercentage}%)
+                              </p>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                              ✓ {lastWorkoutActivity.difficultyLabel || (isEN ? "Completed" : "Selesai")}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Scheduled Exercises Preview List */}
                       <div className="space-y-2">
@@ -5272,6 +5434,41 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* RIWAYAT SESI LATIHAN (COMPLETED WORKOUT HISTORY) */}
+              {completedWorkouts.length > 0 && (
+                <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-[#222222] border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                      <Award size={18} className="text-[#D4FF00]" />
+                      <span>{isEN ? "Completed Workout History" : "Riwayat Latihan Selesai"}</span>
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30">
+                      {completedWorkouts.length} {isEN ? "Sessions" : "Sesi"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {completedWorkouts.slice(0, 8).map((hist) => (
+                      <div key={hist.activityId} className="p-3.5 rounded-xl bg-[#181818] border border-white/[0.08] hover:border-emerald-500/30 transition-all space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h5 className="font-extrabold text-xs sm:text-sm text-white truncate">{hist.workoutTitle}</h5>
+                            <span className="text-[10px] font-bold text-neutral-400">{hist.dayName}, {hist.date}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black shrink-0">
+                            ✓ {hist.difficultyLabel || "Selesai"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-neutral-400 font-medium pt-1 border-t border-white/[0.06]">
+                          <span>⏱️ {hist.plannedDuration}m Target ({hist.actualDurationMinutes}m Real)</span>
+                          <span className="text-emerald-400 font-bold">{hist.completedSets}/{hist.totalSets} Sets ({hist.completionPercentage}%)</span>
                         </div>
                       </div>
                     ))}
@@ -7284,14 +7481,33 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         plan={activeWorkoutPlan}
         persona={safeUser.persona === "mia" ? "mia" : "max"}
         userPhone={safeUser.phone}
-        onWorkoutCompleted={() => {
+        onWorkoutCompleted={(summary) => {
           setShowWorkoutExecutionModal(false);
-          setExercises(prev => prev.map(e => ({
-            ...e,
-            completedSets: e.targetSets,
+          const allEx = activeWorkoutPlan.cardio
+            ? [...activeWorkoutPlan.mainExercises, activeWorkoutPlan.cardio]
+            : activeWorkoutPlan.mainExercises;
+
+          const completedEx: WorkoutExercise[] = allEx.map((e, idx) => ({
+            id: e.exerciseId || `ex-${idx + 1}`,
+            name: e.name,
+            targetSets: e.targetSets || 1,
+            completedSets: e.targetSets || 1,
             status: "completed" as const,
-            setsState: Array(e.targetSets).fill(true)
-          })));
+            setsState: Array(e.targetSets || 1).fill(true),
+            targetReps: e.targetReps
+          }));
+
+          saveExercisesState(completedEx);
+
+          if (summary?.activityRecord) {
+            setCompletedWorkouts(prev => {
+              const updated = [
+                summary.activityRecord!,
+                ...prev.filter(p => p.activityId !== summary.activityRecord!.activityId)
+              ];
+              return updated.slice(0, 50);
+            });
+          }
         }}
       />
 

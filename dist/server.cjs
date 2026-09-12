@@ -59599,6 +59599,43 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       activities: dbData.dailyLogs[actKey] || []
     });
   });
+  app.get("/api/user/:phone/workout-history", (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const histKey = `gymbuddy_workout_history_${phone}`;
+    const altHistKey = `gymbuddy_workout_history_${altPhone}`;
+    const history = dbData.dailyLogs[histKey] || dbData.dailyLogs[altHistKey] || [];
+    res.json({ success: true, phone, history });
+  });
+  app.post("/api/user/:phone/workout-history", import_express.default.json(), (req, res) => {
+    const phone = normalizePhone(req.params.phone);
+    const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;
+    const activity = req.body?.activity || req.body;
+    if (!activity || !activity.activityId && !activity.workoutId) {
+      return res.status(400).json({ success: false, error: "Invalid workout activity data" });
+    }
+    const histKey = `gymbuddy_workout_history_${phone}`;
+    const altHistKey = `gymbuddy_workout_history_${altPhone}`;
+    let history = dbData.dailyLogs[histKey] || dbData.dailyLogs[altHistKey] || [];
+    if (!Array.isArray(history)) history = [];
+    const existingIndex = history.findIndex(
+      (h) => h.activityId === activity.activityId || h.date === activity.date && h.workoutId === activity.workoutId
+    );
+    if (existingIndex >= 0) {
+      history[existingIndex] = {
+        ...history[existingIndex],
+        ...activity,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      history.unshift(activity);
+    }
+    history = history.slice(0, 60);
+    dbData.dailyLogs[histKey] = history;
+    dbData.dailyLogs[altHistKey] = history;
+    saveDb();
+    res.json({ success: true, phone, activity, totalHistory: history.length });
+  });
   app.get("/api/user/:phone/activities", requireAuthMiddleware, requireOwnershipMiddleware, (req, res) => {
     const phone = normalizePhone(req.params.phone);
     const altPhone = phone.startsWith("0") ? "62" + phone.substring(1) : phone.startsWith("62") ? "0" + phone.substring(2) : phone;

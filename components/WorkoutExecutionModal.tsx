@@ -26,6 +26,8 @@ import {
   ExerciseItemPlan,
   PerceivedDifficulty,
   BodyArea,
+  CompletedWorkoutActivity,
+  createCompletedWorkoutRecord,
   initializeSessionState,
   transitionWorkoutSession,
   calculateNextWorkoutAdaptation,
@@ -34,20 +36,23 @@ import {
 } from "../services/workoutEngine";
 import { GymBuddyNotificationService } from "../services/notificationService";
 
+export interface WorkoutCompletionSummary {
+  sessionId: string;
+  completedSets: number;
+  totalSets: number;
+  actualDurationSeconds: number;
+  difficulty: PerceivedDifficulty;
+  nextAdaptation: any;
+  activityRecord?: CompletedWorkoutActivity;
+}
+
 interface WorkoutExecutionModalProps {
   isOpen: boolean;
   onClose: () => void;
   plan: WorkoutPlan;
   persona?: "max" | "mia";
   userPhone?: string;
-  onWorkoutCompleted?: (summary: {
-    sessionId: string;
-    completedSets: number;
-    totalSets: number;
-    actualDurationSeconds: number;
-    difficulty: PerceivedDifficulty;
-    nextAdaptation: any;
-  }) => void;
+  onWorkoutCompleted?: (summary: WorkoutCompletionSummary) => void;
 }
 
 const STORAGE_SESSION_KEY = "gymbuddy_active_session_state";
@@ -60,6 +65,8 @@ export default function WorkoutExecutionModal({
   userPhone,
   onWorkoutCompleted
 }: WorkoutExecutionModalProps) {
+  const isCompletingRef = useRef(false);
+
   // Session State
   const [session, setSession] = useState<WorkoutSessionState>(() => {
     try {
@@ -204,6 +211,9 @@ export default function WorkoutExecutionModal({
   };
 
   const handleFinishWorkout = () => {
+    if (isCompletingRef.current) return;
+    isCompletingRef.current = true;
+
     handleAction({
       type: "FINISH_WORKOUT",
       overallDifficulty: selectedDifficulty,
@@ -219,6 +229,16 @@ export default function WorkoutExecutionModal({
       recovery
     );
 
+    const normPhone = userPhone ? userPhone.replace(/\D/g, "") : "anonymous";
+    const activityRecord = createCompletedWorkoutRecord(
+      session,
+      plan,
+      sessionDurationSeconds,
+      selectedDifficulty,
+      adaptation,
+      userPhone
+    );
+
     if (onWorkoutCompleted) {
       onWorkoutCompleted({
         sessionId: session.sessionId,
@@ -226,28 +246,37 @@ export default function WorkoutExecutionModal({
         totalSets: session.totalSets,
         actualDurationSeconds: sessionDurationSeconds,
         difficulty: selectedDifficulty,
-        nextAdaptation: adaptation
+        nextAdaptation: adaptation,
+        activityRecord
       });
     }
 
     try {
       localStorage.removeItem(STORAGE_SESSION_KEY);
-      // Also log to completed history
-      const historyKey = "gymbuddy_completed_workouts";
-      const existingHistory = JSON.parse(localStorage.getItem(historyKey) || "[]");
-      existingHistory.unshift({
-        id: session.sessionId,
-        planId: plan.id,
-        date: plan.date,
-        dayName: plan.dayName,
-        focus: plan.focus,
-        completedSets: session.completedSets,
-        totalSets: session.totalSets,
-        actualDurationMinutes: Math.round(sessionDurationSeconds / 60),
-        difficulty: selectedDifficulty,
-        timestamp: new Date().toISOString()
-      });
-      localStorage.setItem(historyKey, JSON.stringify(existingHistory.slice(0, 30)));
+      // Persist to user-scoped and global completed history
+      const historyKey = `gymbuddy_completed_workouts_${normPhone}`;
+      const fallbackKey = "gymbuddy_completed_workouts";
+      const existingHistory: CompletedWorkoutActivity[] = JSON.parse(
+        localStorage.getItem(historyKey) || localStorage.getItem(fallbackKey) || "[]"
+      );
+      const filtered = Array.isArray(existingHistory)
+        ? existingHistory.filter(
+            h =>
+              h.activityId !== activityRecord.activityId &&
+              !(h.date === activityRecord.date && h.workoutId === activityRecord.workoutId)
+          )
+        : [];
+      filtered.unshift(activityRecord);
+      localStorage.setItem(historyKey, JSON.stringify(filtered.slice(0, 50)));
+      localStorage.setItem(fallbackKey, JSON.stringify(filtered.slice(0, 50)));
+
+      // Also persist to backend API
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
+      fetch(`${API_BASE_URL}/api/user/${normPhone}/workout-history`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activity: activityRecord })
+      }).catch(e => console.warn("Failed to sync completed workout to backend:", e));
     } catch (e) {
       console.warn("Failed to persist completed workout to history:", e);
     }
