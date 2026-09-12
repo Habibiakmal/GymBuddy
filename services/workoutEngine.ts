@@ -14,7 +14,7 @@
 
 // ─── 1. DATA MODELS & INTERFACES ─────────────────────────────────────────────
 
-export type WorkoutDuration = 15 | 30 | 45 | 60;
+export type WorkoutDuration = 15 | 30 | 45 | 60 | 90 | 120;
 export type FitnessLevel = "beginner" | "intermediate" | "advanced";
 export type WorkoutFrequency = "1-2" | "3-4" | "5+";
 export type EquipmentType =
@@ -741,6 +741,184 @@ export const MASTER_EXERCISE_CATALOG: ExerciseItemPlan[] = [
     imageFrames: [
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Stationary_Bike/0.jpg"
     ]
+  },
+
+  // ── ACCESSORY & HIGH-VOLUME SCALING EXERCISES (For 60, 90, 120m) ──
+  {
+    exerciseId: "side-lateral-raise",
+    name: "Side Lateral Raise",
+    indonesianName: "Lateral Raise Bahu Samping",
+    targetMuscles: ["Lateral Deltoids"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets × 12-15 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Angkat beban setinggi bahu dengan siku sedikit ditekuk, rasakan pembakaran di bahu samping!",
+      mia: "Angkat perlahan seperti menuang air, jangan mengayunkan pinggang ya."
+    },
+    priority: "accessory",
+    bodyArea: "upper_body",
+    movementPattern: "push",
+    jointLoad: { shoulder: "low", spine: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "db-bicep-curl",
+    name: "Dumbbell Bicep Curl",
+    indonesianName: "Bicep Curl Dumbbell",
+    targetMuscles: ["Biceps Brachii"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets × 10-12 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Kunci siku di samping pinggang, squeeze bicep di puncak gerakan!",
+      mia: "Putar pergelangan tangan secara terkontrol, jangan gunakan momentum tubuh."
+    },
+    priority: "accessory",
+    bodyArea: "upper_body",
+    movementPattern: "pull",
+    jointLoad: { wrist: "low", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bicep_Curl/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bicep_Curl/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "tricep-pushdown",
+    name: "Triceps Pushdown",
+    indonesianName: "Tricep Pushdown (Tali / V-Bar)",
+    targetMuscles: ["Triceps"],
+    equipment: "machines",
+    targetSets: 3,
+    targetReps: "3 Sets × 12-15 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Kunci siku lo, dorong kabel lurus ke bawah dan kontraksikan tricep!",
+      mia: "Jaga dada tetap tegak dan fokuskan kontraksi di belakang lengan."
+    },
+    priority: "accessory",
+    bodyArea: "upper_body",
+    movementPattern: "push",
+    jointLoad: { shoulder: "none", spine: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Tricep_Pushdown/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Tricep_Pushdown/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "db-lunges",
+    name: "Dumbbell Walking Lunges",
+    indonesianName: "Dumbbell Lunges (Paha Depan & Bokong)",
+    targetMuscles: ["Quadriceps", "Glutes", "Hamstrings"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets × 10 Reps/kaki",
+    restSeconds: 60,
+    coachCue: {
+      max: "Langkah tegap, turunkan lutut belakang hampir menyentuh lantai dengan kendali penuh!",
+      mia: "Jaga lutut depan tidak melebihi ujung kaki dan tubuh tetap tegak."
+    },
+    priority: "secondary",
+    bodyArea: "lower_body",
+    movementPattern: "lunge",
+    jointLoad: { knee: "moderate", hip: "low", spine: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Lunge/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Lunge/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "hanging-leg-raise",
+    name: "Hanging Leg Raise",
+    indonesianName: "Hanging Leg Raise (Perut Bawah)",
+    targetMuscles: ["Lower Abs", "Hip Flexors"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets × 12-15 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Angkat kaki menggunakan kekuatan perut, jangan berayun liar!",
+      mia: "Tarik napas saat kaki turun dan buang napas saat mengangkat lutut."
+    },
+    priority: "accessory",
+    bodyArea: "core",
+    movementPattern: "core",
+    jointLoad: { shoulder: "low", spine: "none", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hanging_Leg_Raise/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hanging_Leg_Raise/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "cable-face-pull",
+    name: "Cable Face Pull",
+    indonesianName: "Cable Face Pull (Bahu Belakang & Postur)",
+    targetMuscles: ["Rear Deltoids", "Rhomboids"],
+    equipment: "machines",
+    targetSets: 3,
+    targetReps: "3 Sets × 15 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Tarik tali ke arah kening, buka siku ke samping belakang untuk postur baja!",
+      mia: "Gerakan ini sangat baik untuk memperbaiki postur bahu agar tegap."
+    },
+    priority: "accessory",
+    bodyArea: "upper_body",
+    movementPattern: "pull",
+    jointLoad: { shoulder: "low", spine: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Face_Pull/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Face_Pull/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "standing-calf-raise",
+    name: "Standing Calf Raise",
+    indonesianName: "Calf Raise Berdiri (Betis)",
+    targetMuscles: ["Gastrocnemius", "Soleus"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets × 15-20 Reps",
+    restSeconds: 30,
+    coachCue: {
+      max: "Jinjit setinggi mungkin, tahan 1 detik di atas lalu turun perlahan!",
+      mia: "Rasakan regangan lembut pada betis sebelum mendorong kembali ke atas."
+    },
+    priority: "finisher",
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    jointLoad: { ankle: "low", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Calf_Raise/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Calf_Raise/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "mountain-climbers",
+    name: "Mountain Climbers",
+    indonesianName: "Mountain Climbers (HIIT Core)",
+    targetMuscles: ["Core", "Cardiovascular"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets × 20 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Pacu lutut ke arah dada dengan tempo cepat dan pinggul tetap stabil!",
+      mia: "Pertahankan posisi plank yang kuat sambil mengayunkan kaki secara berirama."
+    },
+    priority: "finisher",
+    bodyArea: "core",
+    movementPattern: "core",
+    jointLoad: { wrist: "low", shoulder: "low", knee: "low" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Mountain_Climbers/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Mountain_Climbers/0.jpg"
+    ]
   }
 ];
 
@@ -891,8 +1069,7 @@ export function generatePersonalizedWorkoutPlan(
         targetReps: normalizeSetsRepsString(3, ex.targetReps)
       }));
     }
-  } else {
-    // 60+ minutes
+  } else if (duration === 60) {
     warmupDuration = 6;
     cooldownDuration = 6;
     const candidates = [...primaryMovements, ...secondaryMovements].slice(0, 5);
@@ -901,6 +1078,40 @@ export function generatePersonalizedWorkoutPlan(
       targetSets: fitness === "advanced" ? 4 : 3,
       targetReps: normalizeSetsRepsString(fitness === "advanced" ? 4 : 3, ex.targetReps)
     }));
+  } else if (duration === 90) {
+    // 90 minutes: High volume + accessory work + cardio
+    warmupDuration = 8;
+    cooldownDuration = 8;
+    const pool = [...primaryMovements, ...secondaryMovements, ...safeCore, ...safeCatalog.filter(e => e.priority === "accessory")];
+    const uniqueCandidates = Array.from(new Set(pool));
+    plannedExercises = (uniqueCandidates.length >= 6 ? uniqueCandidates.slice(0, 7) : safeCatalog.slice(0, 7)).map(ex => ({
+      ...ex,
+      targetSets: 3,
+      targetReps: normalizeSetsRepsString(3, ex.targetReps)
+    }));
+    if (!cardioMovement && safeCardio.length > 0) {
+      cardioMovement = {
+        ...safeCardio[0],
+        targetReps: "15–20 min · Kardio Aerobik"
+      };
+    }
+  } else {
+    // 120 minutes: Dedicated Athlete / Maximum Volume (8-10 exercises + cardio)
+    warmupDuration = 10;
+    cooldownDuration = 10;
+    const pool = [...primaryMovements, ...secondaryMovements, ...safeCore, ...safeCatalog.filter(e => e.priority === "accessory" || e.priority === "finisher")];
+    const uniqueCandidates = Array.from(new Set(pool));
+    plannedExercises = (uniqueCandidates.length >= 8 ? uniqueCandidates.slice(0, 9) : safeCatalog.slice(0, 9)).map(ex => ({
+      ...ex,
+      targetSets: fitness === "advanced" ? 4 : 3,
+      targetReps: normalizeSetsRepsString(fitness === "advanced" ? 4 : 3, ex.targetReps)
+    }));
+    if (!cardioMovement && safeCardio.length > 0) {
+      cardioMovement = {
+        ...safeCardio[0],
+        targetReps: "20–25 min · Zona Kardio Optimal"
+      };
+    }
   }
 
   // Combine cardio if present into total exercises
@@ -1025,11 +1236,32 @@ export function shortenWorkoutPlan(
   originalPlan: WorkoutPlan,
   newTargetDuration: WorkoutDuration
 ): WorkoutPlan {
-  if (newTargetDuration >= originalPlan.targetDuration) {
-    return originalPlan; // No shortening needed
+  if (newTargetDuration === originalPlan.targetDuration) {
+    return originalPlan;
   }
 
-  // 1. Keep only essential movements
+  // If user increases duration (e.g. from 15m back to 30, 45, 60, 90, 120m)
+  if (newTargetDuration > originalPlan.targetDuration) {
+    const regenerated = generatePersonalizedWorkoutPlan(
+      {
+        workoutDuration: newTargetDuration,
+        workoutFrequency: "3-4",
+        fitnessLevel: "intermediate",
+        equipment: "full_gym",
+        primaryGoal: originalPlan.goal || "lose"
+      },
+      originalPlan.date
+    );
+    return {
+      ...regenerated,
+      id: `${originalPlan.id}_scaled_${newTargetDuration}m`,
+      targetDuration: newTargetDuration,
+      rationale: `Sesi telah disesuaikan menjadi ${newTargetDuration} menit dengan menu latihan yang lebih lengkap dan volume yang seimbang.`,
+      coachInsight: `Durasi latihan disesuaikan menjadi ${newTargetDuration} menit. Fokus pada setiap gerakan dan nikmati prosesnya.`
+    };
+  }
+
+  // 1. Keep only essential movements for short durations
   let shortenedExercises = originalPlan.mainExercises.filter(ex => ex.priority === "essential");
   if (shortenedExercises.length === 0) {
     shortenedExercises = originalPlan.mainExercises.slice(0, 2);
@@ -1085,6 +1317,42 @@ export function shortenWorkoutPlan(
     rationale: `Sesi telah disesuaikan menjadi ${newTargetDuration} menit. Gerakan inti (${shortenedExercises.map(e => e.name).join(", ")}) diprioritaskan agar target latihan tetap tercapai.`,
     coachInsight: `Saya telah memangkas gerakan pelengkap dan memfokuskan energimu pada gerakan utama dalam waktu ${newTargetDuration} menit.`
   };
+}
+
+/**
+ * Bidirectionally adjusts workout duration (both shortening and lengthening),
+ * scaling the menu and exercises appropriately.
+ */
+export function adjustWorkoutPlanDuration(
+  originalPlan: WorkoutPlan,
+  newTargetDuration: WorkoutDuration,
+  userPrefs?: Partial<WorkoutPreferences>
+): WorkoutPlan {
+  if (newTargetDuration === originalPlan.targetDuration) {
+    return originalPlan;
+  }
+  if (newTargetDuration > originalPlan.targetDuration) {
+    const regenerated = generatePersonalizedWorkoutPlan(
+      {
+        workoutDuration: newTargetDuration,
+        workoutFrequency: (userPrefs?.workoutFrequency || "3-4") as any,
+        fitnessLevel: (userPrefs?.fitnessLevel || "intermediate") as any,
+        equipment: (userPrefs?.equipment || "full_gym") as any,
+        primaryGoal: userPrefs?.primaryGoal || originalPlan.goal || "lose",
+        injuryLimitations: userPrefs?.injuryLimitations || [],
+        persona: userPrefs?.persona || "max"
+      },
+      originalPlan.date
+    );
+    return {
+      ...regenerated,
+      id: `${originalPlan.id}_scaled_${newTargetDuration}m`,
+      targetDuration: newTargetDuration,
+      rationale: `Sesi telah disesuaikan menjadi ${newTargetDuration} menit dengan menambahkan variasi gerakan dan volume latihan yang seimbang.`,
+      coachInsight: `Durasi latihan ditingkatkan menjadi ${newTargetDuration} menit. Manfaatkan waktu ini untuk fokus pada form dan volume latihan.`
+    };
+  }
+  return shortenWorkoutPlan(originalPlan, newTargetDuration);
 }
 
 // ─── 9. WORKOUT SESSION STATE MACHINE ────────────────────────────────────────

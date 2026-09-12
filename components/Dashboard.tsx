@@ -81,6 +81,7 @@ import WorkoutExecutionModal from "./WorkoutExecutionModal";
 import {
   generatePersonalizedWorkoutPlan,
   shortenWorkoutPlan,
+  adjustWorkoutPlanDuration,
   type WorkoutPlan,
   type WorkoutDuration
 } from "../services/workoutEngine";
@@ -1957,21 +1958,93 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   }, [showWorkoutExecutionModal]);
 
   const handleShortenWorkout = (targetMinutes: WorkoutDuration) => {
-    const shortened = shortenWorkoutPlan(activeWorkoutPlan, targetMinutes);
-    setActiveWorkoutPlan(shortened);
-    const allShortened = shortened.cardio
-      ? [...shortened.mainExercises, shortened.cardio]
-      : shortened.mainExercises;
-    const mapped = allShortened.map((ex, idx) => ({
-      id: `shortened-${idx + 1}`,
-      name: ex.name,
-      targetSets: ex.targetSets || 1,
-      completedSets: 0,
-      setsState: Array(ex.targetSets || 1).fill(false),
-      targetReps: ex.targetReps,
-      status: "not_started" as const
-    }));
-    setExercises(mapped);
+    const adjusted = adjustWorkoutPlanDuration(activeWorkoutPlan, targetMinutes, {
+      workoutDuration: targetMinutes,
+      workoutFrequency: safeUser.workoutFrequency || "3-4",
+      fitnessLevel: safeUser.fitnessLevel || "intermediate",
+      equipment: safeUser.equipment || "full_gym",
+      primaryGoal: safeUser.goal || "lose",
+      injuryLimitations: safeUser.injuryLimitations || [],
+      persona: safeUser.persona === "mia" ? "mia" : "max"
+    });
+    setActiveWorkoutPlan(adjusted);
+
+    const allAdjusted = adjusted.cardio
+      ? [...adjusted.mainExercises, adjusted.cardio]
+      : adjusted.mainExercises;
+
+    // Preserve already completed sets & exercises so progress is NEVER lost
+    setExercises(prev => {
+      return allAdjusted.map((ex, idx) => {
+        const existing = prev.find(
+          p => p.name.toLowerCase() === ex.name.toLowerCase() || p.id === ex.exerciseId
+        );
+        if (existing && existing.completedSets > 0) {
+          const completedSets = Math.min(existing.completedSets, ex.targetSets || 1);
+          const setsState = Array(ex.targetSets || 1)
+            .fill(false)
+            .map((_, sIdx) => sIdx < completedSets);
+          return {
+            id: existing.id || `adj-${idx + 1}`,
+            name: ex.name,
+            targetSets: ex.targetSets || 1,
+            completedSets,
+            setsState,
+            targetReps: ex.targetReps,
+            status: completedSets >= (ex.targetSets || 1) ? ("completed" as const) : ("in_progress" as const)
+          };
+        }
+        return {
+          id: `adj-${idx + 1}`,
+          name: ex.name,
+          targetSets: ex.targetSets || 1,
+          completedSets: 0,
+          setsState: Array(ex.targetSets || 1).fill(false),
+          targetReps: ex.targetReps,
+          status: "not_started" as const
+        };
+      });
+    });
+
+    // Also sync and preserve progress in active session storage
+    try {
+      const saved = localStorage.getItem("gymbuddy_active_session_state");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.status !== "WORKOUT_COMPLETED" && parsed.status !== "ABANDONED") {
+          parsed.planId = adjusted.id;
+          parsed.exercises = allAdjusted.map(ex => {
+            const existing = (parsed.exercises || []).find(
+              (p: any) => p.name.toLowerCase() === ex.name.toLowerCase() || p.exerciseId === ex.exerciseId
+            );
+            if (existing && existing.completedSets > 0) {
+              const comp = Math.min(existing.completedSets, ex.targetSets || 1);
+              return {
+                ...existing,
+                targetSets: ex.targetSets || 1,
+                completedSets: comp,
+                setsState: Array(ex.targetSets || 1).fill(false).map((_, sIdx) => sIdx < comp)
+              };
+            }
+            return {
+              exerciseId: ex.exerciseId,
+              name: ex.name,
+              targetSets: ex.targetSets || 1,
+              completedSets: 0,
+              setsState: Array(ex.targetSets || 1).fill(false),
+              setLogs: [],
+              skipped: false
+            };
+          });
+          parsed.totalSets = parsed.exercises.reduce((s: number, e: any) => s + (e.targetSets || 1), 0);
+          parsed.completedSets = parsed.exercises.reduce((s: number, e: any) => s + (e.completedSets || 0), 0);
+          localStorage.setItem("gymbuddy_active_session_state", JSON.stringify(parsed));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to sync session state during duration adjustment:", e);
+    }
+
     setShowShortenWorkoutModal(false);
   };
 
@@ -7248,11 +7321,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
             </div>
 
             <p style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.5, marginBottom: "16px" }}>
-              Punya waktu lebih sempit hari ini? AI Coach akan meregenerasi sesi dengan mempertahankan gerakan majemuk utama dan memangkas aksesoris tanpa mengurangi stimulus inti.
+              Atur waktu yang tersedia hari ini. AI Coach akan menyesuaikan menu latihan, jumlah gerakan, dan intensitas yang ideal tanpa mengorbankan stimulus otot utama.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-              {([15, 30, 45, 60] as WorkoutDuration[]).map((dur) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginBottom: "20px" }}>
+              {([15, 30, 45, 60, 90, 120] as WorkoutDuration[]).map((dur) => (
                 <button
                   key={dur}
                   onClick={() => handleShortenWorkout(dur)}
@@ -7263,14 +7336,24 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     backgroundColor: activeWorkoutPlan.targetDuration === dur ? "rgba(212,255,0,0.12)" : "#141B26",
                     color: activeWorkoutPlan.targetDuration === dur ? "#D4FF00" : "white",
                     fontWeight: 800,
-                    fontSize: "14px",
+                    fontSize: "13px",
                     cursor: "pointer",
                     textAlign: "center"
                   }}
                 >
-                  <span style={{ display: "block", fontSize: "18px", fontWeight: 900 }}>{dur} Menit</span>
-                  <span style={{ display: "block", fontSize: "10px", opacity: 0.7, marginTop: "4px" }}>
-                    {dur === 15 ? "Express (2 Gerakan Inti)" : dur === 30 ? "Fokus Efisien" : dur === 45 ? "Standar Seimbang" : "Volume Lengkap"}
+                  <span style={{ display: "block", fontSize: "17px", fontWeight: 900 }}>{dur} Menit</span>
+                  <span style={{ display: "block", fontSize: "10px", opacity: 0.75, marginTop: "4px" }}>
+                    {dur === 15
+                      ? "Express (2 Gerakan)"
+                      : dur === 30
+                      ? "Fokus Efisien (3–4 Gerakan)"
+                      : dur === 45
+                      ? "Standar Seimbang (4–5 Gerakan)"
+                      : dur === 60
+                      ? "Volume Penuh (5–6 Gerakan)"
+                      : dur === 90
+                      ? "Volume Ekstra (7–8 Gerakan + Kardio)"
+                      : "Pro Athlete (8–10 Gerakan Lengkap)"}
                   </span>
                 </button>
               ))}

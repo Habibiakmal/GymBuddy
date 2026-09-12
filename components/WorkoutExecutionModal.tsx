@@ -458,11 +458,11 @@ export default function WorkoutExecutionModal({
               )}
             </div>
 
-            {/* Coach Cue Box */}
+            {/* Tips Teknik Box */}
             <div className="p-3.5 rounded-xl bg-neutral-900/60 border border-neutral-800 text-left flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-[#D4FF00] shrink-0 mt-0.5" />
               <p className="text-xs text-neutral-300 leading-relaxed">
-                <span className="font-semibold text-white">Coach Cue: </span>
+                <span className="font-semibold text-white">Tips Teknik: </span>
                 {coachCue}
               </p>
             </div>

@@ -89,6 +89,28 @@ const plan60m = generatePersonalizedWorkoutPlan({
 assert(plan60m.targetDuration === 60, "60-minute plan targetDuration equals 60");
 assert(plan60m.totalSets >= 12, `60-minute plan delivers adequate volume for 60 min (sets: ${plan60m.totalSets})`);
 
+const plan90m = generatePersonalizedWorkoutPlan({
+  workoutDuration: 90,
+  workoutFrequency: "5+",
+  fitnessLevel: "advanced",
+  equipment: "full_gym",
+  primaryGoal: "gain"
+});
+assert(plan90m.targetDuration === 90, "90-minute plan targetDuration equals 90");
+assert(plan90m.totalExercises >= 6, `90-minute plan scales exercises up (actual: ${plan90m.totalExercises})`);
+assert(plan90m.totalSets >= 18, `90-minute plan provides dedicated high volume (sets: ${plan90m.totalSets})`);
+
+const plan120m = generatePersonalizedWorkoutPlan({
+  workoutDuration: 120,
+  workoutFrequency: "5+",
+  fitnessLevel: "advanced",
+  equipment: "full_gym",
+  primaryGoal: "gain"
+});
+assert(plan120m.targetDuration === 120, "120-minute plan targetDuration equals 120");
+assert(plan120m.totalExercises >= 8, `120-minute plan provides maximum athletic exercise selection (actual: ${plan120m.totalExercises})`);
+assert(plan120m.totalSets >= 24, `120-minute plan provides full athlete volume (sets: ${plan120m.totalSets})`);
+
 // ─── GROUP 2: EQUIPMENT & GOAL PERSONALIZATION ────────────────────────────────
 console.log("\n▶ GROUP 2: Equipment & Goal Personalization");
 
@@ -154,11 +176,20 @@ const original45m = generatePersonalizedWorkoutPlan({
   primaryGoal: "lose"
 });
 
-const shortenedTo20m = shortenWorkoutPlan(original45m, 15);
-assert(shortenedTo20m.targetDuration === 15, "Shortened plan targets 15 minutes");
-assert(shortenedTo20m.mainExercises.every(e => e.priority === "essential"), "Shortened plan preserves essential compound movements");
-assert(shortenedTo20m.estimatedDuration <= 18, `Shortened duration fits available time window (${shortenedTo20m.estimatedDuration}m)`);
-assert(shortenedTo20m.rationale.includes("15 menit"), "Shortened plan rationale explains focus on core movements");
+const shortenedTo15m = shortenWorkoutPlan(original45m, 15);
+assert(shortenedTo15m.targetDuration === 15, "Shortened plan targets 15 minutes");
+assert(shortenedTo15m.mainExercises.every(e => e.priority === "essential"), "Shortened plan preserves essential compound movements");
+assert(shortenedTo15m.estimatedDuration <= 18, `Shortened duration fits available time window (${shortenedTo15m.estimatedDuration}m)`);
+assert(shortenedTo15m.rationale.includes("15 menit"), "Shortened plan rationale explains focus on core movements");
+
+// Bidirectional scaling: changing 15m back to 45m or up to 90m / 120m
+const scaledBackTo45m = shortenWorkoutPlan(shortenedTo15m, 45);
+assert(scaledBackTo45m.targetDuration === 45, "Plan scales back up to 45 minutes after being shortened");
+assert(scaledBackTo45m.totalExercises >= 3, `Scaled 45m plan restores full exercise count (actual: ${scaledBackTo45m.totalExercises})`);
+
+const scaledUpTo90m = shortenWorkoutPlan(shortenedTo15m, 90);
+assert(scaledUpTo90m.targetDuration === 90, "Plan can scale up to 90 minutes from shortened state");
+assert(scaledUpTo90m.totalExercises >= 6, `Scaled 90m plan provides expanded exercise menu (actual: ${scaledUpTo90m.totalExercises})`);
 
 // ─── GROUP 5: SESSION STATE MACHINE & DUPLICATE PREVENTION ────────────────────
 console.log("\n▶ GROUP 5: Workout Session State Machine & In-Workout Pain Handling");

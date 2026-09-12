@@ -258,7 +258,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   const [injuries, setInjuries] = useState<string[]>(["none"]);
   const [customInjury, setCustomInjury] = useState("");
   const [equipment, setEquipment] = useState<"full_gym" | "dumbbells" | "barbell" | "resistance_bands" | "machines" | "bodyweight" | "other">("full_gym");
-  const [workoutDuration, setWorkoutDuration] = useState<15 | 30 | 45 | 60>(45);
+  const [workoutDuration, setWorkoutDuration] = useState<15 | 30 | 45 | 60 | 90 | 120>(45);
   const [workoutFrequency, setWorkoutFrequency] = useState<"1-2" | "3-4" | "5+">("3-4");
   const [fitnessLevel, setFitnessLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [hasInjury, setHasInjury] = useState<"no" | "yes">("no");
@@ -2088,12 +2088,14 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                       ? "How long do you usually work out? This helps your coach build workouts that fit your schedule."
                       : "Berapa lama kamu biasanya berolahraga? Ini membantu coach merancang sesi yang pas dengan jadwalmu."}
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {[
                       { val: 15, label: "15 min", desc: isEN ? "Express & High ROI" : "Singkat & Padat" },
                       { val: 30, label: "30 min", desc: isEN ? "Standard & Balanced" : "Seimbang & Efisien" },
                       { val: 45, label: "45 min", desc: isEN ? "Optimal Full Session" : "Menu Lengkap Ideal" },
-                      { val: 60, label: "60+ min", desc: isEN ? "Dedicated Volume" : "Volume & Ekstra" }
+                      { val: 60, label: "60 min", desc: isEN ? "Full Volume Session" : "Volume Penuh" },
+                      { val: 90, label: "90 min", desc: isEN ? "High Volume + Cardio" : "Volume Ekstra + Kardio" },
+                      { val: 120, label: "120 min", desc: isEN ? "Pro Athlete Session" : "Menu Atlet Lengkap" }
                     ].map((dur) => (
                       <button
                         key={dur.val}
