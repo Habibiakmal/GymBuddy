@@ -30,6 +30,7 @@ import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
 import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
+import { generatePersonalizedWeeklySchedule } from "./services/workoutEngine";
 import {
   resolveCanonicalProfile,
   generatePersonalizedMealRecommendation,
@@ -2489,6 +2490,10 @@ export function calculateUserData(profile: any) {
     activeService,
     hasReceivedWelcome: Boolean(profile?.hasReceivedWelcome),
     workoutSchedule: profile?.workoutSchedule || null,
+    workoutDuration: profile?.workoutDuration || 45,
+    workoutFrequency: profile?.workoutFrequency || "3-4",
+    fitnessLevel: profile?.fitnessLevel || "intermediate",
+    injuryLimitations: profile?.injuryLimitations || null,
     subscription,
     plan: sub.plan,
     planDuration: sub.planDuration,
@@ -4855,7 +4860,9 @@ export function handleAdditionalActivityLogging(
   saveDb();
 
   const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
+  const schedule = (userData.workoutSchedule && Array.isArray(userData.workoutSchedule) && userData.workoutSchedule.length > 0)
+    ? userData.workoutSchedule
+    : getDefaultWeeklySchedule(goal);
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = new Date().getDay();
   const todayDayName = dayNames[currentDayIdx];
@@ -5076,7 +5083,9 @@ export function handleWorkoutProgressLogging(
   }
 
   const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
+  const schedule = (userData.workoutSchedule && Array.isArray(userData.workoutSchedule) && userData.workoutSchedule.length > 0)
+    ? userData.workoutSchedule
+    : getDefaultWeeklySchedule(goal);
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = new Date().getDay();
   const todayDayName = dayNames[currentDayIdx];
@@ -6177,19 +6186,41 @@ export async function createExpressApp(options: { skipVite?: boolean } = {}) {
     }
 
     // Check if account is permanently deleted
-    if (
-      (canonicalPhone && await isAccountDeleted(canonicalPhone)) ||
-      (localPhone && await isAccountDeleted(localPhone)) ||
-      (effectiveUserId && await isAccountDeleted(effectiveUserId))
-    ) {
-      return {
-        status: 403,
-        body: {
-          success: false,
-          error: "account_deleted",
-          message: "Akun ini telah dihapus. Silakan lakukan pendaftaran baru melalui onboarding."
-        }
-      };
+    const isDeleted = (canonicalPhone && await isAccountDeleted(canonicalPhone)) ||
+                      (localPhone && await isAccountDeleted(localPhone)) ||
+                      (effectiveUserId && await isAccountDeleted(effectiveUserId));
+
+    if (isDeleted) {
+      // Check if this request represents legitimate fresh onboarding re-registration
+      const hasPendingProfile = Boolean(
+        (effectiveUserId && dbData.pendingProfiles && dbData.pendingProfiles[effectiveUserId]) ||
+        (canonicalPhone && dbData.pendingProfiles && Object.values(dbData.pendingProfiles).some((p: any) => p?.phone === canonicalPhone || p?.normalizedPhone === canonicalPhone)) ||
+        (localPhone && dbData.pendingProfiles && Object.values(dbData.pendingProfiles).some((p: any) => p?.phone === localPhone))
+      );
+
+      const isFreshOnboarding = Boolean(
+        reqBody?.isOnboarding ||
+        reqBody?.isFreshOnboarding ||
+        hasPendingProfile ||
+        (effectiveUserId && effectiveUserId.startsWith("usr_ob_"))
+      );
+
+      if (isFreshOnboarding) {
+        // Legitimate fresh onboarding: user is re-registering cleanly after account deletion.
+        // Untombstone the phone number so their new order and registration can proceed.
+        if (canonicalPhone) await clearAccountDeletedTombstone(canonicalPhone);
+        if (localPhone) await clearAccountDeletedTombstone(localPhone);
+        if (effectiveUserId) await clearAccountDeletedTombstone(effectiveUserId);
+      } else {
+        return {
+          status: 403,
+          body: {
+            success: false,
+            error: "account_deleted",
+            message: "Akun ini telah dihapus. Silakan lakukan pendaftaran baru melalui onboarding."
+          }
+        };
+      }
     }
 
     // Lookup canonical user document
@@ -8471,7 +8502,21 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
     const calculated = calculateUserData(user);
-    res.json({ success: true, schedule: calculated.workoutSchedule, goal: calculated.goal, goalTitle: calculated.goalTitle });
+    let schedule = user.workoutSchedule;
+    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+      schedule = generatePersonalizedWeeklySchedule({
+        workoutDuration: user.workoutDuration || 45,
+        workoutFrequency: user.workoutFrequency || "3-4",
+        fitnessLevel: user.fitnessLevel || "intermediate",
+        equipment: user.equipment || "full_gym",
+        primaryGoal: user.goal || "lose",
+        injuryLimitations: user.injuryLimitations || [],
+        persona: user.persona || "max"
+      });
+      user.workoutSchedule = schedule;
+      saveDb();
+    }
+    res.json({ success: true, schedule, goal: calculated.goal, goalTitle: calculated.goalTitle });
   });
 
   app.post("/api/user/:phone/schedule", express.json(), (req, res) => {

@@ -77,6 +77,13 @@ import {
   formatDashboardInteger,
   formatDashboardPercent
 } from "../services/nutritionEngine";
+import WorkoutExecutionModal from "./WorkoutExecutionModal";
+import {
+  generatePersonalizedWorkoutPlan,
+  shortenWorkoutPlan,
+  type WorkoutPlan,
+  type WorkoutDuration
+} from "../services/workoutEngine";
 import { getApiBaseUrl, canonicalApiFetch, getJakartaDateStr } from "../utils/api";
 import {
   PLAN_PRICING,
@@ -1896,6 +1903,77 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [viewingDetailExercise, setViewingDetailExercise] = useState<ExerciseItem | null>(null);
   const [showWatchConnectModal, setShowWatchConnectModal] = useState(false);
   const [watchLinkCopied, setWatchLinkCopied] = useState(false);
+  const [showWorkoutExecutionModal, setShowWorkoutExecutionModal] = useState(false);
+  const [showShortenWorkoutModal, setShowShortenWorkoutModal] = useState(false);
+  const [hasActiveSavedSession, setHasActiveSavedSession] = useState(false);
+
+  const [activeWorkoutPlan, setActiveWorkoutPlan] = useState<WorkoutPlan>(() => {
+    return generatePersonalizedWorkoutPlan(
+      {
+        workoutDuration: safeUser.workoutDuration || 45,
+        workoutFrequency: safeUser.workoutFrequency || "3-4",
+        fitnessLevel: safeUser.fitnessLevel || "intermediate",
+        equipment: safeUser.equipment || "full_gym",
+        primaryGoal: safeUser.goal || "lose",
+        injuryLimitations: safeUser.injuryLimitations || [],
+        persona: safeUser.persona === "mia" ? "mia" : "max"
+      },
+      selectedDate,
+      [],
+      scheduleIndex
+    );
+  });
+
+  useEffect(() => {
+    const generated = generatePersonalizedWorkoutPlan(
+      {
+        workoutDuration: safeUser.workoutDuration || 45,
+        workoutFrequency: safeUser.workoutFrequency || "3-4",
+        fitnessLevel: safeUser.fitnessLevel || "intermediate",
+        equipment: safeUser.equipment || "full_gym",
+        primaryGoal: safeUser.goal || "lose",
+        injuryLimitations: safeUser.injuryLimitations || [],
+        persona: safeUser.persona === "mia" ? "mia" : "max"
+      },
+      selectedDate,
+      [],
+      scheduleIndex
+    );
+    setActiveWorkoutPlan(generated);
+  }, [selectedDate, scheduleIndex, safeUser.workoutDuration, safeUser.fitnessLevel, safeUser.equipment, safeUser.goal, safeUser.persona]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gymbuddy_active_session_state");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.status !== "WORKOUT_COMPLETED" && parsed.status !== "ABANDONED") {
+          setHasActiveSavedSession(true);
+          return;
+        }
+      }
+    } catch {}
+    setHasActiveSavedSession(false);
+  }, [showWorkoutExecutionModal]);
+
+  const handleShortenWorkout = (targetMinutes: WorkoutDuration) => {
+    const shortened = shortenWorkoutPlan(activeWorkoutPlan, targetMinutes);
+    setActiveWorkoutPlan(shortened);
+    const allShortened = shortened.cardio
+      ? [...shortened.mainExercises, shortened.cardio]
+      : shortened.mainExercises;
+    const mapped = allShortened.map((ex, idx) => ({
+      id: `shortened-${idx + 1}`,
+      name: ex.name,
+      targetSets: ex.targetSets || 1,
+      completedSets: 0,
+      setsState: Array(ex.targetSets || 1).fill(false),
+      targetReps: ex.targetReps,
+      status: "not_started" as const
+    }));
+    setExercises(mapped);
+    setShowShortenWorkoutModal(false);
+  };
 
   // Modals
   const [showAddFoodModal, setShowAddFoodModal] = useState(false);
@@ -4078,12 +4156,6 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
 
               {/* ── CARD B: AI WORKOUT COACH FIRST-CLASS BENTO MODULE ── */}
               {(() => {
-                const completedExerciseCount = exercises.filter(ex => 
-                  ex.status === "completed" || 
-                  (typeof ex.completedSets === "number" && ex.targetSets > 0 && ex.completedSets >= ex.targetSets) ||
-                  (Array.isArray(ex.setsState) && ex.setsState.length > 0 && ex.setsState.every(Boolean))
-                ).length;
-                
                 const workoutBentoContent = (
                   <div className="bg-[#222222] border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-xl space-y-5 flex flex-col justify-between h-full relative overflow-hidden">
                     <div className="space-y-4">
@@ -4116,7 +4188,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                               Menu Utama
                             </span>
                             <h3 className="text-lg sm:text-xl font-black text-white tracking-tight mt-0.5">
-                              {todayScheduleObj.focus}
+                              {activeWorkoutPlan.focus}
                             </h3>
                             <p className="text-xs text-neutral-400 font-medium mt-0.5">
                               {todayScheduleObj.desc || "Menu Latihan Terstruktur Sesuai Target Fisik"}
@@ -4127,31 +4199,48 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                           </div>
                         </div>
 
+                        {/* Why this workout? Rationale Box (Section 19) */}
+                        {activeWorkoutPlan.rationale && (
+                          <div className="p-3 bg-[#111620] border border-[#D4FF00]/30 rounded-xl flex items-start gap-2.5">
+                            <Sparkles size={15} className="text-[#D4FF00] shrink-0 mt-0.5" />
+                            <div className="space-y-0.5 text-left">
+                              <span className="text-[10px] font-extrabold uppercase text-[#D4FF00] tracking-wider block">
+                                Kenapa Latihan Ini Dipilih?
+                              </span>
+                              <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                                {activeWorkoutPlan.rationale}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* 4 Workout Metric Badges */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-white/[0.06]">
                           <div className="p-2 bg-[#222222] rounded-xl text-center">
                             <span className="text-[9px] font-bold text-neutral-400 uppercase block">⏱️ Durasi</span>
-                            <span className="text-xs font-black text-white mt-0.5 block">45 Menit</span>
+                            <span className="text-xs font-black text-white mt-0.5 block">{activeWorkoutPlan.targetDuration} Menit</span>
                           </div>
                           <div className="p-2 bg-[#222222] rounded-xl text-center">
                             <span className="text-[9px] font-bold text-neutral-400 uppercase block">⚡ Intensitas</span>
-                            <span className="text-xs font-black text-[#D4FF00] mt-0.5 block">Tinggi</span>
+                            <span className="text-xs font-black text-[#D4FF00] mt-0.5 block">
+                              {activeWorkoutPlan.intensity === "high" ? "Tinggi" : "Sedang"}
+                            </span>
                           </div>
                           <div className="p-2 bg-[#222222] rounded-xl text-center">
                             <span className="text-[9px] font-bold text-neutral-400 uppercase block">🎯 Latihan</span>
-                            <span className="text-xs font-black text-white mt-0.5 block">{exercises.length} Gerakan</span>
+                            <span className="text-xs font-black text-white mt-0.5 block">{activeWorkoutPlan.totalExercises} Gerakan</span>
                           </div>
                           <div className="p-2 bg-[#222222] rounded-xl text-center">
-                            <span className="text-[9px] font-bold text-neutral-400 uppercase block">📊 Selesai</span>
-                            <span className="text-xs font-black text-emerald-400 mt-0.5 block">{completedExerciseCount}/{exercises.length}</span>
+                            <span className="text-[9px] font-bold text-neutral-400 uppercase block">📊 Set Selesai</span>
+                            <span className="text-xs font-black text-emerald-400 mt-0.5 block">{totalCompletedSetsOverall}/{totalTargetSetsOverall} Set</span>
                           </div>
                         </div>
 
-                        {/* Progress Bar */}
+                        {/* Single Consistent Progress Bar (Section 20) */}
                         <div className="space-y-1 pt-1">
                           <div className="flex items-center justify-between text-[11px] font-bold">
                             <span className="text-neutral-400">Total Set Selesai:</span>
-                            <span className="text-[#D4FF00] font-mono">{overallWorkoutPercent}%</span>
+                            <span className="text-[#D4FF00] font-mono">{totalCompletedSetsOverall} / {totalTargetSetsOverall} Set ({overallWorkoutPercent}%)</span>
                           </div>
                           <div className="w-full h-2 bg-[#222222] rounded-full overflow-hidden border border-white/[0.08]">
                             <div
@@ -4229,12 +4318,12 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </div>
                     </div>
 
-                    {/* Quick Action Footer */}
+                    {/* Quick Action Footer: Start Workout (Live Coach Execution) */}
                     <div className="flex items-center gap-2 pt-2 border-t border-white/[0.08]">
                       <button
                         type="button"
                         onClick={() => setShowWatchConnectModal(true)}
-                        className="py-2.5 px-3.5 rounded-xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                        className="py-3 px-3.5 rounded-xl bg-[#181818] hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         title="Hubungkan Apple Watch"
                       >
                         <Watch size={15} />
@@ -4242,11 +4331,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                       </button>
                       <button
                         type="button"
-                        onClick={() => setActiveTab("workouts")}
-                        className="flex-1 py-2.5 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        onClick={() => setShowWorkoutExecutionModal(true)}
+                        className="flex-1 py-3 px-4 rounded-xl bg-[#D4FF00] hover:bg-[#c4ec00] text-black font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#D4FF00]/15"
                       >
-                        <Dumbbell size={14} />
-                        <span>Buka Menu Latihan Lengkap ➔</span>
+                        <Play size={15} fill="currentColor" />
+                        <span>{hasActiveSavedSession ? "Lanjutkan Latihan ➔" : "Mulai Sesi Latihan ➔"}</span>
                       </button>
                     </div>
                   </div>
@@ -4916,11 +5005,28 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                     <span>{isEN ? "Gym Schedule & Workouts" : "Jadwal & Latihan Gym"}</span>
                   </h1>
                   <p className="text-xs text-neutral-400 font-semibold mt-0.5">
-                    {selectedDayName} • {todayScheduleObj.focus} ({overallWorkoutPercent}% {isEN ? "Completed" : "Selesai"})
+                    {selectedDayName} • {activeWorkoutPlan.focus} ({totalCompletedSetsOverall} / {totalTargetSetsOverall} Set • {overallWorkoutPercent}% {isEN ? "Completed" : "Selesai"})
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setShowWorkoutExecutionModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#D4FF00] hover:bg-[#c2eb00] text-black font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Play size={13} fill="currentColor" />
+                    <span>{hasActiveSavedSession ? "Lanjutkan Sesi" : "Mulai Latihan"}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowShortenWorkoutModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-neutral-700 border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Sesuaikan durasi latihan jika waktu terbatas"
+                  >
+                    <Clock size={13} className="text-[#D4FF00]" />
+                    <span>Sesuaikan Waktu ({activeWorkoutPlan.targetDuration}m)</span>
+                  </button>
+
                   <button
                     onClick={() => setShowWatchConnectModal(true)}
                     className="px-3 py-1.5 rounded-xl bg-neutral-800/80 hover:bg-[#D4FF00] hover:text-black border border-white/[0.08] text-neutral-300 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -4947,6 +5053,26 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
                   </button>
                 </div>
               </div>
+
+              {/* Rationale & Coach Insights Banner in Workouts Tab */}
+              {activeWorkoutPlan.rationale && (
+                <div className="p-4 bg-[#181818] border border-white/[0.08] rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-[#D4FF00]" />
+                    <span className="text-xs font-black text-white uppercase tracking-wider">
+                      Alasan & Analisis Program Hari Ini
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-300 leading-relaxed font-medium">
+                    {activeWorkoutPlan.rationale}
+                  </p>
+                  {activeWorkoutPlan.coachInsight && (
+                    <p className="text-[11px] text-neutral-400 italic pt-1 border-t border-white/[0.06]">
+                      💡 Pesan Coach: "{activeWorkoutPlan.coachInsight}"
+                    </p>
+                  )}
+                </div>
+              )}
 
             {!showFullWeeklyOverview ? (
               <>
@@ -7077,6 +7203,88 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           </div>
         )}
       </AnimatePresence>
+
+      {/* WORKOUT EXECUTION MODAL (DO + COACH + ADAPT) */}
+      <WorkoutExecutionModal
+        isOpen={showWorkoutExecutionModal}
+        onClose={() => setShowWorkoutExecutionModal(false)}
+        plan={activeWorkoutPlan}
+        persona={safeUser.persona === "mia" ? "mia" : "max"}
+        userPhone={safeUser.phone}
+        onWorkoutCompleted={() => {
+          setShowWorkoutExecutionModal(false);
+          setExercises(prev => prev.map(e => ({
+            ...e,
+            completedSets: e.targetSets,
+            status: "completed" as const,
+            setsState: Array(e.targetSets).fill(true)
+          })));
+        }}
+      />
+
+      {/* DYNAMIC SESSION SHORTENING MODAL (Section 11) */}
+      {showShortenWorkoutModal && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowShortenWorkoutModal(false); }}
+        >
+          <div
+            style={{ backgroundColor: "#111620", border: "1px solid #1C2433", borderRadius: "24px", padding: "24px", maxWidth: "440px", width: "100%", boxShadow: "0 25px 50px rgba(0,0,0,0.9)", color: "white" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1C2433", paddingBottom: "14px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Clock size={20} color="#D4FF00" />
+                <h3 style={{ fontSize: "16px", fontWeight: 900, color: "white", margin: 0 }}>
+                  Sesuaikan Durasi Latihan
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowShortenWorkoutModal(false)}
+                style={{ background: "#1C2433", border: "none", borderRadius: "10px", padding: "6px", cursor: "pointer", color: "#94a3b8" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.5, marginBottom: "16px" }}>
+              Punya waktu lebih sempit hari ini? AI Coach akan meregenerasi sesi dengan mempertahankan gerakan majemuk utama dan memangkas aksesoris tanpa mengurangi stimulus inti.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+              {([15, 30, 45, 60] as WorkoutDuration[]).map((dur) => (
+                <button
+                  key={dur}
+                  onClick={() => handleShortenWorkout(dur)}
+                  style={{
+                    padding: "14px",
+                    borderRadius: "14px",
+                    border: activeWorkoutPlan.targetDuration === dur ? "2px solid #D4FF00" : "1px solid #1C2433",
+                    backgroundColor: activeWorkoutPlan.targetDuration === dur ? "rgba(212,255,0,0.12)" : "#141B26",
+                    color: activeWorkoutPlan.targetDuration === dur ? "#D4FF00" : "white",
+                    fontWeight: 800,
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    textAlign: "center"
+                  }}
+                >
+                  <span style={{ display: "block", fontSize: "18px", fontWeight: 900 }}>{dur} Menit</span>
+                  <span style={{ display: "block", fontSize: "10px", opacity: 0.7, marginTop: "4px" }}>
+                    {dur === 15 ? "Express (2 Gerakan Inti)" : dur === 30 ? "Fokus Efisien" : dur === 45 ? "Standar Seimbang" : "Volume Lengkap"}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowShortenWorkoutModal(false)}
+              style={{ width: "100%", padding: "12px", borderRadius: "12px", background: "#1C2433", color: "#cbd5e1", border: "none", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* APPLE WATCH CONNECT & ZERO-TYPING PAIRING MODAL */}
       {showWatchConnectModal && (

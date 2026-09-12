@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { notificationService } from "../services/notificationService";
+import { generatePersonalizedWorkoutPlan } from "../services/workoutEngine";
 
 interface WatchModeProps {
   user: any;
@@ -21,14 +22,43 @@ export default function WatchMode({ user: initialUser, onExit }: WatchModeProps)
     return null;
   });
 
-  // ─── Exercises ─────────────────────────────────────────────────────────────
-  const defaultExercises = [
-    { name: "Bench Press", targetSets: 4, completedSets: 0, reps: "8-10 reps", cue: "Tancepin kaki!" },
-    { name: "Incline DB Press", targetSets: 4, completedSets: 0, reps: "10-12 reps", cue: "Busungin dada atas!" },
-    { name: "Lat Pulldown", targetSets: 4, completedSets: 0, reps: "10-12 reps", cue: "Siku ke bawah!" },
-    { name: "Tricep Pushdown", targetSets: 3, completedSets: 0, reps: "12-15 reps", cue: "Kunci siku!" },
-  ];
-  const [exercises, setExercises] = useState(defaultExercises);
+  // ─── Shared Session & Exercises ───────────────────────────────────────────
+  const [exercises, setExercises] = useState(() => {
+    try {
+      const activeSaved = localStorage.getItem("gymbuddy_active_session_state");
+      if (activeSaved) {
+        const parsed = JSON.parse(activeSaved);
+        if (parsed?.exercises && parsed.exercises.length > 0) {
+          return parsed.exercises.map((e: any) => ({
+            name: e.name,
+            targetSets: e.targetSets || 3,
+            completedSets: e.completedSets || 0,
+            reps: "10-12 reps",
+            cue: "Kontrol tempo & kunci core!"
+          }));
+        }
+      }
+    } catch {}
+
+    const plan = generatePersonalizedWorkoutPlan({
+      workoutDuration: initialUser?.workoutDuration || 45,
+      workoutFrequency: initialUser?.workoutFrequency || "3-4",
+      fitnessLevel: initialUser?.fitnessLevel || "intermediate",
+      equipment: initialUser?.equipment || "full_gym",
+      primaryGoal: initialUser?.goal || "lose",
+      injuryLimitations: initialUser?.injuryLimitations || [],
+      persona: initialUser?.persona || "max"
+    });
+
+    const allEx = plan.cardio ? [...plan.mainExercises, plan.cardio] : plan.mainExercises;
+    return allEx.map(ex => ({
+      name: ex.name,
+      targetSets: ex.targetSets || 3,
+      completedSets: 0,
+      reps: ex.targetReps.replace(/^\d+\s*sets?\s*[x×]\s*/i, ""),
+      cue: initialUser?.persona === "mia" ? ex.coachCue.mia : ex.coachCue.max
+    }));
+  });
   const [exIdx, setExIdx] = useState(0);
 
   // ─── Rest Timer ────────────────────────────────────────────────────────────
@@ -43,9 +73,9 @@ export default function WatchMode({ user: initialUser, onExit }: WatchModeProps)
   const [bpm, setBpm] = useState(128);
   const [page, setPage] = useState<"workout" | "metrics">("workout");
 
-  const ex = exercises[exIdx];
-  const allDone = ex.completedSets >= ex.targetSets;
-  const progress = Math.round((ex.completedSets / ex.targetSets) * 100);
+  const ex = exercises[exIdx] || exercises[0];
+  const allDone = ex ? ex.completedSets >= ex.targetSets : true;
+  const progress = ex ? Math.round((ex.completedSets / ex.targetSets) * 100) : 0;
   const timerProgress = ((initRest - restSecs) / initRest) * 100;
 
   // BPM simulation
@@ -66,13 +96,26 @@ export default function WatchMode({ user: initialUser, onExit }: WatchModeProps)
     return () => clearTimeout(timerRef.current);
   }, [timerOn, restSecs]);
 
-  // Complete set handler
+  // Complete set handler with shared state sync
   const completeSet = () => {
     if (allDone) return;
     notificationService.triggerHaptic([80, 40, 120]);
     setExercises(prev => {
       const upd = [...prev];
-      upd[exIdx] = { ...upd[exIdx], completedSets: upd[exIdx].completedSets + 1 };
+      if (upd[exIdx]) {
+        upd[exIdx] = { ...upd[exIdx], completedSets: upd[exIdx].completedSets + 1 };
+      }
+      try {
+        const saved = localStorage.getItem("gymbuddy_active_session_state");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.exercises && parsed.exercises[exIdx]) {
+            parsed.exercises[exIdx].completedSets = upd[exIdx].completedSets;
+            parsed.completedSets = (parsed.completedSets || 0) + 1;
+            localStorage.setItem("gymbuddy_active_session_state", JSON.stringify(parsed));
+          }
+        }
+      } catch {}
       return upd;
     });
     setKcal(k => k + 14);

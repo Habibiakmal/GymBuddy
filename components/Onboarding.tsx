@@ -139,6 +139,13 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
         if (p.injuries && Array.isArray(p.injuries)) setInjuries(p.injuries);
         if (p.allergies && Array.isArray(p.allergies)) setAllergies(p.allergies);
         if (p.equipment) setEquipment(p.equipment);
+        if (p.workoutDuration) setWorkoutDuration(Number(p.workoutDuration) as any);
+        if (p.workoutFrequency) setWorkoutFrequency(p.workoutFrequency);
+        if (p.fitnessLevel) setFitnessLevel(p.fitnessLevel);
+        if (p.hasInjury) setHasInjury(p.hasInjury);
+        if (p.selectedBodyAreas && Array.isArray(p.selectedBodyAreas)) setSelectedBodyAreas(p.selectedBodyAreas);
+        if (p.injurySeverity) setInjurySeverity(p.injurySeverity);
+        if (p.selectedPainTriggers && Array.isArray(p.selectedPainTriggers)) setSelectedPainTriggers(p.selectedPainTriggers);
         if (p.persona) setPersona(p.persona);
         if (p.commitmentLevel) setCommitmentLevel(p.commitmentLevel);
         if (p.userId) setPendingUserId(p.userId);
@@ -250,7 +257,14 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
   // Physical Limitations / Injuries & Equipment
   const [injuries, setInjuries] = useState<string[]>(["none"]);
   const [customInjury, setCustomInjury] = useState("");
-  const [equipment, setEquipment] = useState<"full_gym" | "dumbbells" | "bodyweight">("full_gym");
+  const [equipment, setEquipment] = useState<"full_gym" | "dumbbells" | "barbell" | "resistance_bands" | "machines" | "bodyweight" | "other">("full_gym");
+  const [workoutDuration, setWorkoutDuration] = useState<15 | 30 | 45 | 60>(45);
+  const [workoutFrequency, setWorkoutFrequency] = useState<"1-2" | "3-4" | "5+">("3-4");
+  const [fitnessLevel, setFitnessLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
+  const [hasInjury, setHasInjury] = useState<"no" | "yes">("no");
+  const [selectedBodyAreas, setSelectedBodyAreas] = useState<string[]>([]);
+  const [injurySeverity, setInjurySeverity] = useState<"mild" | "moderate" | "severe">("mild");
+  const [selectedPainTriggers, setSelectedPainTriggers] = useState<string[]>([]);
 
   // Persona Selection
   const [persona, setPersona] = useState<"max" | "mia">("max");
@@ -303,7 +317,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
     const amountParam = isFree ? 0 : getPrice(canonicalPlan, targetDuration);
 
     try {
-      const res = await canonicalApiFetch<{ success: boolean; order?: any; token?: string; redirectUrl?: string; error?: string }>(
+      const res = await canonicalApiFetch<{ success: boolean; order?: any; token?: string; redirectUrl?: string; error?: string; message?: string }>(
         "/api/orders/create",
         {
           method: "POST",
@@ -315,13 +329,14 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
             amount: amountParam,
             billingPeriod: isFree ? "free_trial" : targetDuration,
             duration: targetDuration,
-            customerName: name || "Member GymBuddy"
+            customerName: name || "Member GymBuddy",
+            isOnboarding: true
           })
         }
       );
 
       if (!res || !res.success || !res.order) {
-        throw new Error(res?.error || "Gagal membuat pesanan");
+        throw new Error(res?.message || res?.error || (isEN ? "Failed to process order. Please try again." : "Gagal memproses pesanan. Silakan coba kembali."));
       }
 
       setOrderId(res.order.orderId);
@@ -432,8 +447,13 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
     const carbsGram = Math.round((targetCal * 0.45) / 4);
     const fatGram = Math.round((targetCal * 0.25) / 9);
 
+    const cleanPhone = phone.replace(/\D/g, "");
+    const canonicalPhone = cleanPhone.startsWith("62") ? cleanPhone : (cleanPhone.startsWith("0") ? "62" + cleanPhone.substring(1) : "62" + cleanPhone);
+
     const profileObj = {
       userId: pendingUserId,
+      phone: canonicalPhone,
+      normalizedPhone: canonicalPhone,
       name: name || "Member",
       goal,
       goalTitle: goal === "lose" ? "Menurunkan Berat Badan" : (goal === "gain" ? "Menaikkan Berat Badan" : "Gaya Hidup Sehat & Fit"),
@@ -459,6 +479,21 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       customInjury,
       allergies: allergies.length > 0 ? allergies : ["none"],
       equipment,
+      workoutDuration,
+      workoutFrequency,
+      fitnessLevel,
+      hasInjury,
+      selectedBodyAreas,
+      injurySeverity,
+      selectedPainTriggers,
+      injuryLimitations: hasInjury === "yes" && selectedBodyAreas.length > 0
+        ? selectedBodyAreas.map(area => ({
+            bodyArea: area,
+            severity: injurySeverity,
+            painTriggers: selectedPainTriggers,
+            notes: customInjury
+          }))
+        : [],
       persona,
       commitmentLevel,
       targetCalories: targetCal,
@@ -479,7 +514,7 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
       localStorage.setItem("gymbuddy_pending_profile", JSON.stringify(profileObj));
       await canonicalApiFetch("/api/onboarding/profile", {
         method: "POST",
-        body: JSON.stringify({ userId: pendingUserId, profile: profileObj })
+        body: JSON.stringify({ userId: pendingUserId, phone: canonicalPhone, profile: profileObj })
       });
     } catch (e) {
       console.warn("[Onboarding] Note saving profile:", e);
@@ -2038,86 +2073,343 @@ export default function Onboarding({ language = "EN", onComplete, onOpenLogin }:
                   </div>
                 </div>
 
-                {/* Sub 4: Equipment Availability for Workout Coach */}
+                {/* Sub 4: Workout Duration Preference */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                      {isEN ? "Typical Workout Duration" : "Durasi Latihan Harian"}
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      {isEN ? "Hard scheduling constraint" : "Menyesuaikan waktu luangmu"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400">
+                    {isEN
+                      ? "How long do you usually work out? This helps your coach build workouts that fit your schedule."
+                      : "Berapa lama kamu biasanya berolahraga? Ini membantu coach merancang sesi yang pas dengan jadwalmu."}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { val: 15, label: "15 min", desc: isEN ? "Express & High ROI" : "Singkat & Padat" },
+                      { val: 30, label: "30 min", desc: isEN ? "Standard & Balanced" : "Seimbang & Efisien" },
+                      { val: 45, label: "45 min", desc: isEN ? "Optimal Full Session" : "Menu Lengkap Ideal" },
+                      { val: 60, label: "60+ min", desc: isEN ? "Dedicated Volume" : "Volume & Ekstra" }
+                    ].map((dur) => (
+                      <button
+                        key={dur.val}
+                        type="button"
+                        onClick={() => setWorkoutDuration(dur.val as any)}
+                        className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                          workoutDuration === dur.val
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black shadow-sm"
+                            : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                        }`}
+                      >
+                        <span className="text-sm font-black block">{dur.label}</span>
+                        <span className={`text-[10px] block mt-0.5 ${workoutDuration === dur.val ? "text-black/80 font-bold" : "text-neutral-500"}`}>
+                          {dur.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub 5: Training Frequency */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                    {isEN ? "Training Frequency" : "Frekuensi Latihan Mingguan"}
+                  </label>
+                  <p className="text-[11px] text-neutral-400">
+                    {isEN
+                      ? "How often do you usually work out? This shapes weekly volume and recovery planning."
+                      : "Berapa hari dalam seminggu kamu berolahraga? Ini menentukan volume mingguan dan jadwal pemulihanmu."}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { id: "1-2", label: "1–2 days/week", desc: isEN ? "Full-body focus" : "Fokus Full Body" },
+                      { id: "3-4", label: "3–4 days/week", desc: isEN ? "Balanced Split" : "Split Seimbang" },
+                      { id: "5+", label: "5+ days/week", desc: isEN ? "High frequency" : "Frekuensi Tinggi" }
+                    ].map((freq) => (
+                      <button
+                        key={freq.id}
+                        type="button"
+                        onClick={() => setWorkoutFrequency(freq.id as any)}
+                        className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                          workoutFrequency === freq.id
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                            : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                        }`}
+                      >
+                        <span className="text-xs sm:text-sm font-black block">{freq.label}</span>
+                        <span className={`text-[10px] block mt-0.5 ${workoutFrequency === freq.id ? "text-black/80 font-bold" : "text-neutral-500"}`}>
+                          {freq.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub 6: Fitness Level */}
+                <div className="space-y-3 pt-3 border-t border-neutral-800/80">
+                  <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
+                    {isEN ? "Training Experience / Fitness Level" : "Tingkat Kebugaran / Pengalaman Latihan"}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { id: "beginner", label: isEN ? "Beginner" : "Pemula", desc: isEN ? "Learning core movement patterns" : "Mempelajari pola gerakan dasar" },
+                      { id: "intermediate", label: isEN ? "Intermediate" : "Menengah", desc: isEN ? "Consistent with good technique" : "Terbiasa latihan & teknik aman" },
+                      { id: "advanced", label: isEN ? "Advanced" : "Mahir", desc: isEN ? "Comfortable with heavy overload" : "Fokus intensitas & variasi beban" }
+                    ].map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => setFitnessLevel(lvl.id as any)}
+                        className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                          fitnessLevel === lvl.id
+                            ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                            : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                        }`}
+                      >
+                        <span className="text-xs sm:text-sm font-black block">{lvl.label}</span>
+                        <span className={`text-[10px] block mt-0.5 ${fitnessLevel === lvl.id ? "text-black/80 font-bold" : "text-neutral-500"}`}>
+                          {lvl.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sub 7: Equipment Availability */}
                 <div className="space-y-3 pt-3 border-t border-neutral-800/80">
                   <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
                     {isEN ? "Available Workout Equipment" : "Ketersediaan Alat Latihan (Equipment)"}
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {[
-                      { id: "full_gym", title: isEN ? "Full Gym Equipment" : "Alat Gym Lengkap", desc: isEN ? "Barbells, Cable, Machines" : "Gym Commercial / Fitness Center" },
-                      { id: "dumbbells", title: isEN ? "Dumbbells Only" : "Dumbbell di Rumah", desc: isEN ? "Home dumbbells & bench" : "Set Dumbbell / Beban Rumah" },
-                      { id: "bodyweight", title: isEN ? "Bodyweight (No Equipment)" : "Tanpa Alat / Rumah", desc: isEN ? "Calisthenics & Home Workouts" : "Latihan Pakai Beban Tubuh" }
+                      { id: "full_gym", title: isEN ? "Full Gym" : "Alat Gym Lengkap", desc: isEN ? "Barbells, Cable, Machines" : "Fitness Center Komersial" },
+                      { id: "dumbbells", title: isEN ? "Dumbbells" : "Dumbbell", desc: isEN ? "Home dumbbells & bench" : "Set Beban Rumah" },
+                      { id: "bodyweight", title: isEN ? "Bodyweight" : "Tanpa Alat", desc: isEN ? "Calisthenics / Home" : "Beban Tubuh Sendiri" },
+                      { id: "barbell", title: isEN ? "Barbell Setup" : "Barbell & Rack", desc: isEN ? "Olympic bar & plates" : "Barbel & Rak Beban" },
+                      { id: "machines", title: isEN ? "Machines" : "Mesin Gym", desc: isEN ? "Guided weight stacks" : "Alat Pin Stack Mesin" },
+                      { id: "resistance_bands", title: isEN ? "Bands" : "Resistance Band", desc: isEN ? "Elastic bands" : "Tali Karet Resistensi" }
                     ].map((eq) => (
                       <button
                         key={eq.id}
                         type="button"
                         onClick={() => setEquipment(eq.id as any)}
-                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           equipment === eq.id
                             ? "bg-[#D4FF00] text-black border-[#D4FF00]"
                             : "bg-[#111620] text-white border-neutral-800 hover:border-neutral-700"
                         }`}
                       >
                         <p className="font-extrabold text-xs sm:text-sm mb-0.5">{eq.title}</p>
-                        <p className={`text-[11px] ${equipment === eq.id ? "text-black/80 font-medium" : "text-neutral-400"}`}>{eq.desc}</p>
+                        <p className={`text-[10px] ${equipment === eq.id ? "text-black/80 font-bold" : "text-neutral-400"}`}>{eq.desc}</p>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Sub 5: Physical Limitations / Injuries */}
+                {/* Sub 8: Physical Limitations / Injuries Flow */}
                 <div className="space-y-3 pt-3 border-t border-neutral-800/80">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-['Inter'] font-bold text-[#D4FF00] uppercase tracking-wider">
-                      {isEN ? "Injuries or Physical Limitations (Optional)" : "Cedera atau Keterbatasan Fisik (Opsional)"}
+                      {isEN ? "Pain, Injuries, or Physical Limitations" : "Cedera, Nyeri, atau Batasan Fisik"}
                     </label>
                     <span className="text-[10px] text-neutral-400 font-medium">
-                      {isEN ? "AI Coach will adapt exercises" : "AI akan menyesuaikan gerakan"}
+                      {isEN ? "Critical safety constraint" : "Prioritas keselamatan gerak"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[
-                      { id: "none", label: isEN ? "None (Fully Healthy)" : "Sehat (Tanpa Cedera)" },
-                      { id: "knee", label: isEN ? "Knee Pain" : "Nyeri Lutut" },
-                      { id: "lower_back", label: isEN ? "Lower Back Pain" : "Nyeri Punggung Bawah" },
-                      { id: "shoulder", label: isEN ? "Shoulder Injury" : "Cedera Bahu" },
-                      { id: "hypertension", label: isEN ? "Vertigo / High BP" : "Vertigo / Darah Tinggi" }
-                    ].map((inj) => {
-                      const isSel = injuries.includes(inj.id);
-                      return (
-                        <button
-                          key={inj.id}
-                          type="button"
-                          onClick={() => {
-                            if (inj.id === "none") {
-                              setInjuries(["none"]);
-                            } else {
-                              setInjuries((prev) => {
-                                const filter = prev.filter((i) => i !== "none");
-                                return filter.includes(inj.id) ? filter.filter((i) => i !== inj.id) : [...filter, inj.id];
-                              });
-                            }
-                          }}
-                          className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all text-left flex items-center justify-between cursor-pointer ${
-                            isSel
-                              ? "bg-[#D4FF00]/10 border-[#D4FF00] text-[#D4FF00]"
-                              : "bg-[#111620] text-neutral-300 border-neutral-800 hover:border-neutral-700"
-                          }`}
-                        >
-                          <span>{inj.label}</span>
-                          {isSel && <Check size={14} className="text-[#D4FF00] shrink-0" />}
-                        </button>
-                      );
-                    })}
+                  <p className="text-[11px] text-neutral-400">
+                    {isEN
+                      ? "Do you currently have any pain, injuries, or movements you need to avoid?"
+                      : "Apakah saat ini kamu memiliki rasa nyeri, riwayat cedera, atau gerakan yang perlu dihindari?"}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasInjury("no");
+                        setSelectedBodyAreas([]);
+                        setInjuries(["none"]);
+                      }}
+                      className={`py-2.5 px-3.5 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                        hasInjury === "no"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                          : "bg-[#111620] text-neutral-300 border-neutral-800"
+                      }`}
+                    >
+                      {isEN ? "No, Healthy & Ready to Train" : "Tidak Ada (Sehat & Siap Latihan)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHasInjury("yes")}
+                      className={`py-2.5 px-3.5 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                        hasInjury === "yes"
+                          ? "bg-[#D4FF00] text-black border-[#D4FF00] font-black"
+                          : "bg-[#111620] text-neutral-300 border-neutral-800"
+                      }`}
+                    >
+                      {isEN ? "Yes, I have areas to protect" : "Ya, Ada Area yang Perlu Penyesuaian"}
+                    </button>
                   </div>
-                  <input
-                    type="text"
-                    value={customInjury}
-                    onChange={(e) => setCustomInjury(e.target.value)}
-                    placeholder={isEN ? "Other specific condition (e.g. wrist pain, asthma...)" : "Catatan khusus lain (misal: nyeri pergelangan tangan, asma...)"}
-                    className="w-full bg-[#111620] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
-                  />
+
+                  {hasInjury === "yes" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="space-y-3 pt-2"
+                    >
+                      <div>
+                        <label className="block text-[11px] font-bold text-neutral-300 mb-1.5">
+                          {isEN ? "Select Affected Body Areas:" : "Pilih Area Tubuh yang Memerlukan Penyesuaian:"}
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { id: "knee", label: isEN ? "Knee" : "Lutut" },
+                            { id: "back", label: isEN ? "Lower Back" : "Punggung Bawah" },
+                            { id: "shoulder", label: isEN ? "Shoulder" : "Bahu" },
+                            { id: "hip", label: isEN ? "Hip" : "Pinggul" },
+                            { id: "ankle", label: isEN ? "Ankle" : "Pergelangan Kaki" },
+                            { id: "wrist", label: isEN ? "Wrist" : "Pergelangan Tangan" },
+                            { id: "neck", label: isEN ? "Neck" : "Leher" },
+                            { id: "other", label: isEN ? "Other" : "Lainnya" }
+                          ].map((area) => {
+                            const isSel = selectedBodyAreas.includes(area.id);
+                            return (
+                              <button
+                                key={area.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBodyAreas((prev) =>
+                                    prev.includes(area.id) ? prev.filter((a) => a !== area.id) : [...prev, area.id]
+                                  );
+                                  setInjuries((prev) => {
+                                    const next = prev.filter((i) => i !== "none");
+                                    return next.includes(area.id) ? next.filter((i) => i !== area.id) : [...next, area.id];
+                                  });
+                                }}
+                                className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
+                                  isSel
+                                    ? "bg-[#D4FF00]/15 border-[#D4FF00] text-[#D4FF00]"
+                                    : "bg-[#111620] text-neutral-400 border-neutral-800 hover:border-neutral-700"
+                                }`}
+                              >
+                                {area.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Severity Selection */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="block text-[11px] font-bold text-neutral-300">
+                          {isEN ? "Severity / Training Impact:" : "Tingkat Dampak pada Latihan:"}
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {[
+                            {
+                              id: "mild",
+                              label: isEN ? "Mild" : "Ringan",
+                              desc: isEN
+                                ? "I can usually train, but some movements may need adjustments."
+                                : "Bisa latihan, tapi beberapa gerakan butuh penyesuaian."
+                            },
+                            {
+                              id: "moderate",
+                              label: isEN ? "Moderate" : "Sedang",
+                              desc: isEN
+                                ? "Some movements are uncomfortable or difficult."
+                                : "Beberapa gerakan terasa tidak nyaman atau sulit."
+                            },
+                            {
+                              id: "severe",
+                              label: isEN ? "Severe" : "Perlu Hindari",
+                              desc: isEN
+                                ? "I currently need to avoid training that area."
+                                : "Perlu menghindari melatih area tersebut saat ini."
+                            }
+                          ].map((sev) => (
+                            <button
+                              key={sev.id}
+                              type="button"
+                              onClick={() => setInjurySeverity(sev.id as any)}
+                              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                injurySeverity === sev.id
+                                  ? "bg-[#D4FF00] text-black border-[#D4FF00]"
+                                  : "bg-[#111620] text-neutral-300 border-neutral-800"
+                              }`}
+                            >
+                              <span className="text-xs font-black block">{sev.label}</span>
+                              <span className={`text-[10px] block mt-0.5 leading-tight ${injurySeverity === sev.id ? "text-black/80 font-bold" : "text-neutral-500"}`}>
+                                {sev.desc}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Avoid movements chips */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="block text-[11px] font-bold text-neutral-300">
+                          {isEN ? "Specific Movements to Avoid (Optional):" : "Gerakan Tertentu yang Perlu Dihindari (Opsional):"}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { id: "jumping", label: isEN ? "Jumping / Impact" : "Lompat / High Impact" },
+                            { id: "deep_squat", label: isEN ? "Deep Squats" : "Squat Sangat Dalam" },
+                            { id: "overhead_press", label: isEN ? "Overhead Press" : "Angkat Beban di Atas Kepala" },
+                            { id: "axial_load", label: isEN ? "Heavy Spinal Load" : "Beban Aksial Tulang Belakang" },
+                            { id: "wrist_extension", label: isEN ? "Heavy Wrist Flex" : "Tekukan Pergelangan Tangan" }
+                          ].map((trigger) => {
+                            const isT = selectedPainTriggers.includes(trigger.id);
+                            return (
+                              <button
+                                key={trigger.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPainTriggers((prev) =>
+                                    prev.includes(trigger.id) ? prev.filter((t) => t !== trigger.id) : [...prev, trigger.id]
+                                  );
+                                }}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
+                                  isT
+                                    ? "bg-[#D4FF00]/20 text-[#D4FF00] border-[#D4FF00]"
+                                    : "bg-[#181818] text-neutral-400 border-neutral-800"
+                                }`}
+                              >
+                                {isT ? "✓ " : "+ "}
+                                {trigger.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={customInjury}
+                        onChange={(e) => setCustomInjury(e.target.value)}
+                        placeholder={isEN ? "Additional notes on your condition..." : "Catatan tambahan terkait kondisi fisikmu..."}
+                        className="w-full bg-[#111620] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D4FF00]"
+                      />
+
+                      {/* Prominent Medical Safety Disclaimer Box */}
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left space-y-1">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-[11px]">
+                          <span>🛡️</span>
+                          <span>{isEN ? "Safety & Medical Disclaimer" : "Pemberitahuan Keselamatan & Medis"}</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-300 leading-relaxed">
+                          {isEN
+                            ? "GymBuddy is an AI coach and does not diagnose injuries or provide medical clearance. If you experience severe, sharp, or worsening pain, please stop exercising and consult a qualified healthcare professional."
+                            : "GymBuddy adalah asisten AI kebugaran dan TIDAK mendiagnosis cedera medis. Informasi ini digunakan sebagai batasan latihan. Jika Anda mengalami nyeri hebat atau akut, hentikan latihan dan konsultasikan dengan tenaga medis profesional."}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}

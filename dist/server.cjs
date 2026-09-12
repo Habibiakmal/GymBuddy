@@ -42874,6 +42874,48 @@ var CURATED_EXERCISES = [
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
     ]
+  },
+  {
+    id: "incline-treadmill-walk",
+    name: "Incline Treadmill Walk",
+    indonesianName: "Jalan Incline Treadmill (Incline Walking)",
+    aliases: ["incline walk", "incline walking", "treadmill incline", "jalan incline", "incline treadmill", "incline treadmill walk"],
+    equipmentCategory: "cardio",
+    equipmentName: "Treadmill",
+    bodyPart: "cardio",
+    targetMuscles: ["Cardiovascular", "Calves", "Glutes", "Hamstrings"],
+    secondaryMuscles: ["Core"],
+    equipmentSetup: [
+      "Atur kecepatan treadmill di 4.0 - 5.5 km/jam (jalan cepat).",
+      "Atur sudut incline pada 6% - 12% sesuai kenyamanan lutut dan stamina.",
+      "Gunakan tali pengaman (safety clip) pada pakaian."
+    ],
+    instructions: [
+      "Berdiri tegak di tengah belt treadmill tanpa membungkuk ke depan.",
+      "Ayunkan kedua lengan secara alami dan hindari berpegangan erat terus-menerus pada handle bar.",
+      "Mendarat dengan lembut dari tumit ke telapak kaki untuk melindungi persendian.",
+      "Pertahankan pernapasan teratur di zona 2 (masih bisa berbicara santai)."
+    ],
+    dosAndDonts: {
+      dos: [
+        "Jaga pandangan lurus ke depan dan bahu tetap rileks.",
+        "Pertahankan tempo konstan selama durasi yang ditentukan."
+      ],
+      donts: [
+        "Jangan memegang handle bar sambil bersandar ke belakang (mengurangi efektivitas tanjakan).",
+        "Jangan melangkah terlalu panjang yang membuat tumit terbanting keras."
+      ]
+    },
+    coachCues: {
+      max: "Incline walk adalah senjata rahasia fat loss tanpa bikin sendi hancur bro! Pertahankan elevasi dan ayun lengan lo! \u{1F525}",
+      mia: "Jaga postur tegap dan ayun tangan santai ya. Ini sangat ramah untuk lutut dan membakar kalori optimal! \u2728"
+    },
+    recommendedSetsReps: "15 - 30 Menit (Incline 6-10%, Speed 4.5-5.5 km/jam)",
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/1.jpg"
+    ]
   }
 ];
 var curatedNames = new Set(CURATED_EXERCISES.map((e) => e.name.toLowerCase()));
@@ -42947,11 +42989,11 @@ function formatWhatsAppExerciseGuide(exercise, persona = "max", userGoal = "heal
   const coachCue = persona === "max" ? exercise.coachCues.max : exercise.coachCues.mia;
   let goalRecommendation = exercise.recommendedSetsReps;
   if (userGoal === "gain") {
-    goalRecommendation = "4 Set x 8-10 Repetisi (Fokus Beban Progresif & Hipertrofi Otot)";
+    goalRecommendation = "4 Set \xD7 8-10 Repetisi (Fokus Beban Progresif & Hipertrofi Otot)";
   } else if (userGoal === "lose") {
-    goalRecommendation = "3-4 Set x 12-15 Repetisi (Fokus Tempo Terkontrol & Pembakaran Kalori)";
+    goalRecommendation = "3-4 Set \xD7 12-15 Repetisi (Fokus Tempo Terkontrol & Pembakaran Kalori)";
   } else {
-    goalRecommendation = "3 Set x 10-12 Repetisi (Fokus Ketahanan & Kebugaran Optimal)";
+    goalRecommendation = "3 Set \xD7 10-12 Repetisi (Fokus Ketahanan & Kebugaran Optimal)";
   }
   const text = `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *PANDUAN ALAT & LATIHAN: ${exercise.name.toUpperCase()}*
 \u{1F1EE}\u{1F1E9} *${exercise.indonesianName}*
@@ -42984,32 +43026,32 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
   if (goal === "gain") {
     return [
       { day: isEN ? "Monday" : "Senin", focus: isEN ? "Chest & Triceps (Push Day)" : "Dada & Tricep (Push Day)", exercises: [
-        { id: "w-mon-1", name: "Barbell Bench Press - Medium Grip", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 8-10 Reps" : "4 Set x 8-10 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Incline Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10-12 Reps" : "4 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-mon-3", name: "Triceps Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
+        { id: "w-mon-1", name: "Barbell Bench Press - Medium Grip", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 8-10 Reps" : "4 Set \xD7 8-10 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Incline Dumbbell Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 10-12 Reps" : "4 Set \xD7 10-12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Triceps Pushdown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Back & Biceps (Pull Day)" : "Punggung & Bicep (Pull Day)", exercises: [
-        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10-12 Reps" : "4 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Seated Cable Rows", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-tue-3", name: "Dumbbell Bicep Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 10-12 Reps" : "4 Set \xD7 10-12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Seated Cable Rows", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 10 Reps" : "4 Set \xD7 10 Reps", status: "not_started" },
+        { id: "w-tue-3", name: "Dumbbell Bicep Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Leg Mass & Core (Leg Day)" : "Leg Mass & Core (Leg Day)", exercises: [
-        { id: "w-wed-1", name: "Barbell Full Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 8 Reps" : "4 Set x 8 Reps", status: "not_started" },
-        { id: "w-wed-2", name: "Leg Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 15 Reps" : "3 Set x 15 Reps", status: "not_started" }
+        { id: "w-wed-1", name: "Barbell Full Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 8 Reps" : "4 Set \xD7 8 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Leg Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 10 Reps" : "4 Set \xD7 10 Reps", status: "not_started" },
+        { id: "w-wed-3", name: "Hanging Leg Raise", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 15 Reps" : "3 Set \xD7 15 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Active Recovery & Mobility" : "Pemulihan Aktif & Mobilitas", exercises: [
         { id: "w-thu-1", name: "Dynamic Back Stretch", targetSets: 2, completedSets: 0, setsState: [false, false], targetReps: isEN ? "15 Mins Mobility" : "15 Menit Mobilitas", status: "not_started" },
         { id: "w-thu-2", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "20 Mins Light Walk" : "20 Menit Jalan Santai", status: "not_started" }
       ] },
       { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Chest & Arms Hypertrophy" : "Chest & Arms Hypertrophy", exercises: [
-        { id: "w-fri-1", name: "Dumbbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 10 Reps" : "4 Set x 10 Reps", status: "not_started" },
-        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-fri-3", name: "Preacher Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
+        { id: "w-fri-1", name: "Dumbbell Bench Press", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 10 Reps" : "4 Set \xD7 10 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Cable Chest Fly", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" },
+        { id: "w-fri-3", name: "Preacher Curl", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Delts 3D & Core Focus" : "Delts 3D & Core Focus", exercises: [
-        { id: "w-sat-1", name: "Side Lateral Raise", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 15 Reps" : "4 Set x 15 Reps", status: "not_started" },
-        { id: "w-sat-2", name: "Ab Roller", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
+        { id: "w-sat-1", name: "Side Lateral Raise", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 15 Reps" : "4 Set \xD7 15 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Ab Roller", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Sunday" : "Minggu", focus: isEN ? "Rest & Recovery" : "Istirahat & Pemulihan", exercises: [
         { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "8 Hours Sleep Recovery" : "Recovery 8 Jam Tidur", status: "not_started" }
@@ -43018,28 +43060,29 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
   } else if (goal === "lose") {
     return [
       { day: isEN ? "Monday" : "Senin", focus: isEN ? "Fat Loss HIIT & Push Day" : "Fat Loss HIIT & Push Day", exercises: [
-        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12-15 Reps" : "3 Set x 12-15 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-mon-3", name: "Jumping Rope", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 1 Min" : "3 Set x 1 Menit", status: "not_started" }
+        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12-15 Reps" : "3 Set \xD7 12-15 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" },
+        { id: "w-mon-3", name: "Jumping Rope", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 1 Min" : "3 Set \xD7 1 Menit", status: "not_started" }
       ] },
       { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Upper Body & Core Deficit" : "Upper Body & Core Deficit", exercises: [
-        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
+        { id: "w-tue-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 45 Secs" : "3 Set \xD7 45 Detik", status: "not_started" }
       ] },
       { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Lower Body Fat Crusher" : "Lower Body Fat Crusher", exercises: [
-        { id: "w-wed-1", name: "Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets x 15 Reps" : "4 Set x 15 Reps", status: "not_started" },
-        { id: "w-wed-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" }
+        { id: "w-wed-1", name: "Bodyweight Squat", targetSets: 4, completedSets: 0, setsState: [false, false, false, false], targetReps: isEN ? "4 Sets \xD7 15 Reps" : "4 Set \xD7 15 Reps", status: "not_started" },
+        { id: "w-wed-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Zone 2 Cardio Fat Burn" : "Kardio Zona 2 Pembakar Lemak", exercises: [
         { id: "w-thu-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins Zone 2" : "30 Menit Zona 2", status: "not_started" }
       ] },
       { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Full Body Calorie Burner" : "Full Body Calorie Burner", exercises: [
-        { id: "w-fri-1", name: "Burpee", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10-12 Reps" : "3 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 20 Reps" : "3 Set x 20 Reps", status: "not_started" }
+        { id: "w-fri-1", name: "Burpee", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 10-12 Reps" : "3 Set \xD7 10-12 Reps", status: "not_started" },
+        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 20 Reps" : "3 Set \xD7 20 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Core & Incline Walking" : "Core & Incline Walking", exercises: [
-        { id: "w-sat-1", name: "Russian Twist", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 20 Reps" : "3 Set x 20 Reps", status: "not_started" },
-        { id: "w-sat-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
+        { id: "w-sat-1", name: "Russian Twist", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 20 Reps" : "3 Set \xD7 20 Reps", status: "not_started" },
+        { id: "w-sat-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 45 Secs" : "3 Set \xD7 45 Detik", status: "not_started" },
+        { id: "w-sat-3", name: "Incline Treadmill Walk", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "20 Mins \xB7 Incline 8%" : "20 Menit \xB7 Incline 8%", status: "not_started" }
       ] },
       { day: isEN ? "Sunday" : "Minggu", focus: isEN ? "Rest & Active Recovery" : "Pemulihan Aktif & Hidrasi", exercises: [
         { id: "w-sun-1", name: "Rest & Recovery", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "Active Recovery & Hydration" : "Recovery & Hidrasi", status: "not_started" }
@@ -43048,23 +43091,23 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
   } else {
     return [
       { day: isEN ? "Monday" : "Senin", focus: isEN ? "Push & Core (Stamina & Mobility)" : "Push & Core (Stamina & Mobilitas)", exercises: [
-        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10-12 Reps" : "3 Set x 10-12 Reps", status: "not_started" },
-        { id: "w-mon-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 45 Secs" : "3 Set x 45 Detik", status: "not_started" }
+        { id: "w-mon-1", name: "Push-Up", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 10-12 Reps" : "3 Set \xD7 10-12 Reps", status: "not_started" },
+        { id: "w-mon-2", name: "Plank", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 45 Secs" : "3 Set \xD7 45 Detik", status: "not_started" }
       ] },
       { day: isEN ? "Tuesday" : "Selasa", focus: isEN ? "Lower Body (Legs & Fitness)" : "Lower Body (Kaki & Kebugaran)", exercises: [
-        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12-15 Reps" : "3 Set x 12-15 Reps", status: "not_started" },
-        { id: "w-tue-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10 Reps/leg" : "3 Set x 10 Reps/kaki", status: "not_started" }
+        { id: "w-tue-1", name: "Bodyweight Squat", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12-15 Reps" : "3 Set \xD7 12-15 Reps", status: "not_started" },
+        { id: "w-tue-2", name: "Dumbbell Lunges", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 10 Reps/leg" : "3 Set \xD7 10 Reps/kaki", status: "not_started" }
       ] },
       { day: isEN ? "Wednesday" : "Rabu", focus: isEN ? "Active Recovery & Cardio" : "Pemulihan Aktif & Kardio", exercises: [
         { id: "w-wed-1", name: "Walking", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins Light Walk" : "30 Menit Jalan Santai", status: "not_started" }
       ] },
       { day: isEN ? "Thursday" : "Kamis", focus: isEN ? "Upper Body & Posture" : "Upper Body & Postur", exercises: [
-        { id: "w-thu-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 12 Reps" : "3 Set x 12 Reps", status: "not_started" },
-        { id: "w-thu-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 10 Reps" : "3 Set x 10 Reps", status: "not_started" }
+        { id: "w-thu-1", name: "Wide-Grip Lat Pulldown", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 12 Reps" : "3 Set \xD7 12 Reps", status: "not_started" },
+        { id: "w-thu-2", name: "Dumbbell Shoulder Press", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 10 Reps" : "3 Set \xD7 10 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Friday" : "Jumat", focus: isEN ? "Full Body Conditioning" : "Full Body Conditioning", exercises: [
-        { id: "w-fri-1", name: "Jumping Jacks", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 1 Min" : "3 Set x 1 Menit", status: "not_started" },
-        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets x 15 Reps" : "3 Set x 15 Reps", status: "not_started" }
+        { id: "w-fri-1", name: "Jumping Jacks", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 1 Min" : "3 Set \xD7 1 Menit", status: "not_started" },
+        { id: "w-fri-2", name: "Mountain Climbers", targetSets: 3, completedSets: 0, setsState: [false, false, false], targetReps: isEN ? "3 Sets \xD7 15 Reps" : "3 Set \xD7 15 Reps", status: "not_started" }
       ] },
       { day: isEN ? "Saturday" : "Sabtu", focus: isEN ? "Cardio & Stamina" : "Kardio & Stamina", exercises: [
         { id: "w-sat-1", name: "Stationary Bike", targetSets: 1, completedSets: 0, setsState: [false], targetReps: isEN ? "30 Mins" : "30 Menit", status: "not_started" }
@@ -43074,6 +43117,675 @@ function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
       ] }
     ];
   }
+}
+
+// services/workoutEngine.ts
+function normalizeSetsRepsString(targetSets, targetRepsOrDuration) {
+  const clean = (targetRepsOrDuration || "").trim();
+  if (!clean) return `${targetSets} Sets`;
+  if (/\b(?:min|mins|menit|detik|sec|secs)\b/i.test(clean) && !/\breps\b/i.test(clean)) {
+    if (/^\d+(?:[–\-]\d+)?\s*(?:min|mins|menit)/i.test(clean) || targetSets <= 1) {
+      return clean;
+    }
+    return `${targetSets} Sets \xD7 ${clean}`;
+  }
+  let strippedReps = clean.replace(/^(?:\d+\s*sets?\s*[x×]\s*)+/i, "").trim();
+  strippedReps = strippedReps.replace(/^set\s*\d+\s*[x×]\s*/i, "").trim();
+  if (/^\d+(?:-\d+)?$/.test(strippedReps)) {
+    strippedReps = `${strippedReps} Reps`;
+  }
+  return `${targetSets} Sets \xD7 ${strippedReps}`;
+}
+function validateExerciseSafety(exercise, constraints = []) {
+  if (!constraints || constraints.length === 0) {
+    return { isSafe: true };
+  }
+  for (const c of constraints) {
+    const jointLoad = exercise.jointLoad[c.bodyArea];
+    if (c.severity === "severe") {
+      if (jointLoad === "moderate" || jointLoad === "high") {
+        return {
+          isSafe: false,
+          reason: `Area ${c.bodyArea.toUpperCase()} memiliki status pembatasan ketat (${c.severity}). Gerakan ini dieliminasi untuk menjaga keamanan sendi.`,
+          suggestedModification: "Gunakan alternatif tanpa beban aksial atau isolasi area tubuh lain."
+        };
+      }
+    }
+    if (c.severity === "moderate") {
+      if (jointLoad === "high") {
+        return {
+          isSafe: false,
+          reason: `Gerakan memiliki beban tinggi pada sendi ${c.bodyArea}. Disesuaikan karena adanya riwayat ketidaknyamanan.`,
+          suggestedModification: "Gunakan variasi beban ringan, tumpuan bangku, atau gerakan isolasi terkontrol."
+        };
+      }
+    }
+    const contra = (exercise.contraindications || []).map((x) => x.toLowerCase());
+    if (c.avoidMovements && c.avoidMovements.length > 0) {
+      for (const avoid of c.avoidMovements) {
+        if (contra.includes(avoid.toLowerCase()) || exercise.name.toLowerCase().includes(avoid.toLowerCase())) {
+          return {
+            isSafe: false,
+            reason: `Menghindari pola gerakan '${avoid}' sesuai laporan kenyamanan fisik Anda.`,
+            suggestedModification: "Alternatif pola gerak yang lebih ramah sendi diterapkan."
+          };
+        }
+      }
+    }
+    if (c.painTriggers && c.painTriggers.length > 0) {
+      for (const trigger of c.painTriggers) {
+        if (contra.includes(trigger.toLowerCase())) {
+          return {
+            isSafe: false,
+            reason: `Pemicu nyeri '${trigger}' dihindari sesuai profil fisik Anda.`,
+            suggestedModification: "Menggunakan gerakan dengan stabilitas lebih tinggi."
+          };
+        }
+      }
+    }
+  }
+  return { isSafe: true };
+}
+function calculateRecoveryContext(history, currentDateStr) {
+  if (!history || history.length === 0) {
+    return {
+      daysSinceLastWorkout: 99,
+      recentCompletedSessions: 0,
+      consecutiveWorkoutDays: 0,
+      recentTotalSets: 0,
+      recoveryScore: "high",
+      recentlyTrainedBodyAreas: [],
+      recommendation: "push"
+    };
+  }
+  const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const lastSession = sorted[0];
+  const nowMs = new Date(currentDateStr).getTime();
+  const lastMs = new Date(lastSession.date).getTime();
+  const diffDays = Math.max(0, Math.floor((nowMs - lastMs) / (1e3 * 60 * 60 * 24)));
+  let consecutiveDays = 0;
+  let checkMs = nowMs - 1e3 * 60 * 60 * 24;
+  for (const s of sorted) {
+    const sMs = new Date(s.date).getTime();
+    if (Math.abs(sMs - checkMs) < 1e3 * 60 * 60 * 12) {
+      consecutiveDays++;
+      checkMs -= 1e3 * 60 * 60 * 24;
+    } else {
+      break;
+    }
+  }
+  const sevenDaysAgoMs = nowMs - 7 * 24 * 60 * 60 * 1e3;
+  const recentSessions = sorted.filter((s) => new Date(s.date).getTime() >= sevenDaysAgoMs);
+  const recentSets = recentSessions.reduce((sum, s) => sum + (s.completedSets || 0), 0);
+  const recentlyTrained = [];
+  recentSessions.slice(0, 2).forEach((s) => {
+    if (Array.isArray(s.bodyAreas)) {
+      s.bodyAreas.forEach((a) => {
+        if (!recentlyTrained.includes(a)) recentlyTrained.push(a);
+      });
+    }
+  });
+  const difficulties = recentSessions.map((s) => s.difficulty).filter(Boolean);
+  const hardCount = difficulties.filter((d) => d === "hard" || d === "very_hard").length;
+  let recoveryScore = "high";
+  let recommendation = "maintain";
+  if (consecutiveDays >= 3 || hardCount >= 2 || recentSets >= 45) {
+    recoveryScore = "poor";
+    recommendation = "deload";
+  } else if (consecutiveDays === 2 || hardCount === 1 || recentSets >= 30) {
+    recoveryScore = "moderate";
+    recommendation = "maintain";
+  } else {
+    recoveryScore = "high";
+    recommendation = "push";
+  }
+  return {
+    daysSinceLastWorkout: diffDays,
+    recentCompletedSessions: recentSessions.length,
+    consecutiveWorkoutDays: consecutiveDays,
+    recentTotalSets: recentSets,
+    recentlyTrainedBodyAreas: recentlyTrained,
+    recoveryScore,
+    recommendation
+  };
+}
+function calculateEstimatedWorkoutDuration(warmup, exercises, cooldown, cardio) {
+  const warmupMins = warmup.reduce((sum, w) => sum + w.durationMinutes, 0);
+  const cooldownMins = cooldown.reduce((sum, c) => sum + c.durationMinutes, 0);
+  let exerciseSeconds = 0;
+  for (const ex of exercises) {
+    let repCount = 10;
+    const match = ex.targetReps.match(/(\d+)(?:-\d+)?\s*reps?/i);
+    if (match) {
+      repCount = parseInt(match[1], 10);
+    } else if (ex.targetReps.includes("sec") || ex.targetReps.includes("detik")) {
+      const secMatch = ex.targetReps.match(/(\d+)\s*(?:sec|detik)/i);
+      repCount = secMatch ? parseInt(secMatch[1], 10) / 3 : 10;
+    }
+    const executionPerSet = repCount * 3;
+    const restPerSet = ex.restSeconds || 60;
+    exerciseSeconds += ex.targetSets * (executionPerSet + restPerSet);
+  }
+  let cardioMins = 0;
+  if (cardio) {
+    const cMatch = cardio.targetReps.match(/(\d+)\s*(?:min|menit)/i);
+    cardioMins = cMatch ? parseInt(cMatch[1], 10) : 15;
+  }
+  const totalMinutes = Math.round(warmupMins + exerciseSeconds / 60 + cardioMins + cooldownMins);
+  return Math.max(12, totalMinutes);
+}
+var MASTER_EXERCISE_CATALOG = [
+  // ── PUSH / UPPER BODY ──
+  {
+    exerciseId: "db-bench-press",
+    name: "Dumbbell Bench Press",
+    indonesianName: "Dumbbell Bench Press (Dada & Tricep)",
+    targetMuscles: ["Chest (Pectoralis)", "Triceps", "Anterior Deltoids"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Tancepkan kaki, busungkan dada sedikit, dan dorong kuat dari dada! \u{1F525}",
+      mia: "Tarik napas saat menurunkan dumbbell, dan buang napas perlahan saat mendorong. \u2728"
+    },
+    priority: "essential",
+    bodyArea: "upper_body",
+    movementPattern: "push",
+    jointLoad: { shoulder: "low", wrist: "low", spine: "none", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Bench_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Bench_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Bench_Press/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "push-up",
+    name: "Push-Up",
+    indonesianName: "Push-Up (Dada, Bahu & Core)",
+    targetMuscles: ["Chest", "Core", "Triceps"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 12\u201315 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Kunci pantat dan perut, turun sampai dada hampir cium lantai! Gas!",
+      mia: "Jaga tubuh tetap membentuk garis lurus dari kepala hingga tumit ya. \u2728"
+    },
+    priority: "essential",
+    bodyArea: "upper_body",
+    movementPattern: "push",
+    jointLoad: { wrist: "moderate", shoulder: "moderate", spine: "none", knee: "none" },
+    contraindications: ["wrist_extension"],
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "db-shoulder-press",
+    name: "Seated Dumbbell Shoulder Press",
+    indonesianName: "Dumbbell Shoulder Press Duduk (Bahu)",
+    targetMuscles: ["Deltoids (Bahu)", "Triceps"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Sandaran punggung tegak, dorong tanpa membenturkan dumbbell di atas!",
+      mia: "Dorong ke atas dengan stabil dan jaga pundak tidak terangkat ke telinga ya."
+    },
+    priority: "secondary",
+    bodyArea: "upper_body",
+    movementPattern: "push",
+    jointLoad: { shoulder: "moderate", spine: "low", wrist: "low", knee: "none" },
+    contraindications: ["overhead_press"],
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Dumbbell_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Dumbbell_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Dumbbell_Press/1.jpg"
+    ]
+  },
+  // ── PULL / BACK ──
+  {
+    exerciseId: "lat-pulldown",
+    name: "Wide-Grip Lat Pulldown",
+    indonesianName: "Lat Pulldown (Sayap Punggung)",
+    targetMuscles: ["Latissimus Dorsi", "Biceps", "Rhomboids"],
+    equipment: "machines",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Tarik pakai siku lo ke bawah, squeeze sayap punggung sampai mentok!",
+      mia: "Bawa stang ke arah dada atas perlahan sambil rasakan otot punggung bekerja."
+    },
+    priority: "essential",
+    bodyArea: "upper_body",
+    movementPattern: "pull",
+    jointLoad: { spine: "none", shoulder: "low", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Wide-Grip_Lat_Pulldown/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "db-row-supported",
+    name: "Chest-Supported Dumbbell Row",
+    indonesianName: "Dumbbell Row Tumpuan Dada (Punggung Ramah Pinggang)",
+    targetMuscles: ["Upper Back", "Lats", "Rhomboids"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Dada nempel di bangku, pinggang aman total, tarik siku ke belakang!",
+      mia: "Pilihan terbaik untuk melatih punggung tanpa memberi tekanan pada pinggang bawah."
+    },
+    priority: "essential",
+    bodyArea: "upper_body",
+    movementPattern: "pull",
+    jointLoad: { spine: "none", shoulder: "low", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Row/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Row/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Row/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "seated-cable-row",
+    name: "Seated Cable Row",
+    indonesianName: "Seated Cable Row (Dayung Kabel Duduk)",
+    targetMuscles: ["Rhomboids", "Middle Trapezius", "Lats"],
+    equipment: "machines",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Tarik ke arah pusar, jepit belikat kuat-kuat selama 1 detik!",
+      mia: "Tegakkan dada dan kontrol tarikan kabel tanpa mengayunkan tubuh."
+    },
+    priority: "secondary",
+    bodyArea: "upper_body",
+    movementPattern: "pull",
+    jointLoad: { spine: "low", shoulder: "low", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/1.jpg"
+    ]
+  },
+  // ── LEGS / LOWER BODY ──
+  {
+    exerciseId: "db-rdl",
+    name: "Dumbbell Romanian Deadlift",
+    indonesianName: "Dumbbell Romanian Deadlift (Paha Belakang & Bokong)",
+    targetMuscles: ["Hamstrings", "Glutes"],
+    equipment: "dumbbells",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 60,
+    coachCue: {
+      max: "Dorong pantat ke belakang, lutut sedikit tekuk lembut, rasakan tarikan di paha belakang!",
+      mia: "Jaga punggung tetap rata alami dan bawa dumbbell menyusuri tulang kering."
+    },
+    priority: "essential",
+    bodyArea: "lower_body",
+    movementPattern: "hinge",
+    jointLoad: { knee: "low", spine: "low", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Romanian_Deadlift/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Romanian_Deadlift/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Romanian_Deadlift/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "glute-bridge",
+    name: "Glute Bridge & Hip Thrust",
+    indonesianName: "Glute Bridge (Bokong Ramah Lutut)",
+    targetMuscles: ["Gluteus Maximus", "Hamstrings"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 15 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Dorong dari tumit, kunci bokong di puncak gerakan 2 detik!",
+      mia: "Gerakan ini sangat ramah untuk sendi lutut dan pinggang bawah. Lakukan perlahan."
+    },
+    priority: "essential",
+    bodyArea: "lower_body",
+    movementPattern: "hinge",
+    jointLoad: { knee: "low", spine: "none", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Glute_Bridge/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Glute_Bridge/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Glute_Bridge/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "leg-press",
+    name: "Leg Press Machine",
+    indonesianName: "Mesin Leg Press (Paha & Bokong)",
+    targetMuscles: ["Quadriceps", "Glutes"],
+    equipment: "machines",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 10\u201312 Reps",
+    restSeconds: 75,
+    coachCue: {
+      max: "AWAS: JANGAN kunci mati (lockout) lutut di atas! Sisakan tekukan sedikit!",
+      mia: "Pastikan pinggul dan punggung selalu menempel rapat di bantalan kursi ya."
+    },
+    priority: "essential",
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    jointLoad: { knee: "moderate", spine: "low", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "bodyweight-squat",
+    name: "Bodyweight Squat",
+    indonesianName: "Squat Beban Tubuh",
+    targetMuscles: ["Quadriceps", "Glutes"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 12\u201315 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Buka dada, turun sampai paha sejajar lantai, dorong pakai tumit!",
+      mia: "Atur napas dengan tenang dan jaga lutut tetap sejajar dengan arah jari kaki."
+    },
+    priority: "essential",
+    bodyArea: "lower_body",
+    movementPattern: "squat",
+    jointLoad: { knee: "moderate", spine: "low", shoulder: "none" },
+    contraindications: ["deep_squat"],
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bodyweight_Squat/1.jpg"
+    ]
+  },
+  // ── CORE & CONDITIONING ──
+  {
+    exerciseId: "russian-twist",
+    name: "Russian Twist",
+    indonesianName: "Russian Twist (Perut Samping & Core)",
+    targetMuscles: ["Obliques", "Rectus Abdominis"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 20 Reps",
+    restSeconds: 45,
+    coachCue: {
+      max: "Kunci perut lo, rotasikan tubuh secara terkontrol tanpa mengayun liar!",
+      mia: "Fokus pada putaran pinggang yang lembut dan terarah ya. Jaga pernapasan."
+    },
+    priority: "essential",
+    bodyArea: "core",
+    movementPattern: "core",
+    jointLoad: { spine: "low", knee: "none", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Russian_Twist/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Russian_Twist/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Russian_Twist/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "plank",
+    name: "Plank Hold",
+    indonesianName: "Plank Statis (Kekuatan Core Menyeluruh)",
+    targetMuscles: ["Core", "Transverse Abdominis", "Shoulders"],
+    equipment: "bodyweight",
+    targetSets: 3,
+    targetReps: "3 Sets \xD7 45 Secs",
+    restSeconds: 45,
+    coachCue: {
+      max: "Tahan! Jangan biarkan pinggang turun lemas! 45 detik solid!",
+      mia: "Rapatkan otot perut dan bernapaslah secara teratur sepanjang waktu."
+    },
+    priority: "essential",
+    bodyArea: "core",
+    movementPattern: "core",
+    jointLoad: { shoulder: "low", spine: "none", wrist: "none", knee: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Plank/1.jpg"
+    ]
+  },
+  {
+    exerciseId: "incline-treadmill-walk",
+    name: "Incline Treadmill Walk",
+    indonesianName: "Jalan Incline Treadmill (Pembakar Lemak Ramah Sendi)",
+    targetMuscles: ["Cardiovascular", "Calves", "Glutes"],
+    equipment: "machines",
+    targetSets: 1,
+    targetReps: "15\u201320 min \xB7 Incline 8%",
+    restSeconds: 0,
+    coachCue: {
+      max: "Jaga postur tegak, ayun lengan naturally. Zona kardio pembakar lemak optimal!",
+      mia: "Kecepatan stabil dan elevasi nyaman membantu membakar kalori tanpa membebani lutut."
+    },
+    priority: "secondary",
+    bodyArea: "cardio",
+    movementPattern: "cardio",
+    jointLoad: { knee: "low", spine: "none", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking/0.jpg"
+    ]
+  },
+  {
+    exerciseId: "stationary-bike",
+    name: "Stationary Bike",
+    indonesianName: "Sepeda Statis (Kardio Zona 2)",
+    targetMuscles: ["Cardiovascular", "Quadriceps"],
+    equipment: "machines",
+    targetSets: 1,
+    targetReps: "20 min \xB7 Zona 2",
+    restSeconds: 0,
+    coachCue: {
+      max: "Kayuh stabil di resistensi sedang, jaga napas tetap terkendali!",
+      mia: "Kayuh santai namun berirama untuk menjaga kebugaran jantung dan membakar lemak."
+    },
+    priority: "secondary",
+    bodyArea: "cardio",
+    movementPattern: "cardio",
+    jointLoad: { knee: "low", spine: "none", shoulder: "none" },
+    gifUrl: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Stationary_Bike/0.jpg",
+    imageFrames: [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Stationary_Bike/0.jpg"
+    ]
+  }
+];
+function generatePersonalizedWorkoutPlan(userPrefs, targetDateStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0], history = [], dayIndexOverride) {
+  const duration = userPrefs.workoutDuration || 45;
+  const goal = (userPrefs.primaryGoal || "lose").toLowerCase();
+  const fitness = userPrefs.fitnessLevel || "intermediate";
+  const equipment = userPrefs.equipment || "full_gym";
+  const constraints = userPrefs.injuryLimitations || [];
+  const persona = userPrefs.persona || "max";
+  const d = new Date(targetDateStr);
+  const dayIndex = typeof dayIndexOverride === "number" ? dayIndexOverride : (d.getDay() + 6) % 7;
+  const dayNamesID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const dayName = dayNamesID[dayIndex] || "Hari Ini";
+  const recovery = calculateRecoveryContext(history, targetDateStr);
+  const safeCatalog = MASTER_EXERCISE_CATALOG.filter((ex) => {
+    if (equipment === "bodyweight" || equipment === "none") {
+      if (ex.equipment !== "bodyweight") return false;
+    } else if (equipment === "dumbbells") {
+      if (ex.equipment !== "bodyweight" && ex.equipment !== "dumbbells") return false;
+    }
+    const safety = validateExerciseSafety(ex, constraints);
+    return safety.isSafe;
+  });
+  const safeUpper = safeCatalog.filter((e) => e.bodyArea === "upper_body");
+  const safeLower = safeCatalog.filter((e) => e.bodyArea === "lower_body");
+  const safeCore = safeCatalog.filter((e) => e.bodyArea === "core");
+  const safeCardio = safeCatalog.filter((e) => e.bodyArea === "cardio");
+  let focus = "Full Body Conditioning";
+  let primaryMovements = [];
+  let secondaryMovements = [];
+  let cardioMovement = void 0;
+  if (dayIndex === 5) {
+    focus = "Core & Incline Walking";
+    primaryMovements = safeCore.slice(0, 2);
+    cardioMovement = safeCatalog.find((e) => e.exerciseId === "incline-treadmill-walk") || safeCardio[0];
+  } else if (dayIndex === 0 || dayIndex === 3) {
+    focus = goal === "gain" ? "Upper Body Hypertrophy" : "Upper Body & Core";
+    primaryMovements = safeUpper.slice(0, 2);
+    secondaryMovements = [...safeUpper.slice(2, 4), ...safeCore.slice(0, 1)];
+  } else if (dayIndex === 1 || dayIndex === 4) {
+    focus = goal === "gain" ? "Lower Body Strength & Glutes" : "Lower Body & Fat Burn";
+    primaryMovements = safeLower.slice(0, 2);
+    secondaryMovements = [...safeLower.slice(2, 3), ...safeCore.slice(0, 1)];
+  } else if (dayIndex === 2) {
+    focus = "Midweek Active Recovery & Core";
+    primaryMovements = safeCore.slice(0, 2);
+    cardioMovement = safeCatalog.find((e) => e.exerciseId === "stationary-bike") || safeCardio[0];
+  } else {
+    focus = "Rest & Active Recovery";
+  }
+  let warmupDuration = 5;
+  let cooldownDuration = 5;
+  let plannedExercises = [];
+  if (duration === 15) {
+    warmupDuration = 2;
+    cooldownDuration = 2;
+    plannedExercises = (primaryMovements.length >= 2 ? primaryMovements.slice(0, 2) : safeCatalog.slice(0, 2)).map((ex) => ({
+      ...ex,
+      targetSets: 2,
+      targetReps: normalizeSetsRepsString(2, ex.targetReps)
+    }));
+    cardioMovement = void 0;
+  } else if (duration === 30) {
+    warmupDuration = 4;
+    cooldownDuration = 4;
+    if (dayIndex === 5 && cardioMovement) {
+      plannedExercises = primaryMovements.slice(0, 2).map((ex) => ({
+        ...ex,
+        targetSets: 3,
+        targetReps: normalizeSetsRepsString(3, ex.targetReps)
+      }));
+      cardioMovement = {
+        ...cardioMovement,
+        targetReps: "10\u201312 min \xB7 Incline 6\u20138%"
+      };
+    } else {
+      const candidates = [...primaryMovements, ...secondaryMovements].slice(0, 3);
+      plannedExercises = (candidates.length >= 3 ? candidates : safeCatalog.slice(0, 3)).map((ex) => ({
+        ...ex,
+        targetSets: 3,
+        targetReps: normalizeSetsRepsString(3, ex.targetReps)
+      }));
+    }
+  } else if (duration === 45) {
+    warmupDuration = 5;
+    cooldownDuration = 5;
+    if (dayIndex === 5 && cardioMovement) {
+      plannedExercises = primaryMovements.slice(0, 2).map((ex) => ({
+        ...ex,
+        targetSets: 3,
+        targetReps: normalizeSetsRepsString(3, ex.targetReps)
+      }));
+      cardioMovement = {
+        ...cardioMovement,
+        targetReps: "15\u201320 min \xB7 Incline 8%"
+      };
+    } else {
+      const candidates = [...primaryMovements, ...secondaryMovements].slice(0, 4);
+      plannedExercises = (candidates.length >= 4 ? candidates : safeCatalog.slice(0, 4)).map((ex) => ({
+        ...ex,
+        targetSets: 3,
+        targetReps: normalizeSetsRepsString(3, ex.targetReps)
+      }));
+    }
+  } else {
+    warmupDuration = 6;
+    cooldownDuration = 6;
+    const candidates = [...primaryMovements, ...secondaryMovements].slice(0, 5);
+    plannedExercises = (candidates.length >= 4 ? candidates : safeCatalog.slice(0, 5)).map((ex) => ({
+      ...ex,
+      targetSets: fitness === "advanced" ? 4 : 3,
+      targetReps: normalizeSetsRepsString(fitness === "advanced" ? 4 : 3, ex.targetReps)
+    }));
+  }
+  const allSessionExercises = cardioMovement ? [...plannedExercises, cardioMovement] : plannedExercises;
+  const warmup = [
+    { name: "Pemanasan Mobilitas Sendi", durationMinutes: Math.round(warmupDuration * 0.6), instructions: "Rotasi bahu, arm swings, cat-cow stretch." },
+    { name: "Aktivasi Otot Target", durationMinutes: Math.max(1, Math.round(warmupDuration * 0.4)), instructions: "Gerakan beban tubuh ringan untuk menaikkan detak jantung." }
+  ];
+  const cooldown = [
+    { name: "Peregangan Statis", durationMinutes: cooldownDuration, instructions: "Peregangan otot utama selama 30 detik tiap sisi untuk mempercepat pemulihan." }
+  ];
+  const estimatedDuration = calculateEstimatedWorkoutDuration(warmup, plannedExercises, cooldown, cardioMovement);
+  const totalSets = allSessionExercises.reduce((sum, ex) => sum + (ex.targetSets || 1), 0);
+  let rationale = "";
+  if (dayIndex === 5) {
+    rationale = `Fokus latihan hari ini adalah stabilitas core dan dilanjutkan incline walk selama ${duration} menit untuk membakar lemak secara optimal tanpa membebani persendian.`;
+  } else {
+    const goalText = goal === "gain" ? "pembentukan massa otot" : goal === "lose" ? "pembakaran kalori terstruktur" : "kebugaran fungsional";
+    rationale = `Sesi ${duration} menit ini dirancang untuk ${goalText} pada area ${focus.toLowerCase()} dengan mempertimbangkan ketersediaan alat dan riwayat latihanmu.`;
+  }
+  const safetyNotes = [];
+  if (constraints.length > 0) {
+    const areas = constraints.map((c) => c.bodyArea).join(", ");
+    safetyNotes.push(`Sesi ini secara otomatis mengeliminasi gerakan berisiko pada area: ${areas}.`);
+  }
+  let coachInsight = "";
+  if (recovery.recoveryScore === "poor") {
+    coachInsight = "Kamu telah berlatih intensif beberapa hari berturut-turut. Hari ini volume dijaga terkontrol agar otot pulih maksimal.";
+  } else if (recovery.recoveryScore === "high") {
+    coachInsight = "Kondisi pemulihanmu prima! Manfaatkan sesi ini untuk menjaga konsistensi repetisi dan teknik terbaik.";
+  } else {
+    coachInsight = "Jaga tempo gerakan yang terkontrol. Kualitas form setiap repetisi lebih utama dibanding kecepatan.";
+  }
+  return {
+    id: `plan_${targetDateStr}_${duration}m`,
+    date: targetDateStr,
+    dayName,
+    goal,
+    focus,
+    targetDuration: duration,
+    estimatedDuration,
+    intensity: duration >= 45 ? "high" : "moderate",
+    warmup,
+    mainExercises: plannedExercises,
+    cardio: cardioMovement,
+    cooldown,
+    totalSets,
+    totalExercises: allSessionExercises.length,
+    rationale,
+    coachInsight,
+    safetyNotes
+  };
+}
+function generatePersonalizedWeeklySchedule(userPrefs, lang = "ID") {
+  const daysID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const daysEN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const daysKey = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  return daysKey.map((key, idx) => {
+    const plan = generatePersonalizedWorkoutPlan(userPrefs, "2026-09-14", [], idx);
+    const allEx = plan.cardio ? [...plan.mainExercises, plan.cardio] : plan.mainExercises;
+    return {
+      day: lang === "EN" ? daysEN[idx] : daysID[idx],
+      focus: plan.focus,
+      exercises: allEx.map((ex, exIdx) => ({
+        id: `w-${key}-${exIdx + 1}`,
+        name: ex.name,
+        targetSets: ex.targetSets || 1,
+        completedSets: 0,
+        setsState: Array(ex.targetSets || 1).fill(false),
+        targetReps: normalizeSetsRepsString(ex.targetSets || 1, ex.targetReps),
+        status: "not_started"
+      }))
+    };
+  });
 }
 
 // services/recommendationEngine.ts
@@ -53725,6 +54437,10 @@ function calculateUserData(profile) {
     activeService,
     hasReceivedWelcome: Boolean(profile?.hasReceivedWelcome),
     workoutSchedule: profile?.workoutSchedule || null,
+    workoutDuration: profile?.workoutDuration || 45,
+    workoutFrequency: profile?.workoutFrequency || "3-4",
+    fitnessLevel: profile?.fitnessLevel || "intermediate",
+    injuryLimitations: profile?.injuryLimitations || null,
     subscription,
     plan: sub.plan,
     planDuration: sub.planDuration,
@@ -55571,7 +56287,7 @@ Data terbaru sudah langsung tersimpan di Dashboard! \u{1F680}`
   dbData.dailyLogs[altActKey] = existingActivities;
   saveDb();
   const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
+  const schedule = userData.workoutSchedule && Array.isArray(userData.workoutSchedule) && userData.workoutSchedule.length > 0 ? userData.workoutSchedule : getDefaultWeeklySchedule(goal);
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
   const todayDayName = dayNames[currentDayIdx];
@@ -55715,7 +56431,7 @@ ${details.join(" \u2022 ")}
     return null;
   }
   const goal = userData.goal || "healthy";
-  const schedule = getDefaultWeeklySchedule(goal);
+  const schedule = userData.workoutSchedule && Array.isArray(userData.workoutSchedule) && userData.workoutSchedule.length > 0 ? userData.workoutSchedule : getDefaultWeeklySchedule(goal);
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const currentDayIdx = (/* @__PURE__ */ new Date()).getDay();
   const todayDayName = dayNames[currentDayIdx];
@@ -56641,15 +57357,28 @@ async function createExpressApp(options = {}) {
         }
       };
     }
-    if (canonicalPhone && await isAccountDeleted(canonicalPhone) || localPhone && await isAccountDeleted(localPhone) || effectiveUserId && await isAccountDeleted(effectiveUserId)) {
-      return {
-        status: 403,
-        body: {
-          success: false,
-          error: "account_deleted",
-          message: "Akun ini telah dihapus. Silakan lakukan pendaftaran baru melalui onboarding."
-        }
-      };
+    const isDeleted = canonicalPhone && await isAccountDeleted(canonicalPhone) || localPhone && await isAccountDeleted(localPhone) || effectiveUserId && await isAccountDeleted(effectiveUserId);
+    if (isDeleted) {
+      const hasPendingProfile = Boolean(
+        effectiveUserId && dbData.pendingProfiles && dbData.pendingProfiles[effectiveUserId] || canonicalPhone && dbData.pendingProfiles && Object.values(dbData.pendingProfiles).some((p) => p?.phone === canonicalPhone || p?.normalizedPhone === canonicalPhone) || localPhone && dbData.pendingProfiles && Object.values(dbData.pendingProfiles).some((p) => p?.phone === localPhone)
+      );
+      const isFreshOnboarding = Boolean(
+        reqBody?.isOnboarding || reqBody?.isFreshOnboarding || hasPendingProfile || effectiveUserId && effectiveUserId.startsWith("usr_ob_")
+      );
+      if (isFreshOnboarding) {
+        if (canonicalPhone) await clearAccountDeletedTombstone(canonicalPhone);
+        if (localPhone) await clearAccountDeletedTombstone(localPhone);
+        if (effectiveUserId) await clearAccountDeletedTombstone(effectiveUserId);
+      } else {
+        return {
+          status: 403,
+          body: {
+            success: false,
+            error: "account_deleted",
+            message: "Akun ini telah dihapus. Silakan lakukan pendaftaran baru melalui onboarding."
+          }
+        };
+      }
     }
     const existingUser = (canonicalPhone ? await findUserByPhoneOrId(canonicalPhone) : null) || (localPhone ? await findUserByPhoneOrId(localPhone) : null) || (effectiveUserId ? await findUserByPhoneOrId(effectiveUserId) : null) || (canonicalPhone ? getUserProfile(canonicalPhone) : null) || (localPhone ? getUserProfile(localPhone) : null) || (effectiveUserId && dbData.users ? dbData.users[effectiveUserId] : null);
     const pendingProfile = (effectiveUserId && dbData.pendingProfiles ? dbData.pendingProfiles[effectiveUserId] : null) || existingUser || {};
@@ -58582,7 +59311,21 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
       return res.status(404).json({ success: false, error: "User profile not found" });
     }
     const calculated = calculateUserData(user);
-    res.json({ success: true, schedule: calculated.workoutSchedule, goal: calculated.goal, goalTitle: calculated.goalTitle });
+    let schedule = user.workoutSchedule;
+    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+      schedule = generatePersonalizedWeeklySchedule({
+        workoutDuration: user.workoutDuration || 45,
+        workoutFrequency: user.workoutFrequency || "3-4",
+        fitnessLevel: user.fitnessLevel || "intermediate",
+        equipment: user.equipment || "full_gym",
+        primaryGoal: user.goal || "lose",
+        injuryLimitations: user.injuryLimitations || [],
+        persona: user.persona || "max"
+      });
+      user.workoutSchedule = schedule;
+      saveDb();
+    }
+    res.json({ success: true, schedule, goal: calculated.goal, goalTitle: calculated.goalTitle });
   });
   app.post("/api/user/:phone/schedule", import_express.default.json(), (req, res) => {
     const phone = normalizePhone(req.params.phone);
