@@ -1825,10 +1825,11 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   const handleSaveScannedMeal = async () => {
-    if (!scanResult) return;
+    if (isSavingReviewMeal || !scanResult) return;
     const normPhone = normalizePhone(activeUser.phone || activeUser.normalizedPhone || "");
     if (!normPhone) return;
 
+    setIsSavingReviewMeal(true);
     const clientMealId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newMeal: MealItem = {
       id: clientMealId,
@@ -1869,6 +1870,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           : "Gagal menyimpan makanan ke server. Silakan periksa koneksi internet Anda."
       );
       setTimeout(() => setReminderNotificationMsg(null), 5000);
+    } finally {
+      setIsSavingReviewMeal(false);
     }
   };
 
@@ -1900,8 +1903,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   const [activities, setActivities] = useState<AdditionalActivity[]>([]);
   const [completedWorkouts, setCompletedWorkouts] = useState<CompletedWorkoutActivity[]>(() => {
     try {
-      const _norm = normalizePhone(safeUser.phone || safeUser.normalizedPhone || "");
-      const saved = _norm ? localStorage.getItem(`gymbuddy_completed_workouts_${_norm}`) : null;
+      const _norm = normalizePhone(activeUser?.phone || activeUser?.normalizedPhone || safeUser.phone || safeUser.normalizedPhone || "");
+      const altNorm = _norm.startsWith("0") ? "62" + _norm.substring(1) : (_norm.startsWith("62") ? "0" + _norm.substring(2) : _norm);
+      const saved = _norm ? (localStorage.getItem(`gymbuddy_completed_workouts_${_norm}`) || localStorage.getItem(`gymbuddy_completed_workouts_${altNorm}`)) : null;
       const fallback = localStorage.getItem("gymbuddy_completed_workouts");
       const list = saved ? JSON.parse(saved) : (fallback ? JSON.parse(fallback) : []);
       if (Array.isArray(list)) return list;
@@ -7480,7 +7484,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         onClose={() => setShowWorkoutExecutionModal(false)}
         plan={activeWorkoutPlan}
         persona={safeUser.persona === "mia" ? "mia" : "max"}
-        userPhone={safeUser.phone}
+        userPhone={activeUser.phone || activeUser.normalizedPhone || safeUser.phone || safeUser.normalizedPhone || ""}
         onWorkoutCompleted={(summary) => {
           setShowWorkoutExecutionModal(false);
           const allEx = activeWorkoutPlan.cardio

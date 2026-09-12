@@ -96,4 +96,44 @@ const saladDinner = classifyMealType({
 });
 assert(saladDinner === "dinner", "Explicit intent 'makan malam' overrides to dinner");
 
-console.log("🎉 ALL MEAL CLASSIFIER TESTS PASSED SUCCESSFULLY!");
+// 6. 20:12 WIB Date instance test (Crucial Cloud Run UTC server bug prevention)
+// 20:12 WIB is 13:12 UTC. On Cloud Run running in UTC, Date.getHours() returns 13.
+// With Asia/Jakarta Intl formatting, it MUST map to hour 20 (Dinner), NOT hour 13 (Lunch)!
+const dateWib2012 = new Date("2026-09-12T13:12:00.000Z"); // 13:12 UTC = 20:12 WIB
+const dinner2012 = classifyMealType({
+  foodName: "Nasi Goreng Spesial & Ayam",
+  timeOrDate: dateWib2012,
+  calories: 650
+});
+assert(dinner2012 === "dinner", "20:12 WIB Date (13:12 UTC on server) is classified as dinner (NOT lunch)");
+
+// 7. resolveCleanFoodNameAndMealType override protection
+// When Gemini Vision hallucinated/guessed 'lunch' for a 20:12 photo without user text intent,
+// it MUST NOT override the 20:12 WIB Dinner classification!
+import { resolveCleanFoodNameAndMealType } from "../server";
+
+const resolvedNoIntent = resolveCleanFoodNameAndMealType(
+  "ini foto makananku",
+  "Nasi Goreng Ayam",
+  true,
+  "Lunch", // Hallucinated Gemini Vision output
+  ["Nasi Goreng", "Ayam"],
+  dateWib2012,
+  650
+);
+assert(resolvedNoIntent.mealType === "Dinner", "Vision AI guessed 'Lunch' CANNOT override 20:12 WIB Dinner without explicit user text intent");
+
+const resolvedExplicitIntent = resolveCleanFoodNameAndMealType(
+  "aku baru sempat makan siang ini jam 8 malam",
+  "Nasi Goreng Ayam",
+  true,
+  "Lunch",
+  ["Nasi Goreng", "Ayam"],
+  dateWib2012,
+  650
+);
+assert(resolvedExplicitIntent.mealType === "Lunch", "Explicit user text intent 'makan siang' is respected even at 20:12 WIB");
+
+console.log("🎉 ALL MEAL CLASSIFIER & TIMEZONE TESTS PASSED SUCCESSFULLY!");
+process.exit(0);
+

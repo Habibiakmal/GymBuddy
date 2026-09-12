@@ -3823,6 +3823,12 @@ export function applyTargetedMealCorrection(
     const fracMatch = clause.match(/\b(setengah|separuh|setengahnya|seperempat|tiga perempat|dua kali|dobel|double|satu setengah|1\/2|1\/4|3\/4|1\.5|2)\b/i);
     const isPieceFraction = /\b(?:setengah|separuh|1\/2)\s*potong\b/i.test(clause);
     const pieceMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:potong|buah|butir|gelas|slice|sdm|sendok|porsi)/i);
+    const bareCountMatch = clause.match(/(?:^|\s)(?:tetap\s+)?([1-9]\d*|satu|dua|tiga|empat|lima)(?:\s*(?:x|kali))?(?=\s*$|[\s,])/i);
+    const isTetapOnly = /\b(?:tetap|gak\s+berubah|tidak\s+berubah|sama|ga\s+diubah)\b/i.test(clause);
+
+    const numWords: Record<string, number> = {
+      satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5
+    };
 
     if (explicitKcalMatch) {
       const explicitCal = parseInt(explicitKcalMatch[1], 10);
@@ -3866,6 +3872,33 @@ export function applyTargetedMealCorrection(
       const count = parseFloat(pieceMatch[1].replace(',', '.'));
       ratio = count;
       targetNewPortion = `${count} potong`;
+    } else if (isTetapOnly) {
+      ratio = 1.0;
+      targetNewPortion = targetComp.portion;
+      targetComp.isUpdated = true;
+      changeDescriptions.push(`${targetComp.name} tetap (${targetNewPortion})`);
+      continue;
+    } else if (bareCountMatch) {
+      const rawCount = bareCountMatch[1].toLowerCase();
+      const count = numWords[rawCount] !== undefined ? numWords[rawCount] : parseFloat(rawCount);
+      // Determine existing count if any (e.g. "1 potong", "2 buah", or default 1)
+      const existingCountMatch = targetComp.portion.match(/^(\d+(?:[.,]\d+)?)/);
+      const existingCount = existingCountMatch ? parseFloat(existingCountMatch[1].replace(',', '.')) : 1;
+      ratio = existingCount > 0 ? (count / existingCount) : count;
+
+      if (ratio === 1.0 || count === 1) {
+        ratio = 1.0;
+        targetNewPortion = targetComp.portion;
+        targetComp.isUpdated = true;
+        changeDescriptions.push(`${targetComp.name} tetap 1`);
+        continue;
+      } else {
+        targetNewPortion = `${count} porsi`;
+        if (targetComp.weightGrams) {
+          targetComp.weightGrams = Math.round(targetComp.weightGrams * ratio);
+          targetNewPortion = `${targetNewPortion} (${targetComp.weightGrams}g)`;
+        }
+      }
     } else {
       // AMBIGUOUS CORRECTION: User mentioned an item, but did NOT specify what should change.
       let clarifyMsg = "";
@@ -3953,7 +3986,18 @@ export function applyTargetedMealCorrection(
     targetComp.isUpdated = true;
     newPortionStr = targetNewPortion;
 
-    changeDescriptions.push(`${targetComp.name} dari ${origCompPortion} menjadi ${targetNewPortion}`);
+    let changeDesc = "";
+    if (fracMatch) {
+      const fracStr = fracMatch[1].toLowerCase();
+      const displayFrac = (fracStr === "setengah" || fracStr === "separuh" || fracStr === "1/2") ? "1/2"
+        : (fracStr === "seperempat" || fracStr === "1/4") ? "1/4"
+        : (fracStr === "tiga perempat" || fracStr === "3/4") ? "3/4"
+        : fracStr;
+      changeDesc = `${targetComp.name} menjadi ${displayFrac}`;
+    } else {
+      changeDesc = `${targetComp.name} dari ${origCompPortion} menjadi ${targetNewPortion}`;
+    }
+    changeDescriptions.push(changeDesc);
   }
 
   // 3. Mathematical Delta Calculation:
@@ -3974,17 +4018,32 @@ export function applyTargetedMealCorrection(
     });
 
   // 5. Build Coach Note explaining what changed:
-  const changeSummary = changeDescriptions.length > 0
-    ? changeDescriptions.join(", ")
-    : `porsi ${mainCorrectedComponent || "makanan"}`;
+  let changeSummary = "";
+  if (changeDescriptions.length === 1) {
+    changeSummary = changeDescriptions[0];
+  } else if (changeDescriptions.length === 2) {
+    changeSummary = `${changeDescriptions[0]} dan ${changeDescriptions[1]}`;
+  } else if (changeDescriptions.length > 2) {
+    changeSummary = `${changeDescriptions.slice(0, -1).join(", ")}, dan ${changeDescriptions[changeDescriptions.length - 1]}`;
+  } else {
+    changeSummary = `porsi ${mainCorrectedComponent || "makanan"}`;
+  }
 
   let coachComment = "";
   if (isLansia) {
     coachComment = `Catatan ${changeSummary} sudah diperbarui, ${validatedAddr}. Menu lainnya tetap seperti catatan sebelumnya dan total nutrisi Anda sudah disesuaikan dengan rapi ya. 🌿`;
   } else if (isMia) {
-    coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya ✨`;
+    if (changeDescriptions.length > 1) {
+      coachComment = `Mengerti, ${validatedAddr}! Aku sudah memperbarui porsi ${changeSummary}. Estimasi nutrisinya sudah disesuaikan ya ✨`;
+    } else {
+      coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya ✨`;
+    }
   } else {
-    coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah diupdate. Item lainnya tetap seperti log sebelumnya dan total nutrisi udah diperbarui ya! 💪`;
+    if (changeDescriptions.length > 1) {
+      coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah disesuaikan. Estimasi nutrisinya udah diupdate ya! 💪`;
+    } else {
+      coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah diupdate. Item lainnya tetap seperti log sebelumnya dan total nutrisi udah diperbarui ya! 💪`;
+    }
   }
 
   coachComment = validateAndFormatCoachNote(coachComment, userDataObj);

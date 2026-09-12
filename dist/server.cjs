@@ -102,6 +102,7 @@ __export(server_exports, {
   normalizePhoneToLocal: () => normalizePhoneToLocal,
   pendingWorkoutClarifications: () => pendingWorkoutClarifications,
   processMealCorrection: () => processMealCorrection,
+  processedWebhookEvents: () => processedWebhookEvents,
   resolveCleanFoodNameAndMealType: () => resolveCleanFoodNameAndMealType,
   sanitizeTextForIntent: () => sanitizeTextForIntent,
   sanitizeWhatsAppResponse: () => sanitizeWhatsAppResponse,
@@ -46892,7 +46893,7 @@ function parseMealCorrectionDetails(rawText, lastMeal) {
       portionText: qty === 0.5 ? `1/2 ${unit}` : `${qty} ${unit}`
     };
   }
-  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram)|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4)[.]?$/i);
+  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram|potong|buah|slice|porsi)?|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4|satu|dua|tiga)[.]?$/i);
   if (portMatch) {
     const target = cleanFoodTerm(portMatch[1]);
     const portionText = portMatch[2].trim();
@@ -46905,6 +46906,25 @@ function parseMealCorrectionDetails(rawText, lastMeal) {
       portionText,
       weightGrams
     };
+  }
+  const cleanForMulti = stripped.replace(/^(?:aku\s+|saya\s+|gue\s+)?(?:cuma\s+|hanya\s+)?(?:makan\s+)?/i, "").trim();
+  const multiParts = cleanForMulti.split(/\s*(?:,|dan|serta|\+)\s*/i).map((s) => s.replace(/\bjuga\b/gi, "").trim()).filter(Boolean);
+  if (multiParts.length >= 2) {
+    const matchedClauses = [];
+    for (const part of multiParts) {
+      const m = part.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:cuma|hanya|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram|potong|buah|slice|porsi)?|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4|satu|dua|tiga)$/i);
+      if (m) {
+        matchedClauses.push({ item: cleanFoodTerm(m[1]), portion: m[2].trim() });
+      }
+    }
+    if (matchedClauses.length >= 2) {
+      return {
+        subtype: "MEAL_CORRECTION_PORTION",
+        action: "modify_portion",
+        targetItem: matchedClauses[0].item,
+        portionText: matchedClauses.map((c) => `${c.item}: ${c.portion}`).join(", ")
+      };
+    }
   }
   if (!/\b(?:cuma|hanya|setengah|separuh|seperempat|tidak|nggak|gak|batal|makan|gram|g|gr|potong|buah|butir|dan|sama|kcal|kalori)\b/i.test(stripped)) {
     const words = stripped.split(/\s+/).filter(Boolean);
@@ -50028,6 +50048,15 @@ Aku sudah hitung ulang estimasi nutrisinya.`,
     const fracMatch = clause.match(/\b(setengah|separuh|setengahnya|seperempat|tiga perempat|dua kali|dobel|double|satu setengah|1\/2|1\/4|3\/4|1\.5|2)\b/i);
     const isPieceFraction = /\b(?:setengah|separuh|1\/2)\s*potong\b/i.test(clause);
     const pieceMatch = clause.match(/(\d+(?:[.,]\d+)?)\s*(?:potong|buah|butir|gelas|slice|sdm|sendok|porsi)/i);
+    const bareCountMatch = clause.match(/(?:^|\s)(?:tetap\s+)?([1-9]\d*|satu|dua|tiga|empat|lima)(?:\s*(?:x|kali))?(?=\s*$|[\s,])/i);
+    const isTetapOnly = /\b(?:tetap|gak\s+berubah|tidak\s+berubah|sama|ga\s+diubah)\b/i.test(clause);
+    const numWords = {
+      satu: 1,
+      dua: 2,
+      tiga: 3,
+      empat: 4,
+      lima: 5
+    };
     if (explicitKcalMatch) {
       const explicitCal = parseInt(explicitKcalMatch[1], 10);
       ratio = origCompCal > 0 ? explicitCal / origCompCal : 0.5;
@@ -50070,6 +50099,31 @@ Aku sudah hitung ulang estimasi nutrisinya.`,
       const count = parseFloat(pieceMatch[1].replace(",", "."));
       ratio = count;
       targetNewPortion = `${count} potong`;
+    } else if (isTetapOnly) {
+      ratio = 1;
+      targetNewPortion = targetComp.portion;
+      targetComp.isUpdated = true;
+      changeDescriptions.push(`${targetComp.name} tetap (${targetNewPortion})`);
+      continue;
+    } else if (bareCountMatch) {
+      const rawCount = bareCountMatch[1].toLowerCase();
+      const count = numWords[rawCount] !== void 0 ? numWords[rawCount] : parseFloat(rawCount);
+      const existingCountMatch = targetComp.portion.match(/^(\d+(?:[.,]\d+)?)/);
+      const existingCount = existingCountMatch ? parseFloat(existingCountMatch[1].replace(",", ".")) : 1;
+      ratio = existingCount > 0 ? count / existingCount : count;
+      if (ratio === 1 || count === 1) {
+        ratio = 1;
+        targetNewPortion = targetComp.portion;
+        targetComp.isUpdated = true;
+        changeDescriptions.push(`${targetComp.name} tetap 1`);
+        continue;
+      } else {
+        targetNewPortion = `${count} porsi`;
+        if (targetComp.weightGrams) {
+          targetComp.weightGrams = Math.round(targetComp.weightGrams * ratio);
+          targetNewPortion = `${targetNewPortion} (${targetComp.weightGrams}g)`;
+        }
+      }
     } else {
       let clarifyMsg = "";
       const compLower = targetComp.name.toLowerCase();
@@ -50133,7 +50187,15 @@ Aku sudah hitung ulang estimasi nutrisinya.`,
     targetComp.portion = targetNewPortion;
     targetComp.isUpdated = true;
     newPortionStr = targetNewPortion;
-    changeDescriptions.push(`${targetComp.name} dari ${origCompPortion} menjadi ${targetNewPortion}`);
+    let changeDesc = "";
+    if (fracMatch) {
+      const fracStr = fracMatch[1].toLowerCase();
+      const displayFrac = fracStr === "setengah" || fracStr === "separuh" || fracStr === "1/2" ? "1/2" : fracStr === "seperempat" || fracStr === "1/4" ? "1/4" : fracStr === "tiga perempat" || fracStr === "3/4" ? "3/4" : fracStr;
+      changeDesc = `${targetComp.name} menjadi ${displayFrac}`;
+    } else {
+      changeDesc = `${targetComp.name} dari ${origCompPortion} menjadi ${targetNewPortion}`;
+    }
+    changeDescriptions.push(changeDesc);
   }
   const correctedCalories = Math.max(0, Math.round(lastMeal.calories + totalDeltaCal));
   const correctedProtein = Math.max(0, Number((lastMeal.protein + totalDeltaProt).toFixed(1)));
@@ -50146,14 +50208,31 @@ Aku sudah hitung ulang estimasi nutrisinya.`,
     const badge = c.isUpdated ? " \u2190 diperbarui" : "";
     return `\u2022 ${c.name}: ${c.portion} (~${c.calories} kcal)${badge}`;
   });
-  const changeSummary = changeDescriptions.length > 0 ? changeDescriptions.join(", ") : `porsi ${mainCorrectedComponent || "makanan"}`;
+  let changeSummary = "";
+  if (changeDescriptions.length === 1) {
+    changeSummary = changeDescriptions[0];
+  } else if (changeDescriptions.length === 2) {
+    changeSummary = `${changeDescriptions[0]} dan ${changeDescriptions[1]}`;
+  } else if (changeDescriptions.length > 2) {
+    changeSummary = `${changeDescriptions.slice(0, -1).join(", ")}, dan ${changeDescriptions[changeDescriptions.length - 1]}`;
+  } else {
+    changeSummary = `porsi ${mainCorrectedComponent || "makanan"}`;
+  }
   let coachComment = "";
   if (isLansia2) {
     coachComment = `Catatan ${changeSummary} sudah diperbarui, ${validatedAddr}. Menu lainnya tetap seperti catatan sebelumnya dan total nutrisi Anda sudah disesuaikan dengan rapi ya. \u{1F33F}`;
   } else if (isMia) {
-    coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya \u2728`;
+    if (changeDescriptions.length > 1) {
+      coachComment = `Mengerti, ${validatedAddr}! Aku sudah memperbarui porsi ${changeSummary}. Estimasi nutrisinya sudah disesuaikan ya \u2728`;
+    } else {
+      coachComment = `Siap, ${validatedAddr}! Porsi ${changeSummary} sudah diperbarui. Item lainnya tetap seperti log sebelumnya dan total nutrisi sudah diperbarui ya \u2728`;
+    }
   } else {
-    coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah diupdate. Item lainnya tetap seperti log sebelumnya dan total nutrisi udah diperbarui ya! \u{1F4AA}`;
+    if (changeDescriptions.length > 1) {
+      coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah disesuaikan. Estimasi nutrisinya udah diupdate ya! \u{1F4AA}`;
+    } else {
+      coachComment = `Beres, ${validatedAddr}! Porsi ${changeSummary} udah diupdate. Item lainnya tetap seperti log sebelumnya dan total nutrisi udah diperbarui ya! \u{1F4AA}`;
+    }
   }
   coachComment = validateAndFormatCoachNote(coachComment, userDataObj);
   return {
@@ -51136,7 +51215,7 @@ function extractHourMinute(timeOrDate) {
         minute: "numeric",
         hour12: false
       }).formatToParts(now2);
-      const h = parseInt(parts.find((p) => p.type === "hour")?.value || "12", 10);
+      const h = parseInt(parts.find((p) => p.type === "hour")?.value || "12", 10) % 24;
       const m = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
       return { hour: h, minute: m };
     } catch (e) {
@@ -51146,7 +51225,21 @@ function extractHourMinute(timeOrDate) {
     }
   }
   if (timeOrDate instanceof Date) {
-    return { hour: timeOrDate.getHours(), minute: timeOrDate.getMinutes() };
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Jakarta",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false
+      }).formatToParts(timeOrDate);
+      const h = parseInt(parts.find((p) => p.type === "hour")?.value || "12", 10) % 24;
+      const m = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+      return { hour: h, minute: m };
+    } catch (e) {
+      const utcHour = timeOrDate.getUTCHours();
+      const wibHour = (utcHour + 7) % 24;
+      return { hour: wibHour, minute: timeOrDate.getUTCMinutes() };
+    }
   }
   const str = String(timeOrDate).trim();
   const matchTime = str.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
@@ -51162,11 +51255,13 @@ function extractHourMinute(timeOrDate) {
         minute: "numeric",
         hour12: false
       }).formatToParts(parsedDate);
-      const h = parseInt(parts.find((p) => p.type === "hour")?.value || String(parsedDate.getHours()), 10);
+      const h = parseInt(parts.find((p) => p.type === "hour")?.value || String(parsedDate.getHours()), 10) % 24;
       const m = parseInt(parts.find((p) => p.type === "minute")?.value || String(parsedDate.getMinutes()), 10);
       return { hour: h, minute: m };
     } catch (e) {
-      return { hour: parsedDate.getHours(), minute: parsedDate.getMinutes() };
+      const utcHour = parsedDate.getUTCHours();
+      const wibHour = (utcHour + 7) % 24;
+      return { hour: wibHour, minute: parsedDate.getUTCMinutes() };
     }
   }
   const now = /* @__PURE__ */ new Date();
@@ -53008,6 +53103,15 @@ process.on("uncaughtException", (err) => {
 });
 var TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 var TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
+var processedWebhookEvents = /* @__PURE__ */ new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of processedWebhookEvents.entries()) {
+    if (now - val.timestamp > 10 * 60 * 1e3) {
+      processedWebhookEvents.delete(key);
+    }
+  }
+}, 5 * 60 * 1e3);
 function sanitizeWhatsAppResponse(text) {
   if (!text || typeof text !== "string") return "";
   const STANDARD_SEP = "--------------------------------------------------";
@@ -53023,11 +53127,11 @@ function resolveCleanFoodNameAndMealType(rawUserText, detectedFoodName, hasImage
     foodName: detectedFoodName,
     items: detectedFoodsList,
     userText: cleanCaption,
-    timeOrDate,
+    timeOrDate: timeOrDate || /* @__PURE__ */ new Date(),
     calories
   });
-  const isSnack = isSmartSnack(detectedFoodName, detectedFoodsList, calories);
-  if (!isSnack && detectedMealType && !/(?:sarapan|breakfast|makan\s+siang|lunch|makan\s+malam|dinner|snack|camilan)/i.test(lowerCaption)) {
+  const hasExplicitUserIntent = /(?:sarapan|breakfast|makan\s+pagi|makan\s+siang|lunch|makan\s+malam|dinner|snack|camilan|ngemil)/i.test(lowerCaption);
+  if (hasExplicitUserIntent && detectedMealType) {
     const norm = detectedMealType.toLowerCase().trim();
     if (norm === "breakfast" || norm === "lunch" || norm === "dinner" || norm === "snack") {
       classifiedType = norm;
@@ -53064,7 +53168,7 @@ function resolveCleanFoodNameAndMealType(rawUserText, detectedFoodName, hasImage
   }
   return { foodName: finalFoodName, mealType };
 }
-function buildSingleSourceOfTruthMealRecord(rawUserText, parsed, hasImage) {
+function buildSingleSourceOfTruthMealRecord(rawUserText, parsed, hasImage, messageIdOverride) {
   const { foodName: finalFoodName, mealType: finalMealType } = resolveCleanFoodNameAndMealType(
     rawUserText,
     parsed?.canonicalMealTitle || parsed?.foodName,
@@ -53128,8 +53232,9 @@ function buildSingleSourceOfTruthMealRecord(rawUserText, parsed, hasImage) {
     }
   }
   const detectedFoodsList = Array.isArray(parsed?.detectedFoods) && parsed.detectedFoods.length > 0 ? parsed.detectedFoods : extractDetectedFoodItems(rawUserText || finalFoodName);
+  const deterministicId = messageIdOverride ? `meal_wa_${messageIdOverride.replace(/[^a-zA-Z0-9_-]/g, "_")}` : parsed?.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const mealRecord = {
-    id: `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: deterministicId,
     foodName: finalFoodName,
     mealTitle: finalFoodName,
     rawUserMessage: rawUserText || "",
@@ -55258,7 +55363,7 @@ function updateExistingMealLog(rawPhone, updatedMeal, targetDateStr) {
   saveDb();
   return true;
 }
-function detectMealCorrectionIntent(userText, hasRecentMeal) {
+function detectMealCorrectionIntent(userText, hasRecentMeal, lastMeal) {
   if (!userText || typeof userText !== "string") return false;
   if (detectDeleteMealIntent(userText)) {
     return false;
@@ -55266,7 +55371,7 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
   if (isGreeting(userText)) {
     return false;
   }
-  const details = parseMealCorrectionDetails(userText);
+  const details = parseMealCorrectionDetails(userText, lastMeal);
   if (details) {
     if (hasRecentMeal) return true;
     if (details.subtype !== "MEAL_CORRECTION_GENERAL" || userText.toLowerCase().includes("koreksi") || userText.toLowerCase().includes("ralat") || userText.toLowerCase().includes("revisi")) {
@@ -55282,6 +55387,17 @@ function detectMealCorrectionIntent(userText, hasRecentMeal) {
     return true;
   }
   if (hasRecentMeal) {
+    if (lastMeal) {
+      const comps = Array.isArray(lastMeal.components) ? lastMeal.components : [];
+      const mealName = String(lastMeal.foodName || "").toLowerCase();
+      const hasComponentMention = comps.some((c) => c.name && lower.includes(c.name.toLowerCase())) || mealName.split(/[,&]+/).some((part) => part.trim().length > 2 && lower.includes(part.trim().toLowerCase()));
+      if (hasComponentMention) {
+        const hasPortionOrCount = /\b(setengah|separuh|seperempat|1\/2|1\/4|3\/4|cuma|hanya|tetap|bukan|ganti|tambah|kurang|dihapus|tanpa|\d+(?:[.,]\d+)?(?:\s*(?:g|gr|gram|potong|buah|slice|porsi))?)\b/i.test(lower);
+        if (hasPortionOrCount) {
+          return true;
+        }
+      }
+    }
     const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe|cumi|squid|udang";
     const portionUnits = "\\d+(?:[\\.,]\\d+)?\\s*(?:g|gr|gram|ml|potong|slice|sdm|sendok|buah|porsi)?|setengah|separuh|seperempat|sedikit|tanpa|1\\/2|1\\/4";
     if (new RegExp(`^(?:yang\\s+)?(?:${foodKeywords})(?:\\s*sapi|\\s*ayam|\\s*goreng)?(?:nya)?\\s*(?:tadi)?\\s*(?:cuma|hanya|cuman|jadi|sebanyak)?\\s*(?:${portionUnits})\\s*(?:aja|saja|doang)?$`, "i").test(lower) || new RegExp(`^(?:yang\\s+)?([a-z\\s]+?)\\s*(?:nya\\s*)?(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^porsi\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:jadi|cuma|hanya|sebanyak)?\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`^(?:ternyata|sebenarnya|sebetulnya)\\s+([a-z\\s]+?)\\s*(?:nya\\s*)?(?:cuma|hanya|cuman|jadi|sebanyak)`, "i").test(lower) || new RegExp(`^(?:ubah|ganti)\\s+([a-z\\s]+?)\\s*(?:jadi|ke|menjadi)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:nya)?\\s*(?:tadi\\s*)?(?:cuma|hanya|cuman|jadi|aja|saja|sebanyak|diubah|ganti)\\s*(${portionUnits})`, "i").test(lower) || new RegExp(`(?:${foodKeywords})(?:\\s*sapi|\\s*ayam)?\\s*(${portionUnits})\\s*(?:aja|saja|cuma|doang)`, "i").test(lower)) {
@@ -60052,6 +60168,14 @@ Terima kasih! Pembayaran untuk paket *${displayName}* sebesar Rp ${Number(grossA
         const message = value?.messages?.[0];
         if (message) {
           const from = message.from;
+          const messageId = message.id;
+          if (messageId && processedWebhookEvents.has(messageId)) {
+            console.log(`[Meta WA Webhook] Deduplicated messageId: ${messageId}. Returning HTTP 200 immediately.`);
+            return res.status(200).send("EVENT_RECEIVED");
+          }
+          if (messageId) {
+            processedWebhookEvents.set(messageId, { timestamp: Date.now() });
+          }
           let userProfile = getUserProfile(from);
           let userText = "";
           let imagePart = null;
@@ -60552,7 +60676,8 @@ Keluarkan output JSON valid:
                       const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                         userText,
                         parsed,
-                        Boolean(imagePart)
+                        Boolean(imagePart),
+                        messageId
                       );
                       addMealLog(from, mealRecord);
                       const dailyTotals = getDailyTotals(from);
@@ -60627,6 +60752,14 @@ Keluarkan output JSON valid:
       const { Body, From, NumMedia } = req.body;
       const rawFrom = From || "";
       const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
+      const messageSid = req.body?.MessageSid || req.body?.SmsMessageSid || req.body?.SmsSid;
+      if (messageSid && processedWebhookEvents.has(messageSid)) {
+        console.log(`[Twilio WA Webhook] Deduplicated MessageSid: ${messageSid}. Returning HTTP 200.`);
+        return res.type("text/xml").send("<Response></Response>");
+      }
+      if (messageSid) {
+        processedWebhookEvents.set(messageSid, { timestamp: Date.now() });
+      }
       let userProfile = null;
       try {
         const localUser = getUserProfile(normFrom);
@@ -61258,7 +61391,8 @@ Keluarkan output JSON valid:
                   const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                     userText,
                     parsed,
-                    Boolean(imagePart)
+                    Boolean(imagePart),
+                    messageSid
                   );
                   addMealLog(normFrom, mealRecord);
                   const dailyTotals = getDailyTotals(normFrom);
@@ -61765,6 +61899,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   normalizePhoneToLocal,
   pendingWorkoutClarifications,
   processMealCorrection,
+  processedWebhookEvents,
   resolveCleanFoodNameAndMealType,
   sanitizeTextForIntent,
   sanitizeWhatsAppResponse,

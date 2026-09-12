@@ -205,6 +205,17 @@ import { generateNutritionCardPng, generateNutritionCardSvg } from "./services/c
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 
+// Webhook Idempotency Cache (deduplicates Meta & Twilio automatic retries)
+export const processedWebhookEvents = new Map<string, { timestamp: number; mealId?: string }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of processedWebhookEvents.entries()) {
+    if (now - val.timestamp > 10 * 60 * 1000) { // 10 minutes TTL
+      processedWebhookEvents.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
 /**
  * Sanitizes outgoing WhatsApp messages to guarantee:
  * 1. No broken or repeated separator bars (e.g. ━━━━━━━━━━━━━━).
@@ -250,18 +261,18 @@ export function resolveCleanFoodNameAndMealType(
   const cleanCaption = String(rawUserText || "").trim();
   const lowerCaption = cleanCaption.toLowerCase();
 
-  // 1. Extract Meal Type using smart classifier (combines explicit user intent, smart snack composition, and 4 time windows)
+  // 1. Extract Meal Type using smart classifier (combines explicit user intent, smart snack composition, and 4 time windows in Asia/Jakarta WIB)
   let classifiedType = classifyMealType({
     foodName: detectedFoodName,
     items: detectedFoodsList,
     userText: cleanCaption,
-    timeOrDate,
+    timeOrDate: timeOrDate || new Date(),
     calories
   });
 
-  // If not a smart snack and caption has no explicit intent, respect caller's valid detectedMealType
-  const isSnack = isSmartSnack(detectedFoodName, detectedFoodsList, calories);
-  if (!isSnack && detectedMealType && !/(?:sarapan|breakfast|makan\s+siang|lunch|makan\s+malam|dinner|snack|camilan)/i.test(lowerCaption)) {
+  // Only allow detectedMealType override if user caption explicitly specifies a meal keyword
+  const hasExplicitUserIntent = /(?:sarapan|breakfast|makan\s+pagi|makan\s+siang|lunch|makan\s+malam|dinner|snack|camilan|ngemil)/i.test(lowerCaption);
+  if (hasExplicitUserIntent && detectedMealType) {
     const norm = detectedMealType.toLowerCase().trim();
     if (norm === "breakfast" || norm === "lunch" || norm === "dinner" || norm === "snack") {
       classifiedType = norm as any;
@@ -334,7 +345,8 @@ export function resolveCleanFoodNameAndMealType(
 export function buildSingleSourceOfTruthMealRecord(
   rawUserText: string,
   parsed: any,
-  hasImage: boolean
+  hasImage: boolean,
+  messageIdOverride?: string
 ): {
   mealRecord: MealLog;
   validatedParsed: any;
@@ -417,8 +429,12 @@ export function buildSingleSourceOfTruthMealRecord(
     ? parsed.detectedFoods
     : extractDetectedFoodItems(rawUserText || finalFoodName);
 
+  const deterministicId = messageIdOverride
+    ? `meal_wa_${messageIdOverride.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+    : (parsed?.id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+
   const mealRecord: MealLog = {
-    id: `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: deterministicId,
     foodName: finalFoodName,
     mealTitle: finalFoodName,
     rawUserMessage: rawUserText || "",
@@ -3182,8 +3198,7 @@ export function updateExistingMealLog(rawPhone: string, updatedMeal: MealLog, ta
   return true;
 }
 
-// Natural language meal correction intent detector
-export function detectMealCorrectionIntent(userText: string, hasRecentMeal: boolean): boolean {
+export function detectMealCorrectionIntent(userText: string, hasRecentMeal: boolean, lastMeal?: any): boolean {
   if (!userText || typeof userText !== "string") return false;
 
   // PRIORITY RULE 1: Delete intent always takes precedence over correction
@@ -3197,7 +3212,7 @@ export function detectMealCorrectionIntent(userText: string, hasRecentMeal: bool
   }
 
   // 1. Check structured parser first
-  const details = parseMealCorrectionDetails(userText);
+  const details = parseMealCorrectionDetails(userText, lastMeal);
   if (details) {
     if (hasRecentMeal) return true;
     if (
@@ -3238,6 +3253,20 @@ export function detectMealCorrectionIntent(userText: string, hasRecentMeal: bool
 
   // 3. Natural language component updates when a recent meal exists
   if (hasRecentMeal) {
+    if (lastMeal) {
+      const comps = Array.isArray(lastMeal.components) ? lastMeal.components : [];
+      const mealName = String(lastMeal.foodName || "").toLowerCase();
+      const hasComponentMention = comps.some((c: any) => c.name && lower.includes(c.name.toLowerCase())) ||
+        mealName.split(/[,&]+/).some(part => part.trim().length > 2 && lower.includes(part.trim().toLowerCase()));
+
+      if (hasComponentMention) {
+        const hasPortionOrCount = /\b(setengah|separuh|seperempat|1\/2|1\/4|3\/4|cuma|hanya|tetap|bukan|ganti|tambah|kurang|dihapus|tanpa|\d+(?:[.,]\d+)?(?:\s*(?:g|gr|gram|potong|buah|slice|porsi))?)\b/i.test(lower);
+        if (hasPortionOrCount) {
+          return true;
+        }
+      }
+    }
+
     const foodKeywords = "daging|beef|sapi|roti|bread|sub|nasi|rice|ayam|chicken|telur|egg|keju|cheese|sayur|sayuran|salad|sambal|saus|sauce|minyak|oil|kuah|susu|milk|kopi|coffee|teh|tea|gula|sugar|butter|topping|isian|kentang|potato|alpukat|ikan|fish|tahu|tempe|cumi|squid|udang";
     const portionUnits = "\\d+(?:[\\.,]\\d+)?\\s*(?:g|gr|gram|ml|potong|slice|sdm|sendok|buah|porsi)?|setengah|separuh|seperempat|sedikit|tanpa|1\\/2|1\\/4";
 
@@ -9151,6 +9180,17 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
 
         if (message) {
           const from = message.from;
+          const messageId = message.id;
+
+          // Deduplicate retried webhook events
+          if (messageId && processedWebhookEvents.has(messageId)) {
+            console.log(`[Meta WA Webhook] Deduplicated messageId: ${messageId}. Returning HTTP 200 immediately.`);
+            return res.status(200).send("EVENT_RECEIVED");
+          }
+          if (messageId) {
+            processedWebhookEvents.set(messageId, { timestamp: Date.now() });
+          }
+
           let userProfile = getUserProfile(from);
 
           let userText = "";
@@ -9769,7 +9809,8 @@ Keluarkan output JSON valid:
                   const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                     userText,
                     parsed,
-                    Boolean(imagePart)
+                    Boolean(imagePart),
+                    messageId
                   );
 
                   addMealLog(from, mealRecord);
@@ -9869,6 +9910,17 @@ function escapeXml(unsafe: string): string {
       const { Body, From, NumMedia } = req.body;
       const rawFrom = From || "";
       const normFrom = normalizePhone(rawFrom.replace("whatsapp:", ""));
+      const messageSid = req.body?.MessageSid || req.body?.SmsMessageSid || req.body?.SmsSid;
+
+      // Deduplicate retried webhook events from Twilio
+      if (messageSid && processedWebhookEvents.has(messageSid)) {
+        console.log(`[Twilio WA Webhook] Deduplicated MessageSid: ${messageSid}. Returning HTTP 200.`);
+        return res.type("text/xml").send("<Response></Response>");
+      }
+      if (messageSid) {
+        processedWebhookEvents.set(messageSid, { timestamp: Date.now() });
+      }
+
       let userProfile: any = null;
       try {
         const localUser = getUserProfile(normFrom);
@@ -10635,7 +10687,8 @@ Keluarkan output JSON valid:
                 const { mealRecord, validatedParsed } = buildSingleSourceOfTruthMealRecord(
                   userText,
                   parsed,
-                  Boolean(imagePart)
+                  Boolean(imagePart),
+                  messageSid
                 );
 
                 addMealLog(normFrom, mealRecord);

@@ -229,14 +229,22 @@ export default function WorkoutExecutionModal({
       recovery
     );
 
-    const normPhone = userPhone ? userPhone.replace(/\D/g, "") : "anonymous";
+    let localPhone = "anonymous";
+    if (userPhone) {
+      let cleaned = String(userPhone).replace(/\D/g, "");
+      if (cleaned.startsWith("62")) cleaned = "0" + cleaned.substring(2);
+      else if (cleaned.startsWith("8")) cleaned = "0" + cleaned;
+      localPhone = cleaned || "anonymous";
+    }
+    const intlPhone = localPhone.startsWith("0") ? "62" + localPhone.substring(1) : localPhone;
+
     const activityRecord = createCompletedWorkoutRecord(
       session,
       plan,
       sessionDurationSeconds,
       selectedDifficulty,
       adaptation,
-      userPhone
+      localPhone
     );
 
     if (onWorkoutCompleted) {
@@ -254,10 +262,11 @@ export default function WorkoutExecutionModal({
     try {
       localStorage.removeItem(STORAGE_SESSION_KEY);
       // Persist to user-scoped and global completed history
-      const historyKey = `gymbuddy_completed_workouts_${normPhone}`;
+      const historyKeyLocal = `gymbuddy_completed_workouts_${localPhone}`;
+      const historyKeyIntl = `gymbuddy_completed_workouts_${intlPhone}`;
       const fallbackKey = "gymbuddy_completed_workouts";
       const existingHistory: CompletedWorkoutActivity[] = JSON.parse(
-        localStorage.getItem(historyKey) || localStorage.getItem(fallbackKey) || "[]"
+        localStorage.getItem(historyKeyLocal) || localStorage.getItem(historyKeyIntl) || localStorage.getItem(fallbackKey) || "[]"
       );
       const filtered = Array.isArray(existingHistory)
         ? existingHistory.filter(
@@ -267,12 +276,16 @@ export default function WorkoutExecutionModal({
           )
         : [];
       filtered.unshift(activityRecord);
-      localStorage.setItem(historyKey, JSON.stringify(filtered.slice(0, 50)));
-      localStorage.setItem(fallbackKey, JSON.stringify(filtered.slice(0, 50)));
+      const historyJson = JSON.stringify(filtered.slice(0, 50));
+      localStorage.setItem(historyKeyLocal, historyJson);
+      if (intlPhone !== "anonymous") {
+        localStorage.setItem(historyKeyIntl, historyJson);
+      }
+      localStorage.setItem(fallbackKey, historyJson);
 
       // Also persist to backend API
       const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "https://gymbuddy-backend-253242815083.asia-southeast2.run.app";
-      fetch(`${API_BASE_URL}/api/user/${normPhone}/workout-history`, {
+      fetch(`${API_BASE_URL}/api/user/${localPhone}/workout-history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activity: activityRecord })

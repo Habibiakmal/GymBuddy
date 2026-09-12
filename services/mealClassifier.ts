@@ -109,7 +109,7 @@ export function extractHourMinute(timeOrDate?: string | Date): { hour: number; m
         minute: "numeric",
         hour12: false
       }).formatToParts(now);
-      const h = parseInt(parts.find(p => p.type === "hour")?.value || "12", 10);
+      const h = parseInt(parts.find(p => p.type === "hour")?.value || "12", 10) % 24;
       const m = parseInt(parts.find(p => p.type === "minute")?.value || "0", 10);
       return { hour: h, minute: m };
     } catch (e) {
@@ -120,7 +120,21 @@ export function extractHourMinute(timeOrDate?: string | Date): { hour: number; m
   }
 
   if (timeOrDate instanceof Date) {
-    return { hour: timeOrDate.getHours(), minute: timeOrDate.getMinutes() };
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Jakarta",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false
+      }).formatToParts(timeOrDate);
+      const h = parseInt(parts.find(p => p.type === "hour")?.value || "12", 10) % 24;
+      const m = parseInt(parts.find(p => p.type === "minute")?.value || "0", 10);
+      return { hour: h, minute: m };
+    } catch (e) {
+      const utcHour = timeOrDate.getUTCHours();
+      const wibHour = (utcHour + 7) % 24;
+      return { hour: wibHour, minute: timeOrDate.getUTCMinutes() };
+    }
   }
 
   const str = String(timeOrDate).trim();
@@ -141,11 +155,13 @@ export function extractHourMinute(timeOrDate?: string | Date): { hour: number; m
         minute: "numeric",
         hour12: false
       }).formatToParts(parsedDate);
-      const h = parseInt(parts.find(p => p.type === "hour")?.value || String(parsedDate.getHours()), 10);
+      const h = parseInt(parts.find(p => p.type === "hour")?.value || String(parsedDate.getHours()), 10) % 24;
       const m = parseInt(parts.find(p => p.type === "minute")?.value || String(parsedDate.getMinutes()), 10);
       return { hour: h, minute: m };
     } catch (e) {
-      return { hour: parsedDate.getHours(), minute: parsedDate.getMinutes() };
+      const utcHour = parsedDate.getUTCHours();
+      const wibHour = (utcHour + 7) % 24;
+      return { hour: wibHour, minute: parsedDate.getUTCMinutes() };
     }
   }
 

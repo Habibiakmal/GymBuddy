@@ -1303,9 +1303,11 @@ export function shortenWorkoutPlan(
   const estimatedDuration = calculateEstimatedWorkoutDuration(warmup, shortenedExercises, cooldown, adjustedCardio);
   const totalSets = allExercises.reduce((sum, ex) => sum + (ex.targetSets || 1), 0);
 
+  const cleanBaseId = originalPlan.id.replace(/_(?:shortened|scaled)_\d+m/g, "");
+
   return {
     ...originalPlan,
-    id: `${originalPlan.id}_shortened_${newTargetDuration}m`,
+    id: `${cleanBaseId}_shortened_${newTargetDuration}m`,
     targetDuration: newTargetDuration,
     estimatedDuration,
     warmup,
@@ -1331,7 +1333,11 @@ export function adjustWorkoutPlanDuration(
   if (newTargetDuration === originalPlan.targetDuration) {
     return originalPlan;
   }
+  const cleanBaseId = originalPlan.id.replace(/_(?:shortened|scaled)_\d+m/g, "");
+
   if (newTargetDuration > originalPlan.targetDuration) {
+    const d = new Date(originalPlan.date);
+    const dayIndex = (d.getDay() + 6) % 7;
     const regenerated = generatePersonalizedWorkoutPlan(
       {
         workoutDuration: newTargetDuration,
@@ -1342,11 +1348,13 @@ export function adjustWorkoutPlanDuration(
         injuryLimitations: userPrefs?.injuryLimitations || [],
         persona: userPrefs?.persona || "max"
       },
-      originalPlan.date
+      originalPlan.date,
+      [],
+      dayIndex
     );
     return {
       ...regenerated,
-      id: `${originalPlan.id}_scaled_${newTargetDuration}m`,
+      id: `${cleanBaseId}_scaled_${newTargetDuration}m`,
       targetDuration: newTargetDuration,
       rationale: `Sesi telah disesuaikan menjadi ${newTargetDuration} menit dengan menambahkan variasi gerakan dan volume latihan yang seimbang.`,
       coachInsight: `Durasi latihan ditingkatkan menjadi ${newTargetDuration} menit. Manfaatkan waktu ini untuk fokus pada form dan volume latihan.`
@@ -1789,9 +1797,15 @@ export function createCompletedWorkoutRecord(
   nextAdaptation?: any,
   phone?: string
 ): CompletedWorkoutActivity {
-  const normPhone = phone ? phone.replace(/\D/g, "") : "anonymous";
+  let normPhone = "anonymous";
+  if (phone) {
+    let cleaned = String(phone).replace(/\D/g, "");
+    if (cleaned.startsWith("62")) cleaned = "0" + cleaned.substring(2);
+    else if (cleaned.startsWith("8")) cleaned = "0" + cleaned;
+    normPhone = cleaned || "anonymous";
+  }
   const now = new Date();
-  const dateStr = plan.date || now.toISOString().split("T")[0];
+  const dateStr = plan.date || now.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
   const allPlanExercises = plan.cardio ? [...plan.mainExercises, plan.cardio] : plan.mainExercises;
 
   // Build stable exercise records

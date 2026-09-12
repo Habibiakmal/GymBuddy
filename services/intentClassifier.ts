@@ -350,8 +350,8 @@ export function parseMealCorrectionDetails(
   }
 
   // 7. Portion (MEAL_CORRECTION_PORTION)
-  // "nasinya cuma 100 gram", "nasinya cuma setengah", "cuminya sekitar 150 gram"
-  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram)|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4)[.]?$/i);
+  // "nasinya cuma 100 gram", "nasinya cuma setengah", "cuminya sekitar 150 gram", "kue talas 1"
+  const portMatch = stripped.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:tadi\s*)?(?:cuma|hanya|sekitar|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram|potong|buah|slice|porsi)?|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4|satu|dua|tiga)[.]?$/i);
   if (portMatch) {
     const target = cleanFoodTerm(portMatch[1]);
     const portionText = portMatch[2].trim();
@@ -364,6 +364,29 @@ export function parseMealCorrectionDetails(
       portionText,
       weightGrams
     };
+  }
+
+  // 7b. Multi-item or multi-clause correction:
+  // e.g. "kue jeruk setengah, kue talas 1, pudding dessert juga setengah"
+  // e.g. "aku cuma makan kue jeruk setengah, kue talas satu, pudding setengah"
+  const cleanForMulti = stripped.replace(/^(?:aku\s+|saya\s+|gue\s+)?(?:cuma\s+|hanya\s+)?(?:makan\s+)?/i, "").trim();
+  const multiParts = cleanForMulti.split(/\s*(?:,|dan|serta|\+)\s*/i).map(s => s.replace(/\bjuga\b/gi, "").trim()).filter(Boolean);
+  if (multiParts.length >= 2) {
+    const matchedClauses: Array<{ item: string; portion: string }> = [];
+    for (const part of multiParts) {
+      const m = part.match(/^([a-zA-Z0-9\s]+?)(?:nya)?\s*(?:cuma|hanya|sebanyak|jadi)?\s*(\d+(?:[.,]\d+)?\s*(?:g|gr|gram|potong|buah|slice|porsi)?|setengah(?:nya)?|separuh|seperempat|tiga\s*perempat|1\/2|1\/4|3\/4|satu|dua|tiga)$/i);
+      if (m) {
+        matchedClauses.push({ item: cleanFoodTerm(m[1]), portion: m[2].trim() });
+      }
+    }
+    if (matchedClauses.length >= 2) {
+      return {
+        subtype: "MEAL_CORRECTION_PORTION",
+        action: "modify_portion",
+        targetItem: matchedClauses[0].item,
+        portionText: matchedClauses.map(c => `${c.item}: ${c.portion}`).join(", ")
+      };
+    }
   }
 
   // 8. Ambiguous single food mention: ONLY if it's 1-2 words naming a component without portions or verbs (e.g. "koreksi ayamnya", "ayamnya", "nasi putih")
