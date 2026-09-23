@@ -147,22 +147,30 @@ assert(!resLansia.redirectMessage?.includes("bro"), "Zero forbidden 'bro' slang 
 // ── GROUP 4: PLAN RESTRICTIONS WITH IMAGES ──
 console.log("\n▶ GROUP 4: Plan Capability Enforcement with Images");
 
+const futureExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
 const mockNutritionOnlyUser = {
   ...mockUserMia,
+  subscription_plan: "nutritionist" as any,
   plan: "nutritionist",
-  activeService: "nutritionist"
+  activeService: "nutritionist",
+  planExpiresAt: futureExpiry,
+  subscription_status: "active"
 };
 
 const mockWorkoutOnlyUser = {
   ...mockUserMax,
+  subscription_plan: "workout" as any,
   plan: "workout",
-  activeService: "workout"
+  activeService: "workout",
+  planExpiresAt: futureExpiry,
+  subscription_status: "active"
 };
 
 // Workout equipment photo sent by user with Nutrition Only plan
 const resEquipOnNutrition = validatePlanContext("ini alat apa?", true, mockNutritionOnlyUser);
 assert(resEquipOnNutrition.canProceed === false, "canProceed is false for equipment inquiry on Nutrition-Only plan");
-assert(resEquipOnNutrition.decision === "REDIRECT_UNSUPPORTED_WORKOUT", "Redirected to unsupported workout on Nutrition plan");
+assert(resEquipOnNutrition.decision === "REDIRECT_UNSUPPORTED_WORKOUT", "Redirected to unsupported workout on Nutrition plan", JSON.stringify(resEquipOnNutrition));
 
 // Food photo sent by user with Workout Only plan
 const resFoodOnWorkout = validatePlanContext("aku makan ini", true, mockWorkoutOnlyUser);

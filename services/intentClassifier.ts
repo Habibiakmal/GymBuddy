@@ -15,10 +15,17 @@ export type UserIntentType =
   | "PROGRAM_QUESTION"
   | "WORKOUT_QUESTION"
   | "WORKOUT_LOG"
+  | "WORKOUT_ADAPTATION"
   | "VAGUE_WORKOUT_NEEDS_CLARIFICATION"
+  | "EQUIPMENT_INQUIRY"
+  | "EXERCISE_POSTURE_INQUIRY"
   | "MEAL_LOG"
   | "MEAL_CORRECTION"
   | "MEAL_DELETE"
+  | "RECOMMENDATION_REJECTION"
+  | "RECOMMENDATION_REFERENCE_MODIFICATION"
+  | "PREFERENCE_UPDATE"
+  | "MULTI_INTENT"
   | "WEIGHT_LOG"
   | "BODY_MEASUREMENT_LOG"
   | "GOAL_UPDATE"
@@ -28,6 +35,43 @@ export type UserIntentType =
   | "CANCEL"
   | "CONFIRMATION"
   | "UNKNOWN";
+
+export type ResponseComplexityType =
+  | "SIMPLE_ACTION"
+  | "SIMPLE_CONFIRMATION"
+  | "CORRECTION"
+  | "RECOMMENDATION"
+  | "INFORMATIONAL"
+  | "MULTI_INTENT"
+  | "SAFETY_WARNING"
+  | "ERROR"
+  | "ACCOUNT_ACTION";
+
+export interface PreferenceInstructionResult {
+  type: "PERSISTENT_DISLIKE" | "TEMPORARY_PREFERENCE" | "TEMPORAL_OVERRIDE" | "PERSISTENT_CHANGE";
+  value: string;
+  scope?: "tomorrow_only" | "tonight_only" | "meal_specific" | "today" | "specific_date";
+  category?: "sarapan" | "siang" | "malam" | "snack";
+  action?: "add_disliked" | "remove_disliked" | "add_temporary" | "add_override";
+}
+
+export interface WorkoutAdaptationDetails {
+  isAdaptation: boolean;
+  targetMinutes?: number;
+  targetDurationMinutes?: number;
+  effortSignal: "normal" | "intense" | "fatigued";
+  isFatigued?: boolean;
+  discomfortSignal?: string;
+  discomfortArea?: string;
+  equipmentConstraint?: string;
+}
+
+export type EquipmentIntentSubtype =
+  | "WHAT_IS_IT"
+  | "HOW_TO_USE"
+  | "EXERCISES_FOR_EQUIPMENT"
+  | "EXERCISE_POSTURE"
+  | "GENERAL_EQUIPMENT";
 
 export type MealCorrectionSubtype =
   | "MEAL_CORRECTION_ITEM"
@@ -58,6 +102,7 @@ export interface MealCorrectionDetails {
 
 export interface IntentClassificationResult {
   intent: UserIntentType;
+  equipmentSubtype?: EquipmentIntentSubtype;
   confidence: "high" | "medium" | "low";
   reason: string;
   extractedDetails?: {
@@ -66,6 +111,12 @@ export interface IntentClassificationResult {
     weightKg?: number;
     mealDescription?: string;
     mealCorrection?: MealCorrectionDetails;
+    equipmentName?: string;
+    equipmentIntentSubtype?: EquipmentIntentSubtype;
+    preferenceInstruction?: PreferenceInstructionResult;
+    workoutAdaptation?: WorkoutAdaptationDetails;
+    rejectionDetails?: { rejectedItem?: string };
+    multiIntentDetails?: { logPart: string; recPart: string };
   };
 }
 
@@ -519,6 +570,86 @@ export function classifyUserIntent(
     };
   }
 
+  // ── MULTI-INTENT CHECK ───────────────────────────────────────────────────
+  const multiIntent = detectMultiIntent(rawText);
+  if (multiIntent && multiIntent.isMultiIntent) {
+    return {
+      intent: "MULTI_INTENT",
+      confidence: "high",
+      reason: "User combined meal logging and recommendation request",
+      extractedDetails: {
+        multiIntentDetails: {
+          logPart: multiIntent.logPart || "",
+          recPart: multiIntent.recPart || ""
+        }
+      }
+    };
+  }
+
+  // ── WORKOUT ADAPTATION CHECK ─────────────────────────────────────────────
+  // e.g. "Aku cuma punya waktu 15 menit", "Lututku lagi gak enak", "15 menit dan lagi capek"
+  const workoutAdaptation = detectWorkoutAdaptation(rawText);
+  if (workoutAdaptation && workoutAdaptation.isAdaptation && !lower.match(/\b(?:makan|menu|kalori|minum)\b/i)) {
+    return {
+      intent: "WORKOUT_ADAPTATION",
+      confidence: "high",
+      reason: "User requested workout adaptation for duration, fatigue, or discomfort",
+      extractedDetails: {
+        workoutAdaptation
+      }
+    };
+  }
+
+  // ── RECOMMENDATION REJECTION / PREFERENCE UPDATE CHECK ───────────────────
+  const rejectionCheck = detectRecommendationRejection(rawText);
+  const prefInstruction = parsePreferenceInstruction(rawText);
+
+  if (rejectionCheck.isRejection) {
+    return {
+      intent: "RECOMMENDATION_REJECTION",
+      confidence: "high",
+      reason: rejectionCheck.rejectedItem
+        ? `User rejected recommendation ingredient: ${rejectionCheck.rejectedItem}`
+        : "User rejected recommendation",
+      extractedDetails: {
+        rejectionDetails: { rejectedItem: rejectionCheck.rejectedItem },
+        preferenceInstruction: prefInstruction || (rejectionCheck.rejectedItem ? {
+          type: "PERSISTENT_DISLIKE",
+          value: rejectionCheck.rejectedItem,
+          action: "add_disliked"
+        } : undefined)
+      }
+    };
+  }
+
+  if (prefInstruction) {
+    return {
+      intent: "PREFERENCE_UPDATE",
+      confidence: "high",
+      reason: `User specified preference update (${prefInstruction.type}: ${prefInstruction.value})`,
+      extractedDetails: {
+        preferenceInstruction: prefInstruction
+      }
+    };
+  }
+
+  // ── RECOMMENDATION REFERENCE MODIFICATION CHECK ───────────────────────────
+  // E.g. "yang tadi aja", "ganti ayamnya jadi tahu", "hapus nasinya", "tambahin buah"
+  const isRefMod =
+    lower.match(/^(?:yang\s+tadi(?:\s+aja)?|pilihan\s+yang\s+tadi)$/i) ||
+    lower.match(/(?:hapus|hilangkan|tanpa)\s+(?:nasi|ayam|telur|sayur|tahu|tempe|daging)/i) ||
+    lower.match(/(?:tambahin|tambah|ekstra)\s+(?:buah|sayur|telur)/i) ||
+    lower.match(/(?:yang\s+)?([a-zA-Z\s]+?)(?:nya)?\s+ganti(?:\s+(?:jadi|ke|dengan)\s+([a-zA-Z\s]+))?/i) ||
+    lower.match(/^(?:ganti\s+(?:yang\s+)?itu|bukan\s+(?:yang\s+)?itu)$/i);
+
+  if (isRefMod && !context.hasRecentMeal) {
+    return {
+      intent: "RECOMMENDATION_REFERENCE_MODIFICATION",
+      confidence: "high",
+      reason: "User is modifying or referencing recent recommendation"
+    };
+  }
+
   // ── 2d. HYDRATION LOG (EXPLICIT) ─────────────────────────────────────────
   // Examples: "minum 500ml", "air 2 gelas", "minum 1 liter"
   const isHydration = Boolean(
@@ -569,6 +700,59 @@ export function classifyUserIntent(
       intent: "PROGRAM_QUESTION",
       confidence: "high",
       reason: "User is inquiring or stating their program, not reporting completed exercise"
+    };
+  }
+
+  // ── 3b. EQUIPMENT & EXERCISE POSTURE INQUIRY ─────────────────────────────
+  // Handles demonstrative and direct questions about gym equipment or exercise form/posture
+  // especially when accompanied by an image or referring to visual context ("alat ini", "ini apa?")
+  const isEquipmentInquirySignal = Boolean(
+    lower.match(/\b(?:alat\s*ini|mesin\s*ini|alat\s*gym|mesin\s*gym|alat\s*fitness)\b/i) ||
+    lower.match(/\b(?:cara\s+(?:pakai|make|menggunakan)|gimana\s+(?:cara\s+)?(?:make|pakai|menggunakan)|bagaimana\s+(?:cara\s+)?(?:pakai|make|menggunakan))\s+(?:alat|mesin|ini)\b/i) ||
+    lower.match(/\b(?:ini\s+alat\s+apa|alat\s+apa\s+ini|ini\s+mesin\s+apa|ini\s+buat\s+apa|alat\s+ini\s+buat\s+apa)\b/i) ||
+    lower.match(/\b(?:latihan|workout|olahraga)\s+apa\s+(?:yang\s+)?bisa\s+(?:dilakukan\s+)?(?:dengan|pake|pakai)\s+(?:alat|mesin)\b/i) ||
+    lower.match(/\b(?:bisa\s+buat\s+(?:latihan|workout|apa)\s+aja)\b/i) ||
+    (context.hasImage && lower.match(/^(?:ini\s+apa|apa\s+ini|alat\s+ini|mesin\s+ini|cara\s+pakai(?:nya)?|cara\s+make(?:nya)?|gimana\s+make(?:nya)?|gimana\s+cara(?:nya)?|bisa\s+buat\s+latihan\s+apa\s*aja)[.?!]?$/i)) ||
+    (Boolean(lower.match(/\b(?:dumbbell|barbell|kettlebell|resistance\s*band|treadmill|exercise\s*bike|workout\s*bench|cable\s*machine|yoga\s*mat|barbel|sepeda\s*statis|matras)\b/i)) &&
+      Boolean(lower.match(/\b(?:cara|gimana|bagaimana|apa|fungsi|latihan|workout|buat)\b/i)))
+  );
+
+  const isExercisePostureSignal = Boolean(
+    lower.match(/\b(?:ini\s+gerakan\s+apa|gerakan\s+apa\s+ini|nama\s+gerakan\s+ini|latihan\s+gerakan\s+ini|gerakan\s+ini\s+gimana)\b/i) ||
+    lower.match(/\b(?:form\s+ini|postur\s+ini|teknik\s+gerakan\s+ini)\b/i) ||
+    (context.hasImage && Boolean(lower.match(/\b(?:gerakan|form|postur)\s+(?:ini|apa)\b/i)))
+  );
+
+  if (isExercisePostureSignal) {
+    return {
+      intent: "EXERCISE_POSTURE_INQUIRY",
+      equipmentSubtype: "EXERCISE_POSTURE",
+      confidence: "high",
+      reason: "User is inquiring about exercise movement or posture shown in visual context",
+      extractedDetails: {
+        equipmentIntentSubtype: "EXERCISE_POSTURE"
+      }
+    };
+  }
+
+  if (isEquipmentInquirySignal) {
+    let eqSubtype: EquipmentIntentSubtype = "GENERAL_EQUIPMENT";
+    if (lower.match(/\b(?:ini\s+apa|apa\s+ini|alat\s+apa|mesin\s+apa|nama\s+alat)\b/i)) {
+      eqSubtype = "WHAT_IS_IT";
+    } else if (lower.match(/\b(?:cara\s+(?:pakai|make|menggunakan)|gimana\s+(?:cara\s+)?(?:make|pakai|menggunakan)|bagaimana\s+cara|tutor(?:ial)?)\b/i)) {
+      eqSubtype = "HOW_TO_USE";
+    } else if (lower.match(/\b(?:latihan\s+apa|workout\s+apa|bisa\s+buat\s+latihan|buat\s+latihan\s+apa|variasi)\b/i)) {
+      eqSubtype = "EXERCISES_FOR_EQUIPMENT";
+    }
+
+    return {
+      intent: "EQUIPMENT_INQUIRY",
+      equipmentSubtype: eqSubtype,
+      confidence: "high",
+      reason: `User is inquiring about gym equipment/tool (${eqSubtype})`,
+      extractedDetails: {
+        equipmentIntentSubtype: eqSubtype
+      }
     };
   }
 
@@ -714,9 +898,12 @@ export function classifyUserIntent(
   }
 
   // ── 8. MEAL LOGGING ───────────────────────────────────────────────────────
-  // e.g. "Tadi saya makan nasi ayam", "Makan siang ayam geprek", sends image
+  // e.g. "Tadi saya makan nasi ayam", "Makan siang ayam geprek", sends food image
+  const isNonFoodVisualQuery = isEquipmentInquirySignal || isExercisePostureSignal ||
+    Boolean(lower.match(/\b(?:alat|mesin|dumbbell|barbell|treadmill|kettlebell|bench|kabel|sepeda|matras|gerakan|postur|form)\b/i));
+
   const hasMealSignal =
-    context.hasImage ||
+    (context.hasImage && !isNonFoodVisualQuery) ||
     Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) ||
     Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
 
@@ -746,4 +933,241 @@ export function classifyUserIntent(
     confidence: "low",
     reason: "General conversation or open query"
   };
+}
+
+// ============================================================================
+// HUMAN BEHAVIOR INTELLIGENCE HELPER DETECTORS
+// ============================================================================
+
+/**
+ * Detects compound user messages combining meal logging and recommendation requests.
+ * E.g. "tadi aku makan nasi padang, catat ya, terus kasih rekomendasi makan malam yang rendah kalori dan tanpa ayam"
+ */
+export interface MultiIntentResult {
+  isMultiIntent: boolean;
+  intents: Array<{ type: "LOG_MEAL" | "RECOMMENDATION" | "WATER_LOG"; text: string }>;
+  logPart?: string;
+  recPart?: string;
+}
+
+export function detectMultiIntent(text: string): MultiIntentResult {
+  if (!text) return { isMultiIntent: false, intents: [] };
+  const lower = text.toLowerCase();
+  const splitMatch = lower.match(/(.+?)(?:,\s*(?:lalu|terus|dan\s+terus|kemudian|sekalian|nanti)?\s+|\s+(?:lalu|terus|kemudian|sekalian)\s+)(.+)/i);
+  if (splitMatch) {
+    const part1 = splitMatch[1].trim();
+    const part2 = splitMatch[2].trim();
+    const isPart1Log = Boolean(part1.match(/\b(?:tadi\s+)?(?:aku|saya)?\s*(?:udah\s+)?makan\b/i) || part1.match(/\bcatat\b/i));
+    const isPart2Rec = Boolean(part2.match(/\b(?:rekomendasi|saran|pilihan)\b/i) || part2.match(/\bmakan\s+(?:malam|siang|pagi)\s+apa\b/i));
+
+    if (isPart1Log && isPart2Rec) {
+      return {
+        isMultiIntent: true,
+        intents: [
+          { type: "LOG_MEAL", text: part1 },
+          { type: "RECOMMENDATION", text: part2 }
+        ],
+        logPart: part1,
+        recPart: part2
+      };
+    }
+  }
+  return { isMultiIntent: false, intents: [] };
+}
+
+/**
+ * Detects user rejection of a food recommendation.
+ * E.g. "aku gak suka ikan", "nggak mau ayam", "bukan itu", "skip", "ganti yang lain"
+ */
+export function detectRecommendationRejection(text: string): { isRejection: boolean; rejectedItem?: string; isPersistent?: boolean } {
+  if (!text) return { isRejection: false };
+  const lower = text.toLowerCase().trim();
+
+  // 1. Explicit item rejection: "aku gak suka X", "gak mau X", "jangan X", "benci X"
+  const itemMatch = lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+suka\s+([a-zA-Z\s]+)/i) ||
+                    lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+mau\s+([a-zA-Z\s]+)/i) ||
+                    lower.match(/(?:aku\s+)?(?:gak\s+doyan|benci)\s+([a-zA-Z\s]+)/i) ||
+                    lower.match(/^jangan\s+(?:kasih\s+)?([a-zA-Z\s]+)/i);
+
+  if (itemMatch) {
+    let item = itemMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (item && !["itu", "yang itu", "tadi", "yang tadi"].includes(item)) {
+      const isPersistent = lower.includes("suka") || lower.includes("doyan") || lower.includes("benci");
+      return { isRejection: true, rejectedItem: item, isPersistent };
+    }
+    return { isRejection: true, rejectedItem: undefined };
+  }
+
+  // 2. General rejection: "bukan itu", "skip", "ganti yang lain", "yang lain dong", "nggak mau"
+  if (/^(?:bukan\s+(?:yang\s+)?itu|skip|ganti\s+(?:yang\s+)?lain|yang\s+lain\s+dong|nggak\s+mau|gak\s+mau|jangan\s+yang\s+itu|menu\s+lain\s+dong|bosan)[.!]?$/i.test(lower)) {
+    return { isRejection: true, rejectedItem: undefined };
+  }
+
+  return { isRejection: false };
+}
+
+/**
+ * Parses explicit preference statements distinguishing persistent dislike,
+ * temporary preference (today), temporal override (tomorrow / tonight),
+ * and persistent preference changes.
+ */
+export function parsePreferenceInstruction(rawText: string): PreferenceInstructionResult | null {
+  if (!rawText) return null;
+  const lower = rawText.toLowerCase().trim();
+
+  // 1. Persistent Change e.g. "Mulai sekarang aku gak masalah makan ikan", "aku sekarang udah suka ikan"
+  const changeMatch = lower.match(/mulai\s+sekarang\s+(?:aku\s+)?(?:gak\s+masalah|bisa|boleh|mau|suka)\s+(?:makan\s+)?([a-zA-Z\s]+)/i) ||
+                      lower.match(/(?:aku\s+)?(?:sekarang\s+)?udah\s+(?:suka|mau\s+makan|gak\s+masalah\s+makan)\s+([a-zA-Z\s]+)/i);
+  if (changeMatch) {
+    const val = changeMatch[1].replace(/nya$/, "").replace(/\s+(?:lagi|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "PERSISTENT_CHANGE",
+        value: val,
+        action: "remove_disliked"
+      };
+    }
+  }
+
+  // 2. Meal-specific Temporal Override e.g. "Makan malam ini aku mau ikan", "malam ini pengen ikan"
+  const mealSpecificMatch = lower.match(/(?:makan\s+malam(?:\s+ini)?|malam\s+ini|dinner)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i) ||
+                            lower.match(/(?:sarapan(?:\s+ini)?|pagi\s+ini|breakfast)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i) ||
+                            lower.match(/(?:makan\s+siang(?:\s+ini)?|siang\s+ini|lunch)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i);
+  if (mealSpecificMatch) {
+    let cat: "sarapan" | "siang" | "malam" | "snack" = "malam";
+    if (lower.includes("sarapan") || lower.includes("pagi") || lower.includes("breakfast")) cat = "sarapan";
+    else if (lower.includes("siang") || lower.includes("lunch")) cat = "siang";
+    const val = mealSpecificMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORAL_OVERRIDE",
+        value: val,
+        scope: "tonight_only",
+        category: cat,
+        action: "add_override"
+      };
+    }
+  }
+
+  // 3. Tomorrow Temporal Override e.g. "Besok aku mau makan ikan", "besok pengen udang"
+  const tomorrowMatch = lower.match(/besok\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i);
+  if (tomorrowMatch) {
+    const val = tomorrowMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORAL_OVERRIDE",
+        value: val,
+        scope: "tomorrow_only",
+        action: "add_override"
+      };
+    }
+  }
+
+  // 4. Temporary Preference Today e.g. "Hari ini aku gak mau ayam", "hari ini jangan ayam", "lagi gak pengen ayam hari ini"
+  const tempMatch = lower.match(/(?:hari\s+ini\s+(?:aku\s+)?(?:gak\s+mau|jangan|gak\s+pengen|lagi\s+gak\s+mood)|(?:lagi\s+)?gak\s+pengen\s+([a-zA-Z\s]+?)\s+hari\s+ini)\s*([a-zA-Z\s]+)?/i);
+  if (tempMatch) {
+    const rawVal = tempMatch[2] || tempMatch[1];
+    const val = (rawVal || "").replace(/nya$/, "").replace(/\s+(?:dulu|aja|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORARY_PREFERENCE",
+        value: val,
+        scope: "today",
+        action: "add_temporary"
+      };
+    }
+  }
+
+  // 5. Persistent Dislike e.g. "Aku gak suka ikan", "nggak suka ikan", "benci ikan", "gak makan babi"
+  const dislikeMatch = lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+(?:suka|doyan|makan)\s+([a-zA-Z\s]+)/i) ||
+                       lower.match(/(?:aku\s+)?(?:benci|hindari)\s+([a-zA-Z\s]+)/i);
+  if (dislikeMatch) {
+    const val = dislikeMatch[1].replace(/nya$/, "").replace(/\s+(?:lagi|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu", "itu", "yang itu"].includes(val)) {
+      return {
+        type: "PERSISTENT_DISLIKE",
+        value: val,
+        action: "add_disliked"
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detects requests to adapt an existing workout plan for duration, fatigue, or discomfort.
+ * Never converts to HIIT automatically or assumes intensity changes from duration alone.
+ */
+export function detectWorkoutAdaptation(text: string): WorkoutAdaptationDetails | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  // Duration match e.g. "cuma punya waktu 15 menit", "hari ini 15 menit", "cuma bisa 20 menit"
+  const durMatch = lower.match(/(?:cuma|hanya|punya\s+waktu|bisa|waktuku|durasi)?\s*(\d{1,3})\s*(?:menit|mins|min)\b/i);
+  const targetMinutes = durMatch ? parseInt(durMatch[1], 10) : undefined;
+
+  // Fatigue match e.g. "lagi capek", "capek banget", "lemas", "lelah", "mager", "kurang tenaga", "recovery"
+  const isFatigued = Boolean(lower.match(/\b(?:lagi\s+)?(?:capek|lelah|lemas|pegal|letih|kurang\s+tenaga|mager|pemulihan|recovery)\b/i));
+
+  // High intensity match e.g. "pengen yang berat", "yang keras", "yang intens"
+  const isIntense = Boolean(lower.match(/\b(?:pengen|mau|buat)\s+(?:yang\s+)?(?:berat|keras|intens|hard)\b/i));
+
+  // Discomfort match e.g. "lututku lagi gak enak", "lutut sakit", "lutut nyeri", "cedera lutut", "gak bisa squat"
+  const discomfortMatch = lower.match(/\b(lutut|knee|pinggang|bahu|engkel|sendi|punggung)\s*(?:ku|mu|nya)?\s*(?:lagi\s+)?(?:gak\s+enak|sakit|nyeri|linu|pegal|cedera)\b/i) ||
+                          lower.match(/\b(?:gak\s+bisa|tidak\s+bisa)\s+(?:squat|lompat|jump)\b/i);
+  let discomfortSignal: string | undefined = undefined;
+  if (discomfortMatch) {
+    const raw = (discomfortMatch[1] || "lutut").toLowerCase();
+    discomfortSignal = (raw === "lutut" || raw === "knee") ? "knee" : raw;
+  }
+
+  // Equipment match e.g. "di rumah", "tanpa alat", "gak bisa ke gym"
+  const equipMatch = lower.match(/\b(?:di\s+rumah|tanpa\s+alat|gak\s+bisa\s+ke\s+gym|bodyweight)\b/i);
+  const equipmentConstraint = equipMatch ? equipMatch[0].toLowerCase() : undefined;
+
+  if (targetMinutes || isFatigued || isIntense || discomfortSignal || equipmentConstraint) {
+    return {
+      isAdaptation: true,
+      targetMinutes,
+      targetDurationMinutes: targetMinutes,
+      effortSignal: isFatigued ? "fatigued" : (isIntense ? "intense" : "normal"),
+      isFatigued,
+      discomfortSignal,
+      discomfortArea: discomfortSignal,
+      equipmentConstraint
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Classifies response complexity model to ensure formatting matches user intent:
+ * SIMPLE_ACTION: 1-line concise confirmation, zero dashboard dumping.
+ * CORRECTION: Acknowledge + show only affected values.
+ * RECOMMENDATION: Structured vertical card.
+ * MULTI_INTENT: Clearly demarcated sequential actions.
+ */
+export function classifyResponseComplexity(
+  intent: UserIntentType,
+  text: string,
+  context?: any
+): ResponseComplexityType {
+  if ((intent as string) === "SIMPLE_ACTION" || intent === "HYDRATION_LOG" || intent === "WEIGHT_LOG") {
+    return "SIMPLE_ACTION";
+  }
+  if (intent === "CONFIRMATION") {
+    return "SIMPLE_CONFIRMATION";
+  }
+  if (intent === "MEAL_CORRECTION") {
+    return "CORRECTION";
+  }
+  if (intent === "RECOMMENDATION_REJECTION" || intent === "RECOMMENDATION_REFERENCE_MODIFICATION") {
+    return "RECOMMENDATION";
+  }
+  if (intent === "MULTI_INTENT") {
+    return "MULTI_INTENT";
+  }
+  return "INFORMATIONAL";
 }

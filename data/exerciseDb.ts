@@ -981,10 +981,181 @@ for (const raw of (rawExercises as unknown as ExerciseItem[])) {
 
 export const EXERCISE_DATABASE: ExerciseItem[] = fullList;
 
+// Indonesian & English stopwords/generic question words that MUST NOT trigger false exercise matches
+export const EXERCISE_QUERY_STOPWORDS = new Set([
+  "gimana", "bagaimana", "cara", "make", "pakai", "pake", "alat", "ini", "itu", "buat", "apa", "apakah",
+  "bisa", "untuk", "tutor", "tutorial", "tips", "panduan", "latihan", "olahraga", "mesin", "gerakan",
+  "teknik", "posisi", "postur", "help", "how", "to", "use", "the", "this", "that", "what", "is", "a",
+  "an", "dong", "ya", "kak", "bro", "coach", "tolong", "ajarin", "diajarin", "gaya", "dong", "kasih",
+  "tahu", "tau", "tentang", "mengenai", "tentunya", "melakukan", "ngerjain", "pakainya", "makai", "memakai",
+  "menggunakan", "penggunaan", "kegunaan", "fungsi", "fungsingya"
+]);
+
+// 9 Canonical equipment mappings for GymBuddy AI Vision & text understanding
+export const CANONICAL_EQUIPMENT_TYPES = [
+  "dumbbell",
+  "barbell",
+  "kettlebell",
+  "resistance band",
+  "treadmill",
+  "exercise bike",
+  "workout bench",
+  "cable machine",
+  "yoga mat"
+] as const;
+
+export type CanonicalEquipmentType = typeof CANONICAL_EQUIPMENT_TYPES[number];
+
+/**
+ * Normalizes and resolves any equipment name or phrase to a canonical equipment type.
+ */
+export function resolveCanonicalEquipment(input: string): CanonicalEquipmentType | null {
+  if (!input) return null;
+  const s = input.toLowerCase().trim();
+
+  if (s.includes("dumbbell") || s.includes("dumbell") || s.includes("barbel kecil") || s.includes("hand weight")) {
+    return "dumbbell";
+  }
+  if (s.includes("barbell") || s.includes("barbel") || s.includes("olympic bar") || s.includes("ez bar")) {
+    return "barbell";
+  }
+  if (s.includes("kettlebell") || s.includes("kettle bell") || s.includes("kettelbell")) {
+    return "kettlebell";
+  }
+  if (s.includes("resistance band") || s.includes("resistance_band") || s.includes("karet") || s.includes("elastic band") || s.includes("loop band") || s.includes("pull up band")) {
+    return "resistance band";
+  }
+  if (s.includes("treadmill") || s.includes("treadmil") || s.includes("mesin lari") || s.includes("jalan di tempat")) {
+    return "treadmill";
+  }
+  if (s.includes("bike") || s.includes("sepeda") || s.includes("cycling") || s.includes("statik") || s.includes("statis") || s.includes("spin bike")) {
+    return "exercise bike";
+  }
+  if (s.includes("bench") || s.includes("bangku") || s.includes("incline bench") || s.includes("flat bench") || s.includes("kursi gym")) {
+    return "workout bench";
+  }
+  if (s.includes("cable") || s.includes("kabel") || s.includes("pulley") || s.includes("lat pull") || s.includes("crossover") || s.includes("mesin kabel")) {
+    return "cable machine";
+  }
+  if (s.includes("mat") || s.includes("matras") || s.includes("yoga") || s.includes("floor") || s.includes("lantai")) {
+    return "yoga mat";
+  }
+
+  return null;
+}
+
+/**
+ * Retrieves exercises matching a specific equipment type or category.
+ */
+export function findExercisesByEquipment(equipment: string, limit: number = 5): ExerciseItem[] {
+  const canonical = resolveCanonicalEquipment(equipment);
+  const searchStr = (canonical || equipment).toLowerCase().trim();
+
+  return EXERCISE_DATABASE.filter(item => {
+    const itemEquip = (item.equipmentCategory || "").toLowerCase();
+    const itemEqName = (item.equipmentName || "").toLowerCase();
+    const itemIndo = (item.indonesianName || "").toLowerCase();
+    const itemName = item.name.toLowerCase();
+
+    if (canonical === "dumbbell") {
+      return itemEquip === "dumbbell" || itemEqName.includes("dumbbell") || itemName.includes("dumbbell") || itemIndo.includes("dumbbell");
+    }
+    if (canonical === "barbell") {
+      return itemEquip === "barbell" || itemEqName.includes("barbell") || itemName.includes("barbell") || itemIndo.includes("barbel");
+    }
+    if (canonical === "kettlebell") {
+      return itemEquip === "kettlebell" || itemEqName.includes("kettlebell") || itemName.includes("kettlebell");
+    }
+    if (canonical === "resistance band") {
+      return itemEquip === "band" || itemEqName.includes("band") || itemName.includes("band") || itemIndo.includes("karet");
+    }
+    if (canonical === "treadmill") {
+      return itemEqName.includes("treadmill") || itemName.includes("treadmill") || itemIndo.includes("treadmill");
+    }
+    if (canonical === "exercise bike") {
+      return itemName.includes("bike") || itemEqName.includes("bike") || itemIndo.includes("sepeda");
+    }
+    if (canonical === "workout bench") {
+      return itemName.includes("bench") || itemEqName.includes("bench") || itemIndo.includes("bangku");
+    }
+    if (canonical === "cable machine") {
+      return itemEquip === "cable" || itemEqName.includes("cable") || itemName.includes("cable") || itemIndo.includes("kabel");
+    }
+    if (canonical === "yoga mat") {
+      return itemEquip === "bodyweight" && (item.bodyPart === "waist" || item.bodyPart === "core" || itemName.includes("plank") || itemName.includes("mat") || itemName.includes("push-up"));
+    }
+
+    return itemEquip.includes(searchStr) || itemEqName.includes(searchStr);
+  }).slice(0, limit);
+}
+
+/**
+ * Validates whether a selected exercise is logically consistent with detected equipment.
+ * For example: detected "dumbbell" is INCOMPATIBLE with "bodyweight" / "bodyweight-squat".
+ */
+export function validateContentConsistency(
+  detectedEquipment: string,
+  exercise: ExerciseItem | null | undefined
+): { isValid: boolean; reason?: string } {
+  if (!detectedEquipment || !exercise) {
+    return { isValid: false, reason: "Missing equipment or exercise" };
+  }
+
+  const canonical = resolveCanonicalEquipment(detectedEquipment);
+  if (!canonical) {
+    // If not one of 9 canonicals, fallback to basic keyword presence
+    return { isValid: true };
+  }
+
+  const exCategory = (exercise.equipmentCategory || "").toLowerCase();
+  const exName = exercise.name.toLowerCase();
+  const exEquipName = (exercise.equipmentName || "").toLowerCase();
+
+  // Strict incompatibility checks:
+  if (canonical === "dumbbell") {
+    if (exCategory === "bodyweight" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with bodyweight exercise '${exercise.name}'` };
+    }
+    if (exCategory === "barbell" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with barbell exercise '${exercise.name}'` };
+    }
+    if (exCategory === "machine" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with machine exercise '${exercise.name}'` };
+    }
+  }
+
+  if (canonical === "barbell") {
+    if (exCategory === "bodyweight" && !exName.includes("barbell")) {
+      return { isValid: false, reason: `Detected Barbell is incompatible with bodyweight exercise '${exercise.name}'` };
+    }
+    if (exCategory === "dumbbell" && !exName.includes("barbell")) {
+      return { isValid: false, reason: `Detected Barbell is incompatible with dumbbell exercise '${exercise.name}'` };
+    }
+  }
+
+  if (canonical === "treadmill" && !exName.includes("treadmill") && !exEquipName.includes("treadmill")) {
+    return { isValid: false, reason: `Detected Treadmill is incompatible with non-treadmill exercise '${exercise.name}'` };
+  }
+
+  if (canonical === "exercise bike" && !exName.includes("bike") && !exEquipName.includes("bike")) {
+    return { isValid: false, reason: `Detected Exercise Bike is incompatible with non-bike exercise '${exercise.name}'` };
+  }
+
+  return { isValid: true };
+}
+
 // Helper to find exercise by query / alias
 export function findExerciseOrEquipment(query: string): ExerciseItem | null {
   if (!query) return null;
   const q = query.toLowerCase().trim();
+
+  // Guard: If the query consists solely of stopwords/generic words without an exercise or equipment,
+  // return null immediately so it is NOT falsely matched to Bodyweight Squat or any other exercise!
+  const rawWords = q.split(/[\s,+/_\-?!:;]+/).filter((w) => w.length > 0);
+  const meaningfulWords = rawWords.filter((w) => !EXERCISE_QUERY_STOPWORDS.has(w));
+  if (meaningfulWords.length === 0) {
+    return null;
+  }
 
   // 1. Direct match on ID or Name
   const directMatch = EXERCISE_DATABASE.find(
@@ -999,6 +1170,7 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
   if (aliasMatch) return aliasMatch;
 
   // 3. Match longest specific alias contained in query, or where query is contained in alias
+  // Guard: Do not allow purely stopword aliases to match
   let bestSubstrItem: ExerciseItem | null = null;
   let maxAliasLength = 0;
 
@@ -1009,6 +1181,10 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
 
     for (const alias of (item.aliases || [])) {
       const a = alias.toLowerCase();
+      // Only match alias if the alias itself contains meaningful words
+      const aliasMeaningful = a.split(/\s+/).some(w => !EXERCISE_QUERY_STOPWORDS.has(w));
+      if (!aliasMeaningful) continue;
+
       if (q === a) {
         return item;
       }
@@ -1017,7 +1193,7 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
           maxAliasLength = a.length;
           bestSubstrItem = item;
         }
-      } else if (a.includes(q)) {
+      } else if (a.includes(q) && q.length >= 4) {
         if (q.length > maxAliasLength) {
           maxAliasLength = q.length;
           bestSubstrItem = item;
@@ -1030,8 +1206,12 @@ export function findExerciseOrEquipment(query: string): ExerciseItem | null {
     return bestSubstrItem;
   }
 
-  // 4. Keyword token matching
-  const tokens = q.split(/[\s,+/_-]+/).filter((t) => t.length > 2);
+  // 4. Keyword token matching (Filtered by stopwords)
+  const tokens = meaningfulWords.filter((t) => t.length > 2);
+  if (tokens.length === 0) {
+    return null;
+  }
+
   let bestItem: ExerciseItem | null = null;
   let maxScore = 0;
 
@@ -1096,6 +1276,227 @@ export function formatWhatsAppExerciseGuide(
   return {
     text,
     mediaUrl: exercise.gifUrl
+  };
+}
+
+export interface EquipmentGuideOptions {
+  equipmentName: string;
+  subtype?: "WHAT_IS_IT" | "HOW_TO_USE" | "EXERCISES_FOR_EQUIPMENT" | "EXERCISE_POSTURE" | "GENERAL_EQUIPMENT";
+  persona?: "max" | "mia";
+  userGoal?: string;
+  userAddressing?: string;
+  confidence?: number;
+  aiComment?: string;
+  suggestedExercises?: Array<{ name: string; setsReps?: string; targetMuscle?: string; techniqueTip?: string }>;
+  primaryExerciseOverride?: ExerciseItem;
+}
+
+/**
+ * Formats a consistent WhatsApp guide for gym equipment / visual fitness inquiry.
+ * Guarantees that: TITLE = CONTENT ID = URL = IMAGE = INSTRUCTIONS.
+ * Never defaults to Bodyweight Squat when equipment is dumbbell, barbell, or other fitness gear.
+ */
+export function formatWhatsAppEquipmentGuide(
+  options: EquipmentGuideOptions
+): {
+  text: string;
+  mediaUrl?: string;
+  canonicalEquipment: string | null;
+  selectedExercise?: ExerciseItem;
+} {
+  const canonical = resolveCanonicalEquipment(options.equipmentName);
+  const displayName = canonical
+    ? canonical.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+    : (options.equipmentName || "Alat Latihan");
+
+  const persona = options.persona || "max";
+  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
+  const addr = options.userAddressing ? `, ${options.userAddressing}` : "";
+  const subtype = options.subtype || "HOW_TO_USE";
+  const userGoal = options.userGoal || "healthy";
+
+  // 1. Low confidence / ambiguous check (< 60%)
+  if (options.confidence !== undefined && options.confidence < 60) {
+    const text = persona === "mia"
+      ? `📸 Fotonya sudah aku cek ya${addr}! 😊 Tapi sudut pandang atau gambarnya agak kurang jelas nih untuk memastikan jenis alatnya secara akurat.\n\nApakah ini alat seperti *Dumbbell*, *Barbell*, *Kettlebell*, atau lainnya? Boleh coba kirimkan foto dari sudut yang lebih jelas atau sebutkan nama alatnya ya! ✨`
+      : `📸 Foto sudah dicek${addr}! Sudut pandang atau resolusi fotonya agak kurang jelas nih buat memastikan jenis alatnya dengan presisi.\n\nApakah ini *Dumbbell*, *Barbell*, *Kettlebell*, atau mesin gym lainnya? Boleh kirim foto dari sudut lebih dekat/jelas atau ketik langsung nama alatnya ya! 💪`;
+
+    return {
+      text,
+      mediaUrl: undefined,
+      canonicalEquipment: canonical,
+      selectedExercise: undefined
+    };
+  }
+
+  // 2. Resolve Candidate Exercises
+  const candidateExercises = findExercisesByEquipment(canonical || options.equipmentName, 6);
+
+  // Select primary exercise
+  let selectedExercise: ExerciseItem | undefined = undefined;
+  if (options.primaryExerciseOverride) {
+    const check = validateContentConsistency(options.equipmentName, options.primaryExerciseOverride);
+    if (check.isValid) {
+      selectedExercise = options.primaryExerciseOverride;
+    }
+  }
+
+  if (!selectedExercise && candidateExercises.length > 0) {
+    selectedExercise = candidateExercises[0];
+  }
+
+  // Strict double check: Incompatible exercise must NEVER be used!
+  if (selectedExercise) {
+    const consistency = validateContentConsistency(displayName, selectedExercise);
+    if (!consistency.isValid) {
+      console.warn(`[ContentConsistency] Rejected inconsistent exercise ${selectedExercise.name} for ${displayName}: ${consistency.reason}`);
+      selectedExercise = candidateExercises.find(e => validateContentConsistency(displayName, e).isValid) || undefined;
+    }
+  }
+
+  // Calculate goal recommendations
+  let goalRecommendation = "3 Set × 10-12 Repetisi (Fokus Kontrol Form & Kebugaran Optimal)";
+  if (userGoal === "gain") {
+    goalRecommendation = "4 Set × 8-10 Repetisi (Fokus Beban Progresif & Hipertrofi Otot)";
+  } else if (userGoal === "lose") {
+    goalRecommendation = "3-4 Set × 12-15 Repetisi (Fokus Tempo Terkontrol & Pembakaran Kalori)";
+  }
+
+  // 3. Render according to intent subtype
+  if (subtype === "WHAT_IS_IT") {
+    const variationsText = candidateExercises.length > 0
+      ? candidateExercises.slice(0, 3).map((e, idx) => `  ${idx + 1}. *${e.name}* (${e.indonesianName}) - Target: ${e.targetMuscles.join(", ")}`).join("\n")
+      : `  • Latihan isolasi dan compound sesuai beban`;
+
+    const text =
+      `🔍 *MENGENAL ALAT: ${displayName.toUpperCase()}*\n` +
+      `--------------------------------------------------\n` +
+      `Alat ini adalah *${displayName}*, perlengkapan latihan yang sangat efektif untuk melatih kekuatan dan pengencangan otot.\n\n` +
+      `🎯 *Manfaat Utama*:\n` +
+      `• Membangun kekuatan & stabilitas otot\n` +
+      `• Fleksibel untuk berbagai sudut gerakan\n` +
+      `• Mendukung target ${userGoal === "gain" ? "pembentukan massa otot (hipertrofi)" : userGoal === "lose" ? "pembakaran kalori & fat loss" : "kebugaran & postur tubuh"}\n\n` +
+      `📌 *Variasi Latihan Populer*:\n${variationsText}\n\n` +
+      `💡 *Tips Pemula*: Mulai dari beban ringan terlebih dahulu untuk menguasai form gerakan sebelum menambah beban.\n\n` +
+      (selectedExercise ? `📱 *Lihat Panduan Gerakan Lengkap di Web*:\n🔗 https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}` : "");
+
+    return {
+      text,
+      mediaUrl: selectedExercise?.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+
+  if (subtype === "EXERCISES_FOR_EQUIPMENT") {
+    const listText = candidateExercises.length > 0
+      ? candidateExercises.slice(0, 4).map((e, idx) =>
+          `*${idx + 1}. ${e.name}* (${e.indonesianName})\n` +
+          `   🎯 Target: ${e.targetMuscles.join(", ")}\n` +
+          `   🔢 Rekomendasi: ${e.recommendedSetsReps}\n` +
+          `   💡 Form Kunci: ${e.dosAndDonts.dos[0] || "Jaga kontrol gerakan"}`
+        ).join("\n\n")
+      : (options.suggestedExercises && options.suggestedExercises.length > 0
+          ? options.suggestedExercises.map((e, idx) =>
+              `*${idx + 1}. ${e.name}*\n` +
+              `   🎯 Target: ${e.targetMuscle || "General"}\n` +
+              `   🔢 Rekomendasi: ${e.setsReps || "3 Sets x 10-12 Reps"}\n` +
+              `   💡 Tips: ${e.techniqueTip || "Kontrol gerakan"}`
+            ).join("\n\n")
+          : `• *Custom Exercise*\n  🔢 3 Sets x 10-12 Reps\n  💡 Kontrol gerakan secara stabil.`);
+
+    const text =
+      `🏋️‍♂️ *VARIASI LATIHAN: ${displayName.toUpperCase()}*\n` +
+      `--------------------------------------------------\n` +
+      `Berikut beberapa variasi latihan terbaik yang bisa kamu lakukan dengan *${displayName}*:\n\n` +
+      `${listText}\n\n` +
+      `💬 *${coachName}*:\n"Pilih 1-2 gerakan di atas untuk melengkapi sesi latihanmu. Mau aku jelaskan panduan step-by-step untuk salah satu gerakan di atas${addr}?"\n\n` +
+      (selectedExercise ? `📱 *Animasi & Kamus Gerakan di Web/PWA*:\n🔗 https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}` : "");
+
+    return {
+      text,
+      mediaUrl: selectedExercise?.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+
+  if (subtype === "EXERCISE_POSTURE" && selectedExercise) {
+    const coachCue = persona === "max" ? selectedExercise.coachCues.max : selectedExercise.coachCues.mia;
+    const text =
+      `🧘 *CHECKPOINT POSTUR & TEKNIK: ${selectedExercise.name.toUpperCase()}*\n` +
+      `🇮🇩 *${selectedExercise.indonesianName}*\n` +
+      `⚙️ *Kategori Alat*: ${selectedExercise.equipmentName}\n` +
+      `--------------------------------------------------\n` +
+      `🎯 *Target Otot*: ${selectedExercise.targetMuscles.join(", ")}\n\n` +
+      `✅ *POSTUR & FORM YANG BENAR*:\n` +
+      selectedExercise.dosAndDonts.dos.map(d => `✔ ${d}`).join("\n") +
+      (selectedExercise.dosAndDonts.donts.length > 0
+        ? `\n\n❌ *KESALAHAN UMUM YANG WAJIB DIHINDARI*:\n` + selectedExercise.dosAndDonts.donts.map(d => `✖ ${d}`).join("\n")
+        : "") +
+      `\n\n💬 *${coachName}*:\n"${coachCue}"\n\n` +
+      `📱 *Lihat Animasi Form di Web/PWA*:\n` +
+      `🔗 https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}`;
+
+    return {
+      text,
+      mediaUrl: selectedExercise.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+
+  // Default: HOW_TO_USE (or GENERAL_EQUIPMENT)
+  if (selectedExercise) {
+    const coachCue = persona === "max" ? selectedExercise.coachCues.max : selectedExercise.coachCues.mia;
+    const text =
+      `🏋️‍♂️ *PANDUAN ALAT & LATIHAN: ${displayName.toUpperCase()}*\n` +
+      `📌 *Gerakan Utama*: ${selectedExercise.name} (${selectedExercise.indonesianName})\n` +
+      `--------------------------------------------------\n` +
+      `🎯 *Target Otot*: ${selectedExercise.targetMuscles.join(", ")}\n` +
+      `⚙️ *Kategori Alat*: ${selectedExercise.equipmentName}\n` +
+      `⏱️ *Rekomendasi Goal Kamu*: ${goalRecommendation}\n\n` +
+      `🔧 *CARA SETTING & POSISI ALAT*:\n` +
+      selectedExercise.equipmentSetup.map((step, idx) => `${idx + 1}. ${step}`).join("\n") +
+      `\n\n📝 *CARA PENGGUNAAN STEP-BY-STEP*:\n` +
+      selectedExercise.instructions.map((step, idx) => `${idx + 1}. ${step}`).join("\n") +
+      `\n\n💡 *FORM KUNCI & TIPS AMAN*:\n` +
+      selectedExercise.dosAndDonts.dos.map(d => `✔ ${d}`).join("\n") +
+      (selectedExercise.dosAndDonts.donts.length > 0 ? "\n" + selectedExercise.dosAndDonts.donts.map(d => `✖ ${d}`).join("\n") : "") +
+      `\n\n💬 *${coachName}*:\n"${coachCue}"\n\n` +
+      `📱 *Kamus Alat & Animasi Gerakan di Web/PWA*:\n` +
+      `🔗 https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}`;
+
+    return {
+      text,
+      mediaUrl: selectedExercise.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+
+  // Fallback if no specific database exercise matches the equipment name
+  const generalComment = options.aiComment ||
+    (persona === "max"
+      ? `Alat ini sangat efektif untuk melatih kekuatan otot. Selalu pastikan kontrol beban dan jangan memaksakan beban terlalu berat ya! 💪`
+      : `Alat ini sangat bagus untuk mendukung rutinitas latihan kamu. Lakukan dengan perlahan dan nikmati prosesnya ya! ✨`);
+
+  const text =
+    `🏋️‍♂️ *PANDUAN ALAT LATIHAN: ${displayName.toUpperCase()}*\n` +
+    `--------------------------------------------------\n` +
+    `Alat ini dirancang untuk latihan kekuatan dan kebugaran.\n\n` +
+    `⏱️ *Rekomendasi*: ${goalRecommendation}\n\n` +
+    `💡 *Tips Umum Penggunaan*:\n` +
+    `1. Sesuaikan posisi tubuh atau beban sesuai kemampuan awal.\n` +
+    `2. Jaga postur punggung tetap lurus dan aktifkan otot inti (core).\n` +
+    `3. Tarik nafas saat gerakan rileks/turun, dan hembuskan saat mendorong/menarik beban.\n\n` +
+    `💬 *${coachName}*:\n"${generalComment}"`;
+
+  return {
+    text,
+    mediaUrl: undefined,
+    canonicalEquipment: canonical,
+    selectedExercise: undefined
   };
 }
 

@@ -14,6 +14,7 @@
  */
 
 import { calculateDailyNutritionSummary, type DailyNutritionSummary } from "./nutritionEngine";
+import { type TemporalOverride } from "./conversationStateManager";
 
 // ============================================================================
 // 1. CANONICAL USER PROFILE CONTRACT
@@ -919,6 +920,141 @@ export function validateFoodSafety(
   };
 }
 
+/**
+ * Validates whether a temporal override candidate is permissible under hard safety constraints.
+ * 
+ * STRICT RULE:
+ * A TemporalOverride may override a USER PREFERENCE (such as dislikedFoods).
+ * It MUST NEVER bypass:
+ * • Allergy hard constraints
+ * • Applicable medical safety validation
+ * • Other explicitly non-overridable safety constraints
+ * 
+ * Safety validation must always run after resolving preferences and overrides.
+ * If candidate conflicts with an allergy or medical safety condition, it is strictly BLOCKED.
+ */
+export function validateTemporalOverrideSafety(
+  item: string,
+  rawProfile: any
+): { allowed: boolean; reason?: string; violationType?: string } {
+  if (!item) return { allowed: false, reason: "Bahan makanan tidak valid" };
+  const profile = resolveCanonicalProfile(rawProfile);
+  const cleanItem = item.trim().toLowerCase();
+
+  // Test candidate representing the requested item
+  const testCandidate: MealCandidate = {
+    name: cleanItem,
+    category: "siang",
+    calories: 200,
+    protein: 20,
+    carbs: 10,
+    fat: 5,
+    fiber: 2,
+    sodium: cleanItem.includes("asin") ? 750 : 200,
+    sugar: cleanItem.includes("manis") || cleanItem.includes("sirup") ? 25 : 2,
+    ingredients: [cleanItem],
+    prepMethod: cleanItem.includes("goreng") ? "goreng" : "rebus"
+  };
+
+  // Run authoritative validateFoodSafety with dislikedFoods temporarily empty,
+  // because temporal overrides CAN override user preferences (dislikedFoods),
+  // but MUST NEVER bypass allergies or medical safety validation!
+  const safetyProfile: CanonicalUserProfile = {
+    ...profile,
+    dislikedFoods: []
+  };
+
+  const safetyCheck = validateFoodSafety(testCandidate, safetyProfile);
+  if (!safetyCheck.pass) {
+    const isAllergy = safetyCheck.violations.some(v => v.startsWith("allergen_conflict") || v.startsWith("hidden_allergen"));
+    const isMedical = safetyCheck.violations.some(v => v.startsWith("medical_"));
+
+    let reasonMsg = safetyCheck.reasons.join(". ");
+    if (isAllergy) {
+      reasonMsg = `Kamu memiliki riwayat alergi terhadap ${cleanItem}. Demi keselamatanmu, bahan alergen tidak bisa diizinkan.`;
+    } else if (isMedical) {
+      reasonMsg = `Bahan '${cleanItem}' tidak dianjurkan untuk kondisi kesehatanmu (${safetyCheck.reasons[0] || "kondisi medis"}).`;
+    }
+
+    return {
+      allowed: false,
+      reason: reasonMsg,
+      violationType: isAllergy ? "allergy_conflict" : isMedical ? "medical_conflict" : "safety_violation"
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Validates whether a current explicit user instruction (meal correction, component modification,
+ * addition, or replacement) is permissible under the priority gatekeeper hierarchy.
+ * 
+ * CONCEPTUAL PRIORITY:
+ * 1. HARD SAFETY CONSTRAINTS (Allergies)
+ * 2. CURRENT EXPLICIT USER INSTRUCTION
+ * 3. MEDICAL SAFETY VALIDATION (Existing validateFoodSafety conditions)
+ * 
+ * CRITICAL RULE:
+ * "Current Explicit User Instruction" does NOT mean the user can override safety.
+ * User intent determines what the user wants changed.
+ * Safety validation determines whether the resulting state/recommendation is allowed.
+ * An explicit instruction CAN modify user preferences (dislikedFoods),
+ * but MUST NEVER bypass:
+ * • Allergy hard constraints (Gate 1)
+ * • Applicable medical safety validation (Gate 3)
+ */
+export function validateUserInstructionSafety(
+  requestedIngredientOrMeal: string,
+  rawProfile: any
+): { allowed: boolean; reason?: string; violationType?: "allergy_conflict" | "medical_conflict" | "safe" } {
+  if (!requestedIngredientOrMeal) return { allowed: true, violationType: "safe" };
+  const profile = resolveCanonicalProfile(rawProfile);
+  const cleanItem = requestedIngredientOrMeal.trim().toLowerCase();
+
+  const testCandidate: MealCandidate = {
+    name: cleanItem,
+    category: "siang",
+    calories: 150,
+    protein: 15,
+    carbs: 10,
+    fat: 5,
+    fiber: 2,
+    sodium: cleanItem.includes("asin") ? 750 : 200,
+    sugar: cleanItem.includes("manis") || cleanItem.includes("sirup") ? 25 : 2,
+    ingredients: [cleanItem],
+    prepMethod: cleanItem.includes("goreng") ? "goreng" : "rebus"
+  };
+
+  // Explicit user instruction can override user preferences (dislikedFoods),
+  // but MUST NEVER bypass Allergies (Gate 1) or Medical Safety (Gate 3)!
+  const safetyAuthorityProfile: CanonicalUserProfile = {
+    ...profile,
+    dislikedFoods: []
+  };
+
+  const check = validateFoodSafety(testCandidate, safetyAuthorityProfile);
+  if (!check.pass) {
+    const isAllergy = check.violations.some(v => v.startsWith("allergen_conflict") || v.startsWith("hidden_allergen"));
+    const isMedical = check.violations.some(v => v.startsWith("medical_"));
+
+    let reasonMsg = check.reasons.join(". ");
+    if (isAllergy) {
+      reasonMsg = `Kamu memiliki riwayat alergi terhadap ${cleanItem}. Demi keselamatanmu, bahan alergen tidak bisa ditambahkan ya 🙏`;
+    } else if (isMedical) {
+      reasonMsg = `Bahan '${cleanItem}' tidak dianjurkan untuk kondisi kesehatanmu (${check.reasons[0] || "kondisi medis"}) ya 🙏`;
+    }
+
+    return {
+      allowed: false,
+      reason: reasonMsg,
+      violationType: isAllergy ? "allergy_conflict" : isMedical ? "medical_conflict" : "safe"
+    };
+  }
+
+  return { allowed: true, violationType: "safe" };
+}
+
 export function validateWorkoutSafety(
   rawExercise: Partial<ExerciseCandidate> | ExerciseCandidate | any,
   rawProfile: CanonicalUserProfile | any
@@ -1272,11 +1408,29 @@ export const BASE_MEAL_POOL: MealCandidate[] = [
 // 8. PERSONALIZED SINGLE MEAL RECOMMENDATION GENERATOR
 // ============================================================================
 
+export interface MealRecommendationOptions {
+  sessionExcludedIngredients?: string[];
+  temporalOverrides?: TemporalOverride[];
+  targetScope?: "tomorrow_only" | "tonight_only" | "meal_specific" | "today" | "specific_date";
+  targetDateStr?: string;
+  isLightBreakfast?: boolean;
+}
+
 export function generatePersonalizedMealRecommendation(
   rawProfile: any,
   rawTotals?: any,
-  userText?: string
+  userText?: string,
+  options?: MealRecommendationOptions
 ): string {
+  return generatePersonalizedMealRecommendationDetailed(rawProfile, rawTotals, userText, options).text;
+}
+
+export function generatePersonalizedMealRecommendationDetailed(
+  rawProfile: any,
+  rawTotals?: any,
+  userText?: string,
+  options?: MealRecommendationOptions
+): { text: string; meal: MealCandidate } {
   const profile = resolveCanonicalProfile(rawProfile);
   const totals: DailyNutrientTotals = {
     calories: Number(rawTotals?.calories) || 0,
@@ -1320,6 +1474,34 @@ export function generatePersonalizedMealRecommendation(
   let candidates = BASE_MEAL_POOL.filter(m => m.category === targetCategory);
   if (candidates.length === 0) candidates = BASE_MEAL_POOL;
 
+  // Filter out session-excluded ingredients (e.g. today's rejection)
+  if (options?.sessionExcludedIngredients && options.sessionExcludedIngredients.length > 0) {
+    const exList = options.sessionExcludedIngredients.map(s => s.toLowerCase());
+    const filtered = candidates.filter(m => {
+      const text = `${m.name} ${(m.ingredients || []).join(" ")} ${m.prepMethod || ""}`.toLowerCase();
+      return !exList.some(ex => text.includes(ex));
+    });
+    if (filtered.length > 0) {
+      candidates = filtered;
+    }
+  }
+
+  // Check TemporalOverrides for user preferences (dislikedFoods)
+  let effectiveProfile = profile;
+  if (profile.dislikedFoods && profile.dislikedFoods.length > 0 && options?.temporalOverrides && options.temporalOverrides.length > 0) {
+    const activeOverrides = options.temporalOverrides.filter(o => {
+      if (options.targetScope && o.scope !== options.targetScope) return false;
+      if (o.category && o.category !== targetCategory) return false;
+      return true;
+    });
+
+    if (activeOverrides.length > 0) {
+      const allowedItems = activeOverrides.map(o => o.value.toLowerCase());
+      const filteredDislikes = profile.dislikedFoods.filter(d => !allowedItems.some(item => d.toLowerCase().includes(item) || item.includes(d.toLowerCase())));
+      effectiveProfile = { ...profile, dislikedFoods: filteredDislikes };
+    }
+  }
+
   const hasHypertension = profile.medicalConditions.some(c => c.includes("hypertens") || c.includes("darah tinggi") || c.includes("tekanan darah"));
   const hasDiabetes = profile.medicalConditions.some(c => c.includes("diabet") || c.includes("gula"));
 
@@ -1352,11 +1534,21 @@ export function generatePersonalizedMealRecommendation(
   });
 
   // HARD GATE SAFETY VALIDATION LOOP
+  // SUBORDINATION: validateFoodSafety is strictly run on effectiveProfile.
+  // Overrides only affect preferences; ANY ALLERGY OR MEDICAL CONFLICT IS REJECTED!
   let chosenMeal: MealCandidate | null = null;
   let validationResult: SafetyValidationResult | null = null;
 
   for (const candidate of candidates) {
-    const check = validateFoodSafety(candidate, profile);
+    // If session excluded, skip
+    if (options?.sessionExcludedIngredients && options.sessionExcludedIngredients.length > 0) {
+      const candText = `${candidate.name} ${(candidate.ingredients || []).join(" ")} ${candidate.prepMethod || ""}`.toLowerCase();
+      if (options.sessionExcludedIngredients.some(ex => candText.includes(ex.toLowerCase()))) {
+        continue;
+      }
+    }
+
+    const check = validateFoodSafety(candidate, effectiveProfile);
     if (check.pass) {
       chosenMeal = candidate;
       validationResult = check;
@@ -1411,7 +1603,7 @@ export function generatePersonalizedMealRecommendation(
       rationale: "Menu netral ramah eliminasi dengan protein bersih dan tinggi serat."
     };
 
-    const emergencyCheck = validateFoodSafety(universalSafe, profile);
+    const emergencyCheck = validateFoodSafety(universalSafe, effectiveProfile);
     if (emergencyCheck.pass) {
       chosenMeal = universalSafe;
       validationResult = emergencyCheck;
@@ -1432,7 +1624,7 @@ export function generatePersonalizedMealRecommendation(
         rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
       };
       chosenMeal = veganSafe;
-      validationResult = validateFoodSafety(veganSafe, profile);
+      validationResult = validateFoodSafety(veganSafe, effectiveProfile);
     }
   }
 
@@ -1448,7 +1640,7 @@ export function generatePersonalizedMealRecommendation(
   if (hasKidney) {
     progressNotes.push(`⚕️ *Catatan Medis Ginjal*: Asupan protein dan cairan harus selalu dikonsultasikan dengan dokter spesialis atau dokter pendampingmu ya.`);
   } else if (remainingProt > 20) {
-    progressNotes.push(`🍖 *Prioritas Protein*: Masih memerlukan ~${remainingProt}g protein hari ini.`);
+    progressNotes.push(`🍖 *Prioritas Protein*: Masih memerlukan ~${remainingProt}g protein (sisa kebutuhan hari ini).`);
   }
 
   if (hasHypertension) {
@@ -1462,22 +1654,35 @@ export function generatePersonalizedMealRecommendation(
     ? `Menu ini gue pilihkan berdasarkan data profil dan sisa target harian lo bro. Tetap konsisten jaga pola makan bergizi dan jangan lupa hidrasi! Gas! 🔥`
     : `Menu ini dipilih berdasarkan data profil dan kebutuhan nutrisimu hari ini ya. Tetap jaga pola makan seimbang dan cukupi hidrasi agar tubuh selalu bugar ✨`;
 
-  // Format final clean WhatsApp message
-  return (
-    `🍽️ *REKOMENDASI MENU ${targetCategory.toUpperCase()} PERSONAL*\n` +
-    `--------------------------------------------------\n` +
-    `👤 *Profil*: ${profile.name} | Goal: ${profile.goalTitle}\n` +
-    `🛡️ *Status Rekomendasi*: Direkomendasikan berdasarkan data profil dan targetmu\n\n` +
-    `🍱 *Menu Pilihan*: *${chosenMeal.name}*\n` +
-    `🔥 Kalori: ~${chosenMeal.calories} kcal\n` +
-    `🍖 Protein: ~${chosenMeal.protein}g | 🍚 Karbo: ~${chosenMeal.carbs}g | 🥓 Lemak: ~${chosenMeal.fat}g\n` +
-    `🧂 Sodium: ~${chosenMeal.sodium} mg | 🥬 Serat: ~${chosenMeal.fiber}g\n\n` +
-    `💡 *Alasan Pemilihan*: ${chosenMeal.rationale}\n\n` +
-    `📈 *Analisis Progress Nutrisi*: \n` +
-    progressNotes.map(n => `• ${n}`).join("\n") + `\n\n` +
-    `--------------------------------------------------\n` +
-    `💬 *${coachName}*:\n"${personaNote}"`
-  );
+  const catTitle = targetCategory === "sarapan" ? "Sarapan" : (targetCategory === "siang" ? "Makan Siang" : (targetCategory === "malam" ? "Makan Malam" : "Camilan"));
+
+  // Clean vertical formatting per Section 30
+  const itemsFormatted = (chosenMeal.ingredients && chosenMeal.ingredients.length > 0)
+    ? chosenMeal.ingredients.map(ing => `• ${ing.charAt(0).toUpperCase() + ing.slice(1)}`).join("\n")
+    : `• ${chosenMeal.name}`;
+
+  const lines = [
+    `🍽️ *Rekomendasi ${catTitle}*\n`,
+    itemsFormatted,
+    "",
+    `🔥 ±${chosenMeal.calories} kcal · 💪 ±${chosenMeal.protein}g protein`,
+    `🍚 Karbo ±${chosenMeal.carbs}g · 🥑 Lemak ±${chosenMeal.fat}g`,
+    "",
+    `💡 ${chosenMeal.rationale}`
+  ];
+
+  if (progressNotes.length > 0) {
+    lines.push("");
+    lines.push(progressNotes.join("\n"));
+  }
+
+  lines.push("");
+  lines.push(`💬 *${coachName}*:\n"${personaNote}"`);
+
+  return {
+    text: lines.join("\n"),
+    meal: chosenMeal
+  };
 }
 
 // ============================================================================
@@ -1677,16 +1882,29 @@ export function classifyMealIntent(userText: string): MealIntentResult | null {
 // 8.6 PERSONALIZED TOMORROW MEAL RECOMMENDATION GENERATOR
 // ============================================================================
 
-export function generatePersonalizedTomorrowMealPlan(rawProfile: any): string {
+export function generatePersonalizedTomorrowMealPlan(rawProfile: any, options?: MealRecommendationOptions): string {
   const profile = resolveCanonicalProfile(rawProfile);
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
   const { formattedDate } = getWibDateDetails(1);
 
-  // Pre-filter safe pools using deterministic validator
-  const safeBreakfastPool = BASE_MEAL_POOL.filter(m => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
-  const safeLunchPool = BASE_MEAL_POOL.filter(m => m.category === "siang" && validateFoodSafety(m, profile).pass);
-  const safeSnackPool = BASE_MEAL_POOL.filter(m => m.category === "snack" && validateFoodSafety(m, profile).pass);
-  const safeDinnerPool = BASE_MEAL_POOL.filter(m => m.category === "malam" && validateFoodSafety(m, profile).pass);
+  // Check TemporalOverrides for tomorrow
+  let effectiveProfile = profile;
+  if (profile.dislikedFoods && profile.dislikedFoods.length > 0 && options?.temporalOverrides && options.temporalOverrides.length > 0) {
+    const activeOverrides = options.temporalOverrides.filter(o => o.scope === "tomorrow_only" || o.scope === "today");
+    if (activeOverrides.length > 0) {
+      const allowed = activeOverrides.map(o => o.value.toLowerCase());
+      effectiveProfile = {
+        ...profile,
+        dislikedFoods: profile.dislikedFoods.filter(d => !allowed.some(item => d.toLowerCase().includes(item) || item.includes(d.toLowerCase())))
+      };
+    }
+  }
+
+  // Pre-filter safe pools using deterministic validator (SUBORDINATION: allergies & medical safety always enforced!)
+  const safeBreakfastPool = BASE_MEAL_POOL.filter(m => m.category === "sarapan" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeLunchPool = BASE_MEAL_POOL.filter(m => m.category === "siang" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter(m => m.category === "snack" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeDinnerPool = BASE_MEAL_POOL.filter(m => m.category === "malam" && validateFoodSafety(m, effectiveProfile).pass);
 
   // Fallback items if extreme restriction
   const certifiedFallbackBreakfast: MealCandidate = {
@@ -1766,32 +1984,32 @@ export function generatePersonalizedTomorrowMealPlan(rawProfile: any): string {
 
   let chosenBreakfast: MealCandidate = safeBreakfastPool.length > 0
     ? safeBreakfastPool[0]
-    : (validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback);
+    : (validateFoodSafety(certifiedFallbackBreakfast, effectiveProfile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback);
 
   let chosenLunch: MealCandidate = safeLunchPool.length > 0
     ? safeLunchPool[0]
-    : (validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback);
+    : (validateFoodSafety(certifiedFallbackLunch, effectiveProfile).pass ? certifiedFallbackLunch : certifiedVeganFallback);
 
   let chosenSnack: MealCandidate = safeSnackPool.length > 0
     ? safeSnackPool[0]
-    : (validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback);
+    : (validateFoodSafety(certifiedFallbackSnack, effectiveProfile).pass ? certifiedFallbackSnack : certifiedVeganFallback);
 
   let chosenDinner: MealCandidate = safeDinnerPool.length > 0
     ? safeDinnerPool[0]
-    : (validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback);
+    : (validateFoodSafety(certifiedFallbackDinner, effectiveProfile).pass ? certifiedFallbackDinner : certifiedVeganFallback);
 
   // Safety checks
-  if (!validateFoodSafety(chosenBreakfast, profile).pass) {
-    chosenBreakfast = safeBreakfastPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenBreakfast, effectiveProfile).pass) {
+    chosenBreakfast = safeBreakfastPool.find(m => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenLunch, profile).pass) {
-    chosenLunch = safeLunchPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenLunch, effectiveProfile).pass) {
+    chosenLunch = safeLunchPool.find(m => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenSnack, profile).pass) {
-    chosenSnack = safeSnackPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenSnack, effectiveProfile).pass) {
+    chosenSnack = safeSnackPool.find(m => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenDinner, profile).pass) {
-    chosenDinner = safeDinnerPool.find(m => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenDinner, effectiveProfile).pass) {
+    chosenDinner = safeDinnerPool.find(m => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
 
   const estCalories = chosenBreakfast.calories + chosenLunch.calories + chosenSnack.calories + chosenDinner.calories;
@@ -2002,7 +2220,21 @@ export function generatePersonalizedWeeklyMealPlan(rawProfile: any): string {
 // 10. PERSONALIZED WORKOUT & WEEKLY PLAN GENERATOR (ITEM-BY-ITEM VALIDATION)
 // ============================================================================
 
-export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targetDayOffset: number = 0): string {
+export interface WorkoutAdaptationOptions {
+  targetMinutes?: number;
+  targetDurationMinutes?: number;
+  effortSignal?: "normal" | "intense" | "fatigued";
+  isFatigued?: boolean;
+  discomfortSignal?: string;
+  discomfortArea?: string;
+  equipmentConstraint?: string;
+}
+
+export function generatePersonalizedWorkoutRecommendation(
+  rawProfile: any,
+  targetDayOffset: number = 0,
+  adaptation?: WorkoutAdaptationOptions
+): string {
   const profile = resolveCanonicalProfile(rawProfile);
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -2011,7 +2243,22 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
   const dayLabel = targetDayOffset === 1 ? "BESOK" : "HARI INI";
 
   // Filter exercises by hard safety validation
-  const safeExercises = EXERCISE_REGISTRY.filter(ex => validateWorkoutSafety(ex, profile).pass);
+  let safeExercises = EXERCISE_REGISTRY.filter(ex => validateWorkoutSafety(ex, profile).pass);
+
+  // If discomfort signal present (e.g. knee/lutut), avoid high-impact & aggravating movements conservatively
+  let discomfortNote = "";
+  const discSignal = adaptation?.discomfortSignal || adaptation?.discomfortArea;
+  if (discSignal) {
+    const disc = discSignal.toLowerCase();
+    if (disc.includes("lutut") || disc.includes("knee")) {
+      safeExercises = safeExercises.filter(ex => {
+        const text = `${ex.name} ${ex.indonesianName || ""} ${(ex.targetMuscles || []).join(" ")}`.toLowerCase();
+        return !text.includes("jump") && !text.includes("lompat") && !text.includes("lunge") && !text.includes("squat") && !text.includes("burpee");
+      });
+      discomfortNote = `⚠️ *Penyesuaian Ketidaknyamanan Lutut*:\n` +
+        `Kalau lututmu lagi gak enak, kita hindari gerakan high-impact dulu ya. Aku sesuaikan sesi hari ini ke versi yang lebih ringan. Jika terasa nyeri saat bergerak, segera hentikan latihan dan istirahat ya.\n\n`;
+    }
+  }
 
   // Goal & Area Selection
   let targetArea: "lower_body" | "upper_body" | "core" | "full_body" = "upper_body";
@@ -2062,6 +2309,23 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
     return safeExercises.find(alt => validateWorkoutSafety(alt, profile).pass) || ex;
   });
 
+  // Duration & Fatigue adaptation:
+  // 15-minute adaptation: condense routine to 2 key exercises preserving pacing and normal rest.
+  // Never automatically convert to HIIT, burpees, or forced high intensity!
+  const targetMins = adaptation?.targetMinutes ?? adaptation?.targetDurationMinutes;
+  let durationHeader = "";
+  if (targetMins && targetMins <= 20) {
+    selected = selected.slice(0, 2);
+    selected = selected.map(e => ({ ...e, targetSets: 2 }));
+    durationHeader = `⏱️ *Durasi*: ~${targetMins} Menit (Versi Ringkas Padat)\n⏱️ *Istirahat*: 60-90 detik antar set (pacing teratur, bukan memaksakan HIIT)\n`;
+  }
+
+  // Fatigue adaptation:
+  let fatigueNote = "";
+  if (adaptation?.isFatigued || adaptation?.effortSignal === "fatigued") {
+    fatigueNote = `🌿 *Penyesuaian Energi*: Karena kamu lagi capek, intensitas latihan ini disesuaikan lebih santai agar tubuh tetap aktif bergerak tanpa membebani pemulihan.\n\n`;
+  }
+
   const exerciseLines = selected.map((ex, idx) => 
     `${idx + 1}. *${ex.indonesianName || ex.name}*\n` +
     `   🔢 ${formatSetsReps(ex.targetSets, ex.targetReps)}\n` +
@@ -2081,6 +2345,9 @@ export function generatePersonalizedWorkoutRecommendation(rawProfile: any, targe
     `--------------------------------------------------\n\n` +
     `📅 *${fullDateLabel}*\n\n` +
     `🎯 *Fokus*: ${targetArea.replace("_", " ").toUpperCase()} (${profile.goalTitle})\n` +
+    `${durationHeader}` +
+    `${discomfortNote}` +
+    `${fatigueNote}` +
     `${injuryNote}\n\n` +
     `📌 *Daftar Gerakan Terpilih*:\n\n` +
     `${exerciseLines}\n\n` +

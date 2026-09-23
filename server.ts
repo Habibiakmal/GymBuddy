@@ -29,11 +29,22 @@ import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
 import midtransClient from "midtrans-client";
 import TwilioPackage from "twilio";
-import { findExerciseOrEquipment, formatWhatsAppExerciseGuide, getDefaultWeeklySchedule, EXERCISE_DATABASE } from "./data/exerciseDb";
+import {
+  findExerciseOrEquipment,
+  formatWhatsAppExerciseGuide,
+  getDefaultWeeklySchedule,
+  EXERCISE_DATABASE,
+  resolveCanonicalEquipment,
+  findExercisesByEquipment,
+  validateContentConsistency,
+  formatWhatsAppEquipmentGuide,
+  CANONICAL_EQUIPMENT_TYPES
+} from "./data/exerciseDb";
 import { generatePersonalizedWeeklySchedule } from "./services/workoutEngine";
 import {
   resolveCanonicalProfile,
   generatePersonalizedMealRecommendation,
+  generatePersonalizedMealRecommendationDetailed,
   generatePersonalizedTomorrowMealPlan,
   generatePersonalizedWeeklyMealPlan,
   generatePersonalizedWorkoutRecommendation,
@@ -42,11 +53,15 @@ import {
   classifyWorkoutIntent,
   formatSetsReps,
   validateFoodSafety,
+  validateTemporalOverrideSafety,
+  validateUserInstructionSafety,
   validateWorkoutSafety,
   logRecommendationAudit,
   generateMealTimingAdvice,
   isMealTimingAdviceQuery,
-  type CanonicalUserProfile
+  type CanonicalUserProfile,
+  type MealRecommendationOptions,
+  type WorkoutAdaptationOptions
 } from "./services/recommendationEngine";
 export { classifyMealIntent, classifyWorkoutIntent, formatSetsReps, generateMealTimingAdvice, isMealTimingAdviceQuery };
 import {
@@ -134,8 +149,16 @@ import {
   sanitizeTextForIntent,
   parseMealCorrectionDetails,
   isGreeting,
+  parsePreferenceInstruction,
+  detectRecommendationRejection,
+  detectWorkoutAdaptation,
+  detectMultiIntent,
+  classifyResponseComplexity,
   type IntentClassificationResult,
-  type UserIntentType
+  type UserIntentType,
+  type ResponseComplexityType,
+  type PreferenceInstructionResult,
+  type WorkoutAdaptationDetails
 } from "./services/intentClassifier";
 import {
   getActiveTask,
@@ -144,7 +167,19 @@ import {
   clearAllActiveTasks,
   isTaskInterruptingIntent,
   logConversationTurn,
-  type ActiveConversationTask
+  getRecentVisualContext,
+  setRecentVisualContext,
+  clearRecentVisualContext,
+  getRecentRecommendation,
+  setRecentRecommendation,
+  addSessionExcludedIngredient,
+  addTemporalOverride,
+  resolveRecommendationReference,
+  modifyActiveRecommendation,
+  type ActiveConversationTask,
+  type RecentVisualContext,
+  type RecentRecommendationContext,
+  type TemporalOverride
 } from "./services/conversationStateManager";
 import {
   requireAuthMiddleware,
@@ -4470,34 +4505,303 @@ export function generateMealRecommendations(
   userText?: string
 ): string {
   const intent = classifyMealIntent(userText || "");
+  const normPhone = rawPhone ? rawPhone.replace(/[^\d]/g, "") : "";
+  const recentCtx = normPhone ? getRecentRecommendation(normPhone) : null;
+  const options: MealRecommendationOptions = {
+    sessionExcludedIngredients: recentCtx?.excludedIngredients,
+    temporalOverrides: recentCtx?.temporalOverrides
+  };
+
   if (intent && intent.scope === "tomorrow") {
-    return generatePersonalizedTomorrowMealPlan(userData);
+    return generatePersonalizedTomorrowMealPlan(userData, options);
   }
   if (intent && intent.scope === "weekly") {
     return generatePersonalizedWeeklyMealPlan(userData);
   }
   const todayStr = getTodayDateStr();
   const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
-  return generatePersonalizedMealRecommendation(userData, totals, userText);
+
+  const detailed = generatePersonalizedMealRecommendationDetailed(userData, totals, userText, options);
+  if (normPhone && detailed.meal) {
+    setRecentRecommendation(normPhone, {
+      type: "meal",
+      mealData: {
+        id: detailed.meal.name.toLowerCase().replace(/\s+/g, "-"),
+        name: detailed.meal.name,
+        category: detailed.meal.category,
+        ingredients: detailed.meal.ingredients,
+        components: detailed.meal.components,
+        calories: detailed.meal.calories,
+        protein: detailed.meal.protein,
+        carbs: detailed.meal.carbs,
+        fat: detailed.meal.fat,
+        rationale: detailed.meal.rationale
+      },
+      excludedIngredients: recentCtx?.excludedIngredients || [],
+      temporalOverrides: recentCtx?.temporalOverrides || []
+    });
+  }
+  return detailed.text;
 }
 
-function formatEquipmentCard(parsedAi: any, userData: ReturnType<typeof calculateUserData>): string {
+export async function handleBehavioralIntelligenceIntent(
+  from: string,
+  userText: string,
+  userData: ReturnType<typeof calculateUserData>
+): Promise<string[] | null> {
+  const normPhone = from.replace(/[^\d]/g, "");
+  const lowerText = userText.toLowerCase().trim();
+
+  // 1. MULTI_INTENT Handling (e.g. log lunch + dinner recommendation)
+  const multi = detectMultiIntent(userText);
+  if (multi.isMultiIntent && multi.intents.length >= 2) {
+    const responses: string[] = [];
+    let logSummary = "";
+
+    // Part A: Logging intent
+    const logPart = multi.intents.find(i => i.type === "LOG_MEAL");
+    if (logPart && logPart.text) {
+      const deterministicResult = estimateMealNutritionDeterministic(logPart.text);
+      if (deterministicResult) {
+        const mealLogEntry = {
+          id: Date.now().toString(),
+          userId: from,
+          mealName: deterministicResult.foodName || logPart.text,
+          calories: deterministicResult.calories || 0,
+          protein: deterministicResult.protein || 0,
+          carbs: deterministicResult.carbs || 0,
+          fat: deterministicResult.fat || 0,
+          timestamp: new Date().toISOString(),
+          analysis: `Pencatatan multi-intent otomatis: ${deterministicResult.foodName}`
+        };
+        addMealLog(from, mealLogEntry);
+        logSummary = `Siap, makan ${deterministicResult.foodName} sudah aku catat 👍 (🔥 ${deterministicResult.calories} kcal, 💪 ${deterministicResult.protein}g protein)`;
+      } else {
+        logSummary = `Siap, catatan untuk "${logPart.text}" sudah tersimpan 👍`;
+      }
+    }
+
+    // Part B: Recommendation intent
+    const recPart = multi.intents.find(i => i.type === "RECOMMENDATION");
+    if (recPart && recPart.text) {
+      const recMsg = generateMealRecommendations(userData, from, recPart.text);
+      if (logSummary) {
+        responses.push(`${logSummary}\n\n${recMsg}`);
+      } else {
+        responses.push(recMsg);
+      }
+      return responses;
+    } else if (logSummary) {
+      return [logSummary];
+    }
+  }
+
+  // 2. CONVERSATIONAL REFERENCE RESOLUTION (e.g. "yang tadi", "yang itu", "yang ayamnya", "ganti yang tadi", "hapus nasinya", "tambahin buah")
+  const recentRec = getRecentRecommendation(normPhone);
+  if (recentRec && recentRec.mealData) {
+    const refResolution = resolveRecommendationReference(normPhone, userText);
+    if (refResolution.isAmbiguous) {
+      // Multiple plausible targets exist: ask one concise clarification (NEVER guess)
+      return [refResolution.clarificationPrompt || `Mau ganti bagian ${refResolution.candidates?.join(" atau ")}?`];
+    }
+
+    if (refResolution.isResolved) {
+      // Case A: Recall "yang tadi" or "yang itu"
+      if (refResolution.action === "recall") {
+        return [`Siap, kita pakai menu yang tadi: *${refResolution.target}* 👍`];
+      }
+
+      // Case B: "ganti yang tadi" -> replace the previous recommendation entity
+      if (refResolution.action === "replace" && refResolution.target === recentRec.mealData.name) {
+        addSessionExcludedIngredient(normPhone, refResolution.target);
+        const newRec = generateMealRecommendations(userData, from);
+        return [`Siap, ini pengganti untuk menu yang tadi 👍\n\n${newRec}`];
+      }
+
+      // Case C: Component modification ("ganti ayamnya jadi tahu", "hapus nasinya", "tambahin buah")
+      // PRIORITY GATEKEEPER CHECK:
+      // Current Explicit User Instruction determines intent, but SAFETY AUTHORITY determines permission.
+      // Explicit instruction must NEVER bypass Hard Safety (Allergies) or Medical Safety Validation!
+      if (refResolution.replacement) {
+        const safetyCheck = validateUserInstructionSafety(refResolution.replacement, userData);
+        if (!safetyCheck.allowed) {
+          return [
+            safetyCheck.reason || `Mohon maaf, ${refResolution.replacement} tidak bisa ditambahkan demi keselamatanmu ya 🙏`
+          ];
+        }
+      }
+
+      const updatedContext = modifyActiveRecommendation(normPhone, refResolution);
+      if (updatedContext && updatedContext.mealData) {
+        const updatedMeal = updatedContext.mealData;
+        let actionDesc = "menunya sudah kuperbarui";
+        if (refResolution.action === "replace" && refResolution.target && refResolution.replacement) {
+          actionDesc = `${refResolution.target.toLowerCase()} sudah aku ganti jadi ${refResolution.replacement.toLowerCase()}`;
+        } else if (refResolution.action === "remove" && refResolution.target) {
+          actionDesc = `${refResolution.target.toLowerCase()} sudah aku hilangkan`;
+        } else if (refResolution.action === "add" && refResolution.replacement) {
+          actionDesc = `${refResolution.replacement.toLowerCase()} sudah aku tambahkan`;
+        }
+
+        return [
+          `Siap, ${actionDesc} 👍\n\nTotalnya sekarang:\n🔥 ±${updatedMeal.calories} kcal\n💪 ±${updatedMeal.protein}g protein\n🍞 ±${updatedMeal.carbs}g karbo\n🥑 ±${updatedMeal.fat}g lemak`
+        ];
+      }
+    }
+  }
+
+  // 3. PREFERENCE & TEMPORAL OVERRIDE HANDLING
+  const prefInstruction = parsePreferenceInstruction(userText);
+  if (prefInstruction) {
+    // 3.1 TEMPORAL OVERRIDE (e.g. "Besok aku mau makan udang", "Makan malam ini aku mau ikan")
+    if (prefInstruction.type === "TEMPORAL_OVERRIDE") {
+      // RULE: Check safety subordination FIRST!
+      // Temporal overrides must NEVER bypass allergy hard constraints or applicable medical safety validation!
+      const safetyCheck = validateTemporalOverrideSafety(prefInstruction.value, userData);
+      if (!safetyCheck.allowed) {
+        // BLOCKED! Do not add temporal override!
+        return [
+          `Mohon maaf, aku mencatat kamu punya riwayat atau kondisi yang tidak sesuai dengan ${prefInstruction.value}. Demi keselamatanmu, bahan ini tidak bisa dimasukkan ke rencana makan ya 🙏\n\n💡 _${safetyCheck.reason}_`
+        ];
+      }
+
+      // Allowed because it only overrides user preference (dislikedFoods)
+      addTemporalOverride(normPhone, {
+        type: "preference_override",
+        value: prefInstruction.value,
+        scope: prefInstruction.scope as any,
+        category: prefInstruction.category
+      });
+
+      if (prefInstruction.scope === "tomorrow_only") {
+        return [
+          `Siap, besok ${prefInstruction.value} diizinkan untuk rencana makanmu 👍 (preferensi makanan yang kamu kurang suka tetap tersimpan seperti biasa)`
+        ];
+      } else if (prefInstruction.scope === "tonight_only" || prefInstruction.category === "malam") {
+        const recText = generateMealRecommendations(userData, from, "rekomendasi makan malam");
+        return [
+          `Siap, untuk makan malam nanti aku siapkan rekomendasi dengan ${prefInstruction.value} ya 👍\n\n${recText}`
+        ];
+      } else {
+        return [
+          `Siap, untuk menu ini ${prefInstruction.value} diizinkan 👍`
+        ];
+      }
+    }
+
+    // 3.2 PERSISTENT CHANGE (e.g. "Mulai sekarang aku gak masalah makan ikan")
+    if (prefInstruction.type === "PERSISTENT_CHANGE") {
+      const userProfile = getUserProfile(from);
+      if (userProfile && userProfile.dislikedFoods) {
+        userProfile.dislikedFoods = userProfile.dislikedFoods.filter(
+          (d: string) => !d.toLowerCase().includes(prefInstruction.value.toLowerCase()) && !prefInstruction.value.toLowerCase().includes(d.toLowerCase())
+        );
+        saveUserProfile(from, userProfile);
+      }
+      return [
+        `Siap, aku sudah hapus ${prefInstruction.value} dari daftar makanan yang kamu hindari 👍 Mulai sekarang ${prefInstruction.value} bisa masuk ke rekomendasi menu kamu.`
+      ];
+    }
+
+    // 3.3 TEMPORARY PREFERENCE TODAY (e.g. "Hari ini aku gak mau ayam")
+    if (prefInstruction.type === "TEMPORARY_PREFERENCE") {
+      addSessionExcludedIngredient(normPhone, prefInstruction.value);
+      return [
+        `Siap, khusus hari ini aku hindari menu berbahan ${prefInstruction.value} ya 👍 Preferensi umum kamu tetap aman.`
+      ];
+    }
+
+    // 3.4 PERSISTENT DISLIKE (e.g. "Aku gak suka ikan")
+    if (prefInstruction.type === "PERSISTENT_DISLIKE") {
+      const userProfile = getUserProfile(from);
+      if (userProfile) {
+        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+        if (!userProfile.dislikedFoods.some((d: string) => d.toLowerCase() === prefInstruction.value.toLowerCase())) {
+          userProfile.dislikedFoods.push(prefInstruction.value);
+          saveUserProfile(from, userProfile);
+        }
+      }
+      addSessionExcludedIngredient(normPhone, prefInstruction.value);
+
+      // ACTION FIRST: If user was given a recommendation, immediately regenerate it without fish!
+      const newRec = generateMealRecommendations(userData, from);
+      return [
+        `Siap, aku catat kamu gak suka ${prefInstruction.value} 👍 Ini rekomendasi alternatifnya:\n\n${newRec}`
+      ];
+    }
+  }
+
+  // 4. RECOMMENDATION REJECTION (e.g. "nggak suka ikan", "bukan yang itu", "skip")
+  const rejection = detectRecommendationRejection(userText);
+  if (rejection.isRejection) {
+    if (rejection.rejectedItem) {
+      addSessionExcludedIngredient(normPhone, rejection.rejectedItem);
+      const userProfile = getUserProfile(from);
+      if (userProfile && rejection.isPersistent) {
+        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+        if (!userProfile.dislikedFoods.includes(rejection.rejectedItem)) {
+          userProfile.dislikedFoods.push(rejection.rejectedItem);
+          saveUserProfile(from, userProfile);
+        }
+      }
+    } else if (recentRec && recentRec.mealData) {
+      addSessionExcludedIngredient(normPhone, recentRec.mealData.name);
+    }
+
+    const altRec = generateMealRecommendations(userData, from);
+    return [
+      `Siap, langsung aku carikan menu penggantinya ya 👍 Ini rekomendasi alternatifnya:\n\n${altRec}`
+    ];
+  }
+
+  // 5. WORKOUT ADAPTATION (e.g. 15 minutes, fatigue, knee discomfort)
+  const adaptation = detectWorkoutAdaptation(userText);
+  if (adaptation.isAdaptation) {
+    const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+    const adaptationOpts: WorkoutAdaptationOptions = {
+      targetDurationMinutes: adaptation.targetDurationMinutes,
+      isFatigued: adaptation.isFatigued,
+      discomfortArea: adaptation.discomfortArea
+    };
+
+    const workoutRec = generatePersonalizedWorkoutRecommendation(userData, 0, adaptationOpts);
+    let note = "";
+    if (adaptation.targetDurationMinutes && adaptation.isFatigued) {
+      note = `Waktu 15 menit dan lagi capek: aku siapkan gerakan mobilitas ringan & pemulihan aktif agar tubuh tetap segar tanpa membebani fisik ya 💪`;
+    } else if (adaptation.targetDurationMinutes) {
+      note = `Waktu terbatas ${adaptation.targetDurationMinutes} menit: latihannya aku padatkan jadi 2 gerakan inti dengan waktu istirahat teratur (bukan HIIT/burpees berlebihan) 👍`;
+    } else if (adaptation.discomfortArea === "knee") {
+      note = `Lutut lagi kurang nyaman: demi kenyamanan, gerakan berdampak tinggi seperti lompatan dan squat dalam aku ganti dengan latihan aman tanpa membebani lutut ya 👍`;
+    }
+
+    return [
+      `💬 *${coachName}*:\n"${note}"\n\n${workoutRec}`
+    ];
+  }
+
+  return null;
+}
+
+interface EquipmentCardResult {
+  text: string;
+  mediaUrl?: string;
+  selectedExercise?: any;
+  canonicalEquipment?: string | null;
+  toString(): string;
+}
+
+function formatEquipmentCard(
+  parsedAi: any,
+  userData: ReturnType<typeof calculateUserData>,
+  userText?: string
+): EquipmentCardResult {
   const persona = (userData.persona === "mia" || userData.persona === "nikita") ? "mia" : "max";
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const equipmentName = parsedAi.equipmentName || "Alat Gym";
-
-  // Check if we have exact/fuzzy match in ExerciseDB
-  const matchedExercise = findExerciseOrEquipment(equipmentName) || findExerciseOrEquipment(parsedAi.query || "");
-  if (matchedExercise) {
-    const guide = formatWhatsAppExerciseGuide(matchedExercise, persona);
-    return guide.text;
-  }
-
-  const isAligned = parsedAi.isAlignedWithGoal !== false;
-
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
 
+  const isAligned = parsedAi.isAlignedWithGoal !== false;
   if (!isAligned) {
     const redirectionMsg = validateAndFormatCoachNote(
       parsedAi.politeRedirection || 
@@ -4507,46 +4811,55 @@ function formatEquipmentCard(parsedAi: any, userData: ReturnType<typeof calculat
       userData
     );
 
-    return `🏋️ *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*
+    const redirectText = `🏋️ *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*\n\n` +
+      `⚠️ *Status Goal Alignment*:\n_KURANG COCOK UNTUK GOAL SAAT INI_\n\n` +
+      `💬 *Pesan dari ${coachName}*:\n"${redirectionMsg}"\n\n` +
+      `💡 *Catatan Coach*:\n${parsedAi.alignmentExplanation || "Gunakan latihan dasar yang lebih sesuai dengan targetmu."}`;
 
-⚠️ *Status Goal Alignment*:
-_KURANG COCOK UNTUK GOAL SAAT INI_
-
-💬 *Pesan dari ${coachName}*:
-"${redirectionMsg}"
-
-💡 *Catatan Coach*:
-${parsedAi.alignmentExplanation || "Gunakan latihan dasar yang lebih sesuai dengan targetmu."}`;
+    return {
+      text: redirectText,
+      mediaUrl: undefined,
+      canonicalEquipment: resolveCanonicalEquipment(equipmentName),
+      selectedExercise: undefined,
+      toString() { return this.text; }
+    };
   }
 
-  const exercises = Array.isArray(parsedAi.suggestedExercises) && parsedAi.suggestedExercises.length > 0
-    ? parsedAi.suggestedExercises.map((e: any, idx: number) => 
-        `• *${e.name || `Variasi ${idx+1}`}*\n` +
-        `  💪 Otot: ${e.targetMuscle || "General"}\n` +
-        `  🔢 Target: ${e.setsReps || "3 Sets x 10-12 Reps"}\n` +
-        `  💡 Tips: ${e.techniqueTip || "Jaga postur & pernafasan teratur."}`
-      ).join("\n\n")
-    : `• *Custom Exercise*\n  🔢 Target: 3 Sets x 12 Reps\n  💡 Tips: Kontrol gerakan saat eccentric.`;
+  // Determine intent subtype
+  let subtype: "WHAT_IS_IT" | "HOW_TO_USE" | "EXERCISES_FOR_EQUIPMENT" | "EXERCISE_POSTURE" | "GENERAL_EQUIPMENT" =
+    parsedAi.intentSubtype || "HOW_TO_USE";
 
-  const comment = validateAndFormatCoachNote(
-    parsedAi.coachComment || 
-      (persona === "max" 
-        ? `Alat ini mantap banget buat goal kamu, ${validatedAddr}! Lakukan gerakan di atas & pastikan form kamu bersih! 💪`
-        : `Alat ini sangat cocok untuk mendukung ${userData.goalTitle} kamu, ${validatedAddr}! Lakukan dengan perlahan dan nikmati prosesnya ya ✨`),
-    userData
-  );
+  if (userText) {
+    const lower = userText.toLowerCase();
+    if (lower.match(/\b(?:ini\s*apa|alat\s*apa|nama\s*alat|fungsi\s*alat|alat\s*ini\s*apa)\b/)) {
+      subtype = "WHAT_IS_IT";
+    } else if (lower.match(/\b(?:bisa\s*buat|latihan\s*apa|variasi|buat\s*apa\s*aja|olahraga\s*apa)\b/)) {
+      subtype = "EXERCISES_FOR_EQUIPMENT";
+    } else if (lower.match(/\b(?:postur|form|gerakan\s*ini|teknik\s*ini)\b/)) {
+      subtype = "EXERCISE_POSTURE";
+    } else if (lower.match(/\b(?:cara\s*make|cara\s*pakai|cara\s*menggunakan|gimana\s*cara|tutorial)\b/)) {
+      subtype = "HOW_TO_USE";
+    }
+  }
 
-  return `🏋️ *PANDUAN ALAT GYM: ${equipmentName.toUpperCase()}*
+  const guide = formatWhatsAppEquipmentGuide({
+    equipmentName,
+    subtype,
+    persona,
+    userGoal: userData.goal || "healthy",
+    userAddressing: validatedAddr,
+    confidence: parsedAi.confidenceScore ?? parsedAi.confidenceLevel,
+    aiComment: parsedAi.coachComment,
+    suggestedExercises: parsedAi.suggestedExercises
+  });
 
-✅ *Status Goal Alignment*:
-*SANGAT COCOK UNTUK GOAL ${userData.goalTitle.toUpperCase()}!*
-
-📌 *Rekomendasi Variasi Latihan*:
-${exercises}
-
------------------------------
-💬 *${coachName}*:
-"${comment}"`;
+  return {
+    text: guide.text,
+    mediaUrl: guide.mediaUrl,
+    canonicalEquipment: guide.canonicalEquipment,
+    selectedExercise: guide.selectedExercise,
+    toString() { return this.text; }
+  };
 }
 
 
@@ -9435,8 +9748,11 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
+            let behavioralResult: string[] | null = null;
             if (!planValidation.canProceed) {
               responseMessages = [planValidation.redirectMessage!];
+            } else if (!imagePart && (behavioralResult = await handleBehavioralIntelligenceIntent(from, userText, userData))) {
+              responseMessages = behavioralResult;
             } else if (waterMatch) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -9471,12 +9787,18 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
                 const comment = userData.persona === "max" 
                   ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥"
                   : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar ✨";
-                responseMessages = [
-                  `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
-                  `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
-                  `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
-                  `💬 *${coachName}*:\n"${comment}"`
-                ];
+
+                const isSimpleAction = classifyResponseComplexity("SIMPLE_ACTION", userText) === "SIMPLE_ACTION";
+                if (isSimpleAction) {
+                  responseMessages = [`Siap, aku tambahkan ${actualMl}ml air 💧`];
+                } else {
+                  responseMessages = [
+                    `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
+                    `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
+                    `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
+                    `💬 *${coachName}*:\n"${comment}"`
+                  ];
+                }
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData)!;
@@ -9760,15 +10082,25 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
-Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
-Jika ini foto alat gym (misal Dumbbell, Leg Press, Smith Machine, Cable Machine, Foam Roller, Barbell, Treadmill, dll.) atau pertanyaan mengenai alat latihan:
-Evaluasi apakah alat ini COCOK untuk goal pengguna saat ini (${userData.goalTitle}).
+Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN (MULTI-MODAL EQUIPMENT UNDERSTANDING)
+Jika ini foto alat gym (misal Dumbbell, Barbell, Kettlebell, Resistance Band, Treadmill, Exercise Bike, Workout Bench, Cable Machine, Yoga Mat) atau pertanyaan mengenai alat latihan:
+1. IDENTIFIKASI ALAT SECARA TEPAT:
+   - equipmentName: Wajib kenali jenis alat secara spesifik. JIKA GAMBAR MENUNJUKKAN DUMBBELL: DILARANG KERAS MENYEBUTKAN BODYWEIGHT SQUAT ATAU GERAKAN TANPA ALAT! Nama alat WAJIB "Dumbbell".
+   - Jika gambar blur, tidak fokus, atau sudutnya ambigu, set confidenceScore < 60.
+2. SUBTYPE MAKSUD PENGGUNA:
+   - "WHAT_IS_IT": User bertanya nama/fungsi alat (misal "ini apa?", "alat apa ini?").
+   - "HOW_TO_USE": User bertanya tutorial/cara pakai alat (misal "gimana cara make alat ini?", "cara pakai alat ini?").
+   - "EXERCISES_FOR_EQUIPMENT": User bertanya variasi latihan apa yang bisa dilakukan (misal "bisa buat latihan apa aja?", "latihan apa yang bisa dilakukan?").
+   - "EXERCISE_POSTURE": User bertanya form/postur gerakan (misal "ini gerakan apa?", "form-nya bener gak?").
+3. Evaluasi apakah alat ini COCOK untuk goal pengguna saat ini (${userData.goalTitle}).
 Jika TIDAK cocok (misal alat powerlifting berat untuk goal pemula/fat loss), set isAlignedWithGoal = false dan berikan pesan ramah/sopan ("Kayaknya alat tsb bukan untuk kita dulu...").
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": true,
   "equipmentName": "Nama Alat Gym",
+  "intentSubtype": "HOW_TO_USE",
+  "confidenceScore": 95,
   "isAlignedWithGoal": true,
   "alignmentExplanation": "Penjelasan kesesuaian alat dengan goal",
   "suggestedExercises": [
@@ -9828,8 +10160,13 @@ Keluarkan output JSON valid:
                   const redirectRes = validatePlanContext("alat gym", true, userData);
                   responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
                 } else {
-                  const eqCard = formatEquipmentCard(parsed, userData);
-                  responseMessages = [eqCard];
+                  setRecentVisualContext(from, {
+                    detectedEquipment: parsed.equipmentName || "Alat Gym",
+                    confidence: parsed.confidenceScore ?? parsed.confidenceLevel ?? 90,
+                    intentSubtype: parsed.intentSubtype
+                  });
+                  const eqCard = formatEquipmentCard(parsed, userData, userText);
+                  responseMessages = [eqCard.text];
                 }
               } else if (imagePart || parsed.isUnrelatedImage) {
                 // Image is unrelated or ambiguous - polite redirection without guessing
@@ -10154,9 +10491,17 @@ function escapeXml(unsafe: string): string {
       let responseMessages: string[] = [];
       let mediaUrlToSend: string | undefined = undefined;
 
-      const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
+      const isDemonstrativeVisualQuery = Boolean(
+        userText.match(/\b(?:alat\s*ini|ini\s*apa|alat\s*apa|cara\s*(?:make|pakai|menggunakan)\s*alat\s*ini|buat\s*apa\s*ini|gerakan\s*ini|mesin\s*ini|benda\s*ini)\b/i) ||
+        (userText.match(/\b(?:ini|itu)\b/i) && userText.match(/\b(?:alat|mesin|gerakan|bisa\s*buat|cara|gimana|buat\s*apa)\b/i))
+      );
+
+      const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery && !imagePart && !isDemonstrativeVisualQuery
+        ? findExerciseOrEquipment(userText)
+        : null;
+
       const isExerciseInquiry = Boolean(
-        matchedEx && (
+        matchedEx && !imagePart && !isDemonstrativeVisualQuery && (
           userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) ||
           lowerText.includes("cara pakai") ||
           lowerText.includes("cara menggunakan") ||
@@ -10228,6 +10573,35 @@ function escapeXml(unsafe: string): string {
         responseMessages = [guide.text];
         if (guide.mediaUrl) {
           mediaUrlToSend = guide.mediaUrl;
+        }
+      } else if (!imagePart && isDemonstrativeVisualQuery) {
+        const recentVisual = getRecentVisualContext(normFrom);
+        if (recentVisual && recentVisual.detectedEquipment) {
+          if (!planCapabilities.canWorkout) {
+            responseMessages = [validatePlanContext("alat gym", true, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya ✨"];
+          } else {
+            const eqRes = formatEquipmentCard({
+              equipmentName: recentVisual.detectedEquipment,
+              confidenceScore: recentVisual.confidence,
+              intentSubtype: recentVisual.intentSubtype,
+              isAlignedWithGoal: true
+            }, userData, userText);
+            responseMessages = [eqRes.text];
+            if (eqRes.mediaUrl) {
+              mediaUrlToSend = eqRes.mediaUrl;
+            }
+          }
+        } else {
+          const coachName = (userData.persona === "mia" || userData.persona === "nikita") ? "Coach Mia" : "Coach Max";
+          const addressing = getValidatedUserAddressing(userData);
+          responseMessages = [
+            `🏋️ *FOTO ALAT BELUM TERLIHAT*\n-----------------------------\n` +
+            `Halo ${addressing.validatedAddress}! Kamu sedang menanyakan alat yang mana nih? 😊\n\n` +
+            `💡 *Cara Cepat*:\n` +
+            `1. Kirimkan foto alat gym / dumbbell / mesin latihan yang ingin kamu tanyakan, atau\n` +
+            `2. Ketik langsung nama alatnya (misalnya: *"cara pakai Dumbbell"*, *"latihan dengan Dumbbell"*).\n\n` +
+            `${coachName} siap bantu jelaskan panduan teknik & variasinya! 💪`
+          ];
         }
       } else if (isWelcomeMessage) {
         if (isOnboardingHandshake) {
@@ -10321,8 +10695,11 @@ function escapeXml(unsafe: string): string {
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
 
+        let behavioralResult: string[] | null = null;
         if (!planValidation.canProceed) {
           responseMessages = [planValidation.redirectMessage!];
+        } else if (!imagePart && (behavioralResult = await handleBehavioralIntelligenceIntent(normFrom, userText, userData))) {
+          responseMessages = behavioralResult;
         } else if (waterMatch) {
           if (!planCapabilities.canNutrition) {
             responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya ✨"];
@@ -10359,12 +10736,18 @@ function escapeXml(unsafe: string): string {
             const comment = userData.persona === "max" 
               ? (isFemale ? "Mantap! Jaga terus hidrasi tubuh kamu biar metabolisme makin kencang! 🔥" : "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! 🔥")
               : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar ✨";
-            responseMessages = [
-              `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
-              `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
-              `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
-              `💬 *${coachName}*:\n"${comment}"`
-            ];
+
+            const isSimpleAction = classifyResponseComplexity("SIMPLE_ACTION", userText) === "SIMPLE_ACTION";
+            if (isSimpleAction) {
+              responseMessages = [`Siap, aku tambahkan ${actualMl}ml air 💧`];
+            } else {
+              responseMessages = [
+                `💧 *CATATAN HIDRASI DISIMPAN*\n-----------------------------\n` +
+                `✅ Kamu menambah *${actualMl} ml* air putih!\n` +
+                `📊 Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)\n\n` +
+                `💬 *${coachName}*:\n"${comment}"`
+              ];
+            }
           }
         } else if (weightMatch) {
           const newW = parseFloat(weightMatch[1].replace(',', '.'));
@@ -10624,14 +11007,24 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
-Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
-Jika ini foto alat gym atau pertanyaan alat latihan:
-Evaluasi apakah alat ini COCOK untuk goal pengguna (${userData.goalTitle}).
+Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN (MULTI-MODAL EQUIPMENT UNDERSTANDING)
+Jika ini foto alat gym (misal Dumbbell, Barbell, Kettlebell, Resistance Band, Treadmill, Exercise Bike, Workout Bench, Cable Machine, Yoga Mat) atau pertanyaan mengenai alat latihan:
+1. IDENTIFIKASI ALAT SECARA TEPAT:
+   - equipmentName: Wajib kenali jenis alat secara spesifik. JIKA GAMBAR MENUNJUKKAN DUMBBELL: DILARANG KERAS MENYEBUTKAN BODYWEIGHT SQUAT ATAU GERAKAN TANPA ALAT! Nama alat WAJIB "Dumbbell".
+   - Jika gambar blur, tidak fokus, atau sudutnya ambigu, set confidenceScore < 60.
+2. SUBTYPE MAKSUD PENGGUNA:
+   - "WHAT_IS_IT": User bertanya nama/fungsi alat (misal "ini apa?", "alat apa ini?").
+   - "HOW_TO_USE": User bertanya tutorial/cara pakai alat (misal "gimana cara make alat ini?", "cara pakai alat ini?").
+   - "EXERCISES_FOR_EQUIPMENT": User bertanya variasi latihan apa yang bisa dilakukan (misal "bisa buat latihan apa aja?", "latihan apa yang bisa dilakukan?").
+   - "EXERCISE_POSTURE": User bertanya form/postur gerakan (misal "ini gerakan apa?", "form-nya bener gak?").
+3. Evaluasi apakah alat ini COCOK untuk goal pengguna (${userData.goalTitle}).
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": true,
   "equipmentName": "Nama Alat Gym",
+  "intentSubtype": "HOW_TO_USE",
+  "confidenceScore": 95,
   "isAlignedWithGoal": true,
   "alignmentExplanation": "Penjelasan kesesuaian alat dengan goal",
   "suggestedExercises": [
@@ -10669,6 +11062,8 @@ Keluarkan output JSON valid:
 
           const isEquipmentMatch = !parsed.isUnrelatedImage && (
             parsed.isEquipment ||
+            classifiedIntent.intent === "EQUIPMENT_INQUIRY" ||
+            classifiedIntent.intent === "EXERCISE_POSTURE_INQUIRY" ||
             ((lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym")) && !parsed.isFood)
           );
 
@@ -10714,11 +11109,17 @@ Keluarkan output JSON valid:
               if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
               parsed.isEquipment = true;
 
-              const dbMatch = findExerciseOrEquipment(parsed.equipmentName || userText);
-              const eqCard = formatEquipmentCard(parsed, userData);
-              responseMessages = [eqCard];
-              if (dbMatch && (dbMatch.gifUrl || dbMatch.imageFrames?.[0])) {
-                mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
+              // Save to recent visual context for two-step memory!
+              setRecentVisualContext(normFrom, {
+                detectedEquipment: parsed.equipmentName,
+                confidence: parsed.confidenceScore ?? parsed.confidenceLevel ?? 90,
+                intentSubtype: parsed.intentSubtype
+              });
+
+              const eqRes = formatEquipmentCard(parsed, userData, userText);
+              responseMessages = [eqRes.text];
+              if (eqRes.mediaUrl) {
+                mediaUrlToSend = eqRes.mediaUrl;
               }
             }
           } else if (imagePart || parsed.isUnrelatedImage) {

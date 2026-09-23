@@ -87,6 +87,7 @@ __export(server_exports, {
   getUserSubscription: () => getUserSubscription,
   grantTrialToUser: () => grantTrialToUser,
   handleAdditionalActivityLogging: () => handleAdditionalActivityLogging,
+  handleBehavioralIntelligenceIntent: () => handleBehavioralIntelligenceIntent,
   handleDeleteMealCommand: () => handleDeleteMealCommand,
   handleWhatsAppLoginConfirmation: () => handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging: () => handleWorkoutProgressLogging,
@@ -42927,9 +42928,186 @@ for (const raw of allExercises_default) {
   }
 }
 var EXERCISE_DATABASE = fullList;
+var EXERCISE_QUERY_STOPWORDS = /* @__PURE__ */ new Set([
+  "gimana",
+  "bagaimana",
+  "cara",
+  "make",
+  "pakai",
+  "pake",
+  "alat",
+  "ini",
+  "itu",
+  "buat",
+  "apa",
+  "apakah",
+  "bisa",
+  "untuk",
+  "tutor",
+  "tutorial",
+  "tips",
+  "panduan",
+  "latihan",
+  "olahraga",
+  "mesin",
+  "gerakan",
+  "teknik",
+  "posisi",
+  "postur",
+  "help",
+  "how",
+  "to",
+  "use",
+  "the",
+  "this",
+  "that",
+  "what",
+  "is",
+  "a",
+  "an",
+  "dong",
+  "ya",
+  "kak",
+  "bro",
+  "coach",
+  "tolong",
+  "ajarin",
+  "diajarin",
+  "gaya",
+  "dong",
+  "kasih",
+  "tahu",
+  "tau",
+  "tentang",
+  "mengenai",
+  "tentunya",
+  "melakukan",
+  "ngerjain",
+  "pakainya",
+  "makai",
+  "memakai",
+  "menggunakan",
+  "penggunaan",
+  "kegunaan",
+  "fungsi",
+  "fungsingya"
+]);
+function resolveCanonicalEquipment(input) {
+  if (!input) return null;
+  const s = input.toLowerCase().trim();
+  if (s.includes("dumbbell") || s.includes("dumbell") || s.includes("barbel kecil") || s.includes("hand weight")) {
+    return "dumbbell";
+  }
+  if (s.includes("barbell") || s.includes("barbel") || s.includes("olympic bar") || s.includes("ez bar")) {
+    return "barbell";
+  }
+  if (s.includes("kettlebell") || s.includes("kettle bell") || s.includes("kettelbell")) {
+    return "kettlebell";
+  }
+  if (s.includes("resistance band") || s.includes("resistance_band") || s.includes("karet") || s.includes("elastic band") || s.includes("loop band") || s.includes("pull up band")) {
+    return "resistance band";
+  }
+  if (s.includes("treadmill") || s.includes("treadmil") || s.includes("mesin lari") || s.includes("jalan di tempat")) {
+    return "treadmill";
+  }
+  if (s.includes("bike") || s.includes("sepeda") || s.includes("cycling") || s.includes("statik") || s.includes("statis") || s.includes("spin bike")) {
+    return "exercise bike";
+  }
+  if (s.includes("bench") || s.includes("bangku") || s.includes("incline bench") || s.includes("flat bench") || s.includes("kursi gym")) {
+    return "workout bench";
+  }
+  if (s.includes("cable") || s.includes("kabel") || s.includes("pulley") || s.includes("lat pull") || s.includes("crossover") || s.includes("mesin kabel")) {
+    return "cable machine";
+  }
+  if (s.includes("mat") || s.includes("matras") || s.includes("yoga") || s.includes("floor") || s.includes("lantai")) {
+    return "yoga mat";
+  }
+  return null;
+}
+function findExercisesByEquipment(equipment, limit = 5) {
+  const canonical = resolveCanonicalEquipment(equipment);
+  const searchStr = (canonical || equipment).toLowerCase().trim();
+  return EXERCISE_DATABASE.filter((item) => {
+    const itemEquip = (item.equipmentCategory || "").toLowerCase();
+    const itemEqName = (item.equipmentName || "").toLowerCase();
+    const itemIndo = (item.indonesianName || "").toLowerCase();
+    const itemName = item.name.toLowerCase();
+    if (canonical === "dumbbell") {
+      return itemEquip === "dumbbell" || itemEqName.includes("dumbbell") || itemName.includes("dumbbell") || itemIndo.includes("dumbbell");
+    }
+    if (canonical === "barbell") {
+      return itemEquip === "barbell" || itemEqName.includes("barbell") || itemName.includes("barbell") || itemIndo.includes("barbel");
+    }
+    if (canonical === "kettlebell") {
+      return itemEquip === "kettlebell" || itemEqName.includes("kettlebell") || itemName.includes("kettlebell");
+    }
+    if (canonical === "resistance band") {
+      return itemEquip === "band" || itemEqName.includes("band") || itemName.includes("band") || itemIndo.includes("karet");
+    }
+    if (canonical === "treadmill") {
+      return itemEqName.includes("treadmill") || itemName.includes("treadmill") || itemIndo.includes("treadmill");
+    }
+    if (canonical === "exercise bike") {
+      return itemName.includes("bike") || itemEqName.includes("bike") || itemIndo.includes("sepeda");
+    }
+    if (canonical === "workout bench") {
+      return itemName.includes("bench") || itemEqName.includes("bench") || itemIndo.includes("bangku");
+    }
+    if (canonical === "cable machine") {
+      return itemEquip === "cable" || itemEqName.includes("cable") || itemName.includes("cable") || itemIndo.includes("kabel");
+    }
+    if (canonical === "yoga mat") {
+      return itemEquip === "bodyweight" && (item.bodyPart === "waist" || item.bodyPart === "core" || itemName.includes("plank") || itemName.includes("mat") || itemName.includes("push-up"));
+    }
+    return itemEquip.includes(searchStr) || itemEqName.includes(searchStr);
+  }).slice(0, limit);
+}
+function validateContentConsistency(detectedEquipment, exercise) {
+  if (!detectedEquipment || !exercise) {
+    return { isValid: false, reason: "Missing equipment or exercise" };
+  }
+  const canonical = resolveCanonicalEquipment(detectedEquipment);
+  if (!canonical) {
+    return { isValid: true };
+  }
+  const exCategory = (exercise.equipmentCategory || "").toLowerCase();
+  const exName = exercise.name.toLowerCase();
+  const exEquipName = (exercise.equipmentName || "").toLowerCase();
+  if (canonical === "dumbbell") {
+    if (exCategory === "bodyweight" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with bodyweight exercise '${exercise.name}'` };
+    }
+    if (exCategory === "barbell" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with barbell exercise '${exercise.name}'` };
+    }
+    if (exCategory === "machine" && !exName.includes("dumbbell")) {
+      return { isValid: false, reason: `Detected Dumbbell is incompatible with machine exercise '${exercise.name}'` };
+    }
+  }
+  if (canonical === "barbell") {
+    if (exCategory === "bodyweight" && !exName.includes("barbell")) {
+      return { isValid: false, reason: `Detected Barbell is incompatible with bodyweight exercise '${exercise.name}'` };
+    }
+    if (exCategory === "dumbbell" && !exName.includes("barbell")) {
+      return { isValid: false, reason: `Detected Barbell is incompatible with dumbbell exercise '${exercise.name}'` };
+    }
+  }
+  if (canonical === "treadmill" && !exName.includes("treadmill") && !exEquipName.includes("treadmill")) {
+    return { isValid: false, reason: `Detected Treadmill is incompatible with non-treadmill exercise '${exercise.name}'` };
+  }
+  if (canonical === "exercise bike" && !exName.includes("bike") && !exEquipName.includes("bike")) {
+    return { isValid: false, reason: `Detected Exercise Bike is incompatible with non-bike exercise '${exercise.name}'` };
+  }
+  return { isValid: true };
+}
 function findExerciseOrEquipment(query) {
   if (!query) return null;
   const q = query.toLowerCase().trim();
+  const rawWords = q.split(/[\s,+/_\-?!:;]+/).filter((w) => w.length > 0);
+  const meaningfulWords = rawWords.filter((w) => !EXERCISE_QUERY_STOPWORDS.has(w));
+  if (meaningfulWords.length === 0) {
+    return null;
+  }
   const directMatch = EXERCISE_DATABASE.find(
     (item) => item.id.toLowerCase() === q || item.name.toLowerCase() === q || (item.indonesianName || "").toLowerCase() === q
   );
@@ -42946,6 +43124,8 @@ function findExerciseOrEquipment(query) {
     }
     for (const alias of item.aliases || []) {
       const a = alias.toLowerCase();
+      const aliasMeaningful = a.split(/\s+/).some((w) => !EXERCISE_QUERY_STOPWORDS.has(w));
+      if (!aliasMeaningful) continue;
       if (q === a) {
         return item;
       }
@@ -42954,7 +43134,7 @@ function findExerciseOrEquipment(query) {
           maxAliasLength = a.length;
           bestSubstrItem = item;
         }
-      } else if (a.includes(q)) {
+      } else if (a.includes(q) && q.length >= 4) {
         if (q.length > maxAliasLength) {
           maxAliasLength = q.length;
           bestSubstrItem = item;
@@ -42965,7 +43145,10 @@ function findExerciseOrEquipment(query) {
   if (bestSubstrItem && maxAliasLength >= 3) {
     return bestSubstrItem;
   }
-  const tokens = q.split(/[\s,+/_-]+/).filter((t) => t.length > 2);
+  const tokens = meaningfulWords.filter((t) => t.length > 2);
+  if (tokens.length === 0) {
+    return null;
+  }
   let bestItem = null;
   let maxScore = 0;
   for (const item of EXERCISE_DATABASE) {
@@ -43020,6 +43203,185 @@ function formatWhatsAppExerciseGuide(exercise, persona = "max", userGoal = "heal
   return {
     text,
     mediaUrl: exercise.gifUrl
+  };
+}
+function formatWhatsAppEquipmentGuide(options) {
+  const canonical = resolveCanonicalEquipment(options.equipmentName);
+  const displayName = canonical ? canonical.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : options.equipmentName || "Alat Latihan";
+  const persona = options.persona || "max";
+  const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
+  const addr = options.userAddressing ? `, ${options.userAddressing}` : "";
+  const subtype = options.subtype || "HOW_TO_USE";
+  const userGoal = options.userGoal || "healthy";
+  if (options.confidence !== void 0 && options.confidence < 60) {
+    const text2 = persona === "mia" ? `\u{1F4F8} Fotonya sudah aku cek ya${addr}! \u{1F60A} Tapi sudut pandang atau gambarnya agak kurang jelas nih untuk memastikan jenis alatnya secara akurat.
+
+Apakah ini alat seperti *Dumbbell*, *Barbell*, *Kettlebell*, atau lainnya? Boleh coba kirimkan foto dari sudut yang lebih jelas atau sebutkan nama alatnya ya! \u2728` : `\u{1F4F8} Foto sudah dicek${addr}! Sudut pandang atau resolusi fotonya agak kurang jelas nih buat memastikan jenis alatnya dengan presisi.
+
+Apakah ini *Dumbbell*, *Barbell*, *Kettlebell*, atau mesin gym lainnya? Boleh kirim foto dari sudut lebih dekat/jelas atau ketik langsung nama alatnya ya! \u{1F4AA}`;
+    return {
+      text: text2,
+      mediaUrl: void 0,
+      canonicalEquipment: canonical,
+      selectedExercise: void 0
+    };
+  }
+  const candidateExercises = findExercisesByEquipment(canonical || options.equipmentName, 6);
+  let selectedExercise = void 0;
+  if (options.primaryExerciseOverride) {
+    const check = validateContentConsistency(options.equipmentName, options.primaryExerciseOverride);
+    if (check.isValid) {
+      selectedExercise = options.primaryExerciseOverride;
+    }
+  }
+  if (!selectedExercise && candidateExercises.length > 0) {
+    selectedExercise = candidateExercises[0];
+  }
+  if (selectedExercise) {
+    const consistency = validateContentConsistency(displayName, selectedExercise);
+    if (!consistency.isValid) {
+      console.warn(`[ContentConsistency] Rejected inconsistent exercise ${selectedExercise.name} for ${displayName}: ${consistency.reason}`);
+      selectedExercise = candidateExercises.find((e) => validateContentConsistency(displayName, e).isValid) || void 0;
+    }
+  }
+  let goalRecommendation = "3 Set \xD7 10-12 Repetisi (Fokus Kontrol Form & Kebugaran Optimal)";
+  if (userGoal === "gain") {
+    goalRecommendation = "4 Set \xD7 8-10 Repetisi (Fokus Beban Progresif & Hipertrofi Otot)";
+  } else if (userGoal === "lose") {
+    goalRecommendation = "3-4 Set \xD7 12-15 Repetisi (Fokus Tempo Terkontrol & Pembakaran Kalori)";
+  }
+  if (subtype === "WHAT_IS_IT") {
+    const variationsText = candidateExercises.length > 0 ? candidateExercises.slice(0, 3).map((e, idx) => `  ${idx + 1}. *${e.name}* (${e.indonesianName}) - Target: ${e.targetMuscles.join(", ")}`).join("\n") : `  \u2022 Latihan isolasi dan compound sesuai beban`;
+    const text2 = `\u{1F50D} *MENGENAL ALAT: ${displayName.toUpperCase()}*
+--------------------------------------------------
+Alat ini adalah *${displayName}*, perlengkapan latihan yang sangat efektif untuk melatih kekuatan dan pengencangan otot.
+
+\u{1F3AF} *Manfaat Utama*:
+\u2022 Membangun kekuatan & stabilitas otot
+\u2022 Fleksibel untuk berbagai sudut gerakan
+\u2022 Mendukung target ${userGoal === "gain" ? "pembentukan massa otot (hipertrofi)" : userGoal === "lose" ? "pembakaran kalori & fat loss" : "kebugaran & postur tubuh"}
+
+\u{1F4CC} *Variasi Latihan Populer*:
+${variationsText}
+
+\u{1F4A1} *Tips Pemula*: Mulai dari beban ringan terlebih dahulu untuk menguasai form gerakan sebelum menambah beban.
+
+` + (selectedExercise ? `\u{1F4F1} *Lihat Panduan Gerakan Lengkap di Web*:
+\u{1F517} https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}` : "");
+    return {
+      text: text2,
+      mediaUrl: selectedExercise?.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+  if (subtype === "EXERCISES_FOR_EQUIPMENT") {
+    const listText = candidateExercises.length > 0 ? candidateExercises.slice(0, 4).map(
+      (e, idx) => `*${idx + 1}. ${e.name}* (${e.indonesianName})
+   \u{1F3AF} Target: ${e.targetMuscles.join(", ")}
+   \u{1F522} Rekomendasi: ${e.recommendedSetsReps}
+   \u{1F4A1} Form Kunci: ${e.dosAndDonts.dos[0] || "Jaga kontrol gerakan"}`
+    ).join("\n\n") : options.suggestedExercises && options.suggestedExercises.length > 0 ? options.suggestedExercises.map(
+      (e, idx) => `*${idx + 1}. ${e.name}*
+   \u{1F3AF} Target: ${e.targetMuscle || "General"}
+   \u{1F522} Rekomendasi: ${e.setsReps || "3 Sets x 10-12 Reps"}
+   \u{1F4A1} Tips: ${e.techniqueTip || "Kontrol gerakan"}`
+    ).join("\n\n") : `\u2022 *Custom Exercise*
+  \u{1F522} 3 Sets x 10-12 Reps
+  \u{1F4A1} Kontrol gerakan secara stabil.`;
+    const text2 = `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *VARIASI LATIHAN: ${displayName.toUpperCase()}*
+--------------------------------------------------
+Berikut beberapa variasi latihan terbaik yang bisa kamu lakukan dengan *${displayName}*:
+
+${listText}
+
+\u{1F4AC} *${coachName}*:
+"Pilih 1-2 gerakan di atas untuk melengkapi sesi latihanmu. Mau aku jelaskan panduan step-by-step untuk salah satu gerakan di atas${addr}?"
+
+` + (selectedExercise ? `\u{1F4F1} *Animasi & Kamus Gerakan di Web/PWA*:
+\u{1F517} https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}` : "");
+    return {
+      text: text2,
+      mediaUrl: selectedExercise?.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+  if (subtype === "EXERCISE_POSTURE" && selectedExercise) {
+    const coachCue = persona === "max" ? selectedExercise.coachCues.max : selectedExercise.coachCues.mia;
+    const text2 = `\u{1F9D8} *CHECKPOINT POSTUR & TEKNIK: ${selectedExercise.name.toUpperCase()}*
+\u{1F1EE}\u{1F1E9} *${selectedExercise.indonesianName}*
+\u2699\uFE0F *Kategori Alat*: ${selectedExercise.equipmentName}
+--------------------------------------------------
+\u{1F3AF} *Target Otot*: ${selectedExercise.targetMuscles.join(", ")}
+
+\u2705 *POSTUR & FORM YANG BENAR*:
+` + selectedExercise.dosAndDonts.dos.map((d) => `\u2714 ${d}`).join("\n") + (selectedExercise.dosAndDonts.donts.length > 0 ? `
+
+\u274C *KESALAHAN UMUM YANG WAJIB DIHINDARI*:
+` + selectedExercise.dosAndDonts.donts.map((d) => `\u2716 ${d}`).join("\n") : "") + `
+
+\u{1F4AC} *${coachName}*:
+"${coachCue}"
+
+\u{1F4F1} *Lihat Animasi Form di Web/PWA*:
+\u{1F517} https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}`;
+    return {
+      text: text2,
+      mediaUrl: selectedExercise.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+  if (selectedExercise) {
+    const coachCue = persona === "max" ? selectedExercise.coachCues.max : selectedExercise.coachCues.mia;
+    const text2 = `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *PANDUAN ALAT & LATIHAN: ${displayName.toUpperCase()}*
+\u{1F4CC} *Gerakan Utama*: ${selectedExercise.name} (${selectedExercise.indonesianName})
+--------------------------------------------------
+\u{1F3AF} *Target Otot*: ${selectedExercise.targetMuscles.join(", ")}
+\u2699\uFE0F *Kategori Alat*: ${selectedExercise.equipmentName}
+\u23F1\uFE0F *Rekomendasi Goal Kamu*: ${goalRecommendation}
+
+\u{1F527} *CARA SETTING & POSISI ALAT*:
+` + selectedExercise.equipmentSetup.map((step, idx) => `${idx + 1}. ${step}`).join("\n") + `
+
+\u{1F4DD} *CARA PENGGUNAAN STEP-BY-STEP*:
+` + selectedExercise.instructions.map((step, idx) => `${idx + 1}. ${step}`).join("\n") + `
+
+\u{1F4A1} *FORM KUNCI & TIPS AMAN*:
+` + selectedExercise.dosAndDonts.dos.map((d) => `\u2714 ${d}`).join("\n") + (selectedExercise.dosAndDonts.donts.length > 0 ? "\n" + selectedExercise.dosAndDonts.donts.map((d) => `\u2716 ${d}`).join("\n") : "") + `
+
+\u{1F4AC} *${coachName}*:
+"${coachCue}"
+
+\u{1F4F1} *Kamus Alat & Animasi Gerakan di Web/PWA*:
+\u{1F517} https://gymbuddygroup.com?tab=workout&exercise=${selectedExercise.id}`;
+    return {
+      text: text2,
+      mediaUrl: selectedExercise.gifUrl,
+      canonicalEquipment: canonical,
+      selectedExercise
+    };
+  }
+  const generalComment = options.aiComment || (persona === "max" ? `Alat ini sangat efektif untuk melatih kekuatan otot. Selalu pastikan kontrol beban dan jangan memaksakan beban terlalu berat ya! \u{1F4AA}` : `Alat ini sangat bagus untuk mendukung rutinitas latihan kamu. Lakukan dengan perlahan dan nikmati prosesnya ya! \u2728`);
+  const text = `\u{1F3CB}\uFE0F\u200D\u2642\uFE0F *PANDUAN ALAT LATIHAN: ${displayName.toUpperCase()}*
+--------------------------------------------------
+Alat ini dirancang untuk latihan kekuatan dan kebugaran.
+
+\u23F1\uFE0F *Rekomendasi*: ${goalRecommendation}
+
+\u{1F4A1} *Tips Umum Penggunaan*:
+1. Sesuaikan posisi tubuh atau beban sesuai kemampuan awal.
+2. Jaga postur punggung tetap lurus dan aktifkan otot inti (core).
+3. Tarik nafas saat gerakan rileks/turun, dan hembuskan saat mendorong/menarik beban.
+
+\u{1F4AC} *${coachName}*:
+"${generalComment}"`;
+  return {
+    text,
+    mediaUrl: void 0,
+    canonicalEquipment: canonical,
+    selectedExercise: void 0
   };
 }
 function getDefaultWeeklySchedule(goal = "healthy", lang = "ID") {
@@ -44802,6 +45164,84 @@ function validateFoodSafety(rawMeal, rawProfile) {
     matchedAllergens: rejectedItems
   };
 }
+function validateTemporalOverrideSafety(item, rawProfile) {
+  if (!item) return { allowed: false, reason: "Bahan makanan tidak valid" };
+  const profile = resolveCanonicalProfile(rawProfile);
+  const cleanItem = item.trim().toLowerCase();
+  const testCandidate = {
+    name: cleanItem,
+    category: "siang",
+    calories: 200,
+    protein: 20,
+    carbs: 10,
+    fat: 5,
+    fiber: 2,
+    sodium: cleanItem.includes("asin") ? 750 : 200,
+    sugar: cleanItem.includes("manis") || cleanItem.includes("sirup") ? 25 : 2,
+    ingredients: [cleanItem],
+    prepMethod: cleanItem.includes("goreng") ? "goreng" : "rebus"
+  };
+  const safetyProfile = {
+    ...profile,
+    dislikedFoods: []
+  };
+  const safetyCheck = validateFoodSafety(testCandidate, safetyProfile);
+  if (!safetyCheck.pass) {
+    const isAllergy = safetyCheck.violations.some((v) => v.startsWith("allergen_conflict") || v.startsWith("hidden_allergen"));
+    const isMedical = safetyCheck.violations.some((v) => v.startsWith("medical_"));
+    let reasonMsg = safetyCheck.reasons.join(". ");
+    if (isAllergy) {
+      reasonMsg = `Kamu memiliki riwayat alergi terhadap ${cleanItem}. Demi keselamatanmu, bahan alergen tidak bisa diizinkan.`;
+    } else if (isMedical) {
+      reasonMsg = `Bahan '${cleanItem}' tidak dianjurkan untuk kondisi kesehatanmu (${safetyCheck.reasons[0] || "kondisi medis"}).`;
+    }
+    return {
+      allowed: false,
+      reason: reasonMsg,
+      violationType: isAllergy ? "allergy_conflict" : isMedical ? "medical_conflict" : "safety_violation"
+    };
+  }
+  return { allowed: true };
+}
+function validateUserInstructionSafety(requestedIngredientOrMeal, rawProfile) {
+  if (!requestedIngredientOrMeal) return { allowed: true, violationType: "safe" };
+  const profile = resolveCanonicalProfile(rawProfile);
+  const cleanItem = requestedIngredientOrMeal.trim().toLowerCase();
+  const testCandidate = {
+    name: cleanItem,
+    category: "siang",
+    calories: 150,
+    protein: 15,
+    carbs: 10,
+    fat: 5,
+    fiber: 2,
+    sodium: cleanItem.includes("asin") ? 750 : 200,
+    sugar: cleanItem.includes("manis") || cleanItem.includes("sirup") ? 25 : 2,
+    ingredients: [cleanItem],
+    prepMethod: cleanItem.includes("goreng") ? "goreng" : "rebus"
+  };
+  const safetyAuthorityProfile = {
+    ...profile,
+    dislikedFoods: []
+  };
+  const check = validateFoodSafety(testCandidate, safetyAuthorityProfile);
+  if (!check.pass) {
+    const isAllergy = check.violations.some((v) => v.startsWith("allergen_conflict") || v.startsWith("hidden_allergen"));
+    const isMedical = check.violations.some((v) => v.startsWith("medical_"));
+    let reasonMsg = check.reasons.join(". ");
+    if (isAllergy) {
+      reasonMsg = `Kamu memiliki riwayat alergi terhadap ${cleanItem}. Demi keselamatanmu, bahan alergen tidak bisa ditambahkan ya \u{1F64F}`;
+    } else if (isMedical) {
+      reasonMsg = `Bahan '${cleanItem}' tidak dianjurkan untuk kondisi kesehatanmu (${check.reasons[0] || "kondisi medis"}) ya \u{1F64F}`;
+    }
+    return {
+      allowed: false,
+      reason: reasonMsg,
+      violationType: isAllergy ? "allergy_conflict" : isMedical ? "medical_conflict" : "safe"
+    };
+  }
+  return { allowed: true, violationType: "safe" };
+}
 function validateWorkoutSafety(rawExercise, rawProfile) {
   const profile = resolveCanonicalProfile(rawProfile);
   let exercise;
@@ -45114,7 +45554,7 @@ var BASE_MEAL_POOL = [
     rationale: "Tinggi protein nabati dan serat, sangat mengenyangkan di sela jam makan."
   }
 ];
-function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText) {
+function generatePersonalizedMealRecommendationDetailed(rawProfile, rawTotals, userText, options) {
   const profile = resolveCanonicalProfile(rawProfile);
   const totals = {
     calories: Number(rawTotals?.calories) || 0,
@@ -45151,6 +45591,29 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
   }
   let candidates = BASE_MEAL_POOL.filter((m) => m.category === targetCategory);
   if (candidates.length === 0) candidates = BASE_MEAL_POOL;
+  if (options?.sessionExcludedIngredients && options.sessionExcludedIngredients.length > 0) {
+    const exList = options.sessionExcludedIngredients.map((s) => s.toLowerCase());
+    const filtered = candidates.filter((m) => {
+      const text = `${m.name} ${(m.ingredients || []).join(" ")} ${m.prepMethod || ""}`.toLowerCase();
+      return !exList.some((ex) => text.includes(ex));
+    });
+    if (filtered.length > 0) {
+      candidates = filtered;
+    }
+  }
+  let effectiveProfile = profile;
+  if (profile.dislikedFoods && profile.dislikedFoods.length > 0 && options?.temporalOverrides && options.temporalOverrides.length > 0) {
+    const activeOverrides = options.temporalOverrides.filter((o) => {
+      if (options.targetScope && o.scope !== options.targetScope) return false;
+      if (o.category && o.category !== targetCategory) return false;
+      return true;
+    });
+    if (activeOverrides.length > 0) {
+      const allowedItems = activeOverrides.map((o) => o.value.toLowerCase());
+      const filteredDislikes = profile.dislikedFoods.filter((d) => !allowedItems.some((item) => d.toLowerCase().includes(item) || item.includes(d.toLowerCase())));
+      effectiveProfile = { ...profile, dislikedFoods: filteredDislikes };
+    }
+  }
   const hasHypertension = profile.medicalConditions.some((c) => c.includes("hypertens") || c.includes("darah tinggi") || c.includes("tekanan darah"));
   const hasDiabetes = profile.medicalConditions.some((c) => c.includes("diabet") || c.includes("gula"));
   candidates = [...candidates].sort((a, b) => {
@@ -45179,7 +45642,13 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
   let chosenMeal = null;
   let validationResult = null;
   for (const candidate of candidates) {
-    const check = validateFoodSafety(candidate, profile);
+    if (options?.sessionExcludedIngredients && options.sessionExcludedIngredients.length > 0) {
+      const candText = `${candidate.name} ${(candidate.ingredients || []).join(" ")} ${candidate.prepMethod || ""}`.toLowerCase();
+      if (options.sessionExcludedIngredients.some((ex) => candText.includes(ex.toLowerCase()))) {
+        continue;
+      }
+    }
+    const check = validateFoodSafety(candidate, effectiveProfile);
     if (check.pass) {
       chosenMeal = candidate;
       validationResult = check;
@@ -45231,7 +45700,7 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
       prepMethod: "rebus tawar",
       rationale: "Menu netral ramah eliminasi dengan protein bersih dan tinggi serat."
     };
-    const emergencyCheck = validateFoodSafety(universalSafe, profile);
+    const emergencyCheck = validateFoodSafety(universalSafe, effectiveProfile);
     if (emergencyCheck.pass) {
       chosenMeal = universalSafe;
       validationResult = emergencyCheck;
@@ -45251,7 +45720,7 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
         rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
       };
       chosenMeal = veganSafe;
-      validationResult = validateFoodSafety(veganSafe, profile);
+      validationResult = validateFoodSafety(veganSafe, effectiveProfile);
     }
   }
   const progressNotes = [];
@@ -45264,7 +45733,7 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
   if (hasKidney) {
     progressNotes.push(`\u2695\uFE0F *Catatan Medis Ginjal*: Asupan protein dan cairan harus selalu dikonsultasikan dengan dokter spesialis atau dokter pendampingmu ya.`);
   } else if (remainingProt > 20) {
-    progressNotes.push(`\u{1F356} *Prioritas Protein*: Masih memerlukan ~${remainingProt}g protein hari ini.`);
+    progressNotes.push(`\u{1F356} *Prioritas Protein*: Masih memerlukan ~${remainingProt}g protein (sisa kebutuhan hari ini).`);
   }
   if (hasHypertension) {
     progressNotes.push(`\u{1F9C2} *Perhatian Natrium (Hipertensi)*: Menjaga asupan garam ketat (<1.500 mg/hari). Menu ini dipilih rendah garam untuk kesehatan tekanan darahmu.`);
@@ -45273,24 +45742,29 @@ function generatePersonalizedMealRecommendation(rawProfile, rawTotals, userText)
   }
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
   const personaNote = profile.persona === "max" ? `Menu ini gue pilihkan berdasarkan data profil dan sisa target harian lo bro. Tetap konsisten jaga pola makan bergizi dan jangan lupa hidrasi! Gas! \u{1F525}` : `Menu ini dipilih berdasarkan data profil dan kebutuhan nutrisimu hari ini ya. Tetap jaga pola makan seimbang dan cukupi hidrasi agar tubuh selalu bugar \u2728`;
-  return `\u{1F37D}\uFE0F *REKOMENDASI MENU ${targetCategory.toUpperCase()} PERSONAL*
---------------------------------------------------
-\u{1F464} *Profil*: ${profile.name} | Goal: ${profile.goalTitle}
-\u{1F6E1}\uFE0F *Status Rekomendasi*: Direkomendasikan berdasarkan data profil dan targetmu
-
-\u{1F371} *Menu Pilihan*: *${chosenMeal.name}*
-\u{1F525} Kalori: ~${chosenMeal.calories} kcal
-\u{1F356} Protein: ~${chosenMeal.protein}g | \u{1F35A} Karbo: ~${chosenMeal.carbs}g | \u{1F953} Lemak: ~${chosenMeal.fat}g
-\u{1F9C2} Sodium: ~${chosenMeal.sodium} mg | \u{1F96C} Serat: ~${chosenMeal.fiber}g
-
-\u{1F4A1} *Alasan Pemilihan*: ${chosenMeal.rationale}
-
-\u{1F4C8} *Analisis Progress Nutrisi*: 
-` + progressNotes.map((n) => `\u2022 ${n}`).join("\n") + `
-
---------------------------------------------------
-\u{1F4AC} *${coachName}*:
-"${personaNote}"`;
+  const catTitle = targetCategory === "sarapan" ? "Sarapan" : targetCategory === "siang" ? "Makan Siang" : targetCategory === "malam" ? "Makan Malam" : "Camilan";
+  const itemsFormatted = chosenMeal.ingredients && chosenMeal.ingredients.length > 0 ? chosenMeal.ingredients.map((ing) => `\u2022 ${ing.charAt(0).toUpperCase() + ing.slice(1)}`).join("\n") : `\u2022 ${chosenMeal.name}`;
+  const lines = [
+    `\u{1F37D}\uFE0F *Rekomendasi ${catTitle}*
+`,
+    itemsFormatted,
+    "",
+    `\u{1F525} \xB1${chosenMeal.calories} kcal \xB7 \u{1F4AA} \xB1${chosenMeal.protein}g protein`,
+    `\u{1F35A} Karbo \xB1${chosenMeal.carbs}g \xB7 \u{1F951} Lemak \xB1${chosenMeal.fat}g`,
+    "",
+    `\u{1F4A1} ${chosenMeal.rationale}`
+  ];
+  if (progressNotes.length > 0) {
+    lines.push("");
+    lines.push(progressNotes.join("\n"));
+  }
+  lines.push("");
+  lines.push(`\u{1F4AC} *${coachName}*:
+"${personaNote}"`);
+  return {
+    text: lines.join("\n"),
+    meal: chosenMeal
+  };
 }
 function isMealTimingAdviceQuery(userText) {
   if (!userText || typeof userText !== "string") return false;
@@ -45437,14 +45911,25 @@ function classifyMealIntent(userText) {
   }
   return null;
 }
-function generatePersonalizedTomorrowMealPlan(rawProfile) {
+function generatePersonalizedTomorrowMealPlan(rawProfile, options) {
   const profile = resolveCanonicalProfile(rawProfile);
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
   const { formattedDate } = getWibDateDetails(1);
-  const safeBreakfastPool = BASE_MEAL_POOL.filter((m) => m.category === "sarapan" && validateFoodSafety(m, profile).pass);
-  const safeLunchPool = BASE_MEAL_POOL.filter((m) => m.category === "siang" && validateFoodSafety(m, profile).pass);
-  const safeSnackPool = BASE_MEAL_POOL.filter((m) => m.category === "snack" && validateFoodSafety(m, profile).pass);
-  const safeDinnerPool = BASE_MEAL_POOL.filter((m) => m.category === "malam" && validateFoodSafety(m, profile).pass);
+  let effectiveProfile = profile;
+  if (profile.dislikedFoods && profile.dislikedFoods.length > 0 && options?.temporalOverrides && options.temporalOverrides.length > 0) {
+    const activeOverrides = options.temporalOverrides.filter((o) => o.scope === "tomorrow_only" || o.scope === "today");
+    if (activeOverrides.length > 0) {
+      const allowed = activeOverrides.map((o) => o.value.toLowerCase());
+      effectiveProfile = {
+        ...profile,
+        dislikedFoods: profile.dislikedFoods.filter((d) => !allowed.some((item) => d.toLowerCase().includes(item) || item.includes(d.toLowerCase())))
+      };
+    }
+  }
+  const safeBreakfastPool = BASE_MEAL_POOL.filter((m) => m.category === "sarapan" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeLunchPool = BASE_MEAL_POOL.filter((m) => m.category === "siang" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeSnackPool = BASE_MEAL_POOL.filter((m) => m.category === "snack" && validateFoodSafety(m, effectiveProfile).pass);
+  const safeDinnerPool = BASE_MEAL_POOL.filter((m) => m.category === "malam" && validateFoodSafety(m, effectiveProfile).pass);
   const certifiedFallbackBreakfast = {
     name: "Oatmeal Apel Rebus + Biji Chia Alami",
     category: "sarapan",
@@ -45515,21 +46000,21 @@ function generatePersonalizedTomorrowMealPlan(rawProfile) {
     prepMethod: "kukus",
     rationale: "Menu eliminasi murni ramah seluruh pantangan alergi dan medis."
   };
-  let chosenBreakfast = safeBreakfastPool.length > 0 ? safeBreakfastPool[0] : validateFoodSafety(certifiedFallbackBreakfast, profile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback;
-  let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[0] : validateFoodSafety(certifiedFallbackLunch, profile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
-  let chosenSnack = safeSnackPool.length > 0 ? safeSnackPool[0] : validateFoodSafety(certifiedFallbackSnack, profile).pass ? certifiedFallbackSnack : certifiedVeganFallback;
-  let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[0] : validateFoodSafety(certifiedFallbackDinner, profile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
-  if (!validateFoodSafety(chosenBreakfast, profile).pass) {
-    chosenBreakfast = safeBreakfastPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  let chosenBreakfast = safeBreakfastPool.length > 0 ? safeBreakfastPool[0] : validateFoodSafety(certifiedFallbackBreakfast, effectiveProfile).pass ? certifiedFallbackBreakfast : certifiedVeganFallback;
+  let chosenLunch = safeLunchPool.length > 0 ? safeLunchPool[0] : validateFoodSafety(certifiedFallbackLunch, effectiveProfile).pass ? certifiedFallbackLunch : certifiedVeganFallback;
+  let chosenSnack = safeSnackPool.length > 0 ? safeSnackPool[0] : validateFoodSafety(certifiedFallbackSnack, effectiveProfile).pass ? certifiedFallbackSnack : certifiedVeganFallback;
+  let chosenDinner = safeDinnerPool.length > 0 ? safeDinnerPool[0] : validateFoodSafety(certifiedFallbackDinner, effectiveProfile).pass ? certifiedFallbackDinner : certifiedVeganFallback;
+  if (!validateFoodSafety(chosenBreakfast, effectiveProfile).pass) {
+    chosenBreakfast = safeBreakfastPool.find((m) => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenLunch, profile).pass) {
-    chosenLunch = safeLunchPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenLunch, effectiveProfile).pass) {
+    chosenLunch = safeLunchPool.find((m) => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenSnack, profile).pass) {
-    chosenSnack = safeSnackPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenSnack, effectiveProfile).pass) {
+    chosenSnack = safeSnackPool.find((m) => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
-  if (!validateFoodSafety(chosenDinner, profile).pass) {
-    chosenDinner = safeDinnerPool.find((m) => validateFoodSafety(m, profile).pass) || certifiedVeganFallback;
+  if (!validateFoodSafety(chosenDinner, effectiveProfile).pass) {
+    chosenDinner = safeDinnerPool.find((m) => validateFoodSafety(m, effectiveProfile).pass) || certifiedVeganFallback;
   }
   const estCalories = chosenBreakfast.calories + chosenLunch.calories + chosenSnack.calories + chosenDinner.calories;
   const estProtein = chosenBreakfast.protein + chosenLunch.protein + chosenSnack.protein + chosenDinner.protein;
@@ -45694,14 +46179,29 @@ ${dailyPlans}
 \u{1F4AC} *${coachName}*:
 "${weeklyMealPersonaClosing}"`;
 }
-function generatePersonalizedWorkoutRecommendation(rawProfile, targetDayOffset = 0) {
+function generatePersonalizedWorkoutRecommendation(rawProfile, targetDayOffset = 0, adaptation) {
   const profile = resolveCanonicalProfile(rawProfile);
   const coachName = profile.persona === "max" ? "Coach Max" : "Coach Mia";
   const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const targetDayIdx = ((/* @__PURE__ */ new Date()).getDay() + targetDayOffset + 7) % 7;
   const targetDayName = dayNames[targetDayIdx];
   const dayLabel = targetDayOffset === 1 ? "BESOK" : "HARI INI";
-  const safeExercises = EXERCISE_REGISTRY.filter((ex) => validateWorkoutSafety(ex, profile).pass);
+  let safeExercises = EXERCISE_REGISTRY.filter((ex) => validateWorkoutSafety(ex, profile).pass);
+  let discomfortNote = "";
+  const discSignal = adaptation?.discomfortSignal || adaptation?.discomfortArea;
+  if (discSignal) {
+    const disc = discSignal.toLowerCase();
+    if (disc.includes("lutut") || disc.includes("knee")) {
+      safeExercises = safeExercises.filter((ex) => {
+        const text = `${ex.name} ${ex.indonesianName || ""} ${(ex.targetMuscles || []).join(" ")}`.toLowerCase();
+        return !text.includes("jump") && !text.includes("lompat") && !text.includes("lunge") && !text.includes("squat") && !text.includes("burpee");
+      });
+      discomfortNote = `\u26A0\uFE0F *Penyesuaian Ketidaknyamanan Lutut*:
+Kalau lututmu lagi gak enak, kita hindari gerakan high-impact dulu ya. Aku sesuaikan sesi hari ini ke versi yang lebih ringan. Jika terasa nyeri saat bergerak, segera hentikan latihan dan istirahat ya.
+
+`;
+    }
+  }
   let targetArea = "upper_body";
   if (targetDayIdx === 1 || targetDayIdx === 4) targetArea = "upper_body";
   else if (targetDayIdx === 2 || targetDayIdx === 5) targetArea = "lower_body";
@@ -45753,6 +46253,21 @@ Hari ini adalah waktu untuk pemulihan otot dan relaksasi persendian. Cukupi air 
     if (validateWorkoutSafety(ex, profile).pass) return ex;
     return safeExercises.find((alt) => validateWorkoutSafety(alt, profile).pass) || ex;
   });
+  const targetMins = adaptation?.targetMinutes ?? adaptation?.targetDurationMinutes;
+  let durationHeader = "";
+  if (targetMins && targetMins <= 20) {
+    selected = selected.slice(0, 2);
+    selected = selected.map((e) => ({ ...e, targetSets: 2 }));
+    durationHeader = `\u23F1\uFE0F *Durasi*: ~${targetMins} Menit (Versi Ringkas Padat)
+\u23F1\uFE0F *Istirahat*: 60-90 detik antar set (pacing teratur, bukan memaksakan HIIT)
+`;
+  }
+  let fatigueNote = "";
+  if (adaptation?.isFatigued || adaptation?.effortSignal === "fatigued") {
+    fatigueNote = `\u{1F33F} *Penyesuaian Energi*: Karena kamu lagi capek, intensitas latihan ini disesuaikan lebih santai agar tubuh tetap aktif bergerak tanpa membebani pemulihan.
+
+`;
+  }
   const exerciseLines = selected.map(
     (ex, idx) => `${idx + 1}. *${ex.indonesianName || ex.name}*
    \u{1F522} ${formatSetsReps(ex.targetSets, ex.targetReps)}
@@ -45768,7 +46283,7 @@ Kalau kamu sudah selesai latihan dan ingin mencatatnya, baru bilang bahwa kamu s
 \u{1F4C5} *${fullDateLabel}*
 
 \u{1F3AF} *Fokus*: ${targetArea.replace("_", " ").toUpperCase()} (${profile.goalTitle})
-${injuryNote}
+${durationHeader}${discomfortNote}${fatigueNote}${injuryNote}
 
 \u{1F4CC} *Daftar Gerakan Terpilih*:
 
@@ -47008,6 +47523,66 @@ function classifyUserIntent(rawText, context = {}) {
       reason: "User expressed gratitude or courteous chit-chat"
     };
   }
+  const multiIntent = detectMultiIntent(rawText);
+  if (multiIntent && multiIntent.isMultiIntent) {
+    return {
+      intent: "MULTI_INTENT",
+      confidence: "high",
+      reason: "User combined meal logging and recommendation request",
+      extractedDetails: {
+        multiIntentDetails: {
+          logPart: multiIntent.logPart || "",
+          recPart: multiIntent.recPart || ""
+        }
+      }
+    };
+  }
+  const workoutAdaptation = detectWorkoutAdaptation(rawText);
+  if (workoutAdaptation && workoutAdaptation.isAdaptation && !lower.match(/\b(?:makan|menu|kalori|minum)\b/i)) {
+    return {
+      intent: "WORKOUT_ADAPTATION",
+      confidence: "high",
+      reason: "User requested workout adaptation for duration, fatigue, or discomfort",
+      extractedDetails: {
+        workoutAdaptation
+      }
+    };
+  }
+  const rejectionCheck = detectRecommendationRejection(rawText);
+  const prefInstruction = parsePreferenceInstruction(rawText);
+  if (rejectionCheck.isRejection) {
+    return {
+      intent: "RECOMMENDATION_REJECTION",
+      confidence: "high",
+      reason: rejectionCheck.rejectedItem ? `User rejected recommendation ingredient: ${rejectionCheck.rejectedItem}` : "User rejected recommendation",
+      extractedDetails: {
+        rejectionDetails: { rejectedItem: rejectionCheck.rejectedItem },
+        preferenceInstruction: prefInstruction || (rejectionCheck.rejectedItem ? {
+          type: "PERSISTENT_DISLIKE",
+          value: rejectionCheck.rejectedItem,
+          action: "add_disliked"
+        } : void 0)
+      }
+    };
+  }
+  if (prefInstruction) {
+    return {
+      intent: "PREFERENCE_UPDATE",
+      confidence: "high",
+      reason: `User specified preference update (${prefInstruction.type}: ${prefInstruction.value})`,
+      extractedDetails: {
+        preferenceInstruction: prefInstruction
+      }
+    };
+  }
+  const isRefMod = lower.match(/^(?:yang\s+tadi(?:\s+aja)?|pilihan\s+yang\s+tadi)$/i) || lower.match(/(?:hapus|hilangkan|tanpa)\s+(?:nasi|ayam|telur|sayur|tahu|tempe|daging)/i) || lower.match(/(?:tambahin|tambah|ekstra)\s+(?:buah|sayur|telur)/i) || lower.match(/(?:yang\s+)?([a-zA-Z\s]+?)(?:nya)?\s+ganti(?:\s+(?:jadi|ke|dengan)\s+([a-zA-Z\s]+))?/i) || lower.match(/^(?:ganti\s+(?:yang\s+)?itu|bukan\s+(?:yang\s+)?itu)$/i);
+  if (isRefMod && !context.hasRecentMeal) {
+    return {
+      intent: "RECOMMENDATION_REFERENCE_MODIFICATION",
+      confidence: "high",
+      reason: "User is modifying or referencing recent recommendation"
+    };
+  }
   const isHydration = Boolean(
     lower.match(/(?:minum|air(?:\s+putih)?|water)\s+(?:sebanyak\s+)?(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l|gelas|cup|botol)\b/i) || lower.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|liter|l|gelas|cup|botol)\s*(?:air(?:\s+putih)?|water)\b/i)
   );
@@ -47037,6 +47612,42 @@ function classifyUserIntent(rawText, context = {}) {
       intent: "PROGRAM_QUESTION",
       confidence: "high",
       reason: "User is inquiring or stating their program, not reporting completed exercise"
+    };
+  }
+  const isEquipmentInquirySignal = Boolean(
+    lower.match(/\b(?:alat\s*ini|mesin\s*ini|alat\s*gym|mesin\s*gym|alat\s*fitness)\b/i) || lower.match(/\b(?:cara\s+(?:pakai|make|menggunakan)|gimana\s+(?:cara\s+)?(?:make|pakai|menggunakan)|bagaimana\s+(?:cara\s+)?(?:pakai|make|menggunakan))\s+(?:alat|mesin|ini)\b/i) || lower.match(/\b(?:ini\s+alat\s+apa|alat\s+apa\s+ini|ini\s+mesin\s+apa|ini\s+buat\s+apa|alat\s+ini\s+buat\s+apa)\b/i) || lower.match(/\b(?:latihan|workout|olahraga)\s+apa\s+(?:yang\s+)?bisa\s+(?:dilakukan\s+)?(?:dengan|pake|pakai)\s+(?:alat|mesin)\b/i) || lower.match(/\b(?:bisa\s+buat\s+(?:latihan|workout|apa)\s+aja)\b/i) || context.hasImage && lower.match(/^(?:ini\s+apa|apa\s+ini|alat\s+ini|mesin\s+ini|cara\s+pakai(?:nya)?|cara\s+make(?:nya)?|gimana\s+make(?:nya)?|gimana\s+cara(?:nya)?|bisa\s+buat\s+latihan\s+apa\s*aja)[.?!]?$/i) || Boolean(lower.match(/\b(?:dumbbell|barbell|kettlebell|resistance\s*band|treadmill|exercise\s*bike|workout\s*bench|cable\s*machine|yoga\s*mat|barbel|sepeda\s*statis|matras)\b/i)) && Boolean(lower.match(/\b(?:cara|gimana|bagaimana|apa|fungsi|latihan|workout|buat)\b/i))
+  );
+  const isExercisePostureSignal = Boolean(
+    lower.match(/\b(?:ini\s+gerakan\s+apa|gerakan\s+apa\s+ini|nama\s+gerakan\s+ini|latihan\s+gerakan\s+ini|gerakan\s+ini\s+gimana)\b/i) || lower.match(/\b(?:form\s+ini|postur\s+ini|teknik\s+gerakan\s+ini)\b/i) || context.hasImage && Boolean(lower.match(/\b(?:gerakan|form|postur)\s+(?:ini|apa)\b/i))
+  );
+  if (isExercisePostureSignal) {
+    return {
+      intent: "EXERCISE_POSTURE_INQUIRY",
+      equipmentSubtype: "EXERCISE_POSTURE",
+      confidence: "high",
+      reason: "User is inquiring about exercise movement or posture shown in visual context",
+      extractedDetails: {
+        equipmentIntentSubtype: "EXERCISE_POSTURE"
+      }
+    };
+  }
+  if (isEquipmentInquirySignal) {
+    let eqSubtype = "GENERAL_EQUIPMENT";
+    if (lower.match(/\b(?:ini\s+apa|apa\s+ini|alat\s+apa|mesin\s+apa|nama\s+alat)\b/i)) {
+      eqSubtype = "WHAT_IS_IT";
+    } else if (lower.match(/\b(?:cara\s+(?:pakai|make|menggunakan)|gimana\s+(?:cara\s+)?(?:make|pakai|menggunakan)|bagaimana\s+cara|tutor(?:ial)?)\b/i)) {
+      eqSubtype = "HOW_TO_USE";
+    } else if (lower.match(/\b(?:latihan\s+apa|workout\s+apa|bisa\s+buat\s+latihan|buat\s+latihan\s+apa|variasi)\b/i)) {
+      eqSubtype = "EXERCISES_FOR_EQUIPMENT";
+    }
+    return {
+      intent: "EQUIPMENT_INQUIRY",
+      equipmentSubtype: eqSubtype,
+      confidence: "high",
+      reason: `User is inquiring about gym equipment/tool (${eqSubtype})`,
+      extractedDetails: {
+        equipmentIntentSubtype: eqSubtype
+      }
     };
   }
   const isWorkoutQuestion = Boolean(lower.match(/\b(?:jadwal|schedule)\s+(?:workout|latihan|olahraga|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:latihan|workout|olahraga)\s+(?:apa|hari\s*ini|besok)\b/i)) || Boolean(lower.match(/\b(?:menu|program)\s+(?:latihan|workout)\b/i)) || Boolean(lower.match(/\b(?:rekomendasi|saran)\s+(?:latihan|workout|olahraga)\b/i)) || Boolean(lower.match(/\b(?:cara|bagaimana|gimana|tutorial|tips|panduan|tutor)\b/i) && lower.match(/\b(?:bench\s*press|squat|deadlift|push\s*up|pull\s*up|latihan)\b/i)) || lower.includes("?") && lower.match(/\b(?:latihan|workout|gym|olahraga)\b/i);
@@ -47156,7 +47767,8 @@ function classifyUserIntent(rawText, context = {}) {
       reason: "User is asking for nutritional advice or food recommendations"
     };
   }
-  const hasMealSignal = context.hasImage || Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) || Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
+  const isNonFoodVisualQuery = isEquipmentInquirySignal || isExercisePostureSignal || Boolean(lower.match(/\b(?:alat|mesin|dumbbell|barbell|treadmill|kettlebell|bench|kabel|sepeda|matras|gerakan|postur|form)\b/i));
+  const hasMealSignal = context.hasImage && !isNonFoodVisualQuery || Boolean(lower.match(/\b(?:tadi\s+)?(?:saya|aku)?\s*(?:makan|sarapan|lunch|dinner|nyemil|minum)\s+[a-z0-9]/i)) || Boolean(lower.match(/\b(?:catat|rekap|log)\s+(?:makanan|menu|makan)\b/i));
   if (hasMealSignal) {
     return {
       intent: "MEAL_LOG",
@@ -47179,6 +47791,161 @@ function classifyUserIntent(rawText, context = {}) {
     confidence: "low",
     reason: "General conversation or open query"
   };
+}
+function detectMultiIntent(text) {
+  if (!text) return { isMultiIntent: false, intents: [] };
+  const lower = text.toLowerCase();
+  const splitMatch = lower.match(/(.+?)(?:,\s*(?:lalu|terus|dan\s+terus|kemudian|sekalian|nanti)?\s+|\s+(?:lalu|terus|kemudian|sekalian)\s+)(.+)/i);
+  if (splitMatch) {
+    const part1 = splitMatch[1].trim();
+    const part2 = splitMatch[2].trim();
+    const isPart1Log = Boolean(part1.match(/\b(?:tadi\s+)?(?:aku|saya)?\s*(?:udah\s+)?makan\b/i) || part1.match(/\bcatat\b/i));
+    const isPart2Rec = Boolean(part2.match(/\b(?:rekomendasi|saran|pilihan)\b/i) || part2.match(/\bmakan\s+(?:malam|siang|pagi)\s+apa\b/i));
+    if (isPart1Log && isPart2Rec) {
+      return {
+        isMultiIntent: true,
+        intents: [
+          { type: "LOG_MEAL", text: part1 },
+          { type: "RECOMMENDATION", text: part2 }
+        ],
+        logPart: part1,
+        recPart: part2
+      };
+    }
+  }
+  return { isMultiIntent: false, intents: [] };
+}
+function detectRecommendationRejection(text) {
+  if (!text) return { isRejection: false };
+  const lower = text.toLowerCase().trim();
+  const itemMatch = lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+suka\s+([a-zA-Z\s]+)/i) || lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+mau\s+([a-zA-Z\s]+)/i) || lower.match(/(?:aku\s+)?(?:gak\s+doyan|benci)\s+([a-zA-Z\s]+)/i) || lower.match(/^jangan\s+(?:kasih\s+)?([a-zA-Z\s]+)/i);
+  if (itemMatch) {
+    let item = itemMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (item && !["itu", "yang itu", "tadi", "yang tadi"].includes(item)) {
+      const isPersistent = lower.includes("suka") || lower.includes("doyan") || lower.includes("benci");
+      return { isRejection: true, rejectedItem: item, isPersistent };
+    }
+    return { isRejection: true, rejectedItem: void 0 };
+  }
+  if (/^(?:bukan\s+(?:yang\s+)?itu|skip|ganti\s+(?:yang\s+)?lain|yang\s+lain\s+dong|nggak\s+mau|gak\s+mau|jangan\s+yang\s+itu|menu\s+lain\s+dong|bosan)[.!]?$/i.test(lower)) {
+    return { isRejection: true, rejectedItem: void 0 };
+  }
+  return { isRejection: false };
+}
+function parsePreferenceInstruction(rawText) {
+  if (!rawText) return null;
+  const lower = rawText.toLowerCase().trim();
+  const changeMatch = lower.match(/mulai\s+sekarang\s+(?:aku\s+)?(?:gak\s+masalah|bisa|boleh|mau|suka)\s+(?:makan\s+)?([a-zA-Z\s]+)/i) || lower.match(/(?:aku\s+)?(?:sekarang\s+)?udah\s+(?:suka|mau\s+makan|gak\s+masalah\s+makan)\s+([a-zA-Z\s]+)/i);
+  if (changeMatch) {
+    const val = changeMatch[1].replace(/nya$/, "").replace(/\s+(?:lagi|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "PERSISTENT_CHANGE",
+        value: val,
+        action: "remove_disliked"
+      };
+    }
+  }
+  const mealSpecificMatch = lower.match(/(?:makan\s+malam(?:\s+ini)?|malam\s+ini|dinner)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i) || lower.match(/(?:sarapan(?:\s+ini)?|pagi\s+ini|breakfast)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i) || lower.match(/(?:makan\s+siang(?:\s+ini)?|siang\s+ini|lunch)\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i);
+  if (mealSpecificMatch) {
+    let cat = "malam";
+    if (lower.includes("sarapan") || lower.includes("pagi") || lower.includes("breakfast")) cat = "sarapan";
+    else if (lower.includes("siang") || lower.includes("lunch")) cat = "siang";
+    const val = mealSpecificMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORAL_OVERRIDE",
+        value: val,
+        scope: "tonight_only",
+        category: cat,
+        action: "add_override"
+      };
+    }
+  }
+  const tomorrowMatch = lower.match(/besok\s+(?:aku\s+)?(?:mau|pengen|ingin|boleh)?\s*(?:makan\s+)?([a-zA-Z\s]+)/i);
+  if (tomorrowMatch) {
+    const val = tomorrowMatch[1].replace(/nya$/, "").replace(/\s+(?:aja|dong|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORAL_OVERRIDE",
+        value: val,
+        scope: "tomorrow_only",
+        action: "add_override"
+      };
+    }
+  }
+  const tempMatch = lower.match(/(?:hari\s+ini\s+(?:aku\s+)?(?:gak\s+mau|jangan|gak\s+pengen|lagi\s+gak\s+mood)|(?:lagi\s+)?gak\s+pengen\s+([a-zA-Z\s]+?)\s+hari\s+ini)\s*([a-zA-Z\s]+)?/i);
+  if (tempMatch) {
+    const rawVal = tempMatch[2] || tempMatch[1];
+    const val = (rawVal || "").replace(/nya$/, "").replace(/\s+(?:dulu|aja|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu"].includes(val)) {
+      return {
+        type: "TEMPORARY_PREFERENCE",
+        value: val,
+        scope: "today",
+        action: "add_temporary"
+      };
+    }
+  }
+  const dislikeMatch = lower.match(/(?:aku\s+)?(?:gak|nggak|tidak)\s+(?:suka|doyan|makan)\s+([a-zA-Z\s]+)/i) || lower.match(/(?:aku\s+)?(?:benci|hindari)\s+([a-zA-Z\s]+)/i);
+  if (dislikeMatch) {
+    const val = dislikeMatch[1].replace(/nya$/, "").replace(/\s+(?:lagi|deh|ya)$/i, "").trim();
+    if (val && !["makan", "menu", "itu", "yang itu"].includes(val)) {
+      return {
+        type: "PERSISTENT_DISLIKE",
+        value: val,
+        action: "add_disliked"
+      };
+    }
+  }
+  return null;
+}
+function detectWorkoutAdaptation(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+  const durMatch = lower.match(/(?:cuma|hanya|punya\s+waktu|bisa|waktuku|durasi)?\s*(\d{1,3})\s*(?:menit|mins|min)\b/i);
+  const targetMinutes = durMatch ? parseInt(durMatch[1], 10) : void 0;
+  const isFatigued = Boolean(lower.match(/\b(?:lagi\s+)?(?:capek|lelah|lemas|pegal|letih|kurang\s+tenaga|mager|pemulihan|recovery)\b/i));
+  const isIntense = Boolean(lower.match(/\b(?:pengen|mau|buat)\s+(?:yang\s+)?(?:berat|keras|intens|hard)\b/i));
+  const discomfortMatch = lower.match(/\b(lutut|knee|pinggang|bahu|engkel|sendi|punggung)\s*(?:ku|mu|nya)?\s*(?:lagi\s+)?(?:gak\s+enak|sakit|nyeri|linu|pegal|cedera)\b/i) || lower.match(/\b(?:gak\s+bisa|tidak\s+bisa)\s+(?:squat|lompat|jump)\b/i);
+  let discomfortSignal = void 0;
+  if (discomfortMatch) {
+    const raw = (discomfortMatch[1] || "lutut").toLowerCase();
+    discomfortSignal = raw === "lutut" || raw === "knee" ? "knee" : raw;
+  }
+  const equipMatch = lower.match(/\b(?:di\s+rumah|tanpa\s+alat|gak\s+bisa\s+ke\s+gym|bodyweight)\b/i);
+  const equipmentConstraint = equipMatch ? equipMatch[0].toLowerCase() : void 0;
+  if (targetMinutes || isFatigued || isIntense || discomfortSignal || equipmentConstraint) {
+    return {
+      isAdaptation: true,
+      targetMinutes,
+      targetDurationMinutes: targetMinutes,
+      effortSignal: isFatigued ? "fatigued" : isIntense ? "intense" : "normal",
+      isFatigued,
+      discomfortSignal,
+      discomfortArea: discomfortSignal,
+      equipmentConstraint
+    };
+  }
+  return null;
+}
+function classifyResponseComplexity(intent, text, context) {
+  if (intent === "SIMPLE_ACTION" || intent === "HYDRATION_LOG" || intent === "WEIGHT_LOG") {
+    return "SIMPLE_ACTION";
+  }
+  if (intent === "CONFIRMATION") {
+    return "SIMPLE_CONFIRMATION";
+  }
+  if (intent === "MEAL_CORRECTION") {
+    return "CORRECTION";
+  }
+  if (intent === "RECOMMENDATION_REJECTION" || intent === "RECOMMENDATION_REFERENCE_MODIFICATION") {
+    return "RECOMMENDATION";
+  }
+  if (intent === "MULTI_INTENT") {
+    return "MULTI_INTENT";
+  }
+  return "INFORMATIONAL";
 }
 
 // services/nutritionEngine.ts
@@ -51458,7 +52225,9 @@ function normalizeDuration(raw) {
 
 // services/conversationStateManager.ts
 var activeTasks = /* @__PURE__ */ new Map();
+var recentVisualContexts = /* @__PURE__ */ new Map();
 var DEFAULT_TASK_TTL_MS = 10 * 60 * 1e3;
+var DEFAULT_VISUAL_CONTEXT_TTL_MS = 5 * 60 * 1e3;
 function getActiveTask(phone) {
   if (!phone) return null;
   const cleanPhone = phone.replace(/[^\d]/g, "");
@@ -51490,8 +52259,347 @@ function clearActiveTask(phone, reason) {
     activeTasks.delete(cleanPhone);
   }
 }
+function getRecentVisualContext(phone) {
+  if (!phone) return null;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const ctx = recentVisualContexts.get(cleanPhone);
+  if (!ctx) return null;
+  if (Date.now() > ctx.expiresAt) {
+    recentVisualContexts.delete(cleanPhone);
+    return null;
+  }
+  return ctx;
+}
+function setRecentVisualContext(phone, ctx, ttlMs = DEFAULT_VISUAL_CONTEXT_TTL_MS) {
+  if (!phone) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const now = Date.now();
+  recentVisualContexts.set(cleanPhone, {
+    ...ctx,
+    timestamp: now,
+    expiresAt: now + ttlMs
+  });
+}
 function clearAllActiveTasks() {
   activeTasks.clear();
+  recentVisualContexts.clear();
+  recentRecommendations.clear();
+}
+var recentRecommendations = /* @__PURE__ */ new Map();
+var DEFAULT_REC_TTL_MS = 30 * 60 * 1e3;
+function getRecentRecommendation(phone) {
+  if (!phone) return null;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const ctx = recentRecommendations.get(cleanPhone);
+  if (!ctx) return null;
+  if (Date.now() > ctx.expiresAt) {
+    recentRecommendations.delete(cleanPhone);
+    return null;
+  }
+  return ctx;
+}
+function setRecentRecommendation(phone, ctx, ttlMs = DEFAULT_REC_TTL_MS) {
+  if (!phone) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const now = Date.now();
+  const existing = recentRecommendations.get(cleanPhone);
+  recentRecommendations.set(cleanPhone, {
+    ...ctx,
+    excludedIngredients: ctx.excludedIngredients || existing?.excludedIngredients || [],
+    temporalOverrides: ctx.temporalOverrides || existing?.temporalOverrides || [],
+    timestamp: now,
+    expiresAt: now + ttlMs
+  });
+}
+function addSessionExcludedIngredient(phone, ingredient) {
+  if (!phone || !ingredient) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const cleanItem = ingredient.trim().toLowerCase();
+  const existing = getRecentRecommendation(cleanPhone);
+  if (existing) {
+    if (!existing.excludedIngredients.includes(cleanItem)) {
+      existing.excludedIngredients.push(cleanItem);
+    }
+  } else {
+    recentRecommendations.set(cleanPhone, {
+      type: "meal",
+      excludedIngredients: [cleanItem],
+      temporalOverrides: [],
+      timestamp: Date.now(),
+      expiresAt: Date.now() + DEFAULT_REC_TTL_MS
+    });
+  }
+}
+function addTemporalOverride(phone, override) {
+  if (!phone || !override.value) return;
+  const cleanPhone = phone.replace(/[^\d]/g, "");
+  const now = Date.now();
+  const newOverride = {
+    type: override.type || "preference_override",
+    ...override,
+    value: override.value.trim().toLowerCase(),
+    createdAt: now,
+    expiresAt: now + 24 * 60 * 60 * 1e3
+    // 24 hours TTL for daily/temporal overrides
+  };
+  const existing = getRecentRecommendation(cleanPhone);
+  if (existing) {
+    existing.temporalOverrides = (existing.temporalOverrides || []).filter((o) => Date.now() <= o.expiresAt);
+    existing.temporalOverrides.push(newOverride);
+  } else {
+    recentRecommendations.set(cleanPhone, {
+      type: "meal",
+      excludedIngredients: [],
+      temporalOverrides: [newOverride],
+      timestamp: now,
+      expiresAt: now + DEFAULT_REC_TTL_MS
+    });
+  }
+}
+function resolveRecommendationReference(phone, userText) {
+  const ctx = getRecentRecommendation(phone);
+  if (!ctx || !ctx.mealData) {
+    return { isResolved: false, isAmbiguous: false };
+  }
+  const meal = ctx.mealData;
+  const lower = userText.toLowerCase().trim();
+  const components = meal.components || (meal.ingredients || []).map((ing) => ({
+    name: ing,
+    portion: "1 porsi",
+    calories: Math.round(meal.calories / Math.max(1, meal.ingredients.length)),
+    protein: Math.round(meal.protein / Math.max(1, meal.ingredients.length)),
+    carbs: Math.round(meal.carbs / Math.max(1, meal.ingredients.length)),
+    fat: Math.round(meal.fat / Math.max(1, meal.ingredients.length))
+  }));
+  if (/^(?:yang\s+tadi(?:\s+aja)?|pilihan\s+yang\s+tadi|menu\s+yang\s+tadi|seperti\s+(?:yang\s+)?sebelumnya|yang\s+itu(?:\s+aja)?|itu\s+aja)$/i.test(lower)) {
+    return {
+      isResolved: true,
+      isAmbiguous: false,
+      action: "recall",
+      target: meal.name
+    };
+  }
+  if (/^(?:ganti|ubah|tukar)\s+(?:yang\s+tadi|menu\s+yang\s+tadi|pilihan\s+yang\s+tadi)(?:\s+(?:dong|deh|ya|aja))?$/i.test(lower)) {
+    return {
+      isResolved: true,
+      isAmbiguous: false,
+      action: "replace",
+      target: meal.name
+    };
+  }
+  const compRefMatch = lower.match(/^(?:yang|bagian)?\s*([a-zA-Z\s]+?)(?:nya)?$/i);
+  if (compRefMatch) {
+    const rawWord = compRefMatch[1].trim().toLowerCase();
+    if (!["tadi", "itu", "ini", "dong", "deh", "ya", "aja", "mau", "oke", "siap"].includes(rawWord)) {
+      const matching = components.filter((c) => c.name.toLowerCase().includes(rawWord));
+      if (matching.length === 1) {
+        return {
+          isResolved: true,
+          isAmbiguous: false,
+          target: matching[0].name,
+          matchedComponent: matching[0]
+        };
+      } else if (matching.length > 1) {
+        return {
+          isResolved: false,
+          isAmbiguous: true,
+          candidates: matching.map((c) => c.name),
+          clarificationPrompt: `Mau yang ${matching.map((c) => c.name).join(" atau ")}?`
+        };
+      }
+    }
+  }
+  const removeMatch = lower.match(/(?:hapus|hilangkan|tanpa|jangan\s+pakai|buang)\s+([a-zA-Z\s]+)/i);
+  if (removeMatch) {
+    const rawTarget = removeMatch[1].replace(/nya$/, "").trim().toLowerCase();
+    const matching = components.filter((c) => c.name.toLowerCase().includes(rawTarget));
+    if (matching.length === 1) {
+      return {
+        isResolved: true,
+        isAmbiguous: false,
+        action: "remove",
+        target: matching[0].name,
+        matchedComponent: matching[0]
+      };
+    } else if (matching.length > 1) {
+      return {
+        isResolved: false,
+        isAmbiguous: true,
+        candidates: matching.map((c) => c.name),
+        action: "remove",
+        clarificationPrompt: `Mau hapus bagian ${matching.map((c) => c.name).join(" atau ")}?`
+      };
+    }
+  }
+  const addMatch = lower.match(/(?:tambah(?:in)?|ekstra|tambahkan|plus)\s+([a-zA-Z\s]+)/i);
+  if (addMatch) {
+    const addTarget = addMatch[1].replace(/nya$/, "").trim();
+    return {
+      isResolved: true,
+      isAmbiguous: false,
+      action: "add",
+      replacement: addTarget
+    };
+  }
+  const replaceMatch = lower.match(/(?:ganti\s+([a-zA-Z\s]+?)\s+(?:jadi|ke|dengan)\s+([a-zA-Z\s]+)|(?:yang\s+)?([a-zA-Z\s]+?)(?:nya)?\s+ganti(?:\s+(?:jadi|ke|dengan)\s+([a-zA-Z\s]+))?)/i);
+  if (replaceMatch) {
+    const targetWord = (replaceMatch[1] || replaceMatch[3] || "").replace(/nya$/, "").replace(/^yang\s+/, "").trim().toLowerCase();
+    const replWord = (replaceMatch[2] || replaceMatch[4] || "").trim();
+    if (targetWord === "itu" || targetWord === "yang itu" || targetWord === "tadi" || targetWord === "yang tadi") {
+      if (components.length > 1) {
+        return {
+          isResolved: false,
+          isAmbiguous: true,
+          candidates: components.map((c) => c.name),
+          action: "replace",
+          replacement: replWord || void 0,
+          clarificationPrompt: `Mau ganti bagian ${components.map((c) => c.name).join(", ")}?`
+        };
+      } else if (components.length === 1) {
+        return {
+          isResolved: true,
+          isAmbiguous: false,
+          action: "replace",
+          target: components[0].name,
+          matchedComponent: components[0],
+          replacement: replWord || void 0
+        };
+      }
+    }
+    const matching = components.filter((c) => c.name.toLowerCase().includes(targetWord));
+    if (matching.length === 1) {
+      return {
+        isResolved: true,
+        isAmbiguous: false,
+        action: "replace",
+        target: matching[0].name,
+        matchedComponent: matching[0],
+        replacement: replWord || void 0
+      };
+    } else if (matching.length > 1) {
+      return {
+        isResolved: false,
+        isAmbiguous: true,
+        candidates: matching.map((c) => c.name),
+        action: "replace",
+        replacement: replWord || void 0,
+        clarificationPrompt: `Mau ganti bagian ${matching.map((c) => c.name).join(" atau ")}?`
+      };
+    }
+  }
+  if (/^(?:ganti\s+(?:yang\s+)?itu|bukan\s+(?:yang\s+)?itu|ganti\s+dong)$/i.test(lower)) {
+    if (components.length > 1) {
+      return {
+        isResolved: false,
+        isAmbiguous: true,
+        candidates: components.map((c) => c.name),
+        action: "replace",
+        clarificationPrompt: `Mau ganti bagian ${components.map((c) => c.name).join(", ")}?`
+      };
+    }
+  }
+  return { isResolved: false, isAmbiguous: false };
+}
+function modifyActiveRecommendation(phone, resolution) {
+  const ctx = getRecentRecommendation(phone);
+  if (!ctx || !ctx.mealData) return null;
+  const meal = ctx.mealData;
+  let components = meal.components || (meal.ingredients || []).map((ing) => ({
+    name: ing,
+    portion: "1 porsi",
+    calories: Math.round(meal.calories / Math.max(1, meal.ingredients.length)),
+    protein: Math.round(meal.protein / Math.max(1, meal.ingredients.length)),
+    carbs: Math.round(meal.carbs / Math.max(1, meal.ingredients.length)),
+    fat: Math.round(meal.fat / Math.max(1, meal.ingredients.length))
+  }));
+  if (resolution.action === "remove" && resolution.target) {
+    components = components.filter((c) => c.name !== resolution.target && !c.name.toLowerCase().includes(resolution.target.toLowerCase()));
+  } else if (resolution.action === "replace" && resolution.target && resolution.replacement) {
+    const replName = resolution.replacement.charAt(0).toUpperCase() + resolution.replacement.slice(1);
+    let replCal = 120, replProt = 14, replCarbs = 4, replFat = 5;
+    const lowerRepl = replName.toLowerCase();
+    if (lowerRepl.includes("tahu") || lowerRepl.includes("tofu")) {
+      replCal = 110;
+      replProt = 12;
+      replCarbs = 3;
+      replFat = 6;
+    } else if (lowerRepl.includes("tempe")) {
+      replCal = 160;
+      replProt = 16;
+      replCarbs = 9;
+      replFat = 8;
+    } else if (lowerRepl.includes("telur")) {
+      replCal = 95;
+      replProt = 8;
+      replCarbs = 1;
+      replFat = 7;
+    } else if (lowerRepl.includes("dada ayam") || lowerRepl.includes("ayam")) {
+      replCal = 165;
+      replProt = 31;
+      replCarbs = 0;
+      replFat = 3.6;
+    } else if (lowerRepl.includes("sapi")) {
+      replCal = 180;
+      replProt = 24;
+      replCarbs = 0;
+      replFat = 9;
+    }
+    components = components.map((c) => {
+      if (c.name === resolution.target || c.name.toLowerCase().includes(resolution.target.toLowerCase())) {
+        return {
+          name: replName,
+          portion: "1 porsi",
+          calories: replCal,
+          protein: replProt,
+          carbs: replCarbs,
+          fat: replFat
+        };
+      }
+      return c;
+    });
+  } else if (resolution.action === "add" && resolution.replacement) {
+    const addName = resolution.replacement.charAt(0).toUpperCase() + resolution.replacement.slice(1);
+    let addCal = 70, addProt = 2, addCarbs = 14, addFat = 0.5;
+    const lowerAdd = addName.toLowerCase();
+    if (lowerAdd.includes("buah") || lowerAdd.includes("pisang") || lowerAdd.includes("apel")) {
+      addCal = 80;
+      addProt = 1;
+      addCarbs = 20;
+      addFat = 0.2;
+    } else if (lowerAdd.includes("sayur") || lowerAdd.includes("salad")) {
+      addCal = 45;
+      addProt = 2.5;
+      addCarbs = 7;
+      addFat = 0.5;
+    } else if (lowerAdd.includes("telur")) {
+      addCal = 95;
+      addProt = 8;
+      addCarbs = 1;
+      addFat = 7;
+    }
+    components.push({
+      name: addName,
+      portion: "1 porsi",
+      calories: addCal,
+      protein: addProt,
+      carbs: addCarbs,
+      fat: addFat
+    });
+  }
+  const totalCal = components.reduce((acc, c) => acc + c.calories, 0);
+  const totalProt = Math.round(components.reduce((acc, c) => acc + c.protein, 0) * 10) / 10;
+  const totalCarbs = Math.round(components.reduce((acc, c) => acc + c.carbs, 0) * 10) / 10;
+  const totalFat = Math.round(components.reduce((acc, c) => acc + c.fat, 0) * 10) / 10;
+  meal.components = components;
+  meal.ingredients = components.map((c) => c.name);
+  meal.name = components.map((c) => c.name).join(" + ");
+  meal.calories = totalCal;
+  meal.protein = totalProt;
+  meal.carbs = totalCarbs;
+  meal.fat = totalFat;
+  ctx.timestamp = Date.now();
+  setRecentRecommendation(phone, ctx);
+  return ctx;
 }
 function isTaskInterruptingIntent(intent) {
   switch (intent) {
@@ -51507,6 +52615,8 @@ function isTaskInterruptingIntent(intent) {
     case "MEAL_LOG":
     case "HYDRATION_LOG":
     case "PROGRAM_QUESTION":
+    case "EQUIPMENT_INQUIRY":
+    case "EXERCISE_POSTURE_INQUIRY":
       return true;
     default:
       return false;
@@ -56332,34 +57442,264 @@ ${mealListStr}
 }
 function generateMealRecommendations(userData, rawPhone, userText) {
   const intent = classifyMealIntent(userText || "");
+  const normPhone = rawPhone ? rawPhone.replace(/[^\d]/g, "") : "";
+  const recentCtx = normPhone ? getRecentRecommendation(normPhone) : null;
+  const options = {
+    sessionExcludedIngredients: recentCtx?.excludedIngredients,
+    temporalOverrides: recentCtx?.temporalOverrides
+  };
   if (intent && intent.scope === "tomorrow") {
-    return generatePersonalizedTomorrowMealPlan(userData);
+    return generatePersonalizedTomorrowMealPlan(userData, options);
   }
   if (intent && intent.scope === "weekly") {
     return generatePersonalizedWeeklyMealPlan(userData);
   }
   const todayStr = getTodayDateStr();
   const totals = rawPhone ? getDailyTotals(rawPhone, todayStr) : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, logs: [] };
-  return generatePersonalizedMealRecommendation(userData, totals, userText);
+  const detailed = generatePersonalizedMealRecommendationDetailed(userData, totals, userText, options);
+  if (normPhone && detailed.meal) {
+    setRecentRecommendation(normPhone, {
+      type: "meal",
+      mealData: {
+        id: detailed.meal.name.toLowerCase().replace(/\s+/g, "-"),
+        name: detailed.meal.name,
+        category: detailed.meal.category,
+        ingredients: detailed.meal.ingredients,
+        components: detailed.meal.components,
+        calories: detailed.meal.calories,
+        protein: detailed.meal.protein,
+        carbs: detailed.meal.carbs,
+        fat: detailed.meal.fat,
+        rationale: detailed.meal.rationale
+      },
+      excludedIngredients: recentCtx?.excludedIngredients || [],
+      temporalOverrides: recentCtx?.temporalOverrides || []
+    });
+  }
+  return detailed.text;
 }
-function formatEquipmentCard(parsedAi, userData) {
+async function handleBehavioralIntelligenceIntent(from, userText, userData) {
+  const normPhone = from.replace(/[^\d]/g, "");
+  const lowerText = userText.toLowerCase().trim();
+  const multi = detectMultiIntent(userText);
+  if (multi.isMultiIntent && multi.intents.length >= 2) {
+    const responses = [];
+    let logSummary = "";
+    const logPart = multi.intents.find((i) => i.type === "LOG_MEAL");
+    if (logPart && logPart.text) {
+      const deterministicResult = estimateMealNutritionDeterministic(logPart.text);
+      if (deterministicResult) {
+        const mealLogEntry = {
+          id: Date.now().toString(),
+          userId: from,
+          mealName: deterministicResult.foodName || logPart.text,
+          calories: deterministicResult.calories || 0,
+          protein: deterministicResult.protein || 0,
+          carbs: deterministicResult.carbs || 0,
+          fat: deterministicResult.fat || 0,
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          analysis: `Pencatatan multi-intent otomatis: ${deterministicResult.foodName}`
+        };
+        addMealLog(from, mealLogEntry);
+        logSummary = `Siap, makan ${deterministicResult.foodName} sudah aku catat \u{1F44D} (\u{1F525} ${deterministicResult.calories} kcal, \u{1F4AA} ${deterministicResult.protein}g protein)`;
+      } else {
+        logSummary = `Siap, catatan untuk "${logPart.text}" sudah tersimpan \u{1F44D}`;
+      }
+    }
+    const recPart = multi.intents.find((i) => i.type === "RECOMMENDATION");
+    if (recPart && recPart.text) {
+      const recMsg = generateMealRecommendations(userData, from, recPart.text);
+      if (logSummary) {
+        responses.push(`${logSummary}
+
+${recMsg}`);
+      } else {
+        responses.push(recMsg);
+      }
+      return responses;
+    } else if (logSummary) {
+      return [logSummary];
+    }
+  }
+  const recentRec = getRecentRecommendation(normPhone);
+  if (recentRec && recentRec.mealData) {
+    const refResolution = resolveRecommendationReference(normPhone, userText);
+    if (refResolution.isAmbiguous) {
+      return [refResolution.clarificationPrompt || `Mau ganti bagian ${refResolution.candidates?.join(" atau ")}?`];
+    }
+    if (refResolution.isResolved) {
+      if (refResolution.action === "recall") {
+        return [`Siap, kita pakai menu yang tadi: *${refResolution.target}* \u{1F44D}`];
+      }
+      if (refResolution.action === "replace" && refResolution.target === recentRec.mealData.name) {
+        addSessionExcludedIngredient(normPhone, refResolution.target);
+        const newRec = generateMealRecommendations(userData, from);
+        return [`Siap, ini pengganti untuk menu yang tadi \u{1F44D}
+
+${newRec}`];
+      }
+      if (refResolution.replacement) {
+        const safetyCheck = validateUserInstructionSafety(refResolution.replacement, userData);
+        if (!safetyCheck.allowed) {
+          return [
+            safetyCheck.reason || `Mohon maaf, ${refResolution.replacement} tidak bisa ditambahkan demi keselamatanmu ya \u{1F64F}`
+          ];
+        }
+      }
+      const updatedContext = modifyActiveRecommendation(normPhone, refResolution);
+      if (updatedContext && updatedContext.mealData) {
+        const updatedMeal = updatedContext.mealData;
+        let actionDesc = "menunya sudah kuperbarui";
+        if (refResolution.action === "replace" && refResolution.target && refResolution.replacement) {
+          actionDesc = `${refResolution.target.toLowerCase()} sudah aku ganti jadi ${refResolution.replacement.toLowerCase()}`;
+        } else if (refResolution.action === "remove" && refResolution.target) {
+          actionDesc = `${refResolution.target.toLowerCase()} sudah aku hilangkan`;
+        } else if (refResolution.action === "add" && refResolution.replacement) {
+          actionDesc = `${refResolution.replacement.toLowerCase()} sudah aku tambahkan`;
+        }
+        return [
+          `Siap, ${actionDesc} \u{1F44D}
+
+Totalnya sekarang:
+\u{1F525} \xB1${updatedMeal.calories} kcal
+\u{1F4AA} \xB1${updatedMeal.protein}g protein
+\u{1F35E} \xB1${updatedMeal.carbs}g karbo
+\u{1F951} \xB1${updatedMeal.fat}g lemak`
+        ];
+      }
+    }
+  }
+  const prefInstruction = parsePreferenceInstruction(userText);
+  if (prefInstruction) {
+    if (prefInstruction.type === "TEMPORAL_OVERRIDE") {
+      const safetyCheck = validateTemporalOverrideSafety(prefInstruction.value, userData);
+      if (!safetyCheck.allowed) {
+        return [
+          `Mohon maaf, aku mencatat kamu punya riwayat atau kondisi yang tidak sesuai dengan ${prefInstruction.value}. Demi keselamatanmu, bahan ini tidak bisa dimasukkan ke rencana makan ya \u{1F64F}
+
+\u{1F4A1} _${safetyCheck.reason}_`
+        ];
+      }
+      addTemporalOverride(normPhone, {
+        type: "preference_override",
+        value: prefInstruction.value,
+        scope: prefInstruction.scope,
+        category: prefInstruction.category
+      });
+      if (prefInstruction.scope === "tomorrow_only") {
+        return [
+          `Siap, besok ${prefInstruction.value} diizinkan untuk rencana makanmu \u{1F44D} (preferensi makanan yang kamu kurang suka tetap tersimpan seperti biasa)`
+        ];
+      } else if (prefInstruction.scope === "tonight_only" || prefInstruction.category === "malam") {
+        const recText = generateMealRecommendations(userData, from, "rekomendasi makan malam");
+        return [
+          `Siap, untuk makan malam nanti aku siapkan rekomendasi dengan ${prefInstruction.value} ya \u{1F44D}
+
+${recText}`
+        ];
+      } else {
+        return [
+          `Siap, untuk menu ini ${prefInstruction.value} diizinkan \u{1F44D}`
+        ];
+      }
+    }
+    if (prefInstruction.type === "PERSISTENT_CHANGE") {
+      const userProfile = getUserProfile(from);
+      if (userProfile && userProfile.dislikedFoods) {
+        userProfile.dislikedFoods = userProfile.dislikedFoods.filter(
+          (d) => !d.toLowerCase().includes(prefInstruction.value.toLowerCase()) && !prefInstruction.value.toLowerCase().includes(d.toLowerCase())
+        );
+        saveUserProfile(from, userProfile);
+      }
+      return [
+        `Siap, aku sudah hapus ${prefInstruction.value} dari daftar makanan yang kamu hindari \u{1F44D} Mulai sekarang ${prefInstruction.value} bisa masuk ke rekomendasi menu kamu.`
+      ];
+    }
+    if (prefInstruction.type === "TEMPORARY_PREFERENCE") {
+      addSessionExcludedIngredient(normPhone, prefInstruction.value);
+      return [
+        `Siap, khusus hari ini aku hindari menu berbahan ${prefInstruction.value} ya \u{1F44D} Preferensi umum kamu tetap aman.`
+      ];
+    }
+    if (prefInstruction.type === "PERSISTENT_DISLIKE") {
+      const userProfile = getUserProfile(from);
+      if (userProfile) {
+        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+        if (!userProfile.dislikedFoods.some((d) => d.toLowerCase() === prefInstruction.value.toLowerCase())) {
+          userProfile.dislikedFoods.push(prefInstruction.value);
+          saveUserProfile(from, userProfile);
+        }
+      }
+      addSessionExcludedIngredient(normPhone, prefInstruction.value);
+      const newRec = generateMealRecommendations(userData, from);
+      return [
+        `Siap, aku catat kamu gak suka ${prefInstruction.value} \u{1F44D} Ini rekomendasi alternatifnya:
+
+${newRec}`
+      ];
+    }
+  }
+  const rejection = detectRecommendationRejection(userText);
+  if (rejection.isRejection) {
+    if (rejection.rejectedItem) {
+      addSessionExcludedIngredient(normPhone, rejection.rejectedItem);
+      const userProfile = getUserProfile(from);
+      if (userProfile && rejection.isPersistent) {
+        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+        if (!userProfile.dislikedFoods.includes(rejection.rejectedItem)) {
+          userProfile.dislikedFoods.push(rejection.rejectedItem);
+          saveUserProfile(from, userProfile);
+        }
+      }
+    } else if (recentRec && recentRec.mealData) {
+      addSessionExcludedIngredient(normPhone, recentRec.mealData.name);
+    }
+    const altRec = generateMealRecommendations(userData, from);
+    return [
+      `Siap, langsung aku carikan menu penggantinya ya \u{1F44D} Ini rekomendasi alternatifnya:
+
+${altRec}`
+    ];
+  }
+  const adaptation = detectWorkoutAdaptation(userText);
+  if (adaptation.isAdaptation) {
+    const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+    const adaptationOpts = {
+      targetDurationMinutes: adaptation.targetDurationMinutes,
+      isFatigued: adaptation.isFatigued,
+      discomfortArea: adaptation.discomfortArea
+    };
+    const workoutRec = generatePersonalizedWorkoutRecommendation(userData, 0, adaptationOpts);
+    let note = "";
+    if (adaptation.targetDurationMinutes && adaptation.isFatigued) {
+      note = `Waktu 15 menit dan lagi capek: aku siapkan gerakan mobilitas ringan & pemulihan aktif agar tubuh tetap segar tanpa membebani fisik ya \u{1F4AA}`;
+    } else if (adaptation.targetDurationMinutes) {
+      note = `Waktu terbatas ${adaptation.targetDurationMinutes} menit: latihannya aku padatkan jadi 2 gerakan inti dengan waktu istirahat teratur (bukan HIIT/burpees berlebihan) \u{1F44D}`;
+    } else if (adaptation.discomfortArea === "knee") {
+      note = `Lutut lagi kurang nyaman: demi kenyamanan, gerakan berdampak tinggi seperti lompatan dan squat dalam aku ganti dengan latihan aman tanpa membebani lutut ya \u{1F44D}`;
+    }
+    return [
+      `\u{1F4AC} *${coachName}*:
+"${note}"
+
+${workoutRec}`
+    ];
+  }
+  return null;
+}
+function formatEquipmentCard(parsedAi, userData, userText) {
   const persona = userData.persona === "mia" || userData.persona === "nikita" ? "mia" : "max";
   const coachName = persona === "max" ? "Coach Max" : "Coach Mia";
   const equipmentName = parsedAi.equipmentName || "Alat Gym";
-  const matchedExercise = findExerciseOrEquipment(equipmentName) || findExerciseOrEquipment(parsedAi.query || "");
-  if (matchedExercise) {
-    const guide = formatWhatsAppExerciseGuide(matchedExercise, persona);
-    return guide.text;
-  }
-  const isAligned = parsedAi.isAlignedWithGoal !== false;
   const addressing = getValidatedUserAddressing(userData);
   const validatedAddr = addressing.validatedAddress;
+  const isAligned = parsedAi.isAlignedWithGoal !== false;
   if (!isAligned) {
     const redirectionMsg = validateAndFormatCoachNote(
       parsedAi.politeRedirection || (persona === "max" ? `Kayaknya alat ${equipmentName} ini kurang cocok buat goal kamu (${userData.goalTitle}) dulu ya, ${validatedAddr}. Kita fokus ke gerakan utama yang lebih efektif & aman! \u{1F4AA}` : `Wah, sepertinya alat ${equipmentName} ini belum menjadi prioritas utama untuk goal ${userData.goalTitle} kamu ya, ${validatedAddr} \u2728 Yuk fokus ke latihan dasar yang lebih sesuai dulu!`),
       userData
     );
-    return `\u{1F3CB}\uFE0F *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*
+    const redirectText = `\u{1F3CB}\uFE0F *ANALISIS ALAT GYM: ${equipmentName.toUpperCase()}*
 
 \u26A0\uFE0F *Status Goal Alignment*:
 _KURANG COCOK UNTUK GOAL SAAT INI_
@@ -56369,30 +57709,48 @@ _KURANG COCOK UNTUK GOAL SAAT INI_
 
 \u{1F4A1} *Catatan Coach*:
 ${parsedAi.alignmentExplanation || "Gunakan latihan dasar yang lebih sesuai dengan targetmu."}`;
+    return {
+      text: redirectText,
+      mediaUrl: void 0,
+      canonicalEquipment: resolveCanonicalEquipment(equipmentName),
+      selectedExercise: void 0,
+      toString() {
+        return this.text;
+      }
+    };
   }
-  const exercises = Array.isArray(parsedAi.suggestedExercises) && parsedAi.suggestedExercises.length > 0 ? parsedAi.suggestedExercises.map(
-    (e, idx) => `\u2022 *${e.name || `Variasi ${idx + 1}`}*
-  \u{1F4AA} Otot: ${e.targetMuscle || "General"}
-  \u{1F522} Target: ${e.setsReps || "3 Sets x 10-12 Reps"}
-  \u{1F4A1} Tips: ${e.techniqueTip || "Jaga postur & pernafasan teratur."}`
-  ).join("\n\n") : `\u2022 *Custom Exercise*
-  \u{1F522} Target: 3 Sets x 12 Reps
-  \u{1F4A1} Tips: Kontrol gerakan saat eccentric.`;
-  const comment = validateAndFormatCoachNote(
-    parsedAi.coachComment || (persona === "max" ? `Alat ini mantap banget buat goal kamu, ${validatedAddr}! Lakukan gerakan di atas & pastikan form kamu bersih! \u{1F4AA}` : `Alat ini sangat cocok untuk mendukung ${userData.goalTitle} kamu, ${validatedAddr}! Lakukan dengan perlahan dan nikmati prosesnya ya \u2728`),
-    userData
-  );
-  return `\u{1F3CB}\uFE0F *PANDUAN ALAT GYM: ${equipmentName.toUpperCase()}*
-
-\u2705 *Status Goal Alignment*:
-*SANGAT COCOK UNTUK GOAL ${userData.goalTitle.toUpperCase()}!*
-
-\u{1F4CC} *Rekomendasi Variasi Latihan*:
-${exercises}
-
------------------------------
-\u{1F4AC} *${coachName}*:
-"${comment}"`;
+  let subtype = parsedAi.intentSubtype || "HOW_TO_USE";
+  if (userText) {
+    const lower = userText.toLowerCase();
+    if (lower.match(/\b(?:ini\s*apa|alat\s*apa|nama\s*alat|fungsi\s*alat|alat\s*ini\s*apa)\b/)) {
+      subtype = "WHAT_IS_IT";
+    } else if (lower.match(/\b(?:bisa\s*buat|latihan\s*apa|variasi|buat\s*apa\s*aja|olahraga\s*apa)\b/)) {
+      subtype = "EXERCISES_FOR_EQUIPMENT";
+    } else if (lower.match(/\b(?:postur|form|gerakan\s*ini|teknik\s*ini)\b/)) {
+      subtype = "EXERCISE_POSTURE";
+    } else if (lower.match(/\b(?:cara\s*make|cara\s*pakai|cara\s*menggunakan|gimana\s*cara|tutorial)\b/)) {
+      subtype = "HOW_TO_USE";
+    }
+  }
+  const guide = formatWhatsAppEquipmentGuide({
+    equipmentName,
+    subtype,
+    persona,
+    userGoal: userData.goal || "healthy",
+    userAddressing: validatedAddr,
+    confidence: parsedAi.confidenceScore ?? parsedAi.confidenceLevel,
+    aiComment: parsedAi.coachComment,
+    suggestedExercises: parsedAi.suggestedExercises
+  });
+  return {
+    text: guide.text,
+    mediaUrl: guide.mediaUrl,
+    canonicalEquipment: guide.canonicalEquipment,
+    selectedExercise: guide.selectedExercise,
+    toString() {
+      return this.text;
+    }
+  };
 }
 function formatRepsCompact(targetReps, targetSets) {
   let clean = targetReps.trim();
@@ -60314,8 +61672,11 @@ https://gymbuddygroup.com`,
             ];
           } else {
             const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
+            let behavioralResult = null;
             if (!planValidation.canProceed) {
               responseMessages = [planValidation.redirectMessage];
+            } else if (!imagePart && (behavioralResult = await handleBehavioralIntelligenceIntent(from, userText, userData))) {
+              responseMessages = behavioralResult;
             } else if (waterMatch) {
               if (!planCapabilities.canNutrition) {
                 responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
@@ -60347,15 +61708,20 @@ https://gymbuddygroup.com`,
                 addMealLog(from, waterEntry);
                 const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
                 const comment = userData.persona === "max" ? "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
-                responseMessages = [
-                  `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
+                const isSimpleAction = classifyResponseComplexity("SIMPLE_ACTION", userText) === "SIMPLE_ACTION";
+                if (isSimpleAction) {
+                  responseMessages = [`Siap, aku tambahkan ${actualMl}ml air \u{1F4A7}`];
+                } else {
+                  responseMessages = [
+                    `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
 -----------------------------
 \u2705 Kamu menambah *${actualMl} ml* air putih!
 \u{1F4CA} Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)
 
 \u{1F4AC} *${coachName}*:
 "${comment}"`
-                ];
+                  ];
+                }
               }
             } else if (handleReminderCommand(userText, userProfile, from, userData)) {
               responseMessages = handleReminderCommand(userText, userProfile, from, userData);
@@ -60628,15 +61994,25 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
-Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
-Jika ini foto alat gym (misal Dumbbell, Leg Press, Smith Machine, Cable Machine, Foam Roller, Barbell, Treadmill, dll.) atau pertanyaan mengenai alat latihan:
-Evaluasi apakah alat ini COCOK untuk goal pengguna saat ini (${userData.goalTitle}).
+Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN (MULTI-MODAL EQUIPMENT UNDERSTANDING)
+Jika ini foto alat gym (misal Dumbbell, Barbell, Kettlebell, Resistance Band, Treadmill, Exercise Bike, Workout Bench, Cable Machine, Yoga Mat) atau pertanyaan mengenai alat latihan:
+1. IDENTIFIKASI ALAT SECARA TEPAT:
+   - equipmentName: Wajib kenali jenis alat secara spesifik. JIKA GAMBAR MENUNJUKKAN DUMBBELL: DILARANG KERAS MENYEBUTKAN BODYWEIGHT SQUAT ATAU GERAKAN TANPA ALAT! Nama alat WAJIB "Dumbbell".
+   - Jika gambar blur, tidak fokus, atau sudutnya ambigu, set confidenceScore < 60.
+2. SUBTYPE MAKSUD PENGGUNA:
+   - "WHAT_IS_IT": User bertanya nama/fungsi alat (misal "ini apa?", "alat apa ini?").
+   - "HOW_TO_USE": User bertanya tutorial/cara pakai alat (misal "gimana cara make alat ini?", "cara pakai alat ini?").
+   - "EXERCISES_FOR_EQUIPMENT": User bertanya variasi latihan apa yang bisa dilakukan (misal "bisa buat latihan apa aja?", "latihan apa yang bisa dilakukan?").
+   - "EXERCISE_POSTURE": User bertanya form/postur gerakan (misal "ini gerakan apa?", "form-nya bener gak?").
+3. Evaluasi apakah alat ini COCOK untuk goal pengguna saat ini (${userData.goalTitle}).
 Jika TIDAK cocok (misal alat powerlifting berat untuk goal pemula/fat loss), set isAlignedWithGoal = false dan berikan pesan ramah/sopan ("Kayaknya alat tsb bukan untuk kita dulu...").
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": true,
   "equipmentName": "Nama Alat Gym",
+  "intentSubtype": "HOW_TO_USE",
+  "confidenceScore": 95,
   "isAlignedWithGoal": true,
   "alignmentExplanation": "Penjelasan kesesuaian alat dengan goal",
   "suggestedExercises": [
@@ -60694,8 +62070,13 @@ Keluarkan output JSON valid:
                       const redirectRes = validatePlanContext("alat gym", true, userData);
                       responseMessages = [redirectRes.redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
                     } else {
-                      const eqCard = formatEquipmentCard(parsed, userData);
-                      responseMessages = [eqCard];
+                      setRecentVisualContext(from, {
+                        detectedEquipment: parsed.equipmentName || "Alat Gym",
+                        confidence: parsed.confidenceScore ?? parsed.confidenceLevel ?? 90,
+                        intentSubtype: parsed.intentSubtype
+                      });
+                      const eqCard = formatEquipmentCard(parsed, userData, userText);
+                      responseMessages = [eqCard.text];
                     }
                   } else if (imagePart || parsed.isUnrelatedImage) {
                     const defaultUnrelatedMsg = isMia ? "Maaf ya \u{1F60A} Aku belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau kamu ingin aku bantu cek makanan, nutrisi, atau workout, kirim gambar yang sesuai ya." : isLansia ? `Mohon maaf, ${addressing.validatedAddress}. Saya belum dapat mengaitkan gambar ini dengan aktivitas GymBuddy. Apabila Anda ingin Saya mendampingi pencatatan makanan, nutrisi, atau panduan latihan, silakan kirimkan gambar yang sesuai ya. \u{1F33F}` : `Sorry ya, ${addressing.validatedAddress}! Gue belum bisa mengaitkan gambar ini dengan aktivitas GymBuddy. Kalau lo mau gue bantu cek makanan, nutrisi, atau panduan latihan, kirim foto yang sesuai ya! \u{1F4AA}`;
@@ -60883,9 +62264,12 @@ Keluarkan output JSON valid:
       const isMealCorrection = !imagePart && !isGreetingIntent && (detectMealCorrectionIntent(userText, Boolean(recentFoodMeal)) || activeTask?.type === "MEAL_CORRECTION" && !isTaskInterruptingIntent(classifiedIntent.intent));
       let responseMessages = [];
       let mediaUrlToSend = void 0;
-      const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery ? findExerciseOrEquipment(userText) : null;
+      const isDemonstrativeVisualQuery = Boolean(
+        userText.match(/\b(?:alat\s*ini|ini\s*apa|alat\s*apa|cara\s*(?:make|pakai|menggunakan)\s*alat\s*ini|buat\s*apa\s*ini|gerakan\s*ini|mesin\s*ini|benda\s*ini)\b/i) || userText.match(/\b(?:ini|itu)\b/i) && userText.match(/\b(?:alat|mesin|gerakan|bisa\s*buat|cara|gimana|buat\s*apa)\b/i)
+      );
+      const matchedEx = !isWorkoutScheduleQuery && !isWeeklyScheduleQuery && !imagePart && !isDemonstrativeVisualQuery ? findExerciseOrEquipment(userText) : null;
       const isExerciseInquiry = Boolean(
-        matchedEx && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
+        matchedEx && !imagePart && !isDemonstrativeVisualQuery && (userText.match(/^(?:cara|bagaimana|gimana|tutorial|tips|apa\s*itu|tutor|ajarin|panduan)\b/i) || lowerText.includes("cara pakai") || lowerText.includes("cara menggunakan") || lowerText.includes("cara ") || lowerText.includes("tutorial ") || lowerText.includes("alat ") || lowerText.includes("mesin ") || lowerText.includes("teknik ") || lowerText.includes("postur "))
       );
       console.log(`[Twilio WA] \u2705 Step: routing. isReset=${isResetMessage}, isDeleteMeal=${isDeleteMealMessage}, isWeekly=${isWeeklyScheduleQuery}, isWorkout=${isWorkoutScheduleQuery}, isCheckSum=${isCheckSummaryMessage}, isWelcome=${isWelcomeMessage}`);
       if (isResetMessage) {
@@ -60950,6 +62334,38 @@ Sekarang kamu bisa mencoba alur pendaftaran & onboarding baru dari awal di websi
         responseMessages = [guide.text];
         if (guide.mediaUrl) {
           mediaUrlToSend = guide.mediaUrl;
+        }
+      } else if (!imagePart && isDemonstrativeVisualQuery) {
+        const recentVisual = getRecentVisualContext(normFrom);
+        if (recentVisual && recentVisual.detectedEquipment) {
+          if (!planCapabilities.canWorkout) {
+            responseMessages = [validatePlanContext("alat gym", true, userData).redirectMessage || "Untuk plan kamu saat ini, aku fokus bantu soal nutrisi ya \u2728"];
+          } else {
+            const eqRes = formatEquipmentCard({
+              equipmentName: recentVisual.detectedEquipment,
+              confidenceScore: recentVisual.confidence,
+              intentSubtype: recentVisual.intentSubtype,
+              isAlignedWithGoal: true
+            }, userData, userText);
+            responseMessages = [eqRes.text];
+            if (eqRes.mediaUrl) {
+              mediaUrlToSend = eqRes.mediaUrl;
+            }
+          }
+        } else {
+          const coachName = userData.persona === "mia" || userData.persona === "nikita" ? "Coach Mia" : "Coach Max";
+          const addressing = getValidatedUserAddressing(userData);
+          responseMessages = [
+            `\u{1F3CB}\uFE0F *FOTO ALAT BELUM TERLIHAT*
+-----------------------------
+Halo ${addressing.validatedAddress}! Kamu sedang menanyakan alat yang mana nih? \u{1F60A}
+
+\u{1F4A1} *Cara Cepat*:
+1. Kirimkan foto alat gym / dumbbell / mesin latihan yang ingin kamu tanyakan, atau
+2. Ketik langsung nama alatnya (misalnya: *"cara pakai Dumbbell"*, *"latihan dengan Dumbbell"*).
+
+${coachName} siap bantu jelaskan panduan teknik & variasinya! \u{1F4AA}`
+          ];
         }
       } else if (isWelcomeMessage) {
         if (isOnboardingHandshake) {
@@ -61043,8 +62459,11 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
         ];
       } else {
         const planValidation = validatePlanContext(userText, Boolean(imagePart), userData);
+        let behavioralResult = null;
         if (!planValidation.canProceed) {
           responseMessages = [planValidation.redirectMessage];
+        } else if (!imagePart && (behavioralResult = await handleBehavioralIntelligenceIntent(normFrom, userText, userData))) {
+          responseMessages = behavioralResult;
         } else if (waterMatch) {
           if (!planCapabilities.canNutrition) {
             responseMessages = [validatePlanContext("minum air", false, userData).redirectMessage || "Untuk plan kamu saat ini, fokus aku adalah mendampingi latihan fisik kamu ya \u2728"];
@@ -61079,15 +62498,20 @@ Mau catat makanan harian, lapor air minum, update BB ("update bb 72"), atau kons
             const isFemale = (userProfile.gender || "").toLowerCase() === "wanita" || (userProfile.gender || "").toLowerCase() === "female";
             const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
             const comment = userData.persona === "max" ? isFemale ? "Mantap! Jaga terus hidrasi tubuh kamu biar metabolisme makin kencang! \u{1F525}" : "Mantap bro! Jaga terus hidrasi tubuh lo biar metabolisme makin kenceng! \u{1F525}" : "Hebat banget! Tetap rajin minum air putih ya biar tubuh selalu segar \u2728";
-            responseMessages = [
-              `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
+            const isSimpleAction = classifyResponseComplexity("SIMPLE_ACTION", userText) === "SIMPLE_ACTION";
+            if (isSimpleAction) {
+              responseMessages = [`Siap, aku tambahkan ${actualMl}ml air \u{1F4A7}`];
+            } else {
+              responseMessages = [
+                `\u{1F4A7} *CATATAN HIDRASI DISIMPAN*
 -----------------------------
 \u2705 Kamu menambah *${actualMl} ml* air putih!
 \u{1F4CA} Total Hidrasi Hari Ini: *${newTotalCups} Gelas* (${liters} Liter / 3.0 L Target)
 
 \u{1F4AC} *${coachName}*:
 "${comment}"`
-            ];
+              ];
+            }
           }
         } else if (weightMatch) {
           const newW = parseFloat(weightMatch[1].replace(",", "."));
@@ -61336,14 +62760,24 @@ Keluarkan output JSON valid:
   "coachComment": "Komentar ramah khas persona coach (PENTING: Konteks eventType='meal_logged', makanan SUDAH dikonsumsi. JANGAN katakan 'selamat menikmati' atau 'selamat makan'. Jika makan malam/dinner, JANGAN sarankan 'nanti malam makan X' karena dinner sudah selesai; sarankan hidrasi air putih atau istirahat malam)"
 }
 
-Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN
-Jika ini foto alat gym atau pertanyaan alat latihan:
-Evaluasi apakah alat ini COCOK untuk goal pengguna (${userData.goalTitle}).
+Kategori 2: FOTO / DISKUSI ALAT GYM ATAU ALAT LATIHAN (MULTI-MODAL EQUIPMENT UNDERSTANDING)
+Jika ini foto alat gym (misal Dumbbell, Barbell, Kettlebell, Resistance Band, Treadmill, Exercise Bike, Workout Bench, Cable Machine, Yoga Mat) atau pertanyaan mengenai alat latihan:
+1. IDENTIFIKASI ALAT SECARA TEPAT:
+   - equipmentName: Wajib kenali jenis alat secara spesifik. JIKA GAMBAR MENUNJUKKAN DUMBBELL: DILARANG KERAS MENYEBUTKAN BODYWEIGHT SQUAT ATAU GERAKAN TANPA ALAT! Nama alat WAJIB "Dumbbell".
+   - Jika gambar blur, tidak fokus, atau sudutnya ambigu, set confidenceScore < 60.
+2. SUBTYPE MAKSUD PENGGUNA:
+   - "WHAT_IS_IT": User bertanya nama/fungsi alat (misal "ini apa?", "alat apa ini?").
+   - "HOW_TO_USE": User bertanya tutorial/cara pakai alat (misal "gimana cara make alat ini?", "cara pakai alat ini?").
+   - "EXERCISES_FOR_EQUIPMENT": User bertanya variasi latihan apa yang bisa dilakukan (misal "bisa buat latihan apa aja?", "latihan apa yang bisa dilakukan?").
+   - "EXERCISE_POSTURE": User bertanya form/postur gerakan (misal "ini gerakan apa?", "form-nya bener gak?").
+3. Evaluasi apakah alat ini COCOK untuk goal pengguna (${userData.goalTitle}).
 Keluarkan output JSON valid:
 {
   "isFood": false,
   "isEquipment": true,
   "equipmentName": "Nama Alat Gym",
+  "intentSubtype": "HOW_TO_USE",
+  "confidenceScore": 95,
   "isAlignedWithGoal": true,
   "alignmentExplanation": "Penjelasan kesesuaian alat dengan goal",
   "suggestedExercises": [
@@ -61378,7 +62812,7 @@ Keluarkan output JSON valid:
               const cleanReply = String(rawText || "").replace(/```(?:json)?[\s\S]*?```/gi, "").trim();
               parsed = { isFood: false, isEquipment: false, generalReply: cleanReply || "Sip! Ada laporan makanan atau latihan lain yang mau ditanyakan?" };
             }
-            const isEquipmentMatch = !parsed.isUnrelatedImage && (parsed.isEquipment || (lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym")) && !parsed.isFood);
+            const isEquipmentMatch = !parsed.isUnrelatedImage && (parsed.isEquipment || classifiedIntent.intent === "EQUIPMENT_INQUIRY" || classifiedIntent.intent === "EXERCISE_POSTURE_INQUIRY" || (lowerText.includes("alat") || lowerText.includes("cara pakai") || lowerText.includes("mesin") || lowerText.includes("gym")) && !parsed.isFood);
             if (parsed.isFood && !parsed.isUnrelatedImage) {
               if (parsed.needsClarification && !userText.trim()) {
                 const defaultClarification = isMia ? `\u{1F4F8} Fotonya sudah aku cek ya, ${addressing.validatedAddress}! Biar hitungan nutrisinya akurat, boleh kasih tahu isian utamanya apa? Misalnya sosis, telur, daging, atau lainnya \u2728` : `\u{1F4F8} Fotonya sudah dicek ya, ${addressing.validatedAddress}! Biar estimasi makro dan kalorinya presisi, boleh sebutkan isian utamanya? Misalnya sosis, telur, atau daging? \u{1F4AA}`;
@@ -61413,11 +62847,15 @@ Keluarkan output JSON valid:
               } else {
                 if (!parsed.equipmentName) parsed.equipmentName = "Alat Gym / Mesin Latihan";
                 parsed.isEquipment = true;
-                const dbMatch = findExerciseOrEquipment(parsed.equipmentName || userText);
-                const eqCard = formatEquipmentCard(parsed, userData);
-                responseMessages = [eqCard];
-                if (dbMatch && (dbMatch.gifUrl || dbMatch.imageFrames?.[0])) {
-                  mediaUrlToSend = dbMatch.gifUrl || dbMatch.imageFrames[0];
+                setRecentVisualContext(normFrom, {
+                  detectedEquipment: parsed.equipmentName,
+                  confidence: parsed.confidenceScore ?? parsed.confidenceLevel ?? 90,
+                  intentSubtype: parsed.intentSubtype
+                });
+                const eqRes = formatEquipmentCard(parsed, userData, userText);
+                responseMessages = [eqRes.text];
+                if (eqRes.mediaUrl) {
+                  mediaUrlToSend = eqRes.mediaUrl;
                 }
               }
             } else if (imagePart || parsed.isUnrelatedImage) {
@@ -61884,6 +63322,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID && !process.a
   getUserSubscription,
   grantTrialToUser,
   handleAdditionalActivityLogging,
+  handleBehavioralIntelligenceIntent,
   handleDeleteMealCommand,
   handleWhatsAppLoginConfirmation,
   handleWorkoutProgressLogging,
