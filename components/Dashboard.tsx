@@ -68,6 +68,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import PWAInstallBanner from "./PWAInstallBanner";
+import MobileDashboardView from "./MobileDashboardView";
 import { findExerciseOrEquipment, EXERCISE_DATABASE, ExerciseItem, getDefaultWeeklySchedule } from "../data/exerciseDb";
 import { notificationService } from "../services/notificationService";
 import {
@@ -3519,7 +3520,7 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-white font-['Inter'] p-0 sm:p-4 lg:p-6 flex flex-col lg:flex-row gap-5 selection:bg-[#D4FF00] selection:text-black">
+    <div className="min-h-screen bg-[#0D0E12] text-white font-['Inter'] p-0 sm:p-4 lg:p-6 flex flex-col lg:flex-row gap-5 selection:bg-[#D4FF00] selection:text-black">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -3535,6 +3536,64 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* DEDICATED ULTRA-MODERN MOBILE VIEW (< lg: PIXEL-PERFECT REFERENCE DESIGN) */}
+      {/* ========================================================================= */}
+      <div className="block lg:hidden w-full min-h-screen bg-[#0D0E12]">
+        <MobileDashboardView
+          user={activeUser}
+          lang={lang}
+          onToggleLanguage={toggleLanguage}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          todayMeals={allLogs}
+          totalCaloriesConsumed={totalCaloriesConsumed}
+          targetCalories={targetCalories}
+          caloriesRemaining={Math.max(0, targetCalories - totalCaloriesConsumed)}
+          isOverCal={totalCaloriesConsumed > targetCalories}
+          calPercent={targetCalories > 0 ? Math.round((totalCaloriesConsumed / targetCalories) * 100) : 0}
+          totalProtein={totalProteinConsumed}
+          targetProtein={targetProtein}
+          totalCarbs={totalCarbsConsumed}
+          targetCarbs={targetCarbs}
+          totalFat={totalFatConsumed}
+          targetFat={targetFat}
+          totalFiber={0}
+          targetFiber={30}
+          onOpenScanModal={() => setShowScanModal(true)}
+          onDeleteMeal={(mealId) => {
+            const found = allLogs.find((m) => m.id === mealId);
+            if (found) setMealToDelete(found);
+          }}
+          waterCups={totalWaterCups}
+          targetWaterCups={Math.round((targetHydrationGoal || 2500) / 250)}
+          onQuickWater={(ml) => handleQuickAddWater(ml)}
+          activeWorkoutPlan={activeWorkoutPlan}
+          selectedDayName={selectedDayName}
+          totalCompletedSetsOverall={totalCompletedSetsOverall}
+          totalTargetSetsOverall={totalTargetSetsOverall}
+          overallWorkoutPercent={overallWorkoutPercent}
+          onOpenWorkoutExecution={() => setShowWorkoutExecutionModal(true)}
+          onOpenShortenWorkout={() => setShowShortenWorkoutModal(true)}
+          onOpenWatchMode={onOpenWatchMode || (() => setShowWatchConnectModal(true))}
+          weight={Number(activeUser.weight) || 70}
+          targetWeight={Number(activeUser.targetWeight) || 65}
+          startWeight={Number(activeUser.startWeight) || 70}
+          weeklyProgress={weeklyProgress}
+          onOpenUpdateWeight={() => setShowUpdateWeightModal(true)}
+          coachName={coachName}
+          isMaxPersona={isMaxPersona}
+          feelState={feelState}
+          onSelectFeel={handleSelectFeel}
+          coachRecommendation={getCoachFeelingRecommendation()}
+          selectedDate={selectedDate}
+          onSelectDate={(d) => setSelectedDate(d)}
+          onOpenCalendar={() => setShowCalendarModal(true)}
+          onLogout={onLogout}
+          onBackToHome={onBackToHome}
+        />
+      </div>
 
       {/* FLOATING SIDEBAR PANEL (DESKTOP ONLY - NEVER ON MOBILE) */}
       <aside className="hidden lg:flex w-72 bg-[#151515] text-white p-5 flex-col justify-between shrink-0 rounded-3xl border border-white/[0.08] shadow-2xl min-h-[92vh]">
@@ -3778,8 +3837,8 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
         </div>
       </aside>
 
-      {/* RIGHT MAIN CONTENT CONTAINER */}
-      <main className="flex-1 bg-[#151515] sm:bg-[#151515] border-0 sm:border sm:border-white/[0.08] rounded-none sm:rounded-3xl px-3.5 sm:px-6 md:px-8 pt-[max(env(safe-area-inset-top),2.75rem)] sm:pt-6 md:pt-8 pb-36 lg:pb-8 space-y-5 overflow-y-auto shadow-sm text-white">
+      {/* RIGHT MAIN CONTENT CONTAINER (DESKTOP ONLY) */}
+      <main className="hidden lg:block flex-1 bg-[#151515] sm:bg-[#151515] border-0 sm:border sm:border-white/[0.08] rounded-none sm:rounded-3xl px-3.5 sm:px-6 md:px-8 pt-[max(env(safe-area-inset-top),2.75rem)] sm:pt-6 md:pt-8 pb-36 lg:pb-8 space-y-5 overflow-y-auto shadow-sm text-white">
         {/* ========================================================================= */}
         {/* TAB 1: HOME (DASHBOARD RINGKASAN) */}
         {/* ========================================================================= */}
@@ -6756,9 +6815,9 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* CLEAN DOCKED 5-TAB MOBILE NAVIGATION BAR (MOBILE ONLY) */}
+      {/* OLD DOCKED MOBILE NAV BAR (HIDDEN IN FAVOR OF FLOATING ISLAND BAR)        */}
       {/* ========================================================================= */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#222222]/95 backdrop-blur-2xl border-t border-white/[0.08] px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.75rem)] flex items-center justify-around shadow-[0_-8px_30px_rgba(0,0,0,0.7)] lg:hidden">
+      <nav className="hidden fixed bottom-0 inset-x-0 z-40 bg-[#222222]/95 backdrop-blur-2xl border-t border-white/[0.08] px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.75rem)] items-center justify-around shadow-[0_-8px_30px_rgba(0,0,0,0.7)]">
         {/* Tab 1: Home */}
         <button
           onClick={() => setActiveTab("home")}
