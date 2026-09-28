@@ -45895,7 +45895,7 @@ function classifyMealIntent(userText) {
     };
   }
   const isTodayRecommendation = Boolean(
-    lower.includes("rekomendasi makanan") || lower.includes("rekomendasi makan") || lower.includes("menu makan") || lower.includes("saran makan") || lower.includes("pagi siang malam") || lower.includes("rekomendasi sarapan") || lower.includes("saran sarapan") || lower.match(/(?:saran|rekomendasi|ide|menu)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) || lower.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i) || lower.match(/ada\s+saran\s+makan/i) || lower.match(/makan\s+(?:siang|malam|pagi)\s+apa/i) || lower.match(/sarapan\s+(?:pagi|apa)/i) || lower.match(/saran\s+menu/i) || lower.match(/rekomendasi\s+menu/i)
+    lower.includes("rekomendasi makanan") || lower.includes("rekomendasi makan") || lower.includes("jadwal makanan") || lower.includes("jadwal makan") || lower.includes("jadwal menu") || lower.includes("menu makan") || lower.includes("saran makan") || lower.includes("pagi siang malam") || lower.includes("rekomendasi sarapan") || lower.includes("saran sarapan") || lower.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i) || lower.match(/(?:saran|rekomendasi|ide|menu|jadwal)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) || lower.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i) || lower.match(/ada\s+saran\s+makan/i) || lower.match(/(?:hari\s*ini\s+)?makan\s+(?:siang|malam|pagi)\s+apa/i) || lower.match(/(?:aku\s+)?hari\s*ini\s+makan\s+apa/i) || lower.match(/sarapan\s+(?:pagi|apa)/i) || lower.match(/saran\s+menu/i) || lower.match(/rekomendasi\s+menu/i)
   );
   if (isTodayRecommendation && !isTomorrow && !hasWeeklyKeyword) {
     const { dateStr, formattedDate } = getWibDateDetails(0);
@@ -47257,8 +47257,11 @@ function isGreeting(text) {
     "woi"
   ]);
   if (exactGreetings.has(clean)) return true;
+  if (/^(?:halo+|hai+|hi+|hello+|hei+|hey+|woi+|oy+|pagi+|siang+|sore+|malam+)$/i.test(clean)) {
+    return true;
+  }
   return Boolean(
-    clean.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) || clean.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) || clean.match(/^(?:halo|hai|hello|hi)\s+semua$/i) || clean === "assalamu'alaikum" || clean === "assalamualaikum wr wb" || clean === "assalamu alaikum"
+    clean.match(/^(?:halo+|hai+|hello+|hi+|hey+|hei+)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) || clean.match(/^(?:selamat\s+)?(?:pagi+|siang+|sore+|malam+)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) || clean.match(/^(?:halo+|hai+|hello+|hi+)\s+semua$/i) || clean === "assalamu'alaikum" || clean === "assalamualaikum wr wb" || clean === "assalamu alaikum"
   );
 }
 function cleanFoodTerm(term) {
@@ -47514,7 +47517,7 @@ function classifyUserIntent(rawText, context = {}) {
     };
   }
   const isCourtesy = Boolean(
-    lower.match(/^(?:makasih|terima\s+kasih|makasi|mksh|thanks|thx|thank\s+you|arigato|nuhun|suwun)(?:\s+(?:mia|max|coach|gymbuddy|banyak|ya|bgt|banget))?[.!]?$/i) || lower.match(/^(?:mantap|keren|top|good|nice|sip|oke\s+deh|ok\s+deh)[.!]?$/i)
+    lower.match(/^(?:makasih|terima\s+kasih|makasi|mksh|thanks|thx|thank\s+you|arigato|nuhun|suwun)(?:\s+(?:mia|max|coach|gymbuddy|banyak|ya|bgt|banget))?[.!]?$/i) || lower.match(/^(?:mantap|keren|top|good|nice|sip|oke\s+deh|ok\s+deh)[.!]?$/i) || lower.match(/^(?:hm+|hmm+|hmmm+|o+h+)[.!]?$/i)
   );
   if (isCourtesy) {
     return {
@@ -47903,6 +47906,9 @@ function parsePreferenceInstruction(rawText) {
 function detectWorkoutAdaptation(text) {
   if (!text) return null;
   const lower = text.toLowerCase().trim();
+  if (lower.match(/\b(?:catat|rekap|simpan|log|masukkan|tulis)\s+(?:workout|latihan|olahraga|sesi)/i) || lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis)\s+(?:workout|latihan|olahraga|gym)/i)) {
+    return null;
+  }
   const durMatch = lower.match(/(?:cuma|hanya|punya\s+waktu|bisa|waktuku|durasi)?\s*(\d{1,3})\s*(?:menit|mins|min)\b/i);
   const targetMinutes = durMatch ? parseInt(durMatch[1], 10) : void 0;
   const isFatigued = Boolean(lower.match(/\b(?:lagi\s+)?(?:capek|lelah|lemas|pegal|letih|kurang\s+tenaga|mager|pemulihan|recovery)\b/i));
@@ -57479,213 +57485,218 @@ function generateMealRecommendations(userData, rawPhone, userText) {
   return detailed.text;
 }
 async function handleBehavioralIntelligenceIntent(from, userText, userData) {
-  const normPhone = from.replace(/[^\d]/g, "");
-  const lowerText = userText.toLowerCase().trim();
-  const multi = detectMultiIntent(userText);
-  if (multi.isMultiIntent && multi.intents.length >= 2) {
-    const responses = [];
-    let logSummary = "";
-    const logPart = multi.intents.find((i) => i.type === "LOG_MEAL");
-    if (logPart && logPart.text) {
-      const deterministicResult = estimateMealNutritionDeterministic(logPart.text);
-      if (deterministicResult) {
-        const mealLogEntry = {
-          id: Date.now().toString(),
-          userId: from,
-          mealName: deterministicResult.foodName || logPart.text,
-          calories: deterministicResult.calories || 0,
-          protein: deterministicResult.protein || 0,
-          carbs: deterministicResult.carbs || 0,
-          fat: deterministicResult.fat || 0,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          analysis: `Pencatatan multi-intent otomatis: ${deterministicResult.foodName}`
-        };
-        addMealLog(from, mealLogEntry);
-        logSummary = `Siap, makan ${deterministicResult.foodName} sudah aku catat \u{1F44D} (\u{1F525} ${deterministicResult.calories} kcal, \u{1F4AA} ${deterministicResult.protein}g protein)`;
-      } else {
-        logSummary = `Siap, catatan untuk "${logPart.text}" sudah tersimpan \u{1F44D}`;
+  try {
+    const normPhone = from.replace(/[^\d]/g, "");
+    const lowerText = userText.toLowerCase().trim();
+    const multi = detectMultiIntent(userText);
+    if (multi.isMultiIntent && multi.intents.length >= 2) {
+      const responses = [];
+      let logSummary = "";
+      const logPart = multi.intents.find((i) => i.type === "LOG_MEAL");
+      if (logPart && logPart.text) {
+        const deterministicResult = estimateMealNutritionDeterministic(logPart.text);
+        if (deterministicResult) {
+          const mealLogEntry = {
+            id: Date.now().toString(),
+            userId: from,
+            mealName: deterministicResult.foodName || logPart.text,
+            calories: deterministicResult.calories || 0,
+            protein: deterministicResult.protein || 0,
+            carbs: deterministicResult.carbs || 0,
+            fat: deterministicResult.fat || 0,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            analysis: `Pencatatan multi-intent otomatis: ${deterministicResult.foodName}`
+          };
+          addMealLog(from, mealLogEntry);
+          logSummary = `Siap, makan ${deterministicResult.foodName} sudah aku catat \u{1F44D} (\u{1F525} ${deterministicResult.calories} kcal, \u{1F4AA} ${deterministicResult.protein}g protein)`;
+        } else {
+          logSummary = `Siap, catatan untuk "${logPart.text}" sudah tersimpan \u{1F44D}`;
+        }
       }
-    }
-    const recPart = multi.intents.find((i) => i.type === "RECOMMENDATION");
-    if (recPart && recPart.text) {
-      const recMsg = generateMealRecommendations(userData, from, recPart.text);
-      if (logSummary) {
-        responses.push(`${logSummary}
+      const recPart = multi.intents.find((i) => i.type === "RECOMMENDATION");
+      if (recPart && recPart.text) {
+        const recMsg = generateMealRecommendations(userData, from, recPart.text);
+        if (logSummary) {
+          responses.push(`${logSummary}
 
 ${recMsg}`);
-      } else {
-        responses.push(recMsg);
+        } else {
+          responses.push(recMsg);
+        }
+        return responses;
+      } else if (logSummary) {
+        return [logSummary];
       }
-      return responses;
-    } else if (logSummary) {
-      return [logSummary];
     }
-  }
-  const recentRec = getRecentRecommendation(normPhone);
-  if (recentRec && recentRec.mealData) {
-    const refResolution = resolveRecommendationReference(normPhone, userText);
-    if (refResolution.isAmbiguous) {
-      return [refResolution.clarificationPrompt || `Mau ganti bagian ${refResolution.candidates?.join(" atau ")}?`];
-    }
-    if (refResolution.isResolved) {
-      if (refResolution.action === "recall") {
-        return [`Siap, kita pakai menu yang tadi: *${refResolution.target}* \u{1F44D}`];
+    const recentRec = getRecentRecommendation(normPhone);
+    if (recentRec && recentRec.mealData) {
+      const refResolution = resolveRecommendationReference(normPhone, userText);
+      if (refResolution.isAmbiguous) {
+        return [refResolution.clarificationPrompt || `Mau ganti bagian ${refResolution.candidates?.join(" atau ")}?`];
       }
-      if (refResolution.action === "replace" && refResolution.target === recentRec.mealData.name) {
-        addSessionExcludedIngredient(normPhone, refResolution.target);
-        const newRec = generateMealRecommendations(userData, from);
-        return [`Siap, ini pengganti untuk menu yang tadi \u{1F44D}
+      if (refResolution.isResolved) {
+        if (refResolution.action === "recall") {
+          return [`Siap, kita pakai menu yang tadi: *${refResolution.target}* \u{1F44D}`];
+        }
+        if (refResolution.action === "replace" && refResolution.target === recentRec.mealData.name) {
+          addSessionExcludedIngredient(normPhone, refResolution.target);
+          const newRec = generateMealRecommendations(userData, from);
+          return [`Siap, ini pengganti untuk menu yang tadi \u{1F44D}
 
 ${newRec}`];
-      }
-      if (refResolution.replacement) {
-        const safetyCheck = validateUserInstructionSafety(refResolution.replacement, userData);
-        if (!safetyCheck.allowed) {
+        }
+        if (refResolution.replacement) {
+          const safetyCheck = validateUserInstructionSafety(refResolution.replacement, userData);
+          if (!safetyCheck.allowed) {
+            return [
+              safetyCheck.reason || `Mohon maaf, ${refResolution.replacement} tidak bisa ditambahkan demi keselamatanmu ya \u{1F64F}`
+            ];
+          }
+        }
+        const updatedContext = modifyActiveRecommendation(normPhone, refResolution);
+        if (updatedContext && updatedContext.mealData) {
+          const updatedMeal = updatedContext.mealData;
+          let actionDesc = "menunya sudah kuperbarui";
+          if (refResolution.action === "replace" && refResolution.target && refResolution.replacement) {
+            actionDesc = `${refResolution.target.toLowerCase()} sudah aku ganti jadi ${refResolution.replacement.toLowerCase()}`;
+          } else if (refResolution.action === "remove" && refResolution.target) {
+            actionDesc = `${refResolution.target.toLowerCase()} sudah aku hilangkan`;
+          } else if (refResolution.action === "add" && refResolution.replacement) {
+            actionDesc = `${refResolution.replacement.toLowerCase()} sudah aku tambahkan`;
+          }
           return [
-            safetyCheck.reason || `Mohon maaf, ${refResolution.replacement} tidak bisa ditambahkan demi keselamatanmu ya \u{1F64F}`
-          ];
-        }
-      }
-      const updatedContext = modifyActiveRecommendation(normPhone, refResolution);
-      if (updatedContext && updatedContext.mealData) {
-        const updatedMeal = updatedContext.mealData;
-        let actionDesc = "menunya sudah kuperbarui";
-        if (refResolution.action === "replace" && refResolution.target && refResolution.replacement) {
-          actionDesc = `${refResolution.target.toLowerCase()} sudah aku ganti jadi ${refResolution.replacement.toLowerCase()}`;
-        } else if (refResolution.action === "remove" && refResolution.target) {
-          actionDesc = `${refResolution.target.toLowerCase()} sudah aku hilangkan`;
-        } else if (refResolution.action === "add" && refResolution.replacement) {
-          actionDesc = `${refResolution.replacement.toLowerCase()} sudah aku tambahkan`;
-        }
-        return [
-          `Siap, ${actionDesc} \u{1F44D}
+            `Siap, ${actionDesc} \u{1F44D}
 
 Totalnya sekarang:
 \u{1F525} \xB1${updatedMeal.calories} kcal
 \u{1F4AA} \xB1${updatedMeal.protein}g protein
 \u{1F35E} \xB1${updatedMeal.carbs}g karbo
 \u{1F951} \xB1${updatedMeal.fat}g lemak`
-        ];
+          ];
+        }
       }
     }
-  }
-  const prefInstruction = parsePreferenceInstruction(userText);
-  if (prefInstruction) {
-    if (prefInstruction.type === "TEMPORAL_OVERRIDE") {
-      const safetyCheck = validateTemporalOverrideSafety(prefInstruction.value, userData);
-      if (!safetyCheck.allowed) {
-        return [
-          `Mohon maaf, aku mencatat kamu punya riwayat atau kondisi yang tidak sesuai dengan ${prefInstruction.value}. Demi keselamatanmu, bahan ini tidak bisa dimasukkan ke rencana makan ya \u{1F64F}
+    const prefInstruction = parsePreferenceInstruction(userText);
+    if (prefInstruction) {
+      if (prefInstruction.type === "TEMPORAL_OVERRIDE") {
+        const safetyCheck = validateTemporalOverrideSafety(prefInstruction.value, userData);
+        if (!safetyCheck.allowed) {
+          return [
+            `Mohon maaf, aku mencatat kamu punya riwayat atau kondisi yang tidak sesuai dengan ${prefInstruction.value}. Demi keselamatanmu, bahan ini tidak bisa dimasukkan ke rencana makan ya \u{1F64F}
 
 \u{1F4A1} _${safetyCheck.reason}_`
-        ];
-      }
-      addTemporalOverride(normPhone, {
-        type: "preference_override",
-        value: prefInstruction.value,
-        scope: prefInstruction.scope,
-        category: prefInstruction.category
-      });
-      if (prefInstruction.scope === "tomorrow_only") {
-        return [
-          `Siap, besok ${prefInstruction.value} diizinkan untuk rencana makanmu \u{1F44D} (preferensi makanan yang kamu kurang suka tetap tersimpan seperti biasa)`
-        ];
-      } else if (prefInstruction.scope === "tonight_only" || prefInstruction.category === "malam") {
-        const recText = generateMealRecommendations(userData, from, "rekomendasi makan malam");
-        return [
-          `Siap, untuk makan malam nanti aku siapkan rekomendasi dengan ${prefInstruction.value} ya \u{1F44D}
+          ];
+        }
+        addTemporalOverride(normPhone, {
+          type: "preference_override",
+          value: prefInstruction.value,
+          scope: prefInstruction.scope,
+          category: prefInstruction.category
+        });
+        if (prefInstruction.scope === "tomorrow_only") {
+          return [
+            `Siap, besok ${prefInstruction.value} diizinkan untuk rencana makanmu \u{1F44D} (preferensi makanan yang kamu kurang suka tetap tersimpan seperti biasa)`
+          ];
+        } else if (prefInstruction.scope === "tonight_only" || prefInstruction.category === "malam") {
+          const recText = generateMealRecommendations(userData, from, "rekomendasi makan malam");
+          return [
+            `Siap, untuk makan malam nanti aku siapkan rekomendasi dengan ${prefInstruction.value} ya \u{1F44D}
 
 ${recText}`
-        ];
-      } else {
-        return [
-          `Siap, untuk menu ini ${prefInstruction.value} diizinkan \u{1F44D}`
-        ];
-      }
-    }
-    if (prefInstruction.type === "PERSISTENT_CHANGE") {
-      const userProfile = getUserProfile(from);
-      if (userProfile && userProfile.dislikedFoods) {
-        userProfile.dislikedFoods = userProfile.dislikedFoods.filter(
-          (d) => !d.toLowerCase().includes(prefInstruction.value.toLowerCase()) && !prefInstruction.value.toLowerCase().includes(d.toLowerCase())
-        );
-        saveUserProfile(from, userProfile);
-      }
-      return [
-        `Siap, aku sudah hapus ${prefInstruction.value} dari daftar makanan yang kamu hindari \u{1F44D} Mulai sekarang ${prefInstruction.value} bisa masuk ke rekomendasi menu kamu.`
-      ];
-    }
-    if (prefInstruction.type === "TEMPORARY_PREFERENCE") {
-      addSessionExcludedIngredient(normPhone, prefInstruction.value);
-      return [
-        `Siap, khusus hari ini aku hindari menu berbahan ${prefInstruction.value} ya \u{1F44D} Preferensi umum kamu tetap aman.`
-      ];
-    }
-    if (prefInstruction.type === "PERSISTENT_DISLIKE") {
-      const userProfile = getUserProfile(from);
-      if (userProfile) {
-        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
-        if (!userProfile.dislikedFoods.some((d) => d.toLowerCase() === prefInstruction.value.toLowerCase())) {
-          userProfile.dislikedFoods.push(prefInstruction.value);
-          saveUserProfile(from, userProfile);
+          ];
+        } else {
+          return [
+            `Siap, untuk menu ini ${prefInstruction.value} diizinkan \u{1F44D}`
+          ];
         }
       }
-      addSessionExcludedIngredient(normPhone, prefInstruction.value);
-      const newRec = generateMealRecommendations(userData, from);
-      return [
-        `Siap, aku catat kamu gak suka ${prefInstruction.value} \u{1F44D} Ini rekomendasi alternatifnya:
+      if (prefInstruction.type === "PERSISTENT_CHANGE") {
+        const userProfile = getUserProfile(from);
+        if (userProfile && userProfile.dislikedFoods) {
+          userProfile.dislikedFoods = userProfile.dislikedFoods.filter(
+            (d) => !d.toLowerCase().includes(prefInstruction.value.toLowerCase()) && !prefInstruction.value.toLowerCase().includes(d.toLowerCase())
+          );
+          saveUserProfile(from, userProfile);
+        }
+        return [
+          `Siap, aku sudah hapus ${prefInstruction.value} dari daftar makanan yang kamu hindari \u{1F44D} Mulai sekarang ${prefInstruction.value} bisa masuk ke rekomendasi menu kamu.`
+        ];
+      }
+      if (prefInstruction.type === "TEMPORARY_PREFERENCE") {
+        addSessionExcludedIngredient(normPhone, prefInstruction.value);
+        return [
+          `Siap, khusus hari ini aku hindari menu berbahan ${prefInstruction.value} ya \u{1F44D} Preferensi umum kamu tetap aman.`
+        ];
+      }
+      if (prefInstruction.type === "PERSISTENT_DISLIKE") {
+        const userProfile = getUserProfile(from);
+        if (userProfile) {
+          if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+          if (!userProfile.dislikedFoods.some((d) => d.toLowerCase() === prefInstruction.value.toLowerCase())) {
+            userProfile.dislikedFoods.push(prefInstruction.value);
+            saveUserProfile(from, userProfile);
+          }
+        }
+        addSessionExcludedIngredient(normPhone, prefInstruction.value);
+        const newRec = generateMealRecommendations(userData, from);
+        return [
+          `Siap, aku catat kamu gak suka ${prefInstruction.value} \u{1F44D} Ini rekomendasi alternatifnya:
 
 ${newRec}`
-      ];
-    }
-  }
-  const rejection = detectRecommendationRejection(userText);
-  if (rejection.isRejection) {
-    if (rejection.rejectedItem) {
-      addSessionExcludedIngredient(normPhone, rejection.rejectedItem);
-      const userProfile = getUserProfile(from);
-      if (userProfile && rejection.isPersistent) {
-        if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
-        if (!userProfile.dislikedFoods.includes(rejection.rejectedItem)) {
-          userProfile.dislikedFoods.push(rejection.rejectedItem);
-          saveUserProfile(from, userProfile);
-        }
+        ];
       }
-    } else if (recentRec && recentRec.mealData) {
-      addSessionExcludedIngredient(normPhone, recentRec.mealData.name);
     }
-    const altRec = generateMealRecommendations(userData, from);
-    return [
-      `Siap, langsung aku carikan menu penggantinya ya \u{1F44D} Ini rekomendasi alternatifnya:
+    const rejection = detectRecommendationRejection(userText);
+    if (rejection.isRejection) {
+      if (rejection.rejectedItem) {
+        addSessionExcludedIngredient(normPhone, rejection.rejectedItem);
+        const userProfile = getUserProfile(from);
+        if (userProfile && rejection.isPersistent) {
+          if (!userProfile.dislikedFoods) userProfile.dislikedFoods = [];
+          if (!userProfile.dislikedFoods.includes(rejection.rejectedItem)) {
+            userProfile.dislikedFoods.push(rejection.rejectedItem);
+            saveUserProfile(from, userProfile);
+          }
+        }
+      } else if (recentRec && recentRec.mealData) {
+        addSessionExcludedIngredient(normPhone, recentRec.mealData.name);
+      }
+      const altRec = generateMealRecommendations(userData, from);
+      return [
+        `Siap, langsung aku carikan menu penggantinya ya \u{1F44D} Ini rekomendasi alternatifnya:
 
 ${altRec}`
-    ];
-  }
-  const adaptation = detectWorkoutAdaptation(userText);
-  if (adaptation.isAdaptation) {
-    const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
-    const adaptationOpts = {
-      targetDurationMinutes: adaptation.targetDurationMinutes,
-      isFatigued: adaptation.isFatigued,
-      discomfortArea: adaptation.discomfortArea
-    };
-    const workoutRec = generatePersonalizedWorkoutRecommendation(userData, 0, adaptationOpts);
-    let note = "";
-    if (adaptation.targetDurationMinutes && adaptation.isFatigued) {
-      note = `Waktu 15 menit dan lagi capek: aku siapkan gerakan mobilitas ringan & pemulihan aktif agar tubuh tetap segar tanpa membebani fisik ya \u{1F4AA}`;
-    } else if (adaptation.targetDurationMinutes) {
-      note = `Waktu terbatas ${adaptation.targetDurationMinutes} menit: latihannya aku padatkan jadi 2 gerakan inti dengan waktu istirahat teratur (bukan HIIT/burpees berlebihan) \u{1F44D}`;
-    } else if (adaptation.discomfortArea === "knee") {
-      note = `Lutut lagi kurang nyaman: demi kenyamanan, gerakan berdampak tinggi seperti lompatan dan squat dalam aku ganti dengan latihan aman tanpa membebani lutut ya \u{1F44D}`;
+      ];
     }
-    return [
-      `\u{1F4AC} *${coachName}*:
+    const adaptation = detectWorkoutAdaptation(userText);
+    if (adaptation && adaptation.isAdaptation) {
+      const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
+      const adaptationOpts = {
+        targetDurationMinutes: adaptation.targetDurationMinutes,
+        isFatigued: adaptation.isFatigued,
+        discomfortArea: adaptation.discomfortArea
+      };
+      const workoutRec = generatePersonalizedWorkoutRecommendation(userData, 0, adaptationOpts);
+      let note = "";
+      if (adaptation.targetDurationMinutes && adaptation.isFatigued) {
+        note = `Waktu 15 menit dan lagi capek: aku siapkan gerakan mobilitas ringan & pemulihan aktif agar tubuh tetap segar tanpa membebani fisik ya \u{1F4AA}`;
+      } else if (adaptation.targetDurationMinutes) {
+        note = `Waktu terbatas ${adaptation.targetDurationMinutes} menit: latihannya aku padatkan jadi 2 gerakan inti dengan waktu istirahat teratur (bukan HIIT/burpees berlebihan) \u{1F44D}`;
+      } else if (adaptation.discomfortArea === "knee") {
+        note = `Lutut lagi kurang nyaman: demi kenyamanan, gerakan berdampak tinggi seperti lompatan dan squat dalam aku ganti dengan latihan aman tanpa membebani lutut ya \u{1F44D}`;
+      }
+      return [
+        `\u{1F4AC} *${coachName}*:
 "${note}"
 
 ${workoutRec}`
-    ];
+      ];
+    }
+    return null;
+  } catch (err) {
+    console.error("[BehavioralIntelligence] Error handling intent:", err);
+    return null;
   }
-  return null;
 }
 function formatEquipmentCard(parsedAi, userData, userText) {
   const persona = userData.persona === "mia" || userData.persona === "nikita" ? "mia" : "max";
@@ -61614,10 +61625,10 @@ https://gymbuddygroup.com`,
           const isWorkoutReqMessage = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (Boolean(
             workoutIntent?.isWorkoutIntent && (workoutIntent.scope === "today" || workoutIntent.scope === "tomorrow") && (workoutIntent.action === "recommendation" || workoutIntent.action === "schedule")
           ) || lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("saran olahraga hari ini") || lowerText.includes("saran latihan hari ini") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi|saran)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
+          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("jadwal makanan") || lowerText.includes("jadwal makan") || lowerText.includes("jadwal menu") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i)) || Boolean(lowerText.match(/^(?:aku\s+)?hari\s*ini\s+makan\s+apa(?:\s+aj(?:a)?)?/i)));
           const parsedQueryDate = parseDateFromQuery(userText);
-          const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
+          const isCheckSummaryMessage = !isRecommendationMessage && (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini"));
           const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
-          const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
           const weightMatch = matchPureWeightLog(userText);
           const waterMatch = matchPureWaterLog(userText);
           const isGreetingIntent = classifiedIntent.intent === "GREETING" || classifiedIntent.intent === "GENERAL_CONVERSATION";
@@ -62241,12 +62252,12 @@ Keluarkan output JSON valid:
       const isTomorrowMealQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "tomorrow");
       const isWeeklyMealPlanQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "weekly");
       const isMealTimingQuery = Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "meal_timing");
-      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)));
+      const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") || lowerText.includes("rekomendasi makanan") || lowerText.includes("rekomendasi makan") || lowerText.includes("jadwal makanan") || lowerText.includes("jadwal makan") || lowerText.includes("jadwal menu") || lowerText.includes("menu makan") || lowerText.includes("saran makan") || lowerText.includes("pagi siang malam") || lowerText.includes("rekomendasi sarapan") || Boolean(lowerText.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i)) || Boolean(lowerText.match(/ada\s+saran\s+makan/i)) || Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) || Boolean(lowerText.match(/saran\s+menu/i)) || Boolean(lowerText.match(/rekomendasi\s+menu/i)) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i)) || Boolean(lowerText.match(/^(?:aku\s+)?hari\s*ini\s+makan\s+apa(?:\s+aj(?:a)?)?/i)));
       const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (lowerText.includes("jadwal latihan minggu") || lowerText.includes("jadwal olahraga minggu") || lowerText.includes("jadwal olahraga seminggu") || lowerText.includes("jadwal minggu ini") || lowerText.includes("jadwal latihan aku minggu ini") || lowerText.includes("jadwal gym minggu ini") || lowerText.includes("jadwal workout minggu ini") || lowerText.includes("jadwal seminggu") || lowerText.includes("jadwal latihan mingguan") || lowerText.includes("jadwal olahraga mingguan") || lowerText.includes("program minggu ini") || Boolean(lowerText.match(/jadwal\s+(?:olahraga|latihan|workout|gym)\s*(?:se)?minggu(?:an)?/i)));
       const isWorkoutCompletionSignal = Boolean(lowerText.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis|lapor|catat\s+(?:latihan|olahraga|workout)|aku latihan|aku workout|aku olahraga)\b/i));
       const isWorkoutScheduleQuery = !isWeeklyScheduleQuery && !isWorkoutCompletionSignal && (lowerText.includes("jadwal olahraga") || lowerText.includes("jadwal latihan") || lowerText.includes("jadwal workout") || lowerText.includes("jadwal gym") || lowerText.includes("jadwal hari ini") || lowerText.includes("latihan hari ini") || lowerText.includes("workout hari ini") || lowerText.includes("olahraga hari ini") || lowerText.includes("latihan apa") || lowerText.includes("workout apa") || lowerText.includes("olahraga apa") || lowerText.includes("menu latihan") || lowerText.includes("program latihan") || lowerText.includes("rekomendasi workout") || lowerText.includes("rekomendasi latihan") || lowerText.includes("workout besok") || lowerText.includes("latihan besok") || lowerText.includes("schedule workout") || lowerText.includes("workout schedule") || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+(?:olahraga|latihan|workout|gym)/i)) || Boolean(lowerText.match(/\bjadwal\b/i) && Boolean(lowerText.match(/\b(?:olahraga|latihan|workout|gym)\b/i))) || Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?(?:jadwal|menu|program|rekomendasi)\s+(?:workout|latihan|olahraga|gym)/i)) || Boolean(lowerText.match(/^(?:hari\s*ini|besok)\s+(?:jadwal(?:nya)?|menu|program)?\s*(?:workout|latihan|olahraga|gym)\s*(?:apa(?:an)?|gimana)?/i)) || Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i)));
       const parsedQueryDate = parseDateFromQuery(userText);
-      const isCheckSummaryMessage = parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini");
+      const isCheckSummaryMessage = !isRecommendationMessage && (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu")) || lowerText.includes("cek kalori") || lowerText.includes("sisa kalori") || lowerText.includes("rekap kalori") || lowerText.includes("rekap nutrisi") || lowerText.includes("rekap") || lowerText.includes("kemarin") || lowerText.includes("yesterday") || lowerText.includes("makan apa") || lowerText.includes("makanan hari ini") || lowerText.includes("log makanan") || lowerText.includes("log makan") || lowerText.includes("food log") || lowerText.includes("riwayat makan") || lowerText.includes("total kalori") || lowerText.includes("apa yang sudah aku makan") || lowerText.includes("makanan saya hari ini"));
       const isProgressHistoryMessage = lowerText.includes("cek progress") || lowerText.includes("riwayat progress") || lowerText.includes("progress minggu");
       const weightMatch = matchPureWeightLog(userText);
       const waterMatch = matchPureWaterLog(userText);

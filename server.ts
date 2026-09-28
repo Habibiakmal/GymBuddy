@@ -4549,8 +4549,9 @@ export async function handleBehavioralIntelligenceIntent(
   userText: string,
   userData: ReturnType<typeof calculateUserData>
 ): Promise<string[] | null> {
-  const normPhone = from.replace(/[^\d]/g, "");
-  const lowerText = userText.toLowerCase().trim();
+  try {
+    const normPhone = from.replace(/[^\d]/g, "");
+    const lowerText = userText.toLowerCase().trim();
 
   // 1. MULTI_INTENT Handling (e.g. log lunch + dinner recommendation)
   const multi = detectMultiIntent(userText);
@@ -4756,7 +4757,7 @@ export async function handleBehavioralIntelligenceIntent(
 
   // 5. WORKOUT ADAPTATION (e.g. 15 minutes, fatigue, knee discomfort)
   const adaptation = detectWorkoutAdaptation(userText);
-  if (adaptation.isAdaptation) {
+  if (adaptation && adaptation.isAdaptation) {
     const coachName = userData.persona === "max" ? "Coach Max" : "Coach Mia";
     const adaptationOpts: WorkoutAdaptationOptions = {
       targetDurationMinutes: adaptation.targetDurationMinutes,
@@ -4779,7 +4780,11 @@ export async function handleBehavioralIntelligenceIntent(
     ];
   }
 
-  return null;
+    return null;
+  } catch (err) {
+    console.error("[BehavioralIntelligence] Error handling intent:", err);
+    return null;
+  }
 }
 
 interface EquipmentCardResult {
@@ -9651,33 +9656,13 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             Boolean(lowerText.match(/^(?:workout|latihan|olahraga|gym)\s+(?:hari\s*ini|besok)\s*(?:apa(?:an)?|gimana)?$/i))
           );
 
-          const parsedQueryDate = parseDateFromQuery(userText);
-          const isCheckSummaryMessage = (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
-                                       lowerText.includes("cek kalori") || 
-                                       lowerText.includes("sisa kalori") || 
-                                       lowerText.includes("rekap kalori") ||
-                                       lowerText.includes("rekap nutrisi") ||
-                                       lowerText.includes("rekap") ||
-                                       lowerText.includes("kemarin") ||
-                                       lowerText.includes("yesterday") ||
-                                       lowerText.includes("makan apa") ||
-                                       lowerText.includes("makanan hari ini") ||
-                                       lowerText.includes("log makanan") ||
-                                       lowerText.includes("log makan") ||
-                                       lowerText.includes("food log") ||
-                                       lowerText.includes("riwayat makan") ||
-                                       lowerText.includes("total kalori") ||
-                                       lowerText.includes("apa yang sudah aku makan") ||
-                                       lowerText.includes("makanan saya hari ini");
-
-          const isProgressHistoryMessage = lowerText.includes("cek progress") || 
-                                          lowerText.includes("riwayat progress") || 
-                                          lowerText.includes("progress minggu");
-
           const isRecommendationMessage = !isTomorrowMealQuery && !isWeeklyMealPlanQuery && !isMealTimingQuery && (
             Boolean(mealIntent?.isMealIntent && mealIntent.scope === "today") ||
             lowerText.includes("rekomendasi makanan") ||
             lowerText.includes("rekomendasi makan") ||
+            lowerText.includes("jadwal makanan") ||
+            lowerText.includes("jadwal makan") ||
+            lowerText.includes("jadwal menu") ||
             lowerText.includes("menu makan") ||
             lowerText.includes("saran makan") ||
             lowerText.includes("pagi siang malam") ||
@@ -9686,8 +9671,35 @@ Keluarkan HANYA JSON valid tanpa teks markdown di luar JSON:
             Boolean(lowerText.match(/ada\s+saran\s+makan/i)) ||
             Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) ||
             Boolean(lowerText.match(/saran\s+menu/i)) ||
-            Boolean(lowerText.match(/rekomendasi\s+menu/i))
+            Boolean(lowerText.match(/rekomendasi\s+menu/i)) ||
+            Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i)) ||
+            Boolean(lowerText.match(/^(?:aku\s+)?hari\s*ini\s+makan\s+apa(?:\s+aj(?:a)?)?/i))
           );
+
+          const parsedQueryDate = parseDateFromQuery(userText);
+          const isCheckSummaryMessage = !isRecommendationMessage && (
+            (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
+            lowerText.includes("cek kalori") || 
+            lowerText.includes("sisa kalori") || 
+            lowerText.includes("rekap kalori") ||
+            lowerText.includes("rekap nutrisi") ||
+            lowerText.includes("rekap") ||
+            lowerText.includes("kemarin") ||
+            lowerText.includes("yesterday") ||
+            lowerText.includes("makan apa") ||
+            lowerText.includes("makanan hari ini") ||
+            lowerText.includes("log makanan") ||
+            lowerText.includes("log makan") ||
+            lowerText.includes("food log") ||
+            lowerText.includes("riwayat makan") ||
+            lowerText.includes("total kalori") ||
+            lowerText.includes("apa yang sudah aku makan") ||
+            lowerText.includes("makanan saya hari ini")
+          );
+
+          const isProgressHistoryMessage = lowerText.includes("cek progress") || 
+                                          lowerText.includes("riwayat progress") || 
+                                          lowerText.includes("progress minggu");
 
           // Weight Update Intent Match (e.g. "update bb 78", "lapor bb 77.5", "bb 76")
           const weightMatch = matchPureWeightLog(userText);
@@ -10382,6 +10394,9 @@ function escapeXml(unsafe: string): string {
         Boolean(twilioMealIntent?.isMealIntent && twilioMealIntent.scope === "today") ||
         lowerText.includes("rekomendasi makanan") ||
         lowerText.includes("rekomendasi makan") ||
+        lowerText.includes("jadwal makanan") ||
+        lowerText.includes("jadwal makan") ||
+        lowerText.includes("jadwal menu") ||
         lowerText.includes("menu makan") ||
         lowerText.includes("saran makan") ||
         lowerText.includes("pagi siang malam") ||
@@ -10390,7 +10405,9 @@ function escapeXml(unsafe: string): string {
         Boolean(lowerText.match(/ada\s+saran\s+makan/i)) ||
         Boolean(lowerText.match(/makan\s+(?:siang|malam|pagi)\s+apa/i)) ||
         Boolean(lowerText.match(/saran\s+menu/i)) ||
-        Boolean(lowerText.match(/rekomendasi\s+menu/i))
+        Boolean(lowerText.match(/rekomendasi\s+menu/i)) ||
+        Boolean(lowerText.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i)) ||
+        Boolean(lowerText.match(/^(?:aku\s+)?hari\s*ini\s+makan\s+apa(?:\s+aj(?:a)?)?/i))
       );
 
       const isWeeklyScheduleQuery = !isWeeklyMealPlanQuery && (
@@ -10438,23 +10455,25 @@ function escapeXml(unsafe: string): string {
       );
 
       const parsedQueryDate = parseDateFromQuery(userText);
-      const isCheckSummaryMessage = (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
-                                   lowerText.includes("cek kalori") || 
-                                   lowerText.includes("sisa kalori") || 
-                                   lowerText.includes("rekap kalori") ||
-                                   lowerText.includes("rekap nutrisi") ||
-                                   lowerText.includes("rekap") ||
-                                   lowerText.includes("kemarin") ||
-                                   lowerText.includes("yesterday") ||
-                                   lowerText.includes("makan apa") ||
-                                   lowerText.includes("makanan hari ini") ||
-                                   lowerText.includes("log makanan") ||
-                                   lowerText.includes("log makan") ||
-                                   lowerText.includes("food log") ||
-                                   lowerText.includes("riwayat makan") ||
-                                   lowerText.includes("total kalori") ||
-                                   lowerText.includes("apa yang sudah aku makan") ||
-                                   lowerText.includes("makanan saya hari ini");
+      const isCheckSummaryMessage = !isRecommendationMessage && (
+        (parsedQueryDate.isSpecificDate && (lowerText.includes("makan") || lowerText.includes("food") || lowerText.includes("log") || lowerText.includes("kalori") || lowerText.includes("lihat") || lowerText.includes("menu"))) ||
+        lowerText.includes("cek kalori") || 
+        lowerText.includes("sisa kalori") || 
+        lowerText.includes("rekap kalori") ||
+        lowerText.includes("rekap nutrisi") ||
+        lowerText.includes("rekap") ||
+        lowerText.includes("kemarin") ||
+        lowerText.includes("yesterday") ||
+        lowerText.includes("makan apa") ||
+        lowerText.includes("makanan hari ini") ||
+        lowerText.includes("log makanan") ||
+        lowerText.includes("log makan") ||
+        lowerText.includes("food log") ||
+        lowerText.includes("riwayat makan") ||
+        lowerText.includes("total kalori") ||
+        lowerText.includes("apa yang sudah aku makan") ||
+        lowerText.includes("makanan saya hari ini")
+      );
 
       const isProgressHistoryMessage = lowerText.includes("cek progress") || 
                                       lowerText.includes("riwayat progress") || 

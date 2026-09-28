@@ -1848,15 +1848,20 @@ export function classifyMealIntent(userText: string): MealIntentResult | null {
   const isTodayRecommendation = Boolean(
     lower.includes("rekomendasi makanan") ||
     lower.includes("rekomendasi makan") ||
+    lower.includes("jadwal makanan") ||
+    lower.includes("jadwal makan") ||
+    lower.includes("jadwal menu") ||
     lower.includes("menu makan") ||
     lower.includes("saran makan") ||
     lower.includes("pagi siang malam") ||
     lower.includes("rekomendasi sarapan") ||
     lower.includes("saran sarapan") ||
-    lower.match(/(?:saran|rekomendasi|ide|menu)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) ||
+    lower.match(/^(?:kasih\s+aku\s+)?jadwal\s+makan(?:an)?/i) ||
+    lower.match(/(?:saran|rekomendasi|ide|menu|jadwal)\s+(?:sarapan|makan|lunch|dinner|camilan|snack)/i) ||
     lower.match(/saran\s+makan(?:an)?(?:\s+hari\s*ini)?/i) ||
     lower.match(/ada\s+saran\s+makan/i) ||
-    lower.match(/makan\s+(?:siang|malam|pagi)\s+apa/i) ||
+    lower.match(/(?:hari\s*ini\s+)?makan\s+(?:siang|malam|pagi)\s+apa/i) ||
+    lower.match(/(?:aku\s+)?hari\s*ini\s+makan\s+apa/i) ||
     lower.match(/sarapan\s+(?:pagi|apa)/i) ||
     lower.match(/saran\s+menu/i) ||
     lower.match(/rekomendasi\s+menu/i)

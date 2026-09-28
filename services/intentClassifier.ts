@@ -161,11 +161,16 @@ export function isGreeting(text: string): boolean {
   ]);
   if (exactGreetings.has(clean)) return true;
 
+  // Repeated character greetings (e.g. "halooo", "haiii", "heyyy", "oyyy")
+  if (/^(?:halo+|hai+|hi+|hello+|hei+|hey+|woi+|oy+|pagi+|siang+|sore+|malam+)$/i.test(clean)) {
+    return true;
+  }
+
   // Multi-word greetings
   return Boolean(
-    clean.match(/^(?:halo|hai|hello|hi|hey|hei)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) ||
-    clean.match(/^(?:selamat\s+)?(?:pagi|siang|sore|malam)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) ||
-    clean.match(/^(?:halo|hai|hello|hi)\s+semua$/i) ||
+    clean.match(/^(?:halo+|hai+|hello+|hi+|hey+|hei+)\s+(?:gymbuddy|mia|max|coach(?:\s+(?:mia|max))?|kawan|teman|bro|sis)$/i) ||
+    clean.match(/^(?:selamat\s+)?(?:pagi+|siang+|sore+|malam+)(?:\s+(?:mia|max|coach|gymbuddy))?$/i) ||
+    clean.match(/^(?:halo+|hai+|hello+|hi+)\s+semua$/i) ||
     clean === "assalamu'alaikum" ||
     clean === "assalamualaikum wr wb" ||
     clean === "assalamu alaikum"
@@ -555,11 +560,12 @@ export function classifyUserIntent(
     };
   }
 
-  // ── 2e. COURTESY / GRATITUDE (GENERAL CONVERSATION) ──────────────────────
-  // Examples: "makasih", "terima kasih", "thanks", "thank you", "mantap"
+  // ── 2e. COURTESY / GRATITUDE / FILLERS (GENERAL CONVERSATION) ───────────
+  // Examples: "makasih", "terima kasih", "thanks", "thank you", "mantap", "hm", "hmm"
   const isCourtesy = Boolean(
     lower.match(/^(?:makasih|terima\s+kasih|makasi|mksh|thanks|thx|thank\s+you|arigato|nuhun|suwun)(?:\s+(?:mia|max|coach|gymbuddy|banyak|ya|bgt|banget))?[.!]?$/i) ||
-    lower.match(/^(?:mantap|keren|top|good|nice|sip|oke\s+deh|ok\s+deh)[.!]?$/i)
+    lower.match(/^(?:mantap|keren|top|good|nice|sip|oke\s+deh|ok\s+deh)[.!]?$/i) ||
+    lower.match(/^(?:hm+|hmm+|hmmm+|o+h+)[.!]?$/i)
   );
 
   if (isCourtesy) {
@@ -1102,6 +1108,12 @@ export function parsePreferenceInstruction(rawText: string): PreferenceInstructi
 export function detectWorkoutAdaptation(text: string): WorkoutAdaptationDetails | null {
   if (!text) return null;
   const lower = text.toLowerCase().trim();
+
+  // Explicit workout logging commands and completion signals are NOT adaptations
+  if (lower.match(/\b(?:catat|rekap|simpan|log|masukkan|tulis)\s+(?:workout|latihan|olahraga|sesi)/i) ||
+      lower.match(/\b(?:sudah|udah|telah|selesai|beres|done|barusan|tadi|habis)\s+(?:workout|latihan|olahraga|gym)/i)) {
+    return null;
+  }
 
   // Duration match e.g. "cuma punya waktu 15 menit", "hari ini 15 menit", "cuma bisa 20 menit"
   const durMatch = lower.match(/(?:cuma|hanya|punya\s+waktu|bisa|waktuku|durasi)?\s*(\d{1,3})\s*(?:menit|mins|min)\b/i);
