@@ -70,7 +70,6 @@ export interface MobileDashboardProps {
   weight: number;
   targetWeight: number;
   startWeight: number;
-  weeklyProgress: any[];
   onOpenUpdateWeight: () => void;
   // Coach & Mood
   coachName: string;
@@ -123,7 +122,6 @@ export default function MobileDashboardView({
   weight,
   targetWeight,
   startWeight,
-  weeklyProgress,
   onOpenUpdateWeight,
   coachName,
   isMaxPersona,

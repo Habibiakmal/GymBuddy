@@ -3580,7 +3580,6 @@ Hitung makro realistis: (protein*4)+(carbs*4)+(fat*9)=calories. Kembalikan HANYA
           weight={Number(activeUser.weight) || 70}
           targetWeight={Number(activeUser.targetWeight) || 65}
           startWeight={Number(activeUser.startWeight) || 70}
-          weeklyProgress={weeklyProgress}
           onOpenUpdateWeight={() => setShowUpdateWeightModal(true)}
           coachName={coachName}
           isMaxPersona={isMaxPersona}
